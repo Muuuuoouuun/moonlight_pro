@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { NextResponse } from 'next/server.js';
 import { areEquivalentLoopbackOrigins } from '../../../../lib/hub-write-guard.js';
+import { operatorLoginTtl } from '../../../../lib/operator-session.js';
 
 // Run the actual public route with controllable verification promises. No real
 // credentials, hashing work, env access, network, or persisted sessions are used.
@@ -10,7 +11,7 @@ const source = readFileSync(new URL('./route.js', import.meta.url), 'utf8')
   .replace(/^import\s[\s\S]*?;\n/gm, '').replace(/^export /gm, '');
 function route(verify, { configured = true, token = 'synthetic-session-token' } = {}) {
   const scope = {
-    NextResponse, areEquivalentLoopbackOrigins, OPERATOR_SESSION_COOKIE: 'synthetic-operator-session',
+    NextResponse, areEquivalentLoopbackOrigins, operatorLoginTtl, OPERATOR_SESSION_COOKIE: 'synthetic-operator-session',
     hasOperatorLoginCredentials: () => configured, hasOperatorSessionSecret: () => configured,
     operatorLoginCredentialsMatch: verify, createOperatorSessionToken: () => token,
     operatorSessionCookieOptions: ({ maxAge = 60 } = {}) => ({ httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge }),

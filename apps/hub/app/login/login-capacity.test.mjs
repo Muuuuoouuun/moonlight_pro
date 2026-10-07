@@ -17,11 +17,13 @@ function find(node, predicate) {
   for (const child of kids(node)) { const found = find(child, predicate); if (found) return found; }
   return null;
 }
-function mount(respond, query = '') {
+function mount(respond, query = '', sessionResponse = () => body({ status: 'anonymous', configured: true })) {
   let cursor = 0;
   const slots = [];
   const calls = [];
   const visits = [];
+  const sessionCalls = [];
+  let effects = [];
   const React = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
     useState(initial) {
@@ -30,14 +32,19 @@ function mount(respond, query = '') {
       return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }];
     },
     useRef(initial) { const i = cursor++; if (!(i in slots)) slots[i] = { current: initial }; return slots[i]; },
-    useCallback: fn => fn, useEffect: () => {},
+    useCallback: fn => fn, useEffect: fn => { effects.push(fn); },
   };
   const scope = {
-    React, Button: 'Button', Card: 'Card', Input: 'Input', TextAreaField: 'TextAreaField',
+    React, Button: 'Button', Card: 'Card', Checkbox: 'Checkbox', Input: 'Input', TextAreaField: 'TextAreaField',
     useRouter: () => ({ replace: path => visits.push(path) }), useSearchParams: () => new URLSearchParams(query),
-    window: { location: { origin: 'https://hub.example.invalid' } },
+    window: { location: { origin: 'https://hub.example.invalid' }, addEventListener() {}, removeEventListener() {} },
     fetch: async (url, init) => {
       assert.equal(url, '/api/operator/session');
+      if (!init.method) {
+        assert.equal(init.cache, 'no-store');
+        sessionCalls.push(init);
+        return sessionResponse();
+      }
       assert.equal(init.method, 'POST');
       calls.push(JSON.parse(init.body));
       return respond(calls.length);
@@ -45,17 +52,46 @@ function mount(respond, query = '') {
     createCouncilDraftState: () => ({ draft: '', pending: [], error: '', source: null }),
     COUNCIL_HANDOFF_DRAFT_LIMIT: 100, isCouncilHandoffLoginTarget: () => false,
     reduceCouncilDraft: () => { throw new Error('No Council change is allowed'); },
-    consumeCouncilDesktopHandoff: () => { throw new Error('No handoff effects are allowed'); },
+    consumeCouncilDesktopHandoff: () => null,
     councilHandoffLoginPath: () => { throw new Error('No Council routing is allowed'); },
   };
   const LoginForm = new Function(...Object.keys(scope), `${compiled}\nreturn LoginForm;`)(...Object.values(scope));
-  const render = () => { cursor = 0; return LoginForm(); };
+  const render = () => { cursor = 0; effects = []; return LoginForm(); };
   const input = (tree, name) => find(tree, n => n.type === 'Input' && n.props.name === name);
   let tree = render();
   input(tree, 'username').props.onChange('synthetic-operator');
   input(tree, 'password').props.onChange('synthetic-password');
-  return { render, input, calls, visits, submit: async () => { const tree = render(); await find(tree, n => n.type === 'form').props.onSubmit({ preventDefault() {} }); return render(); } };
+  return { render, input, calls, visits, sessionCalls,
+    runEffects: async () => { const cleanup = effects.map(fn => fn()); await new Promise(setImmediate); return cleanup; },
+    submit: async () => { const tree = render(); await find(tree, n => n.type === 'form').props.onSubmit({ preventDefault() {} }); return render(); } };
 }
+
+test('a configured existing session continues to the widget without posting credentials', async () => {
+  const form = mount(() => assert.fail('Existing sessions must not submit a password'), 'next=%2Fwidget',
+    () => body({ status: 'authenticated', configured: true }));
+  await form.runEffects();
+  assert.deepEqual(form.visits, ['/widget']);
+  assert.equal(form.calls.length, 0);
+  assert.equal(form.sessionCalls.length, 1);
+});
+
+test('anonymous or unconfigured sessions keep the login form and do not retry credentials', async () => {
+  for (const data of [{ status: 'anonymous', configured: true }, { status: 'authenticated', configured: false }]) {
+    const form = mount(() => assert.fail('No automatic password request'), '', () => body(data));
+    await form.runEffects();
+    assert.deepEqual(form.visits, []);
+    assert.equal(form.calls.length, 0);
+  }
+});
+
+test('the login preference reaches the server and can opt out of the default 30 days', async () => {
+  const form = mount(() => body({ status: 'busy' }, 429));
+  await form.submit();
+  assert.equal(form.calls[0].rememberMe, true);
+  find(form.render(), n => n.type === 'Checkbox').props.onChange(false);
+  await form.submit();
+  assert.equal(form.calls[1].rememberMe, false);
+});
 
 test('capacity busy preserves credentials, shows a neutral retry, and performs no automatic retry', async () => {
   const form = mount(() => body({ status: 'busy' }, 429));
