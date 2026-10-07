@@ -2,6 +2,7 @@
 import React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card, Checkbox, EmptyState, Kbd, SelectField, Skeleton, TruthBadge } from '../hub-primitives';
+import { Iconed } from '../hub-icons';
 import { journalScopeLabel } from '@/lib/journal';
 import { isCanonicalUuid } from '@/lib/uuid';
 import { createJournalStore, journalTabId, lastJournalWorkspace, rememberJournalWorkspace } from '@/lib/journal-browser-store';
@@ -22,7 +23,25 @@ function MemoDocument({ onClose, onReload, ...props }) {
   return model.reuseDraft ? <MemoUseComposer model={model} onReload={onReload} /> : <MemoComposer model={model} isNew={props.isNew} onClose={onClose} onReload={onReload} />;
 }
 function MatchText({ text, query }) { return memoMatchSegments(text, query).map((part, index) => part.match ? <mark key={index}>{part.text}</mark> : <React.Fragment key={index}>{part.text}</React.Fragment>); }
+export function resolveMemoText(row) {
+  const title = (row.title || '').trim();
+  const excerpt = (row.excerpt || '').trim();
+  if (title) return {
+    title,
+    body: excerpt === title ? '' : excerpt.startsWith(`${title}\n`) ? excerpt.slice(title.length).trim() : excerpt,
+  };
+  const lines = excerpt.split('\n').map(line => line.trim()).filter(Boolean);
+  return { title: lines[0] || '기록된 메모', body: lines.slice(1).join('\n').trim() };
+}
 const initial = { status: 'loading', workspaceId: null, entries: [], entry: null, nextCursor: null, workspaceConfirmed: false };
+function memoSelectionIds(rows, scope) {
+  const ids = new Set();
+  for (const row of rows) {
+    if (!isCanonicalUuid(row.id) || (scope && (scope === 'unclassified' ? row.noteMeta?.scope !== undefined : row.noteMeta?.scope !== scope))) continue;
+    ids.add(row.id);
+  }
+  return [...ids];
+}
 const idlePattern = () => ({ status: 'idle', patterns: [], error: null, code: null, request: null });
 // 메모 분석 봉투 판정. 성공은 엔진이 결과를 만든 succeeded(또는 같은 요청의 duplicate)뿐이다.
 // 202 preview는 엔진·저장소 연결 전이라는 뜻이고, 그때 오는 patterns는 연결 안내용 자리표시라
@@ -31,6 +50,8 @@ const PATTERN_ERROR_COPY = {
   'records-not-found': '분석할 메모를 찾지 못했어요. 메모가 저장됐는지 확인해 주세요.',
   'invalid-input': '분석 요청이 올바르지 않아요. 메모를 다시 선택해 주세요.',
   'engine-unreachable': '분석 엔진에 연결하지 못했어요. 엔진이 실행 중인지 확인한 뒤 다시 실행해 주세요.',
+  'max_tokens': '분석 토큰 한도를 초과했어요. 분석할 메모 수를 줄이거나 다시 시도해 주세요.',
+  'incomplete-output': '분석 생성이 중간에 중단되었어요. 다시 시도해 주세요.',
   'invalid-analysis-json': '분석 응답을 읽지 못했어요. 메모 선택은 유지했습니다. 같은 요청으로 다시 확인해 주세요.',
   'invalid-analysis-output': '분석 응답의 형식이 올바르지 않아요. 같은 요청으로 다시 확인해 주세요.',
   'generation-failed': '분석 결과를 생성하지 못했어요. 같은 요청으로 다시 확인해 주세요.',
@@ -71,6 +92,18 @@ export function Memos() {
   const patternState = patternResult.owner === analysisOwner ? patternResult : idlePattern();
   const patternLoading = patternState.status === 'loading';
   const generation = React.useRef(0), currentLedger = React.useRef(ledger); currentLedger.current = ledger;
+  const displayedSelectionIds = React.useMemo(() => memoSelectionIds(search.entries, analysisOwner.scope), [search.entries, analysisOwner.scope]);
+  const latestDisplayedSelection = React.useRef(displayedSelectionIds); latestDisplayedSelection.current = displayedSelectionIds;
+  const bulkSelectionIds = displayedSelectionIds.slice(0, 10);
+  const allSelected = bulkSelectionIds.length > 0 && bulkSelectionIds.every(memoId => selectedIds.includes(memoId));
+  const toggleSelectAll = React.useCallback(() => {
+    if (!patternControl.active || patternControl.owner !== analysisOwner || latestAnalysisOwner.current !== analysisOwner) return;
+    const ids = latestDisplayedSelection.current.slice(0, 10);
+    setSelection(previous => {
+      const selected = previous.owner === analysisOwner ? previous.ids : [];
+      return { owner: analysisOwner, ids: ids.length > 0 && ids.every(id => selected.includes(id)) ? [] : ids };
+    });
+  }, [analysisOwner, patternControl]);
 
   React.useEffect(() => {
     patternControl.owner = analysisOwner; patternControl.active = analysisReady;
@@ -83,14 +116,14 @@ export function Memos() {
   }, [analysisOwner, analysisReady, patternControl]);
 
   const toggleSelect = React.useCallback((memoId, e) => {
-    e.stopPropagation();
+    e?.stopPropagation?.();
     if (!patternControl.active || patternControl.owner !== analysisOwner || latestAnalysisOwner.current !== analysisOwner
-      || !search.entries.some(row => row.id === memoId)) return;
+      || !latestDisplayedSelection.current.includes(memoId)) return;
     setSelection((previous) => {
       const ids = previous.owner === analysisOwner ? previous.ids : [];
       return { owner: analysisOwner, ids: ids.includes(memoId) ? ids.filter(id => id !== memoId) : ids.length < 10 ? [...ids, memoId] : ids };
     });
-  }, [analysisOwner, patternControl, search.entries]);
+  }, [analysisOwner, patternControl, displayedSelectionIds]);
 
   // 선택 분석과 최근 7일 종합이 같은 라우트·같은 봉투를 쓴다. request를 보관해 preview·error에서
   // 같은 조건으로 다시 실행할 수 있게 한다.
@@ -225,8 +258,8 @@ export function Memos() {
   }, [validId, ledger.entry, search.entries]);
   return <div className="hub-page memos-page fade-up">
     <header className="memos-header"><div><h2>메모</h2><p>남긴 생각을 다음 할 일과 콘텐츠에 이어 쓰세요.</p></div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Button variant="outline" size="sm" onClick={runWeeklySynthesis} disabled={patternLoading || !analysisReady} title="현재 범위의 최근 7일 메모를 최대 25개 종합합니다.">
+      <div className="memos-header-actions">
+        <Button variant="outline" size="sm" icon="sparkle" onClick={runWeeklySynthesis} disabled={patternLoading || !analysisReady} title="현재 범위의 최근 7일 메모를 최대 25개 종합합니다.">
           최근 7일 종합 보고서
         </Button>
         <Button variant="primary" icon="plus" onClick={create} disabled={Boolean(id) || ledger.status === 'loading'}>메모 남기기 <Kbd>N</Kbd></Button>
@@ -234,29 +267,6 @@ export function Memos() {
     </header>
     <div className="memos-state"><TruthBadge state={search.status} /><span className="memo-muted">개인·회사 업무 범위를 확인해 이어 쓰는 기록</span></div>
     <MemoSearchControls filters={filters} context={search.context} onApply={applyFilters} />
-    {selectedIds.length > 0 && (
-      <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--line-strong)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <strong style={{ fontSize: 13 }}>선택한 메모 {selectedIds.length}개</strong>
-          <SelectField label="분석 목적" value={patternGoal} onChange={(e) => setPatternGoal(e.target.value)} options={[
-            { value: 'weekly_synthesis', label: '주간 종합 보고서' },
-            { value: 'sales_insight', label: '영업 인사이트 도출' },
-            { value: 'content_hook', label: '콘텐츠 훅 도출' },
-            { value: 'operational_rule', label: '운영 체크리스트 도출' },
-            { value: 'decision_rationale', label: '의사결정 배경 분석' },
-            { value: 'general', label: '종합 패턴 분석' },
-          ]} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternLoading || !analysisReady}>
-            {patternLoading ? '분석 중…' : '패턴 분석 실행'}
-          </Button>
-          <Button variant="ghost" size="xs" onClick={() => setSelection({ owner: analysisOwner, ids: [] })}>
-            선택 취소
-          </Button>
-        </div>
-      </div>
-    )}
     {(patternState.status === 'loading' || patternState.status === 'live') && (
       <MemoPatternPanel
         loading={patternLoading}
@@ -287,23 +297,61 @@ export function Memos() {
     {localError && <p role="alert" className="memo-feedback">브라우저에 보관된 메모를 확인하지 못했어요. 열려 있는 입력은 복사해 보관해 주세요.</p>}
     {error && <div className="memo-feedback" role="alert"><p>{error}</p><Button onClick={() => setReload((n) => n + 1)}>다시 불러오기</Button></div>}
     {search.error && <div className="memo-feedback" role="alert"><p>{search.error}</p><Button onClick={search.refresh}>다시 찾기</Button></div>}
-    {['live', 'partial'].includes(search.status) && search.entries.length > 0 && <p className="memo-muted" role="status">불러온 메모 <span className="num">{search.entries.length}</span>개{search.nextCursor ? ' · 더 볼 수 있어요' : ''}</p>}
-    {search.status === 'loading' ? <div className="memo-loading"><span className="memo-muted">메모를 찾고 있어요…</span><Skeleton lines={2} width="100%" height={72} label="메모를 찾고 있어요" /></div> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
+    {search.status === 'loading' ? <Card pad={false} className="memo-list"><div className="memo-loading"><span className="memo-muted">메모를 찾고 있어요…</span><Skeleton lines={2} width="100%" height={72} label="메모를 찾고 있어요" /></div></Card> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
       : ['live', 'partial'].includes(search.status) && (search.entries.length === 0 && search.nextCursor ? <div className="memo-feedback" role="status"><p>{search.message}</p><Button onClick={search.more} disabled={search.moreBusy}>범위 기록 더 찾기</Button></div> : search.entries.length === 0 ? <EmptyState icon="content" title={searchQuery ? '조건에 맞는 메모가 없어요' : '기억하고 싶은 일부터 한 줄'} description={searchQuery ? '검색어를 짧게 바꾸거나 조건을 해제해 보세요.' : '제목이나 분류 없이 바로 남겨보세요. 필요할 때 보강하고 활용할 수 있어요.'} action={searchQuery ? <Button onClick={() => applyFilters({})}>조건 모두 해제</Button> : <Button onClick={create} disabled={Boolean(id)}>첫 메모 남기기</Button>} />
-        : <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => <li key={row.id} className="memo-list-item">
+        : <div className="memo-list-container">
+          <div className={`memo-list-header${selectedIds.length ? ' memo-list-header--active' : ''}`}>
+            <div className="memo-list-header__left">
+              <Checkbox size={18} checked={allSelected} disabled={!analysisReady || !bulkSelectionIds.length}
+                label={displayedSelectionIds.length > 10 ? '표시된 메모 중 처음 10개 선택' : '표시된 메모 전체 선택'} onChange={toggleSelectAll} />
+              <span className="memo-list-header__count" role="status">
+                {selectedIds.length > 0 && <><strong>{selectedIds.length}개</strong> 선택됨 / </>}
+                불러온 메모 <span className="num">{search.entries.length}</span>개{search.nextCursor ? ' · 더 볼 수 있어요' : ''}
+              </span>
+            </div>
+            {selectedIds.length > 0 && <div className="memo-list-header__actions">
+              <SelectField label="분석 목적" value={patternGoal} onChange={(e) => setPatternGoal(e.target.value)} options={[
+                { value: 'weekly_synthesis', label: '주간 종합 보고서' },
+                { value: 'sales_insight', label: '영업 인사이트 도출' },
+                { value: 'content_hook', label: '콘텐츠 훅 도출' },
+                { value: 'operational_rule', label: '운영 체크리스트 도출' },
+                { value: 'decision_rationale', label: '의사결정 배경 분석' },
+                { value: 'general', label: '종합 패턴 분석' },
+              ]} />
+              <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternLoading || !analysisReady}>
+                {patternLoading ? '분석 중…' : '패턴 분석'}
+              </Button>
+              <Button variant="ghost" size="xs" onClick={() => setSelection({ owner: analysisOwner, ids: [] })}>선택 취소</Button>
+            </div>}
+          </div>
+          <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => {
+            const display = resolveMemoText(row);
+            const isSelected = selectedIds.includes(row.id);
+            const body = row.match?.text || display.body;
+            return <li key={row.id} className="memo-list-item" data-selected={isSelected ? 'true' : undefined}>
           <div className="memo-row-selection">
-            <Checkbox size={18} checked={selectedIds.includes(row.id)} disabled={!analysisReady}
-              label={`${row.title || row.excerpt.split('\n')[0] || '제목 없는 메모'} · ${journalScopeLabel(row.noteMeta?.scope)} 메모 선택`}
+            <Checkbox size={18} checked={isSelected} disabled={!analysisReady || !displayedSelectionIds.includes(row.id)}
+              label={`${display.title} · ${journalScopeLabel(row.noteMeta?.scope)} 메모 선택`}
               onChange={(_checked, event) => toggleSelect(row.id, event)} />
           </div>
-          <button className="hub-row memo-list-row" onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
-            <div className="memo-row-top"><span className="mono memo-muted">{memoTime(row.occurredAt)}</span><span className="memo-muted">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}{row.used ? ' · 활용함' : ''} · {journalScopeLabel(row.noteMeta?.scope)}</span></div>
-            <strong><MatchText text={row.title || row.excerpt.split('\n')[0]} query={filters.q} /></strong><p><MatchText text={row.match?.text || row.excerpt} query={row.match ? Array.from(filters.q.trim()).slice(0, 180).join('') : filters.q} /></p>
-            {row.match && <span className="memo-muted">{({ title: '제목', body: '본문', enhancement: '보강 내용', tags: '태그' })[row.match.field]}에서 찾음</span>}
-            {search.context && <span className="memo-muted">{search.context.label}에 연결됨</span>}
-            <span className="memo-row-open">열어서 보강·활용 →</span>
+          <button type="button" className="hub-row memo-list-row" onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
+            <div className="memo-row-top">
+              <div className="memo-row-top__meta">
+                <span className="mono memo-row-time">{memoTime(row.occurredAt)}</span><span className="memo-row-divider" aria-hidden="true">·</span>
+                <span className="memo-row-kind">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}</span>
+                <span className="memo-muted">{journalScopeLabel(row.noteMeta?.scope)}</span>
+                {row.used && <span className="memo-row-used-pill">활용함</span>}
+              </div>
+              <span className="memo-row-arrow" aria-hidden="true"><Iconed name="chevronR" size={14} /></span>
+            </div>
+            <strong className="memo-row-title"><MatchText text={display.title} query={filters.q} /></strong>
+            {body && <p className="memo-row-body"><MatchText text={body} query={row.match ? Array.from(filters.q.trim()).slice(0, 180).join('') : filters.q} /></p>}
+            {(row.match || search.context) && <div className="memo-row-submeta">
+              {row.match && <span className="memo-match-badge">{({ title: '제목', body: '본문', enhancement: '보강 내용', tags: '태그' })[row.match.field]}에서 찾음</span>}
+              {search.context && <span className="memo-context-badge">{search.context.label}에 연결됨</span>}
+            </div>}
           </button>
-        </li>)}</ol>{search.nextCursor && <div className="memo-more"><Button variant="outline" onClick={search.more} disabled={search.moreBusy || search.refreshing}>{search.moreBusy ? '불러오는 중…' : '메모 더 보기'}</Button></div>}</Card>)}
+        </li>; })}</ol>{search.nextCursor && <div className="memo-more"><Button variant="outline" onClick={search.more} disabled={search.moreBusy || search.refreshing}>{search.moreBusy ? '불러오는 중…' : '메모 더 보기'}</Button></div>}</Card></div>)}
     {id && !validId && <p role="alert">메모 주소가 올바르지 않아요. <Button onClick={close}>목록으로</Button></p>}
     {validId && (
       <>

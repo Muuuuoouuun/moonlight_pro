@@ -9,6 +9,7 @@ import { memoPeriod } from "@/lib/journal-search-client";
 import { normalizeJournalSearch } from "@/lib/journal-search";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(req) {
   const authError = assertHubWriteAllowed(req);

@@ -14,7 +14,7 @@ const same = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.le
 
 // Run the actual page callbacks/effects. Deferred responses deliberately ignore
 // AbortSignal so a scope return (company -> personal -> company) tests ownership too.
-function mount(query = 'noteScope=company') {
+function mount(query = 'noteScope=company', displayedRows = null) {
   const slots = [], requests = [], events = new EventTarget();
   let params = new URLSearchParams(query), workspaceId = W, cursor = 0, effects = [], writes = 0;
   const React = {
@@ -38,7 +38,8 @@ function mount(query = 'noteScope=company') {
   const dependencies = { ...navigation, isCanonicalUuid, React,
     useRouter: () => ({ replace(url) { params = new URL(url, 'https://local.test').searchParams; }, push() {} }),
     useSearchParams: () => params, usePathname: () => '/dashboard/work/memos',
-    useMemoSearch: () => ({ status: 'live', entries: [{ id: params.get('noteScope') === 'personal' ? PERSONAL : COMPANY }] }),
+    useMemoSearch: () => ({ status: 'live', entries: displayedRows || [{ id: params.get('noteScope') === 'personal' ? PERSONAL : COMPANY,
+      noteMeta: { scope: params.get('noteScope') === 'unclassified' ? undefined : params.get('noteScope') || 'company' } }] }),
     lastJournalWorkspace: () => null, rememberJournalWorkspace() {},
     createJournalStore: () => ({ list: () => [], read: () => null }), journalTabId: () => 'test-tab',
     sessionStorage: {}, window: events, MEMO_SAVED_EVENT: 'synthetic:memo-saved',
@@ -54,7 +55,7 @@ function mount(query = 'noteScope=company') {
   const start = source.indexOf('const initial ='), end = source.indexOf('\n  return <div className="hub-page memos-page fade-up">');
   assert.ok(start >= 0 && end > start, 'actual page callback boundary must exist');
   const component = new Function(...Object.keys(dependencies), source.slice(start, end).replace(/^export /gm, '')
-    + '\nreturn { selectedIds, patternState, ledger, toggleSelect, runPatternAnalysis, runWeeklySynthesis, runAnalysis, closePattern, applyFilters };\n}\nreturn Memos;')(...Object.values(dependencies));
+    + '\nreturn { selectedIds, patternState, ledger, toggleSelect, bulkSelectionIds, allSelected, toggleSelectAll, runPatternAnalysis, runWeeklySynthesis, runAnalysis, closePattern, applyFilters };\n}\nreturn Memos;')(...Object.values(dependencies));
   const render = (commit = true) => {
     cursor = 0; effects = [];
     const view = component();
@@ -65,6 +66,7 @@ function mount(query = 'noteScope=company') {
     return view;
   };
   const h = { requests, render, writes: () => writes,
+    setDisplayedRows(rows) { displayedRows = rows; return render(); },
     setRoute(query, commit = true) { params = new URLSearchParams(query); return render(commit); },
     async ready() { for (let i = 0; i < 3; i++) { render(); await settle(); } return render(); },
     async changeWorkspace() { workspaceId = OTHER; events.dispatchEvent(new Event('synthetic:memo-saved')); return h.ready(); },
@@ -91,6 +93,41 @@ test('scope navigation hides old selection/result before effects and discards a 
   assert.equal(view.patternState.request, null);
   view.runAnalysis(old.body);
   assert.equal(h.requests.length, 1, 'a retired retry must not dispatch in personal scope');
+});
+
+test('bulk selection checks and clears the same first ten displayed eligible notes', async (t) => {
+  const rows = Array.from({ length: 12 }, (_, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`, noteMeta: { scope: 'company' } }));
+  const h = mount('noteScope=company', [{ id: PERSONAL, noteMeta: { scope: 'personal' } }, { id: 'invalid', noteMeta: { scope: 'company' } }, ...rows]);
+  t.after(() => h.unmount());
+  let view = await h.ready();
+  const eligible = rows.slice(0, 10).map(row => row.id);
+  assert.deepEqual(view.bulkSelectionIds, eligible);
+  view.toggleSelectAll(); view = h.render();
+  assert.deepEqual(view.selectedIds, eligible);
+  assert.equal(view.allSelected, true);
+  view.toggleSelectAll(); assert.deepEqual(h.render().selectedIds, []);
+});
+
+test('bulk selection rejects unconfirmed and retired scope callbacks', async (t) => {
+  const h = mount(); t.after(() => h.unmount());
+  h.render().toggleSelectAll(); assert.deepEqual(h.render().selectedIds, []);
+  const old = await h.ready();
+  h.setRoute('noteScope=personal', false);
+  old.toggleSelectAll();
+  assert.deepEqual(h.render(false).selectedIds, []);
+  const current = await h.ready(); current.toggleSelectAll();
+  assert.deepEqual(h.render().selectedIds, [PERSONAL]);
+});
+
+test('retained selection callbacks use the current displayed list, not retired filter rows', async (t) => {
+  const h = mount(); t.after(() => h.unmount());
+  const retired = await h.ready();
+  const currentId = '55555555-5555-4555-8555-555555555555';
+  h.setDisplayedRows([{ id: currentId, noteMeta: { scope: 'company' } }]);
+  retired.toggleSelect(COMPANY, { stopPropagation() {} });
+  assert.deepEqual(h.render().selectedIds, []);
+  retired.toggleSelectAll();
+  assert.deepEqual(h.render().selectedIds, [currentId]);
 });
 
 test('direct company/personal/company navigation never restores the first company request', async (t) => {

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { POST } from "./route.js";
+import * as analysisRoute from "./route.js";
+
+test("journal analysis BFF allows the 45-second upstream read within its 60-second budget", () => {
+  assert.equal(analysisRoute.maxDuration, 60);
+});
 
 test("POST /api/hub/journal/analyze write guard blocks cross-origin requests", async () => {
   const origNodeEnv = process.env.NODE_ENV;

@@ -59,3 +59,18 @@ test("forwardPatternAnalysis forwards valid payload to engine endpoint with secr
   assert.equal(result.data.status, "succeeded");
   assert.equal(result.data.patterns[0].title, "성공 패턴");
 });
+
+test("pattern forwarding gives generation 45 seconds without making a provider call", async (t) => {
+  const timeout = AbortSignal.timeout;
+  let timeoutMs;
+  t.mock.method(AbortSignal, "timeout", (ms) => { timeoutMs = ms; return timeout(ms); });
+  const result = await forwardPatternAnalysis({ requestId: "synthetic-request", records: [] }, {
+    env: { COM_MOON_ENGINE_URL: "https://engine.test", COM_MOON_SHARED_WEBHOOK_SECRET: "synthetic-secret" },
+    fetchImpl: async (_url, options) => {
+      assert.equal(options.signal.aborted, false);
+      return { status: 200, json: async () => ({ status: "succeeded", patterns: [] }) };
+    },
+  });
+  assert.equal(timeoutMs, 45000);
+  assert.equal(result.data.status, "succeeded");
+});

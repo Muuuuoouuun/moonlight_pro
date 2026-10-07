@@ -240,7 +240,12 @@ export function processAndVerifyPatternOutput(
 export async function executePatternAnalysis(
   input: PatternAnalysisInput,
   deps: {
-    generate: (input: { prompt: string; systemInstruction: string; maxOutputTokens: number }) => Promise<{
+    generate: (input: {
+      prompt: string;
+      systemInstruction: string;
+      maxOutputTokens: number;
+      responseMimeType?: string;
+    }) => Promise<{
       ok: boolean;
       text?: string;
       reason?: string;
@@ -294,7 +299,8 @@ export async function executePatternAnalysis(
     const genResult = await deps.generate({
       prompt,
       systemInstruction,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
     });
 
     if (!genResult.ok || !genResult.text) {

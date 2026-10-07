@@ -135,6 +135,19 @@ test("executePatternAnalysis validates bounds and produces structured results", 
   assert.equal(result.unverifiedQuotesFiltered, 0);
 });
 
+test("pattern generation requests JSON with the restored output budget", async () => {
+  let generated;
+  const result = await executePatternAnalysis({
+    workspaceId: "11111111-1111-4111-8111-111111111111",
+    requestId: "22222222-2222-4222-8222-222222222222",
+    goal: "general",
+    records: [{ id: "33333333-3333-4333-8333-333333333333", title: "Synthetic", body: "Synthetic note", occurredAt: "2026-10-01T00:00:00Z" }],
+  }, { generate: async (input) => { generated = input; return { ok: true, text: JSON.stringify({ candidates: [] }) }; } });
+  assert.equal(generated.responseMimeType, "application/json");
+  assert.equal(generated.maxOutputTokens, 8192);
+  assert.equal(result.status, "succeeded");
+});
+
 test("executePatternAnalysis rejects invalid UUID or empty records", async () => {
   const result = await executePatternAnalysis(
     {
