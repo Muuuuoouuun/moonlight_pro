@@ -19,7 +19,7 @@ import {
   buildWeeklySummaryText,
   extractWeeklyExperiment,
 } from "@/lib/ai-workflow-client";
-import { SIGNAL_TARGETS } from '@/lib/signal-targets';
+import { SIGNAL_TARGETS, isSentinelRef, withEntityRef } from '@/lib/signal-targets';
 import { WEEKLY_STAT_FIELDS, weeklySourceLabels, weeklyStatValue } from '@/lib/weekly-report-fields';
 import { goalHref } from '@/lib/goal-client';
 import { BurningStreakBadge, StreakMark, streakLevel } from "../burning-streak";
@@ -74,41 +74,9 @@ const CONTEXT_TARGETS = {
   Work: 'dashboard/work/projects',
 };
 
-// 결정 상태는 KST 날짜 스코프로 이 기기에 영속한다 — 이전에는 컴포넌트 로컬 state뿐이라
-// "✓ 처리" 영수증이 새로고침에 증발하는 가짜였다. 신호는 매일 기록에서 재파생되므로 날짜
-// 키가 자연 만료다. (기록 영속 dismiss는 attention 컷오버 백로그 — 그때 이 키를 대체한다.)
-const BRIEF_DECISION_PREFIX = 'hub:brief-decisions:';
-function briefDecisionStorageKey() {
-  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-  return `${BRIEF_DECISION_PREFIX}${day}`;
-}
-function signalDecisionKey(s) {
-  return `${s.kind}|${s.source?.ref || s.title}`;
-}
-function useBriefDecision(signalKey) {
-  const [decided, setDecidedState] = React.useState(null);
-  React.useEffect(() => {
-    try {
-      const map = JSON.parse(localStorage.getItem(briefDecisionStorageKey()) || '{}');
-      setDecidedState(map[signalKey] || null);
-    } catch { /* storage 불가 환경에서는 세션 한정 동작으로 남긴다 */ }
-  }, [signalKey]);
-  const setDecided = React.useCallback((label) => {
-    setDecidedState(label);
-    try {
-      const key = briefDecisionStorageKey();
-      const map = JSON.parse(localStorage.getItem(key) || '{}');
-      if (label == null) delete map[signalKey]; else map[signalKey] = label;
-      localStorage.setItem(key, JSON.stringify(map));
-      // 지난 날짜 키 정리 — 하루 지난 결정 기록은 재사용되지 않는다.
-      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith(BRIEF_DECISION_PREFIX) && k !== key) localStorage.removeItem(k);
-      }
-    } catch { /* ditto */ }
-  }, [signalKey]);
-  return [decided, setDecided];
-}
+// 신호 버튼은 화면을 여는 링크다 — 누른 것만으로 "처리함"을 적지 않는다(2026-10-01 확인할 것
+// 스펙 §4.1). 예전 날짜별 localStorage 결정 키는 더 읽지 않는다. 끝냄은 저장이
+// 성공한 기록만 센다 — 서버 영수증(signal_outcomes)이 그 자리를 맡는다.
 
 // KPI cards click through to their surface (falls back to the API-provided m.target).
 const METRIC_TARGETS = {
@@ -126,25 +94,6 @@ const BRIEF_DESTINATIONS = [
   { key: 'followups', label: '오늘 연락', icon: 'bell', target: 'dashboard/revenue/followups' },
   { key: 'content', label: '콘텐츠', icon: 'content', target: 'dashboard/content/queue' },
 ];
-
-// Deep-link a signal decision to the specific record drawer when the target is the
-// deals/leads board and the signal carries a real id — revenue.jsx reads ?deal=/?lead=.
-// Sentinel refs (TODAY/NEW/PROPOSED…) are aggregate signals with no single record.
-const SENTINEL_REFS = new Set(['TODAY', 'NEW', 'PROPOSED', 'QUEUE', '—', '']);
-function withEntityRef(target, source) {
-  if (!target || !source || !source.ref) return target;
-  const ref = String(source.ref).trim();
-  if (SENTINEL_REFS.has(ref.toUpperCase())) return target;
-  const from = String(source.from || '').toLowerCase();
-  const join = target.includes('?') ? '&' : '?';
-  if (target.startsWith('dashboard/revenue/deals') && from.startsWith('deal')) {
-    return `${target}${join}deal=${encodeURIComponent(ref)}`;
-  }
-  if (target.startsWith('dashboard/revenue/leads') && from.startsWith('lead')) {
-    return `${target}${join}lead=${encodeURIComponent(ref)}`;
-  }
-  return target;
-}
 
 // Command Brief priority: the single most urgent signal becomes the full-width command;
 // the rest fall into a triaged queue. danger → warning → info → success → neutral, then
@@ -611,84 +560,6 @@ function useDailyBriefLedger(refreshKey) {
   return { ...state, refreshTasks };
 }
 
-function SignalCard({ s, index = 0, defaultExpanded, onNavigate, onAdvisorOpen }) {
-  // Surface the highest-priority signal first-open (§3.1: <5s).
-  const [expanded, setExpanded] = React.useState(defaultExpanded != null ? defaultExpanded : (index === 0 || s.tone === 'danger'));
-  const [decided, setDecided] = useBriefDecision(signalDecisionKey(s));
-  // §5.2 collision precedence: urgency lives on the left rail + dot (danger only);
-  // ordinary lanes (today/queue/info) stay neutral instead of painting semantic hues.
-  const openContext = () => onNavigate?.(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief');
-
-  return (
-    <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
-      background: 'var(--surface)',
-      border: '1px solid var(--line-soft)',
-      borderRadius: 'var(--r-lg)',
-      overflow: 'hidden',
-    }}>
-      <div
-        className="hub-stackable-row"
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={() => setExpanded(e => !e)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(v => !v); } }}
-        style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'flex-start' }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 3 }}>
-          <Dot tone={s.tone === 'danger' ? 'danger' : 'neutral'} size={8} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-            <Badge tone="neutral" size="xs">{s.kind}</Badge>
-            <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>
-            <div style={{ flex: 1 }} />
-            <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source.from} · <span className="mono">{s.source.ref}</span></span>
-          </div>
-          <div style={{ fontSize: 14.5, fontWeight: 600, color: decided ? 'var(--fg-muted)' : 'var(--fg)', marginBottom: 4, letterSpacing: '-0.01em' }}>
-            {s.title}
-          </div>
-          <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5, maxWidth: '70ch' }}>{s.summary}</div>
-          {decided && (
-            // done은 중립 체크 + 낮은 강조 텍스트 — 녹색 완료 금지(§5.3 lifecycle).
-            <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-              <Iconed name="check" size={12} />
-              <span>오늘 처리함 · {decided}</span>
-              <Button variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); setDecided(null); }}>되돌리기</Button>
-            </div>
-          )}
-        </div>
-        <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform var(--dur-hover) var(--ease-hub)', flexShrink: 0, marginTop: 3 }} />
-      </div>
-      {expanded && !decided && (
-        <div style={{ padding: '0 16px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {s.decisions.map((d, i) => (
-            <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="sm" icon={d.primary ? 'bolt' : null}
-              onClick={() => {
-                setDecided(d.label);
-                const target = SIGNAL_TARGETS[d.action];
-                if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
-              }}>
-              {d.label}
-            </Button>
-          ))}
-          {onAdvisorOpen && (
-            <Button
-              variant="outline"
-              size="sm"
-              icon="sparkle"
-              onClick={() => onAdvisorOpen(s)}
-            >
-              조언 구하기
-            </Button>
-          )}
-          <div style={{ flex: 1 }} />
-          <Button variant="ghost" size="sm" icon="moreV" onClick={openContext}>More context</Button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function MetricCard({ m, onNavigate, compact }) {
   const target = m.target || METRIC_TARGETS[m.label];
@@ -1083,7 +954,7 @@ function BriefNavigation({ taskToday, onNavigate }) {
     calendar: '일정 배치',
     projects: '진행 확인',
     followups: '후속 조치',
-    content: '큐 확인',
+    content: '소재·제작 확인',
   };
 
   return (
@@ -1114,15 +985,14 @@ function BriefNavigation({ taskToday, onNavigate }) {
   );
 }
 
-// The command — the single highest-priority signal, rendered full-width with its decisions
+// The command — the single highest-priority signal, rendered full-width with its actions
 // already exposed. This is the "<5s, what's my next move?" surface (DESIGN.md §3.1).
 function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
-  const [decided, setDecided] = useBriefDecision(signalDecisionKey(s));
   // §5.2 red-budget: only true urgency colors the command ring. Everything else reads
   // as the top item by position and size alone — warning/info/success rims were reading
   // as a banned warm-gold halo around the hero card.
   const accent = s.tone === 'danger' ? 'var(--danger)' : 'var(--moon-300)';
-  const hasRecord = s.source?.ref && !SENTINEL_REFS.has(String(s.source.ref).trim().toUpperCase());
+  const hasRecord = s.source?.ref && !isSentinelRef(s.source.ref);
   const openRecord = () => onNavigate?.(withEntityRef(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief', s.source));
   return (
     <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
@@ -1135,7 +1005,7 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         {/* §9: urgent 인디케이터는 루프 금지 — red+glow가 이미 충분한 강조 */}
         <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, flexShrink: 0 }} />
-        <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-dim)', fontWeight: 600 }}>지금 가장 급한 결정</span>
+        <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-dim)', fontWeight: 600 }}>지금 가장 급한 것</span>
         <Badge tone="neutral" size="xs">{s.kind}</Badge>
         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>
         <div style={{ flex: 1 }} />
@@ -1143,40 +1013,30 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
       </div>
       <div style={{ fontSize: 'clamp(18px, 2.2vw, 22px)', fontWeight: 650, letterSpacing: '-0.025em', color: 'var(--fg)', marginBottom: 8, lineHeight: 1.25 }}>{s.title}</div>
       <div style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.55, maxWidth: '76ch' }}>{s.summary}</div>
-      {decided ? (
-        // done은 중립 체크 + 낮은 강조 텍스트 — 녹색 완료 금지(§5.3 lifecycle).
-        <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-          <Iconed name="check" size={14} />
-          <span>오늘 처리함 · {decided}</span>
-          <Button variant="ghost" size="sm" onClick={() => setDecided(null)}>되돌리기</Button>
-        </div>
-      ) : (
-        <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {s.decisions.map((d, i) => (
-            <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="md" icon={d.primary ? 'bolt' : null}
-              onClick={() => {
-                setDecided(d.label);
-                const target = SIGNAL_TARGETS[d.action];
-                if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
-              }}>
-              {d.label}
-            </Button>
-          ))}
-          {onAdvisorOpen && (
-            <Button
-              variant="outline"
-              size="md"
-              icon="sparkle"
-              onClick={() => onAdvisorOpen(s)}
-            >
-              조언 구하기
-            </Button>
-          )}
-          {hasRecord && <Button variant="outline" size="md" iconRight="arrowRight" onClick={openRecord}>레코드 열기</Button>}
-          <div style={{ flex: 1 }} />
-          {remaining > 0 && <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>대기 결정 {remaining}건 ↓</span>}
-        </div>
-      )}
+      <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {s.decisions.map((d, i) => (
+          <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="md" icon={d.primary ? 'bolt' : null}
+            onClick={() => {
+              const target = SIGNAL_TARGETS[d.action];
+              if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
+            }}>
+            {d.label}
+          </Button>
+        ))}
+        {onAdvisorOpen && (
+          <Button
+            variant="outline"
+            size="md"
+            icon="sparkle"
+            onClick={() => onAdvisorOpen(s)}
+          >
+            조언 구하기
+          </Button>
+        )}
+        {hasRecord && <Button variant="outline" size="md" iconRight="arrowRight" onClick={openRecord}>레코드 열기</Button>}
+        <div style={{ flex: 1 }} />
+        {remaining > 0 && <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>확인할 것 {remaining}건 더 ↓</span>}
+      </div>
     </div>
   );
 }
@@ -1193,9 +1053,9 @@ function CommandClear({ signalCount }) {
         <Iconed name="check" size={18} />
       </span>
       <div>
-        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)' }}>지금 급한 결정은 없습니다</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)' }}>지금 급한 것은 없습니다</div>
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', marginTop: 3 }}>
-          {signalCount > 0 ? `${signalCount}개 신호는 아래 큐에서 여유 있게 처리하세요.` : '새 신호가 들어오면 여기 가장 먼저 올라옵니다.'}
+          {signalCount > 0 ? `${signalCount}건은 아래 확인할 것에서 여유 있게 보세요.` : '새 신호가 들어오면 여기 가장 먼저 올라옵니다.'}
         </div>
       </div>
     </div>
@@ -1889,10 +1749,6 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
   );
 }
 
-// The queue is a decision list, not an inbox. Two items keep the first scan
-// calm; the rest stay one click away.
-const QUEUE_LIMIT = 2;
-
 // 60초 시계를 페이지 루트에서 분리 — 분마다 전체 브리핑 트리가 아니라 이 리프만 다시 그린다.
 function BriefClock({ signalCount, urgentCount, todayCount }) {
   const [now, setNow] = React.useState(() => new Date());
@@ -2049,7 +1905,6 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
   const [advisorSignal, setAdvisorSignal] = React.useState(null);
   const ledger = useDailyBriefLedger(refreshKey);
   const guruRecommendations = useGuruRecommendations();
-  const [queueExpanded, setQueueExpanded] = React.useState(false);
   // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
   // 늦은 실패면 { draft, error }를 얹어 입력 그대로 다시 연다(드로어를 먼저 닫았어도 무언 소실 금지).
   const [recordTarget, setRecordTarget] = React.useState(null);
@@ -2067,21 +1922,19 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
   const signalCount = ledger.signals.length;
-  // 헤더는 화면 전체의 요약이고 「결정 큐」 배지는 큐만의 요약이다 — 확정 슬롯의 긴급 KA는
+  // 헤더는 화면 전체의 요약이고 「확인할 것」 배지는 그 목록만의 요약이다 — 확정 슬롯의 긴급 KA는
   // danger 레일을 달고 화면 맨 위에 있으므로 헤더 "즉시"에는 반드시 포함된다(사용성 재감사 A).
   const focusUrgentCount = ledger.summary?.focusUrgentCount ?? (ledger.dailyFocus?.urgentKa?.item ? 1 : 0);
   const screenUrgentCount = urgentCount + focusUrgentCount;
   // 접힌 헤더의 요약 — 0건을 굳이 말하지 않고(소음), read 실패는 0으로 뭉개지 않는다.
   const approvalSummary = ledger.queue?.source === 'error'
-    ? '승인 큐 확인 불가'
+    ? '작업 지시 확인 불가'
     : Number(ledger.queue?.pending) > 0
       ? `승인 대기 ${ledger.queue.pending}건`
       : null;
   const ranked = React.useMemo(() => rankSignals(ledger.signals), [ledger.signals]);
   const command = ranked[0] || null;
   const waiting = ranked.slice(1);
-  const queue = queueExpanded ? waiting : waiting.slice(0, QUEUE_LIMIT);
-  const queueOverflow = waiting.length - queue.length;
   return (
     <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 'var(--section-gap)', maxWidth: 1160, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
@@ -2147,39 +2000,25 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
           )}
         </div>
 
-        {/* 오늘 할 일이 캡처 바로 아래로 올라가면서 왼쪽 칸이 비었다 — 신호 섹션이 전폭을 쓴다. */}
-        <div>
+        {/* 확인할 것은 홈의 한 장씩 카드가 정본이다(2026-09-30 스펙 §7.1, Q-CF2) — 오늘에는 맨 위 카드 한 장
+            요약(위 CommandCard)과 홈으로 가는 한 줄만 둔다. 같은 끝내기를 두 화면에 두 번 펼치지 않는다. */}
+        {waiting.length > 0 && (
           <div>
             <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
               <Badge tone={urgentCount > 0 ? 'danger' : 'neutral'} size="xs">{urgentCount} urgent</Badge>
               <Badge tone="neutral" size="xs">{todayCount} today</Badge>
             </div>}>
-              결정 큐
+              확인할 것
             </SectionTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {queue.length ? (
-                queue.map((s) => (
-                  <SignalCard
-                    key={s.id}
-                    s={s}
-                    defaultExpanded={s.tone === 'danger'}
-                    onNavigate={onNavigate}
-                    onAdvisorOpen={setAdvisorSignal}
-                  />
-                ))
-              ) : (
-                <Card className="daily-brief__panel">
-                  <EmptyState icon="check" title={command ? '큐가 비었습니다' : '오늘 신호 없음'} description={command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'} />
-                </Card>
-              )}
-              {queueOverflow > 0 && (
-                <Button variant="ghost" size="sm" icon="chevronD" onClick={() => setQueueExpanded(true)}>
-                  대기 결정 {queueOverflow}건 더 보기
-                </Button>
-              )}
-            </div>
+            <button type="button" className="hub-card-link" onClick={() => onNavigate('dashboard/home')}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 44, padding: '14px 16px', background: 'var(--surface)', borderRadius: 'var(--r-lg)', color: 'var(--fg)', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}>
+              <span style={{ flex: 1, fontSize: 13.5 }}>
+                확인할 것 <span className="num">{waiting.length}</span>건 더 — 홈에서 한 장씩 끝내기
+              </span>
+              <Iconed name="arrowRight" size={14} style={{ color: 'var(--fg-dim)' }} />
+            </button>
           </div>
-        </div>
+        )}
 
         {/* 매출 pulse는 §2 첫 화면 판단축 — 접힌 MoreDetail 뒤가 아니라 "지금 값"으로
             상시 노출한다(2026-07-15 §2.2 QA 결정 B 유지 항목, system-eval B-11). */}

@@ -126,6 +126,13 @@ export async function getAttentionLedger() {
       "@/lib/hub-write-guard": writeGuardStub,
       "@/lib/pms-engine-client": engineClientStub,
       "@/lib/server-write": serverWriteStub,
+      // 확인할 것 영수증(2026-09-30 스펙) — 이 스위트는 신호 조립만 본다. 영수증은 비어 있고 읽힌 상태로 고정한다.
+      "@/lib/repositories/signal-outcomes": `
+export async function readCheckItemContext() {
+  const s = globalThis.__projectAggregateRouteState || {};
+  return s.checkContext || { status: "live", todayKey: "2026-10-01", outcomes: [], openTaskIds: new Set(), nudgesBySubject: new Map(), finishedToday: [] };
+}
+`,
       // daily-brief의 오늘 일정 슬롯 소스 — 이 스위트에서는 미연결 preview로 고정한다.
       "@/lib/google-calendar":
         'export async function listGoogleCalendarEvents() { return { ok: false, reason: "calendar-not-connected", items: [] }; }',

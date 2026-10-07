@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   createOrUpdateGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
   readCombinedGoogleCalendarEvents,
   recordGoogleCalendarSync,
 } from "@/lib/google-calendar";
@@ -207,5 +208,37 @@ export async function POST(req) {
       },
       { status: 500 },
     );
+  }
+}
+
+// DELETE { eventId } — 확인할 것의 잡아 둔 일 취소에만 쓴다(2026-09-30 스펙 §4.7·§8.2).
+export async function DELETE(req) {
+  try {
+    const guard = assertHubWriteAllowed(req);
+    if (guard) return guard;
+    const parsed = await readHubWriteJson(req);
+    if (parsed.error) return parsed.error;
+    const eventId = String(parsed.data?.eventId || "").trim();
+    if (!eventId) return NextResponse.json({ status: "invalid-input", reason: "missing-event-id" }, { status: 400 });
+    const workspaceId = resolveDefaultWorkspaceId();
+    if (!workspaceId) return NextResponse.json({ status: "preview", message: "Workspace ID is not configured yet." }, { status: 202 });
+
+    const result = await deleteGoogleCalendarEvent({ workspaceId, calendarId: parsed.data?.calendarId, eventId });
+    if (!result.ok) {
+      if (result.reason === "missing-connection" || result.reason === "missing-access-token") {
+        return NextResponse.json({ status: "preview", message: "Google Calendar is not connected yet." }, { status: 202 });
+      }
+      await recordGoogleCalendarSync({
+        workspaceId,
+        connectionId: result.connection?.id || null,
+        status: "failure",
+        payload: { provider: "google_calendar", action: "delete", eventId },
+        errorMessage: result.reason,
+      }).catch(() => null);
+      return NextResponse.json({ status: "error", error: result.reason || "Google Calendar delete failed." }, { status: 502 });
+    }
+    return NextResponse.json({ status: "saved", eventId, reason: result.reason });
+  } catch (error) {
+    return NextResponse.json({ status: "error", error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
