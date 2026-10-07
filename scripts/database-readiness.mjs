@@ -148,6 +148,14 @@ export const DATABASE_FEATURES = [
       ['office_request_inbox_v1(uuid,text,text,integer,jsonb)', '(r.created_at,r.id)<(v_time,v_id)'],
       ['office_request_inbox_v1(uuid,text,text,integer,jsonb)', "r.expires_at<=now() then 'expired'"]],
     tableNoWrite: [['office_requests','service_role']] },
+  { name: '개인 현금 흐름', migration: '20261005_0067_personal_finance.sql',
+    tables: ['finance_imports','finance_entries','finance_subscriptions'],
+    functions: ['finance_import_v1(uuid,jsonb)','finance_review_v1(uuid,text,uuid,integer,jsonb)'],
+    tableNoWrite: ['finance_imports','finance_entries','finance_subscriptions'].map(name=>[name,'service_role']) },
+  { name: '고정비 이용 상태·계약 등록', migration: '20261006_0068_finance_service_status.sql', tables: [],
+    functions: ['finance_import_v1(uuid,jsonb)','finance_review_v1(uuid,text,uuid,integer,jsonb)'],
+    bodyIncludes: [['finance_import_v1(uuid,jsonb)', "'contractsOnly'"],
+      ['finance_review_v1(uuid,text,uuid,integer,jsonb)', "review||p_changes)) then return"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {
