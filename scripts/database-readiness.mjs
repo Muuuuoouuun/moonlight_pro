@@ -156,6 +156,13 @@ export const DATABASE_FEATURES = [
     functions: ['finance_import_v1(uuid,jsonb)','finance_review_v1(uuid,text,uuid,integer,jsonb)'],
     bodyIncludes: [['finance_import_v1(uuid,jsonb)', "'contractsOnly'"],
       ['finance_review_v1(uuid,text,uuid,integer,jsonb)', "review||p_changes)) then return"]] },
+  { name: 'Office 영속 회의', migration: '20261007_0069_office_meetings.sql',
+    tables: ['office_meetings','office_meeting_turns'],
+    functions: ['office_meeting_get_v1(uuid,text,uuid)','office_meeting_create_v1(uuid,text,jsonb)',
+      'office_meeting_update_v1(uuid,text,uuid,jsonb)','office_meeting_list_v1(uuid,text,text,integer,jsonb)',
+      'office_meeting_turn_claim_v1(uuid,text,uuid,jsonb,jsonb)','office_meeting_turn_finish_v1(uuid,text,uuid,uuid,uuid,jsonb)'],
+    tableNoWrite: [['office_meetings','service_role'],['office_meeting_turns','service_role']],
+    bodyIncludes: [['local_skill_request_create_v1(uuid,text,jsonb)','skill-office-source-mismatch']] },
   // 확인할 것 영수증 — 끝내기·보류·시간 잡기 한 번이 한 줄(2026-09-30 확인할 것 스펙 §8.1).
   { name: '확인할 것 영수증', migration: '20261007_0070_signal_outcomes.sql', tables: ['signal_outcomes'], functions: [],
     indexIncludes: [['signal_outcomes', 'signal_outcomes_request_idx', '(workspace_id, request_id)']] },

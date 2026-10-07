@@ -454,6 +454,13 @@ export function resolveSidebarPath(anchorKey, scope) {
   return anchor.paths[normalizeScope(scope)] || anchor.paths[DEFAULT_SCOPE];
 }
 
+// A selected Office scope replaces the old meeting pointer. The destination
+// session can restore its own meeting and drafts after navigation.
+export function officeScopeSelectionPath(activePath, scope) {
+  if (pathnameOf(activePath) !== 'dashboard/agents/office-council') return null;
+  return `dashboard/agents/office-council?scope=${normalizeScope(scope)}`;
+}
+
 // Anchors expanded when no stored preference exists — the operator's daily
 // loop (2026-07-15 spec §3.1). Everything else starts collapsed.
 export const DEFAULT_EXPANDED_ANCHORS = ['revenue', 'content'];

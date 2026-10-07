@@ -105,7 +105,10 @@ actor HubTransport: HubTransporting {
     }
 
     private func sessionForRequest(path: String, method: String) -> URLSession {
-        path == "/api/hub/office/chat" && method.uppercased() == "POST" ? officeChatSession : session
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        let meetingTurn = parts.count == 7 && parts[1...4].joined(separator: "/") == "api/hub/office/meetings"
+            && UUID(uuidString: String(parts[5])) != nil && parts[6] == "turns"
+        return (path == "/api/hub/office/chat" || meetingTurn) && method.uppercased() == "POST" ? officeChatSession : session
     }
 
     // Read-only diagnostics expose the configured budget, never the session or its credentials.

@@ -878,6 +878,24 @@ test('AI utility anchor lands on Office in every scope and Office is findable in
   for (const word of ['오피스', '이브이', '비서']) assert.ok(office.keywords.includes(word), word);
 });
 
+test('explicit Office scope selection replaces the meeting link without changing other global routes', () => {
+  const target = mobileNavRuntime.officeScopeSelectionPath;
+  assert.equal(typeof target, 'function');
+  const meeting = '10000000-0000-4000-8000-000000000001';
+  for (const scope of ['all', 'personal', 'classin']) {
+    for (const path of ['dashboard/agents/office-council', `/dashboard/agents/office-council?meeting=${meeting}&scope=personal`]) {
+      const result = target(path, scope);
+      const url = new URL(result, 'https://hub.invalid/');
+      assert.equal(url.pathname, '/dashboard/agents/office-council');
+      assert.equal(url.searchParams.get('scope'), scope);
+      assert.equal(url.searchParams.has('meeting'), false);
+    }
+  }
+  for (const path of ['dashboard/agents', 'dashboard/agents/runs', 'dashboard/agents/office-council/history', 'dashboard/settings', 'dashboard/daily-brief']) {
+    assert.equal(target(path, 'personal'), null);
+  }
+});
+
 test('report hub is a Home secondary tab, reachable through command catalog with no new anchor', () => {
   const path = 'dashboard/reports';
   assert.equal(ownerAnchorKey(path), 'home');

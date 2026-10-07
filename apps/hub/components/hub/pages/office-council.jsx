@@ -1,10 +1,13 @@
 'use client';
 import React from 'react';
+import { useSearchParams } from 'next/navigation';
+import { OfficeMeetingSessionProvider } from '../office-meeting-session-provider';
+import { OfficeMeetingRoom } from './office-meeting-room';
 import { OFFICE_FAILURE_LABELS, OFFICE_ROSTER, officeDiscussionRounds } from '@com-moon/agent-contracts/office';
 import { parseOfficeRoutingRequest, parseOfficeRoutingResult } from '@com-moon/agent-contracts/office-routing';
 import { Button, CheckboxRow, Drawer, EmptyState, SectionTitle, SegmentedControl, Skeleton, TextAreaField, TextField, TruthBadge, CertaintyBadge } from '../hub-primitives';
-import { requestOffice } from '../office-client';
-import { copyOfficeText, loadOfficeTasks, officeMessageLength, officeRailTasks, officeTaskAgendaBlock, officeTasksForScope, shouldSubmitOfficeKey } from '../office-session';
+import { loadOfficeUsage, requestOffice } from '../office-client';
+import { copyOfficeText, loadOfficeTasks, officeAssignmentInput, officeMessageLength, officeRailTasks, officeTaskAgendaBlock, officeTasksForScope, shouldSubmitOfficeKey } from '../office-session';
 import { useOfficeSession } from '../use-office-session';
 import { OfficeDeliberationControls } from '../office-deliberation-controls';
 import { officeDiscussionState } from '../office-deliberation-client';
@@ -54,7 +57,7 @@ function ThreadDiscussion({ result, request }) {
   const stages = new Set(discussion.turns.map(speech => speech.round)).size;
   return <div className={styles.discussion}>
     <p className={styles.laneCaption}>역할별 발언 · {stages}단계 · 같은 모델의 역할별 개별 검토 · 모델 호출 <span className="mono">{discussion.modelCalls}</span>회</p>
-    <div className={styles.lanes} style={{ '--lane-count': speakers.length }}>{speakers.map(speakerId => <section key={speakerId} className={styles.lane} aria-label={personName(speakerId) + ' 발언'}>
+    <div className={styles.lanes} tabIndex={0} role="region" aria-label="역할별 발언 비교" style={{ '--lane-count': speakers.length }}>{speakers.map(speakerId => <section key={speakerId} className={styles.lane} aria-label={personName(speakerId) + ' 발언'}>
       <header className={styles.laneHeader}><OfficeAvatar agentId={speakerId} size="small" /><strong>{personName(speakerId)}</strong><span>{personRole(speakerId)}</span></header>
       <ol className={styles.speeches}>{discussion.turns.map((speech, index) => speech.ownerId !== speakerId ? null : <li key={speech.round + index} className={styles.speech}>
         <span className={styles.stageLabel}>{speech.round === 'position' ? '첫 의견' : '상호 검토 · ' + (speech.changed ? '관점 수정' : '판단 유지')}</span>
@@ -169,24 +172,30 @@ function PendingTurn({ pending }) {
 // 2026-09-23 운영자 확정: 최근 7일 요청·할 일 연결·평균 지연·실패 원인을 한 줄로.
 function OfficeUsageLine({ refreshKey }) {
   const [usage, setUsage] = React.useState(null);
-  const load = React.useCallback(() => {
+  const [retry, setRetry] = React.useState(0);
+  React.useEffect(() => {
+    const controller = new AbortController();
     setUsage(null);
-    fetch('/api/hub/office/usage', { cache: 'no-store' }).then(res => res.json()).then(setUsage).catch(() => setUsage({ status: 'error' }));
-  }, []);
-  React.useEffect(() => { load(); }, [load, refreshKey]);
+    loadOfficeUsage({ signal: controller.signal }).then(data => { if (!controller.signal.aborted) setUsage(data); });
+    return () => controller.abort();
+  }, [refreshKey, retry]);
+  const load = () => setRetry(value => value + 1);
   if (!usage) return <div className={styles.usage}><Skeleton lines={1} label="최근 7일 사용 기록 확인 중" style={{ flex: '1 1 240px', maxWidth: 320 }} /></div>;
   if (usage.status === 'preview') return <p className={styles.usage}><TruthBadge state="preview" /> 사용 기록은 저장 연결 후 표시됩니다.</p>;
-  if (usage.status !== 'live') return <p className={styles.usage}><TruthBadge state="error" /> 사용 기록을 읽지 못했습니다. <Button size="xs" variant="ghost" onClick={load}>다시 확인</Button></p>;
+  if (!['live', 'partial'].includes(usage.status)) return <p className={styles.usage}><TruthBadge state="error" /> 사용 기록을 읽지 못했습니다. <Button size="xs" variant="ghost" onClick={load}>다시 확인</Button></p>;
   const failures = Object.entries(usage.failureCategories || {}).map(([key, n]) => (OFFICE_FAILURE_LABELS[key] || key) + ' ' + n).join(' · ');
-  return <p className={styles.usage}>최근 <span className="mono">{usage.windowDays}</span>일 · 요청 <span className="mono">{usage.requests}</span> · 할 일 연결 <span className="mono">{usage.applied}</span>
+  return <p className={styles.usage}>{usage.status === 'partial' ? <TruthBadge state="partial" /> : null}최근 <span className="mono">{usage.windowDays}</span>일 · 요청 <span className="mono">{usage.requests}</span> · 할 일 연결 <span className="mono">{usage.applied}</span>
     {usage.averageElapsedMs != null ? <> · 평균 <span className="mono">{Math.round(usage.averageElapsedMs / 1000)}</span>초</> : null}
     {' · '}실패 <span className="mono">{usage.failed}</span>{failures ? ' (' + failures + ')' : ''}</p>;
 }
 
 export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
-  const [surface,setSurface]=React.useState('commander');
+  const meetingParam = useSearchParams().get('meeting');
+  const [surface,setSurface]=React.useState(() => meetingParam ? 'meeting' : 'commander');
   const [discussionVisited,setDiscussionVisited]=React.useState(false);
-  return <section className={styles.shell}><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="오피스 업무 화면" options={[{key:'commander',label:'이브이 업무 분담'},{key:'discussion',label:'관점 대화·회의'}]} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);}}/></div><div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} active={surface === 'discussion'} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}</section>;
+  const [meetingVisited,setMeetingVisited]=React.useState(Boolean(meetingParam));
+  React.useEffect(() => { if (meetingParam) { setSurface('meeting'); setMeetingVisited(true); } }, [meetingParam]);
+  return <section className={styles.shell}><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="오피스 업무 화면" options={[{key:'commander',label:'이브이 업무 분담'},{key:'discussion',label:'관점 대화·회의'},{key:'meeting',label:'저장 회의'}]} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);if(next==='meeting')setMeetingVisited(true);}}/></div><div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} active={surface === 'discussion'} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}{meetingVisited?<div hidden={surface!=='meeting'}><OfficeMeetingSessionProvider><OfficeMeetingRoom scope={scope} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></OfficeMeetingSessionProvider></div>:null}</section>;
 }
 function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, onNavigate }) {
   const { session, store, update } = useOfficeSession(scope);
@@ -211,8 +220,13 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
   const latestTurnRef = React.useRef(null);
   const pendingRef = React.useRef(null);
   const taskReadRef = React.useRef(0);
+  const taskAbortRef = React.useRef(null);
   const assignmentReadRef = React.useRef(0);
   const composing = React.useRef(false);
+  const activeScopeRef = React.useRef(scope);
+  activeScopeRef.current = scope;
+  const mountedRef = React.useRef(false);
+  React.useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const busy = Boolean(session.pending);
   const autoRunning = breakdown?.auto?.state === 'running';
   // 자동 진행 중에는 사람이 같은 입력창을 건드리지 못하게 잠근다 — 다음 조각이 입력창을 채운다.
@@ -222,7 +236,8 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
   const owner = OFFICE_ROSTER.find(person => person.id === ownerId) || OFFICE_ROSTER[0];
   const participants = mode === 'council' ? [ownerId, ...reviewers] : [];
   const preset = COMPARISON_PRESETS.find(item => item.id === session.presetId);
-  const assignmentMessage = (session.agenda?.block || session.draft).trim();
+  const assignmentInput = officeAssignmentInput(session);
+  const assignmentMessage = assignmentInput.message;
   const tooLong = officeMessageLength(session) > 6000;
   const visibleTasks = officeTasksForScope(taskState.tasks, scope).filter(task => task.title?.toLocaleLowerCase('ko-KR').includes(taskQuery.toLocaleLowerCase('ko-KR')));
   const unassignedCount = taskState.tasks.filter(task => task.status !== 'done' && !task.workspace).length;
@@ -237,6 +252,7 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
     setCopyStatus(null); setInputNotice(''); setFollowUpMode('chat'); setSkillTurn(null); setMentorDrawerId(null);
     setSelectedTurnId(null); setMobileView('meet'); setBreakdownOpen(false);
     loadTasks();
+    return () => { taskReadRef.current += 1; taskAbortRef.current?.abort(); assignmentReadRef.current += 1; };
     // loadTasks only reads refs and setters; reloading per scope is the intent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope]);
@@ -247,8 +263,9 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
   }
 
   async function requestAssignment() {
-    if (busy || assignment?.status === 'loading') return;
-    const message = assignmentMessage;
+    if (locked || assignment?.status === 'loading') return;
+    const input = officeAssignmentInput(store.get(scope));
+    const message = input.message;
     let request;
     try { request = parseOfficeRoutingRequest({ message, scope }); }
     catch {
@@ -256,6 +273,9 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
       return;
     }
     const readId = ++assignmentReadRef.current;
+    const isCurrent = () => mountedRef.current && activeScopeRef.current === scope
+      && readId === assignmentReadRef.current
+      && officeAssignmentInput(store.get(scope)).key === input.key;
     setMoreOpen(false);
     setAssignment({ status: 'loading' });
     try {
@@ -264,7 +284,7 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
         body: JSON.stringify(request), cache: 'no-store',
       });
       const body = await response.json().catch(() => null);
-      if (readId !== assignmentReadRef.current) return;
+      if (!isCurrent()) return;
       if (body?.status === 'preview') {
         setAssignment({ status: 'preview', error: body.error || '오피스 Engine 연결이 필요합니다. 담당자를 직접 선택해 주세요.' });
         return;
@@ -273,15 +293,17 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
       const recommendation = parseOfficeRoutingResult({
         status: body.status, version: body.version, ownerId: body.ownerId,
         reviewerIds: body.reviewerIds, reason: body.reason, scope: body.scope,
+        ...(body.plan === undefined ? {} : { plan: body.plan }),
       }, request);
-      setAssignment(recommendation);
+      setAssignment({ ...recommendation, inputKey: input.key, contextTruncated: input.truncated });
     } catch {
-      if (readId === assignmentReadRef.current) setAssignment({ status: 'error', error: '담당 추천을 확인하지 못했습니다. 담당자를 직접 선택해 주세요.' });
+      if (isCurrent()) setAssignment({ status: 'error', error: '담당 추천을 확인하지 못했습니다. 담당자를 직접 선택해 주세요.' });
     }
   }
 
   function applyAssignment() {
-    if (assignment?.status !== 'recommended') return;
+    if (locked || assignment?.status !== 'recommended' || assignment.scope !== scope) return;
+    if (officeAssignmentInput(store.get(scope)).key !== assignment.inputKey) { invalidateAssignment(); return; }
     update({ ownerId: assignment.ownerId, reviewers: assignment.reviewerIds, presetId: null });
     invalidateAssignment();
   }
@@ -354,8 +376,11 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
   }), []);
   const loadTasks = () => {
     const readId = ++taskReadRef.current;
+    taskAbortRef.current?.abort();
+    const controller = new AbortController();
+    taskAbortRef.current = controller;
     setTaskState({ status: 'loading', tasks: [] });
-    loadOfficeTasks().then(result => { if (readId === taskReadRef.current) setTaskState(result); });
+    loadOfficeTasks({ signal: controller.signal }).then(result => { if (readId === taskReadRef.current) setTaskState(result); });
   };
   const openTasks = () => { setTaskQuery(''); setTasksOpen(true); loadTasks(); };
   function selectPreset(selected) {
@@ -540,6 +565,7 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
           <p>주관 · {personName(assignment.ownerId)}</p>
           <p>함께 볼 관점 · {assignment.reviewerIds.length ? assignment.reviewerIds.map(personName).join(' · ') : '없음'}</p>
           <p className={styles.assignmentReason}>{assignment.reason}</p>
+          {assignment.plan ? <dl><div><dt>주관이 만들 결과</dt><dd>{assignment.plan.ownerDeliverable}</dd></div>{assignment.plan.reviews.map(review => <div key={review.reviewerId}><dt>{personName(review.reviewerId)} 검토 질문</dt><dd>{review.question}</dd></div>)}</dl> : null}
           <div className={styles.assignmentActions}><Button variant="primary" size="sm" onClick={applyAssignment}>적용</Button><Button variant="outline" size="sm" onClick={editAssignment}>수정</Button><Button variant="ghost" size="sm" onClick={invalidateAssignment}>무시</Button></div>
         </> : null}
         {['preview', 'error'].includes(assignment.status) ? <><TruthBadge state={assignment.status} /><p>{assignment.error}</p>

@@ -224,6 +224,9 @@ struct HubTransportTests {
         let client = try transport()
         let routes: [(String, String, TimeInterval, TimeInterval)] = [
             ("/api/hub/office/chat", "POST", 60, 70),
+            ("/api/hub/office/meetings/11111111-1111-4111-8111-111111111111/turns", "POST", 60, 70),
+            ("/api/hub/office/meetings/11111111-1111-4111-8111-111111111111/turns", "GET", 20, 45),
+            ("/api/hub/office/meetings/not-a-meeting/turns", "POST", 20, 45),
             ("/api/hub/office/chat", "post", 60, 70),
             ("/api/hub/office/chat", "GET", 20, 45),
             ("/api/hub/office/chat", "PATCH", 20, 45),

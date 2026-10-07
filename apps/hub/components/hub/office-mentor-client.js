@@ -1,3 +1,5 @@
+import { officeRemainingDissent } from './office-deliberation-client.js';
+
 // The Office result is supplied by the currently open browser session. These IDs
 // preserve provenance for the mentor; they are not a claim of a server-side source audit.
 //
@@ -48,7 +50,7 @@ function sourceFields(result) {
     // The result card hides a recommendation that repeats the answer; sending it twice adds nothing.
     ...(recommendation && recommendation !== answer ? [{ label: '주관 추천', text: recommendation }] : []),
     ...items(result.evidence, '근거'),
-    ...items(result.dissent, '남은 이견'),
+    ...items(officeRemainingDissent(result), '남은 이견'),
     { label: '다음 행동', text: clean(result.nextAction) },
   ].map(field => ({ ...field, sent: field.text }));
 }

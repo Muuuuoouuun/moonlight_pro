@@ -14,15 +14,15 @@ export const OFFICE_CODEX_EVALUATION_EXECUTION = Object.freeze({
   httpEndpointInvoked: false, durableJobCreated: false, productionTransportActivated: false,
 });
 
-export function createOfficeCoreEvaluation(core = runOfficeResponse, parentSignal) {
+export function createOfficeCoreEvaluation(core = runOfficeResponse, parentSignal, execution = OFFICE_CODEX_EVALUATION_EXECUTION) {
   return async (request, context, generate, onDiagnostic) => ({
     ...await core(request, context, {
       signal: parentSignal
-        ? AbortSignal.any([parentSignal, AbortSignal.timeout(OFFICE_CODEX_EVALUATION_EXECUTION.jobBudgetMs)])
-        : AbortSignal.timeout(OFFICE_CODEX_EVALUATION_EXECUTION.jobBudgetMs),
-      generate, onDiagnostic,
+        ? AbortSignal.any([parentSignal, AbortSignal.timeout(execution.jobBudgetMs)])
+        : AbortSignal.timeout(execution.jobBudgetMs),
+      generate, onDiagnostic, ...(execution.authoring ? { authoring: execution.authoring } : {}),
     }),
-    evaluationExecution: OFFICE_CODEX_EVALUATION_EXECUTION,
+    evaluationExecution: execution,
   });
 }
 
@@ -62,10 +62,10 @@ export function describeOfficeCodexEvaluationError(error) {
   return safeMessages.has(error?.message) ? error.message : 'Office Codex evaluation failed. Raw error details were not copied.';
 }
 
-async function main() {
-  const { values } = parseArgs({ options: {
+export function parseOfficeCodexEvaluationArgs(args = process.argv.slice(2)) {
+  const { values } = parseArgs({ args, options: {
     live: { type: 'boolean', default: false }, only: { type: 'string', multiple: true },
-    output: { type: 'string' }, 'provider-output': { type: 'string' },
+    output: { type: 'string' }, 'provider-output': { type: 'string' }, model: { type: 'string' },
     concurrency: { type: 'string', default: '1' },
     resume: { type: 'boolean', default: false }, 'retry-incomplete': { type: 'boolean', default: false },
     'dataset-status': { type: 'string', default: 'development' },
@@ -73,21 +73,29 @@ async function main() {
     'review-pack': { type: 'boolean', default: false }, score: { type: 'boolean', default: false },
     rubric: { type: 'boolean', default: false }, role: { type: 'string' },
   } });
+  return values;
+}
+
+export async function runOfficeCodexEvaluation(values, {
+  execution = OFFICE_CODEX_EVALUATION_EXECUTION,
+  command = process.execPath,
+  argv = [fileURLToPath(new URL('../node_modules/@openai/codex/bin/codex.js', import.meta.url))],
+  extraSourcePaths = [],
+} = {}) {
   // Listing and grading do not even instantiate the CLI provider.
   if (!values.live || values.rubric || values['review-pack'] || values.score) return officeQualityCli(values);
   if (!values.output || !values['provider-output']) throw new Error('Live execution requires distinct --output and --provider-output journals.');
   if (fileURLToPath(pathToFileURL(values.output)) === fileURLToPath(pathToFileURL(values['provider-output']))) throw new Error('The run and provider journals must be different files.');
 
-  const command = process.execPath;
-  const argv = [fileURLToPath(new URL('../node_modules/@openai/codex/bin/codex.js', import.meta.url))];
-  const provider = await createCodexCliProvider({ command, argv });
+  const model = values.model ?? CODEX_CLI_DEFAULT_MODEL;
+  const provider = await createCodexCliProvider({ command, argv, model });
   const collectProvenance = async () => {
     const base = await collectOfficeQualityProvenance();
     const sources = { ...base.sources };
-    for (const path of ['scripts/eval-office-codex-async.mjs', 'scripts/office-evaluation/codex-provider.mjs', 'scripts/office-evaluation/cli.mjs', 'scripts/office-evaluation/runner.mjs', 'scripts/office-evaluation/trace.mjs']) {
+    for (const path of ['scripts/eval-office-codex-async.mjs', 'scripts/office-evaluation/codex-provider.mjs', 'scripts/office-evaluation/cli.mjs', 'scripts/office-evaluation/runner.mjs', 'scripts/office-evaluation/trace.mjs', ...extraSourcePaths]) {
       sources[path] = createHash('sha256').update(await readFile(new URL(`../${path}`, import.meta.url))).digest('hex');
     }
-    const modelConfiguration = { provider: 'codex-cli', model: CODEX_CLI_DEFAULT_MODEL, adapter: provider.provenance, execution: OFFICE_CODEX_EVALUATION_EXECUTION };
+    const modelConfiguration = { provider: 'codex-cli', model, adapter: provider.provenance, execution };
     return { ...base, sources, modelConfiguration, bundleHash: qualityHash({ sources, modelConfiguration }) };
   };
 
@@ -118,13 +126,13 @@ async function main() {
     };
     try {
       await officeQualityCli(values, {
-        generate: createOfficeCoreEvaluation(runOfficeResponse, cancellation.signal), collectProvenance,
+        generate: createOfficeCoreEvaluation(runOfficeResponse, cancellation.signal, execution), collectProvenance,
         requireLiveConfiguration: async () => {}, // The actual CLI preflight already succeeded above.
         onFatalError: cancellation.abort,
         onRun: async ({ runId, bundleHash }) => {
           if (values.resume) {
             if (previousHeader.runId !== runId) throw new Error('Provider journal belongs to another evaluation run.');
-          } else await append({ type: 'office-codex-provider-run', runId, at: new Date().toISOString(), bundleHash, execution: OFFICE_CODEX_EVALUATION_EXECUTION });
+          } else await append({ type: 'office-codex-provider-run', runId, at: new Date().toISOString(), bundleHash, execution });
         },
         generateProvider: async input => {
           if (writeFailed) throw new Error('Provider journal write failed; no further model calls are allowed.');
@@ -143,5 +151,6 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(error => { console.error(describeOfficeCodexEvaluationError(error)); process.exitCode = 1; });
+  Promise.resolve().then(() => runOfficeCodexEvaluation(parseOfficeCodexEvaluationArgs()))
+    .catch(error => { console.error(describeOfficeCodexEvaluationError(error)); process.exitCode = 1; });
 }

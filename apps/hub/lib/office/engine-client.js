@@ -7,17 +7,20 @@ function generationRecord(value) {
  if(usage!==null&&!(usage&&['promptTokens','outputTokens','totalTokens'].every(key=>count(usage[key]))))return null;
  return {elapsedMs:value.elapsedMs,modelCalls:value.modelCalls,usage:usage===null?null:{promptTokens:usage.promptTokens,outputTokens:usage.outputTokens,totalTokens:usage.totalTokens}};
 }
-export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=process.env.COM_MOON_ENGINE_URL,secret=process.env.COM_MOON_SHARED_WEBHOOK_SECRET,retries=0}={}) {
+export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=process.env.COM_MOON_ENGINE_URL,secret=process.env.COM_MOON_SHARED_WEBHOOK_SECRET,retries=0,unknownOnTransportFailure=false}={}) {
  if(!engineUrl?.trim()||!secret?.trim()) return {status:'preview',error:'오피스 Engine 연결이 필요합니다. 입력은 보존됩니다.'};
  const attempts=Math.max(0,Math.min(retries,2));
  for(let attempt=0;attempt<=attempts;attempt++) {
+  let responseRead=false;
   try {
    const response=await fetcher(`${engineUrl.trim().replace(/\/$/,'')}/api/ai/office-chat`,{method:'POST',headers:{'content-type':'application/json','x-com-moon-shared-secret':secret.trim()},body:JSON.stringify({request,context}),cache:'no-store',redirect:'error',signal:AbortSignal.timeout(55000)});
-   const data=await response.json().catch(()=>null);
+   const data=await response.json().catch(error=>{if(unknownOnTransportFailure && !(error instanceof SyntaxError))throw error;return null;});
+   responseRead=true;
    if(data?.status==='preview' && response.status===202) return {status:'preview',error:'AI 연결이 필요합니다. 입력은 보존됩니다.'};
    // 2026-09-23 운영자 확정: 분류된 실패는 원인별 문구로 돌려준다. 그 밖의 실패는 기존 일반 오류다.
    const failure=data?.status==='error'?parseOfficeFailure(data.failure):null;
    if(failure) return {status:'error',error:officeFailureMessage(failure),failure};
+   if(unknownOnTransportFailure && !response.ok && response.status>=500) return {status:'unknown',error:'오피스 응답 수신을 확인하지 못했습니다. 저장된 회의 상태를 다시 확인해 주세요.'};
    if(!response.ok || data?.status!=='generated') {
     if(attempt<attempts && (response.status===502 || response.status===503)) {
      await new Promise(r=>setTimeout(r,600));
@@ -35,6 +38,9 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
    if(request.mode!=='council'&&data.discussion!==undefined)throw new Error('unexpected-discussion');
    return {status:'generated',...answer,...discussion,ownerId:request.ownerId,mode:request.mode,scope:request.scope,participants:request.participants,lens:null,simulation:data.simulation,version:data.version,model:typeof data.model==='string'?data.model:null,context,...(['traced','none','untraced'].includes(data.sourceCheck)?{sourceCheck:data.sourceCheck}:{}),...(generationRecord(data.generation)?{generation:generationRecord(data.generation)}:{})};
   }catch(err){
+   // A durable caller must not pay for another generation when the first
+   // response was lost or timed out. Legacy freeform callers keep their status.
+   if(unknownOnTransportFailure && !responseRead) return {status:'unknown',error:'오피스 응답 수신을 확인하지 못했습니다. 저장된 회의 상태를 다시 확인해 주세요.'};
    if(attempt<attempts) {
     await new Promise(r=>setTimeout(r,600));
     continue;

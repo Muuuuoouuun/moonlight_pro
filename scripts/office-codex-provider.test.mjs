@@ -24,7 +24,7 @@ async function setup(t, mode = 'success') {
     import { spawn } from 'node:child_process';
     const args = process.argv.slice(2), mode = args[0], capture = args[1];
     if (args.includes('--version')) { console.log('codex-cli 0.154.0'); process.exit(0); }
-    if (args.includes('--help')) { console.log(${JSON.stringify(requiredHelp)}); process.exit(0); }
+    if (args.includes('--help')) { console.log(${JSON.stringify(`${requiredHelp} --model`)}); process.exit(0); }
     let source = ''; for await (const chunk of process.stdin) source += chunk;
     const schemaPath = args[args.indexOf('--output-schema') + 1];
     fs.writeFileSync(capture, JSON.stringify({ args, source, schema: fs.readFileSync(schemaPath, 'utf8'), cwd: process.cwd(), files: fs.readdirSync(process.cwd()), appSecretsPresent: ['OPENAI_API_KEY','CODEX_API_KEY','GEMINI_API_KEY'].some(key => key in process.env) }));
@@ -107,6 +107,28 @@ async function setup(t, mode = 'success') {
   return { command: process.execPath, argv: [script, mode, capture], capture };
 }
 
+test('an explicitly selected evaluation model is passed once, bound across calls and distinguished from a reported version', async t => {
+  const options = await setup(t);
+  const model = 'gpt-5.6-luna';
+  const provider = await createCodexCliProvider({ ...options, model });
+  const result = await provider.generate(input);
+  assert.equal(result.ok, true);
+  assert.equal(result.model, model);
+  assert.equal(result.modelVersion, null);
+  assert.equal(provider.provenance.modelRequested, model);
+  assert.equal(provider.provenance.modelVersion, null);
+  const captured = JSON.parse(await readFile(options.capture, 'utf8'));
+  assert.equal(captured.args.filter(arg => arg === '--model').length, 1);
+  assert.equal(captured.args[captured.args.indexOf('--model') + 1], model);
+  assert.equal((await provider.generate({ ...input, model })).ok, true);
+  for (const changed of ['gpt-5.6-sol', CODEX_CLI_DEFAULT_MODEL]) {
+    assert.equal((await provider.generate({ ...input, model: changed })).reason, 'invalid-request');
+  }
+  for (const invalid of ['', null, '--model', 'two models', 'x\nsecret']) {
+    await assert.rejects(createCodexCliProvider({ ...options, model: invalid }), /invalid-codex-provider-options/);
+  }
+});
+
 test('the CLI adapter preserves both instruction channels and schema, uses the chosen command prefix, and reports real completion only', async t => {
   const options = await setup(t);
   const { generate, provenance } = await createCodexCliProvider(options);
@@ -157,7 +179,7 @@ test('SDK internal plans and nonfatal error items are observed without their con
   assert.equal(result.adapterMetadata.externalToolEventsObserved, 0);
   assert.equal(result.adapterMetadata.toolEventsObserved, 0);
   assert.equal(result.adapterMetadata.unsupportedItemEventsObserved, 0);
-  assert.equal(provider.provenance.adapterVersion, 'office-codex-cli-eval-v2');
+  assert.equal(provider.provenance.adapterVersion, CODEX_CLI_PROVIDER_VERSION);
   assert.equal(provider.provenance.itemProtocolContract, '@openai/codex-sdk@0.154.0/dist/index.d.ts');
   assert.equal(provider.provenance.toolEventsObservedMeaning, 'legacy-alias-of-externalToolEventsObserved');
   assert.deepEqual(result.adapterMetadata.events.filter(event => event.itemType === 'todo_list'), ['item.started', 'item.updated', 'item.completed'].map(type => ({ type, itemType: 'todo_list', itemCategory: 'internal-plan' })));

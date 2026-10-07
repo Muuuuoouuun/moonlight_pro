@@ -127,6 +127,10 @@
 .assignmentHead strong { font-size:14px; }
 .assignmentReason { border-top:1px solid var(--line-soft); padding-top:12px; color:var(--fg-muted); }
 .roster,.more,.taskPicker { display:grid; gap:12px; padding:16px; }
+.meetingTools { display:grid; gap:12px; padding-top:12px; }
+.taskCompare { display:grid; gap:12px; padding:12px; border:1px solid var(--line); border-radius:var(--r-sm); min-width:0; }
+.taskCompare p { margin:0; font-size:13px; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere; }
+.taskCompare p > span { display:block; margin-top:4px; }
 .roster > strong,.more > strong { font-size:13px; font-weight:600; }
 .member { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:transparent; color:var(--fg); cursor:pointer; }
 .member[aria-pressed="true"] { background:var(--surface-2); border-color:var(--accent-line); box-shadow:inset 1px 0 0 var(--accent); }

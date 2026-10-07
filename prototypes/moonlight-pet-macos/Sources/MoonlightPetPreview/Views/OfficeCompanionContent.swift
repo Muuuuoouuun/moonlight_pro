@@ -15,7 +15,9 @@ struct OfficeCompanionContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             tabs
-            if model.officeTab == .conversation {
+            if model.officeTab == .meeting {
+                CouncilCompanionContent(model: model, openConnection: openConnection, durableMeetings: true)
+            } else if model.officeTab == .conversation {
                 CouncilCompanionContent(model: model, openConnection: openConnection)
             } else if let detail = requests.detail {
                 result(detail)

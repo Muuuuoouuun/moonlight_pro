@@ -1,6 +1,6 @@
 // Browser-safe Office contract. Legacy persona/Guru/Council IDs remain independent.
 import { parseOfficeDeliberation } from './office-deliberation.js';
-export { OFFICE_DISCUSSION_VERSION, OFFICE_DELIBERATION_PROFILES, parseOfficeDeliberation, parseOfficeDiscussion, parseOfficeDiscussionTurn, officeDiscussionRounds } from './office-deliberation.js';
+export { OFFICE_DISCUSSION_VERSION, OFFICE_DISCUSSION_LEGACY_VERSION, OFFICE_DELIBERATION_PROFILES, parseOfficeDeliberation, parseOfficeDiscussion, parseOfficeDiscussionTurn, parseOfficeDiscussionResolutions, officeDiscussionRounds, officeDiscussionReviewTargets, evaluateOfficeDiscussion } from './office-deliberation.js';
 export const OFFICE_VERSION = '2026-09-22.v3';
 export const OFFICE_ROSTER = Object.freeze([
   {
