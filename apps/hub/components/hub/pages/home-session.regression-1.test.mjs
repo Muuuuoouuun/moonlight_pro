@@ -7,6 +7,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Button, EmptyState, Skeleton, TruthBadge, Kbd } from '../hub-primitives.jsx';
 import { Iconed } from '../hub-icons.jsx';
 import { fetchDailyBriefSignals, readEnvelope } from '../daily-brief-signals.js';
+import { formatSlot, nextWorkdayKey } from '../../../lib/check-items/slots.js';
+// 홈은 확인할 것 한 장씩(2026-09-30 스펙 §7.1)이다 — 카드·차례·레일 조각은 실제 모듈을 그대로 쓴다.
+const focusCard = await import(new URL('../check-items/focus-card.jsx', import.meta.url).href);
+const scheduleBand = await import(new URL('../check-items/schedule-band.jsx', import.meta.url).href);
 
 // Regression: QA-001 — a 401 appeared as a quiet Home and an empty calendar.
 // Found by /qa on 2026-10-02. Report: task-2/QA-REPORT.md (outside checkout).
@@ -18,14 +22,20 @@ const code = ts.transpileModule(source.replace(/^import[^\n]+\n/gm, '').replace(
 function surface(brief, schedule) {
   const hookReact = { ...React, useState: initial => React.useState(initial?.events ? schedule : initial) };
   const absent = () => null;
-  return new Function('React', 'deps', `const {Iconed,Button,EmptyState,Skeleton,TruthBadge,Kbd,readEnvelope,useDailyBriefSignals,useGuruRecommendations,DailyReviewCue,PublishDue,GuruRecommendation,GuruRecommendationList,GuidanceInlineTip,HomeMorningBrief,SIGNAL_TARGETS,recommendationForSubject}=deps;\n${code}\nreturn {Home,TodaySchedule,LoginRequired};`)(hookReact, {
+  const deps = {
     Iconed, Button, EmptyState, Skeleton, TruthBadge, Kbd, readEnvelope,
     useDailyBriefSignals: () => brief, useGuruRecommendations: () => ({status:'preview'}),
     DailyReviewCue: absent, PublishDue: absent, GuruRecommendation: absent,
     GuruRecommendationList: absent, GuidanceInlineTip: absent,
     HomeMorningBrief: () => React.createElement('div', null, 'morning-brief-visible'),
     SIGNAL_TARGETS: {}, recommendationForSubject: () => null,
-  });
+    useToast: () => Object.assign(() => {}, { success() {}, error() {}, info() {} }),
+    withEntityRef: (target) => target, formatHomeClock: () => '', CalendarOutcome: absent, ContactRecordDrawer: absent,
+    CheckItemProgress: focusCard.CheckItemProgress, FinishedTodayList: focusCard.FinishedTodayList, FocusCard: focusCard.FocusCard,
+    outcomeIsPanel: focusCard.outcomeIsPanel, useCheckItemDeck: focusCard.useCheckItemDeck, ScheduledList: scheduleBand.ScheduledList,
+    cancelScheduled: absent, postReceipt: absent, undoReceipt: absent, formatSlot, nextWorkdayKey,
+  };
+  return new Function('React', 'deps', `const {${Object.keys(deps).join(',')}}=deps;\n${code}\nreturn {Home,TodaySchedule,LoginRequired};`)(hookReact, deps);
 }
 
 test('a real unauthorized read renders login recovery instead of empty signals and schedules', async () => {
@@ -34,7 +44,7 @@ test('a real unauthorized read renders login recovery instead of empty signals a
   const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
   assert.match(html, /로그인이 필요합니다/);
   assert.match(html, /다시 로그인/);
-  assert.doesNotMatch(html, /확인할 신호 없음|확인된 신호가 없습니다|오늘 잡힌 일정이 없습니다|morning-brief-visible/);
+  assert.doesNotMatch(html, /확인할 것을 다 봤습니다|확인된 신호가 없습니다|오늘 잡힌 일정이 없습니다|morning-brief-visible/);
 });
 
 test('unauthorized calendar alone suppresses stale events and morning interpretation', () => {
@@ -47,7 +57,7 @@ test('unauthorized calendar alone suppresses stale events and morning interpreta
 test('confirmed empty reads retain their real empty state', () => {
   const { Home } = surface({status:'live',signals:[]}, {status:'live',events:[]});
   const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
-  assert.match(html, /확인할 신호 없음/);
+  assert.match(html, /확인할 것을 다 봤습니다/);
   assert.match(html, /오늘 잡힌 일정이 없습니다/);
   assert.match(html, /morning-brief-visible/);
   assert.doesNotMatch(html, /로그인이 필요합니다/);
