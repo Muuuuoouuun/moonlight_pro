@@ -5,11 +5,13 @@ import { CalendarOutcome } from "../calendar-outcome";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { topNavigationForRoute } from "../hub-nav";
-import { Badge, Card, IconButton, Button, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer, Skeleton, TruthBadge } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer, Skeleton, TruthBadge, TextField } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmToday } from "../rhythm-today";
 import { RhythmHistory } from "../rhythm-history";
-import { DecisionFollowups, DecisionMeta, decisionSourceOptions } from "./decision-journal";
+import { DecisionFollowups, DecisionMeta, decisionMatches, decisionMonthGroups, decisionSourceOptions } from "./decision-journal";
+import { linkDecision, saveDecisionWithFollowup } from "../decision-actions";
+import { todayKey } from "../check-items/check-item-actions";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import { calendarEventWhenLabel, mapGoogleEventsToGrid } from "@/lib/calendar-event-view";
@@ -791,20 +793,30 @@ function decisionPrefillFromQuery(params) {
   return { title, ...(projectId ? { projectId } : {}), ...(sourceRef ? { source: 'check-items', sourceRef } : {}) };
 }
 
+const decisionDayLabel = (dayKey) => (dayKey
+  ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' }).format(new Date(`${dayKey}T12:00:00+09:00`))
+  : '');
+
+// 새 결정은 "오늘 확정"으로 시작한다 — 결정 남기기는 대개 이미 정한 것을 적는 일이라 한 번에 끝나게(§13).
+// 아직 정하지 않은 것은 입력창의 `아직 미정` 한 번으로 바꾼다. 그래서 할 일은 같은 입력창에서 함께 만든다.
 function buildDecisionDraft() {
+  const today = todayKey();
   return {
     kind: 'decision',
     isNew: true,
     id: createClientId(),
-    title: '새 결정 기록',
-    date: '',
-    status: 'Draft',
+    taskId: createClientId(),
+    title: '',
+    date: decisionDayLabel(today),
+    status: 'Committed',
     by: 'Me',
     links: 0,
     reason: '',
     projectId: '',
     rationale: '',
-    decidedAt: '',
+    decidedAt: today,
+    taskTitle: '',
+    taskDueAt: '',
   };
 }
 
@@ -846,7 +858,10 @@ export function Decisions({ onNavigate, scope }) {
   const [createdFollowups, setCreatedFollowups] = React.useState({}); // { [decisionId]: task[] } until the ledger re-reads
   const createdFromQueryRef = React.useRef(false);
 
-  const mergedDecisions = [...localDecisions, ...(Array.isArray(liveDecisions) ? liveDecisions : [])]
+  // 저장한 새 결정은 다시 읽으면 기록에도 생긴다 — 같은 id는 기록 쪽 하나만 둔다.
+  const liveList = Array.isArray(liveDecisions) ? liveDecisions : [];
+  const liveIds = new Set(liveList.map(d => d.id));
+  const mergedDecisions = [...localDecisions.filter(d => !liveIds.has(d.id)), ...liveList]
     .map(d => (decisionEdits[d.id] ? { ...d, ...decisionEdits[d.id] } : d))
     .map(d => {
       if (!createdFollowups[d.id] || !Array.isArray(d.followups)) return d;
@@ -875,12 +890,6 @@ export function Decisions({ onNavigate, scope }) {
     : decisionSyncState === 'loading'
       ? 'syncing'
       : decisionSyncState;
-  const decisionColor = decisionComplete
-    ? 'var(--fg-muted)'
-    : decisionSyncState === 'error'
-      ? 'var(--danger)'
-      : 'var(--fg-faint)';
-
   // Page-level `n` — quick-record a decision when no drawer is open and focus isn't in a field.
   React.useEffect(() => {
     const onKey = (e) => {
@@ -907,7 +916,7 @@ export function Decisions({ onNavigate, scope }) {
       const patch = { ...prev[editDecisionId], [key]: value };
       if (key === 'decidedAt') {
         patch.status = value ? 'Committed' : 'Draft';
-        patch.date = value ? new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date(value)) : '';
+        patch.date = value ? decisionDayLabel(String(value).slice(0, 10)) : '';
       }
       if (key === 'rationale') patch.reason = value;
       return { ...prev, [editDecisionId]: patch };
@@ -917,11 +926,38 @@ export function Decisions({ onNavigate, scope }) {
   // Persist the drawer edit. New local rows (client-generated id) POST; existing rows PATCH.
   // `decided_at` left blank keeps the decision as Draft (work-ledger.js resolveDecisionStatus) —
   // there is no separate manual status field.
+  // 새 결정은 결정 → 그래서 할 일 순서로 한 번에(decision-actions.js) — 할 일만 실패하면 결정은 남았다고 말하고,
+  // 다시 저장하면 할 일부터 이어 간다. 기존 결정 편집은 지금처럼 PATCH 한 번.
+  const saveProgressRef = React.useRef({});
   const persistDecision = React.useCallback(async () => {
-    if (!editingDecision?.title?.trim()) return { ok: false, status: 'invalid-input' };
+    if (!editingDecision?.title?.trim()) return { ok: false, status: 'invalid-input', message: '무엇을 정했는지 적어 주세요.' };
+    if (editingDecision.isNew) {
+      const progress = saveProgressRef.current[editingDecision.id] || {};
+      const result = await saveDecisionWithFollowup(globalThis.fetch, {
+        title: editingDecision.title,
+        rationale: editingDecision.rationale,
+        projectId: editingDecision.projectId || null,
+        decidedAt: editingDecision.decidedAt || '',
+        source: editingDecision.source === 'check-items' ? 'check-items' : 'hub-work',
+        sourceRef: editingDecision.sourceRef || null,
+        taskTitle: editingDecision.taskTitle,
+        taskDueAt: editingDecision.taskDueAt,
+      }, { ids: { decisionId: editingDecision.id, taskId: editingDecision.taskId || createClientId() }, progress });
+      saveProgressRef.current[editingDecision.id] = result.progress;
+      if (!result.ok) {
+        return { ok: false, status: result.status === 'preview' ? 'preview' : 'error', message: result.message };
+      }
+      if (result.taskId) {
+        await linkDecision(globalThis.fetch, result.decisionId, { nextTaskId: result.taskId });
+        setCreatedFollowups(prev => ({ ...prev, [result.decisionId]: [{ id: result.taskId, title: editingDecision.taskTitle.trim(), status: 'todo', dueAt: editingDecision.taskDueAt || null }] }));
+      }
+      setLocalDecisions(prev => prev.map(d => (d.id === editDecisionId ? { ...d, isNew: false, followups: [] } : d)));
+      delete saveProgressRef.current[editingDecision.id];
+      return { ok: true, status: 'saved' };
+    }
     try {
       const response = await fetch('/api/hub/decisions', {
-        method: editingDecision.isNew ? 'POST' : 'PATCH',
+        method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           id: editingDecision.id,
@@ -929,30 +965,11 @@ export function Decisions({ onNavigate, scope }) {
           projectId: editingDecision.projectId || '',
           rationale: editingDecision.rationale || '',
           decidedAt: editingDecision.decidedAt || '',
-          source: editingDecision.source === 'check-items' ? 'check-items' : 'hub-work',
-          ...(editingDecision.isNew && editingDecision.sourceRef ? { sourceRef: editingDecision.sourceRef } : {}),
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
         return { ok: false, status: data.status || 'error' };
-      }
-      if (editingDecision.isNew) {
-        const realId = data.decision?.id || editingDecision.id;
-        setLocalDecisions(prev => prev.map(d => (d.id === editDecisionId ? { ...d, id: realId, isNew: false } : d)));
-        // Guard the re-key: id is client-generated up front, so realId === editDecisionId in
-        // the common case, and setting+deleting the same overlay key would silently drop the
-        // just-saved edits (title/rationale/decidedAt/status/reason) back to their stale
-        // pre-edit values. Only remap when the server actually assigned a different id.
-        if (realId !== editDecisionId) {
-          setDecisionEdits(prev => {
-            if (!prev[editDecisionId]) return prev;
-            const next = { ...prev, [realId]: prev[editDecisionId] };
-            delete next[editDecisionId];
-            return next;
-          });
-          setEditDecisionId(realId);
-        }
       }
       return { ok: true, status: data.status };
     } catch (error) {
@@ -962,7 +979,11 @@ export function Decisions({ onNavigate, scope }) {
 
   const sourceOptions = decisionSourceOptions(mergedDecisions.filter(d => !d.isNew));
   const activeSource = sourceOptions.some(option => option.key === sourceFilter) ? sourceFilter : 'all';
-  const list = activeSource === 'all' ? mergedDecisions : mergedDecisions.filter(d => d.isNew || d.source === activeSource);
+  const [query, setQuery] = React.useState('');
+  const bySource = activeSource === 'all' ? mergedDecisions : mergedDecisions.filter(d => d.isNew || d.source === activeSource);
+  const list = bySource.filter(d => d.isNew || decisionMatches(d, query));
+  const groups = decisionMonthGroups(list);
+  const searchable = mergedDecisions.filter(d => !d.isNew).length >= 6;
   const projectOptions = [{ value: '', label: '연결 안 함' }, ...(Array.isArray(linkableProjects) ? linkableProjects : []).map(p => ({ value: p.id, label: p.name }))];
 
   // 탭은 hub-nav의 SSOT에서 가져온다 — 페이지가 자체 목록을 들면 사이드바·탑바와 갈라진다.
@@ -996,7 +1017,7 @@ export function Decisions({ onNavigate, scope }) {
           <div>
             <h3 className="fx-section-title">
               결정 일지
-              <span className="mono" style={{ marginLeft: 10, fontSize: 11, fontWeight: 400, color: decisionColor }}>{decisionLabel}</span>
+              {decisionLabel !== 'live' ? <TruthBadge state={decisionLabel} style={{ marginLeft: 10 }} /> : null}
             </h3>
             <p className="fx-section-desc">
               정말 판단한 것의 기록. 어디서 나왔는지와 그래서 할 일이 함께 붙습니다.
@@ -1005,8 +1026,17 @@ export function Decisions({ onNavigate, scope }) {
           <Button variant="primary" size="sm" icon="plus" onClick={newDecision}>결정 남기기 <Kbd>N</Kbd></Button>
         </div>
 
-        {sourceOptions.length > 2 && (
-          <SegmentedControl label="출처" value={activeSource} onChange={setSourceFilter} options={sourceOptions} style={{ marginBottom: 16, flexWrap: 'wrap' }} />
+        {(sourceOptions.length > 2 || searchable) && (
+          <div className="dj-toolbar">
+            {sourceOptions.length > 2 && <SegmentedControl label="출처" value={activeSource} onChange={setSourceFilter} options={sourceOptions} style={{ flexWrap: 'wrap' }} />}
+            {searchable && <TextField label="결정 찾기" type="search" value={query} placeholder="제목·근거·프로젝트·할 일" onChange={(e) => setQuery(e.target.value)} fieldStyle={{ flex: '1 1 220px', maxWidth: 320 }} />}
+          </div>
+        )}
+        {query.trim() && list.filter(d => !d.isNew).length === 0 && (
+          <Card>
+            <EmptyState icon="decisions" title="찾는 결정이 없습니다" description={`'${query.trim()}'이(가) 들어간 결정이 없습니다.`}
+              action={<Button variant="secondary" size="sm" onClick={() => setQuery('')}>검색 지우기</Button>} />
+          </Card>
         )}
 
         {!decisionComplete && decisionSyncState !== 'loading' && (
@@ -1043,7 +1073,10 @@ export function Decisions({ onNavigate, scope }) {
 
         {list.length > 0 && (
           <div className="fx-timeline-rail">
-            {list.map(d => (
+            {groups.map(group => (
+              <React.Fragment key={group.key}>
+                <div className="dj-month" role="heading" aria-level={4}>{group.label} <span className="mono">{group.items.length}</span></div>
+                {group.items.map(d => (
                 <div key={d.id} className="fx-tl-item">
                   <div className="fx-tl-dot" aria-hidden="true" />
                   <div
@@ -1060,7 +1093,7 @@ export function Decisions({ onNavigate, scope }) {
                         label={d.status === 'Committed' ? '확정' : '미정'}
                         style={FX_CERTAINTY_CHROME}
                       />
-                      <span className="fx-tl-by">by {d.by}</span>
+                      <span className="fx-tl-by">{d.by === 'Me' ? '나' : d.by}</span>
                       <div style={{ flex: 1 }} />
                       <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <Iconed name="link" size={11} /> {d.links}
@@ -1073,7 +1106,7 @@ export function Decisions({ onNavigate, scope }) {
                         onClick={(e) => { e.stopPropagation(); setCouncilDecision(d); }}
                       />
                     </div>
-                    <div className="fx-tl-title">{d.title}</div>
+                    <div className="fx-tl-title">{d.title || '새 결정'}</div>
                     <div className="fx-tl-reason">{d.reason || '근거가 아직 없습니다.'}</div>
                     {!d.isNew && <DecisionMeta decision={d} />}
                   </div>
@@ -1085,6 +1118,8 @@ export function Decisions({ onNavigate, scope }) {
                     }}
                   />
                 </div>
+                ))}
+              </React.Fragment>
             ))}
           </div>
         )}
@@ -1094,10 +1129,11 @@ export function Decisions({ onNavigate, scope }) {
       {editingDecision && (
         <EditDrawer
           title={editingDecision.isNew ? '결정 남기기' : '결정 편집'}
-          subtitle={editingDecision.decidedAt ? '확정' : '미정 · 결정일을 정하면 확정으로 바뀝니다'}
+          subtitle={editingDecision.decidedAt ? `확정 · ${editingDecision.date || ''}`.trim() : '미정 · 정하면 확정으로 바꾸세요'}
+          saveLabel={editingDecision.isNew ? (editingDecision.taskTitle?.trim() ? '결정과 할 일 남기기' : '결정 남기기') : '변경사항 저장'}
           record={editingDecision}
           fields={[
-            { key: 'title', label: '제목', placeholder: '어떤 결정인가요?' },
+            { key: 'title', label: '무엇을 정했나', placeholder: '예: 가격은 월 3만 원으로 간다' },
             { key: 'decidedAt', label: '결정일', inputType: 'date', row: 'meta' },
             { key: 'projectId', label: '연결된 프로젝트', type: 'select', row: 'meta', options: projectOptions },
           ]}
@@ -1120,10 +1156,11 @@ export function Decisions({ onNavigate, scope }) {
           </div>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <textarea
+              aria-label="근거"
               value={editingDecision.rationale || ''}
               onChange={(e) => updateDraft('rationale', e.target.value)}
-              placeholder="맥락, 선택지, 근거를 적어주세요."
-              rows={5}
+              placeholder="왜 이렇게 정했나 — 맥락, 고른 것과 버린 것."
+              rows={4}
               style={{
                 width: '100%', resize: 'vertical',
                 background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
@@ -1131,6 +1168,23 @@ export function Decisions({ onNavigate, scope }) {
               }}
             />
           </label>
+          <div className="dj-drawer-row">
+            <SegmentedControl
+              label="확정 여부"
+              value={editingDecision.decidedAt ? 'confirmed' : 'draft'}
+              onChange={(key) => updateDraft('decidedAt', key === 'confirmed' ? (editingDecision.decidedAt || todayKey()) : '')}
+              options={[{ key: 'confirmed', label: '확정' }, { key: 'draft', label: '아직 미정' }]}
+            />
+          </div>
+          {editingDecision.isNew && (
+            <div className="dj-drawer-task">
+              <TextField label="그래서 할 일 (선택)" value={editingDecision.taskTitle || ''} maxLength={300}
+                placeholder="이 결정으로 생기는 다음 행동 하나" onChange={(e) => updateDraft('taskTitle', e.target.value)} />
+              {editingDecision.taskTitle?.trim() ? (
+                <TextField label="기한 (선택)" type="date" value={editingDecision.taskDueAt || ''} onChange={(e) => updateDraft('taskDueAt', e.target.value)} fieldStyle={{ maxWidth: 200 }} />
+              ) : null}
+            </div>
+          )}
         </EditDrawer>
       )}
 

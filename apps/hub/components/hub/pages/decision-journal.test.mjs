@@ -8,7 +8,7 @@ import { decisionDraftTarget } from '../../../lib/signal-targets.js';
 import { toCheckItem } from '../../../lib/check-items/catalog.js';
 
 // 결정 일지(확인할 것 스펙 §6) — 출처 칩, 막힘 풀림, 그래서 할 일(없으면 한 줄 만들기, 못 읽으면 모름).
-const { DecisionFollowups, DecisionMeta, decisionSourceOptions } = await import(new URL('./decision-journal.jsx', import.meta.url).href);
+const { DecisionFollowups, DecisionMeta, decisionMatches, decisionMonthGroups, decisionSourceOptions } = await import(new URL('./decision-journal.jsx', import.meta.url).href);
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 
@@ -25,8 +25,12 @@ test('행 메타: 출처 칩 · 연결 프로젝트 · 막힘 풀림 며칠을 �
 
 test('그래서 할 일: 있으면 상태 글리프와 함께, 없으면 한 줄 만들기, 못 읽었으면 없다고 하지 않는다', () => {
   const linked = render(DecisionFollowups, { decision: unblock });
-  assert.match(linked, /data-lifecycle="done"/);
+  // 체크로 바로 끝내고 다시 연다 — 상태는 체크와 취소선이 말한다(완료 = 중립, §5.3).
+  assert.match(linked, /role="checkbox" aria-checked="true" aria-label="다시 열기: A안 견적 보내기"/);
   assert.match(linked, /dj-task--done/);
+  assert.match(linked, /할 일 추가/);
+  const doing = render(DecisionFollowups, { decision: { ...unblock, followups: [{ id: 't2', title: '견적', status: 'doing' }] } });
+  assert.match(doing, /data-lifecycle="active"/);
   assert.match(render(DecisionFollowups, { decision: { ...unblock, followups: [] } }), /한 줄로 바로 만들기/);
   assert.match(render(DecisionFollowups, { decision: { ...unblock, followups: null } }), /그래서 할 일을 읽지 못했습니다/);
   assert.equal(render(DecisionFollowups, { decision: { ...unblock, isNew: true } }), '');
@@ -57,11 +61,44 @@ test('Decisions 화면은 결정 일지 — 이름·버튼·출처 저장·카�
   assert.match(work, /결정 남기기 <Kbd>N<\/Kbd>/);
   assert.doesNotMatch(work, /Record decision/);
   // 입력창 안내와 카드의 확실성 라벨은 한국어 직접 라벨만(DESIGN.md §5.3) — 내부 값 Committed/Draft는 화면에 내지 않는다.
-  assert.match(work, /subtitle=\{editingDecision\.decidedAt \? '확정' : '미정 · 결정일을 정하면 확정으로 바뀝니다'\}/);
-  assert.doesNotMatch(work, /'미정 · Draft'|Committed로 바뀝니다/);
+  assert.match(work, /'미정 · 정하면 확정으로 바꾸세요'/);
+  assert.doesNotMatch(work, /'미정 · Draft'|Committed로 바뀝니다|by \{d\.by\}/);
   assert.match(work, /decisionPrefillFromQuery\(searchParams\)/);
-  assert.match(work, /sourceRef: editingDecision\.sourceRef/);
+  assert.match(work, /sourceRef: editingDecision\.sourceRef \|\| null/);
+  // 결정 남기기 한 번에 결정 + 그래서 할 일(§13) — 새 결정은 오늘 확정으로 시작한다.
+  assert.match(work, /saveDecisionWithFollowup\(globalThis\.fetch/);
+  assert.match(work, /label="그래서 할 일 \(선택\)"/);
+  assert.match(work, /decidedAt: today,/);
+  assert.match(work, /options=\{\[\{ key: 'confirmed', label: '확정' \}, \{ key: 'draft', label: '아직 미정' \}\]\}/);
   // 할 일 입력은 role=button 카드 밖(형제)에 둔다.
   assert.match(work, /<\/div>\s*<DecisionFollowups/);
   assert.match(read('../hub-nav.js'), /label: '결정 일지', path: 'dashboard\/work\/decisions'/);
+});
+
+test('찾기는 제목·근거·프로젝트·할 일에서, 낱말이 모두 들어간 결정만', () => {
+  const decision = { title: '가격 A안', reason: '일정 안에 끝낼 수 있다', projectName: '프로젝트 C', followups: [{ title: '견적 보내기' }] };
+  assert.equal(decisionMatches(decision, ''), true);
+  assert.equal(decisionMatches(decision, '가격 견적'), true);
+  assert.equal(decisionMatches(decision, '프로젝트 c'), true);
+  assert.equal(decisionMatches(decision, '가격 환불'), false);
+  assert.equal(decisionMatches({ title: 'x', followups: null }, 'x'), true);
+});
+
+test('타임라인은 달로 나뉘고, 결정일 없는 미정은 미정 묶음', () => {
+  const groups = decisionMonthGroups([
+    { id: 'a', decidedAt: '' },
+    { id: 'b', decidedAt: '2026-10-07T01:00:00Z' },
+    { id: 'c', decidedAt: '2026-10-01' },
+    { id: 'd', decidedAt: '2026-09-30T16:00:00Z' }, // 10월 1일 01시 KST
+    { id: 'e', decidedAt: '2026-09-12T00:00:00Z' },
+  ]);
+  assert.deepEqual(groups.map((group) => [group.label, group.items.map((item) => item.id).join('')]), [
+    ['미정', 'a'], ['2026년 10월', 'bcd'], ['2026년 9월', 'e'],
+  ]);
+});
+
+test('그래서 할 일 체크는 PATCH 한 번 — 실패하면 원래대로 돌린다', async () => {
+  const source = read('./decision-journal.jsx');
+  assert.match(source, /sendJson\(fetchImpl, '\/api\/hub\/tasks', 'PATCH', \{ id: task\.id, status: next \}\)/);
+  assert.match(source, /if \(!saved\.ok\) \{\s*setStatusOverride/);
 });

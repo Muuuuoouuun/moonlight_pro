@@ -5,33 +5,12 @@
 // 쓰고, 중간에 멈추면 무엇이 남았는지 그대로 말한다. `progress`를 넘기면 이미 끝난 단계는 건너뛴다.
 
 import { deliveryDraft } from '../../../../packages/project-delivery/index.ts';
-
-const OK = new Set(['saved', 'duplicate']);
+import { failureReason as why, linkDecision, newDecisionIds, saveDecisionWithFollowup, sendJson as send } from './decision-actions';
 
 export const UNBLOCK_BRANCHES = Object.freeze(['resolved', 'decision', 'next-version']);
 
-async function send(fetchImpl, url, method, body) {
-  try {
-    const response = await fetchImpl(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await response.json().catch(() => ({}));
-    const status = String(data?.status || (response.ok ? 'saved' : 'error'));
-    return { ok: response.ok && OK.has(status), status, data };
-  } catch (error) {
-    return { ok: false, status: 'error', data: { error: error instanceof Error ? error.message : String(error) } };
-  }
-}
-
-function why(result) {
-  if (result.status === 'preview') return '저장소 연결이 필요합니다 — 저장되지 않았습니다.';
-  if (result.status === 'invalid-input') return String(result.data?.error || '입력을 확인해 주세요.');
-  return '';
-}
-
 /** 재시도해도 같은 결정·할 일이 되도록 한 번 만들어 두는 id 묶음. */
-export function newUnblockIds(now = Date.now()) {
-  return { decisionId: globalThis.crypto.randomUUID(), taskId: globalThis.crypto.randomUUID(), decidedAt: new Date(now).toISOString() };
-}
-
+export const newUnblockIds = newDecisionIds;
 /** 다음 버전으로 넘길 범위 — 기존 글 뒤에 한 줄로 덧붙인다. */
 export function appendNextVersion(current, addition) {
   const before = String(current || '').trim();
@@ -99,44 +78,21 @@ export async function unblockProject(fetchImpl, project, input, { ids = newUnblo
   }
 
   const decision = input.decision || {};
-  const title = String(decision.title || '').trim();
-  if (!title) return { ok: false, stage: 'input', message: '무엇을 정했는지 적어 주세요.', progress: done, unblocked: false };
-  const taskTitle = String(decision.taskTitle || '').trim();
   const clearBlocker = decision.clearBlocker !== false;
 
-  // 1. 결정 — 실패하면 멈춘다(아무것도 안 남음).
-  if (!done.decision) {
-    const saved = await send(fetchImpl, '/api/hub/decisions', 'POST', {
-      id: ids.decisionId,
-      title: title.slice(0, 300),
-      rationale: String(decision.rationale || '').trim().slice(0, 4000) || null,
-      projectId: project.id,
-      decidedAt: ids.decidedAt,
-      source: 'project-unblock',
-      sourceRef: { type: 'project', id: project.id },
-    });
-    if (!saved.ok) return { ok: false, stage: 'decision', progress: done, unblocked: false, message: why(saved) || '결정을 남기지 못했습니다. 아무것도 저장되지 않았습니다.' };
-    done.decision = true;
-  }
-
-  // 2. 그래서 할 일 — 실패하면 결정은 남았다고 말한다.
-  if (taskTitle && !done.task) {
-    const task = await send(fetchImpl, '/api/hub/tasks', 'POST', {
-      id: ids.taskId,
-      title: taskTitle.slice(0, 300),
-      projectId: project.id,
-      decisionId: ids.decisionId,
-      source: 'project-unblock',
-      ...(decision.taskDueAt ? { dueAt: decision.taskDueAt } : {}),
-      ...(signalKey ? { signalKey } : {}),
-    });
-    if (!task.ok) {
-      return { ok: false, stage: 'task', progress: done, decisionId: ids.decisionId, unblocked: false,
-        message: `결정은 남았습니다 · 할 일을 만들지 못했습니다${why(task) ? ` — ${why(task)}` : ''}. 다시 누르면 할 일부터 이어 갑니다.` };
-    }
-    done.task = true;
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('moonlight:tasks-saved'));
-  }
+  // 1·2. 결정 → 그래서 할 일(decision-actions.js) — 결정이 실패하면 멈추고, 할 일이 실패하면 결정은 남았다고 말한다.
+  const saved = await saveDecisionWithFollowup(fetchImpl, {
+    title: decision.title,
+    rationale: decision.rationale,
+    projectId: project.id,
+    source: 'project-unblock',
+    sourceRef: { type: 'project', id: project.id },
+    taskTitle: decision.taskTitle,
+    taskDueAt: decision.taskDueAt,
+    signalKey,
+  }, { ids, progress: { decision: done.decision, task: done.task } });
+  Object.assign(done, saved.progress);
+  if (!saved.ok) return { ...saved, progress: done, unblocked: false };
 
   // 3. 막힌 점 비우고 진행으로 — 버전 충돌이면 결정은 남았고 막힘만 남았다고 말한다.
   if (clearBlocker && !done.project) {
@@ -152,13 +108,7 @@ export async function unblockProject(fetchImpl, project, input, { ids = newUnblo
   }
 
   // 4. 결정에 표시용 링크 — 실패해도 막힘 풀기는 성공이다(결정 일지는 할 일의 decision_id로도 찾는다).
-  if (done.task || done.project) {
-    await send(fetchImpl, '/api/hub/decisions', 'PATCH', {
-      id: ids.decisionId,
-      ...(done.task ? { nextTaskId: ids.taskId } : {}),
-      ...(done.project ? { unblockedProjectId: project.id } : {}),
-    });
-  }
+  await linkDecision(fetchImpl, ids.decisionId, { nextTaskId: done.task ? ids.taskId : null, unblockedProjectId: done.project ? project.id : null });
 
   return { ok: true, stage: 'done', progress: done, decisionId: ids.decisionId, taskId: done.task ? ids.taskId : null, unblocked: done.project, message: '' };
 }

@@ -950,6 +950,7 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
   const accent = s.tone === 'danger' ? 'var(--danger)' : 'var(--moon-300)';
   const hasRecord = s.source?.ref && !isSentinelRef(s.source.ref);
   const openRecord = () => onNavigate?.(withEntityRef(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief', s.source));
+  const firstOutcome = s.signalKey && Array.isArray(s.outcomes) ? s.outcomes[0] || null : null;
   return (
     <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
       position: 'relative', overflow: 'hidden',
@@ -970,7 +971,20 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
       <div style={{ fontSize: 'clamp(18px, 2.2vw, 22px)', fontWeight: 650, letterSpacing: '-0.025em', color: 'var(--fg)', marginBottom: 8, lineHeight: 1.25 }}>{s.title}</div>
       <div style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.55, maxWidth: '76ch' }}>{s.summary}</div>
       <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {s.decisions.map((d, i) => (
+        {/* 확인할 것 카드면 홈과 같은 끝내기 1번을 그대로 — 누르면 홈에서 이 카드가 맨 앞에 오고 그 입력이
+            펼쳐진다(2026-09-30 스펙 §7.1 Q-CF2·§13). 끝내기를 두 화면에 따로 구현하지 않는다. */}
+        {firstOutcome ? (
+          <>
+            <Button variant="primary" size="md" icon="bolt" onClick={() => onNavigate?.(firstOutcome.kind === 'navigate'
+              ? withEntityRef(SIGNAL_TARGETS[firstOutcome.action], s.source)
+              : `dashboard/home?check=${encodeURIComponent(s.signalKey)}&do=1`)}>
+              {firstOutcome.label}
+            </Button>
+            <Button variant="secondary" size="md" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/home?check=${encodeURIComponent(s.signalKey)}`)}>
+              다른 방법으로 끝내기
+            </Button>
+          </>
+        ) : s.decisions.map((d, i) => (
           <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="md" icon={d.primary ? 'bolt' : null}
             onClick={() => {
               const target = SIGNAL_TARGETS[d.action];

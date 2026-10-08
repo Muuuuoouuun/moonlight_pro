@@ -7,7 +7,7 @@ import { CalendarOutcome } from "../calendar-outcome";
 import { PublishDue } from "./publish-due";
 import { SIGNAL_TARGETS, withEntityRef } from '@/lib/signal-targets';
 import { ContactRecordDrawer } from '../contact-record-form';
-import { CheckItemProgress, FinishedTodayList, FocusCard, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card';
+import { CheckItemProgress, FinishedTodayList, FocusCard, RemainingList, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card';
 import { cancelScheduled, postReceipt, undoReceipt } from '../check-items/check-item-actions';
 import { ScheduledList } from '../check-items/schedule-band';
 import { formatSlot, nextWorkdayKey } from '@/lib/check-items/slots';
@@ -148,7 +148,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
     [finishedToday],
   );
   // 확인할 것 — 한 장씩(2026-09-30 스펙 §7.1). 건너뛰기는 이번 차례 끝으로, 이전은 마지막 건너뛴 카드를 앞으로.
-  const { deck, current: active, next, skip, previous, markPending, clearPending } = useCheckItemDeck(signals, { finishedKeys });
+  const { deck, current: active, next, skip, previous, focus, markPending, clearPending } = useCheckItemDeck(signals, { finishedKeys });
   const [panel, setPanel] = React.useState(null);
   const [recordTarget, setRecordTarget] = React.useState(null);
   const recordItemRef = React.useRef(null);
@@ -164,6 +164,13 @@ export function Home({ onNavigate, onGuidanceAsk }) {
   }), [schedule]);
 
   React.useEffect(() => { setPanel(null); }, [activeKey]);
+  // 딥링크로 고른 카드가 맨 앞에 오면 그 끝내기를 연다(한 번).
+  React.useEffect(() => {
+    const link = deepLinkRef.current;
+    if (!link || !active || (active.signalKey || active.id) !== link.key) return;
+    deepLinkRef.current = false;
+    if (Number.isInteger(link.index) && active.outcomes?.[link.index]) activateRef.current?.(link.index);
+  }, [active]);
   // 다시 읽은 결과가 오면 저장 중으로 감춰 둔 카드를 푼다 — 규칙이 여전히 잡으면 `stillFlagged`로 다시 보인다.
   React.useEffect(() => { clearPending(); }, [signals, clearPending]);
 
@@ -191,6 +198,8 @@ export function Home({ onNavigate, onGuidanceAsk }) {
     }
     if (outcomeIsPanel(outcome)) setPanel((open) => (open === outcome.key ? null : outcome.key));
   }, [active, onNavigate]);
+  const activateRef = React.useRef(activate);
+  activateRef.current = activate;
 
   // 시간 잡기는 끝냄이 아니다 — 카드는 그 시간까지 빠지고, 토스트에서 바로 되돌릴 수 있다(§4.7 저장 3).
   const scheduled = React.useCallback((item, { slot, receipt, eventId }) => {
@@ -218,8 +227,33 @@ export function Home({ onNavigate, onGuidanceAsk }) {
     if (result.ok) { toast.success('보류를 되돌렸습니다'); reload(); } else toast.error(result.message);
   }, [toast]);
 
+  // 끝낸 직후 토스트 — 보류는 그 자리에서 되돌릴 수 있다(오늘 끝낸 것 목록까지 내려가지 않게, §13).
+  const finished = React.useCallback((item, result = {}) => {
+    const receipt = result.outcome === 'snoozed' && result.receipt?.id ? result.receipt : null;
+    finish(item, { ...result, action: receipt ? { label: '되돌리기', onClick: () => undo(receipt) } : undefined });
+  }, [finish, undo]);
+
+  // 딥링크 ?check=<signalKey>&do=<1~4> — 오늘 화면의 끝내기 버튼이 이 카드를 맨 앞에 두고 그 끝내기를 연다.
+  // 기록을 읽은 뒤 한 번만, 그리고 주소에서 지운다(DESIGN.md §8.1 딥링크). 그 카드가 없으면 조용히 무시하지
+  // 않고 알린다 — 이미 끝났거나 보류된 카드일 수 있다.
+  const deepLinkRef = React.useRef(null);
+  React.useEffect(() => {
+    if (deepLinkRef.current !== null || typeof window === 'undefined') return;
+    if (status !== 'live' && status !== 'partial') return;
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get('check');
+    deepLinkRef.current = key ? { key, index: Number(params.get('do')) - 1 } : false;
+    if (!key) return;
+    params.delete('check');
+    params.delete('do');
+    const query = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    if (deck.some((item) => (item.signalKey || item.id) === key)) focus(key);
+    else { deepLinkRef.current = false; toast.info('그 카드는 이미 끝났거나 보류 중입니다.'); }
+  }, [status, deck, focus, toast]);
+
   // §8.1 페이지 레벨 단축키 — 입력 요소 밖 + 드로어·다이얼로그 닫힘일 때만. 1–4 끝내기, T 시간 잡기,
-  // J/→ 건너뛰기, K/← 이전.
+  // D 결정으로 남기기, J/→ 건너뛰기, K/← 이전.
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -237,6 +271,9 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       } else if ((e.key === 't' || e.key === 'T') && active.signalKey && active.schedule) {
         e.preventDefault();
         setPanel((open) => (open === 'schedule' ? null : 'schedule'));
+      } else if ((e.key === 'd' || e.key === 'D') && active.signalKey && active.links?.some((link) => link.action === 'decision')) {
+        e.preventDefault();
+        setPanel((open) => (open === 'decide' ? null : 'decide'));
       } else if (/^[1-4]$/.test(e.key) && active.outcomes?.[Number(e.key) - 1]) {
         e.preventDefault();
         activate(Number(e.key) - 1);
@@ -283,6 +320,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
           ) : (
             <>
               <CheckItemProgress finished={finishedToday} remaining={deck.length} scheduled={waitingCount} date={formatEyebrowDate(new Date())} />
+              <RemainingList deck={deck} currentKey={activeKey} onFocus={focus} />
               {active ? (
                 <FocusCard
                   item={active}
@@ -293,7 +331,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
                   onScheduled={(result) => scheduled(active, result)}
                   calendar={calendar}
                   blocks={scheduledBlocks}
-                  onFinished={(result) => finish(active, result)}
+                  onFinished={(result) => finished(active, result)}
                   onSkip={skip}
                   onNavigate={onNavigate}
                   recommendation={recommendation ? (
@@ -333,7 +371,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       </div>
 
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기 · <Kbd>T</Kbd> 시간 잡기 · <Kbd>J</Kbd> 건너뛰기 · <Kbd>K</Kbd> 이전
+        <Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기 · <Kbd>T</Kbd> 시간 잡기 · <Kbd>D</Kbd> 결정 · <Kbd>J</Kbd> 건너뛰기 · <Kbd>K</Kbd> 이전
       </footer>
 
       {recordTarget && (

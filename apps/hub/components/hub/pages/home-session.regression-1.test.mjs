@@ -31,7 +31,7 @@ function surface(brief, schedule) {
     SIGNAL_TARGETS: {}, recommendationForSubject: () => null,
     useToast: () => Object.assign(() => {}, { success() {}, error() {}, info() {} }),
     withEntityRef: (target) => target, formatHomeClock: () => '', CalendarOutcome: absent, ContactRecordDrawer: absent,
-    CheckItemProgress: focusCard.CheckItemProgress, FinishedTodayList: focusCard.FinishedTodayList, FocusCard: focusCard.FocusCard,
+    CheckItemProgress: focusCard.CheckItemProgress, RemainingList: focusCard.RemainingList, FinishedTodayList: focusCard.FinishedTodayList, FocusCard: focusCard.FocusCard,
     outcomeIsPanel: focusCard.outcomeIsPanel, useCheckItemDeck: focusCard.useCheckItemDeck, ScheduledList: scheduleBand.ScheduledList,
     cancelScheduled: absent, postReceipt: absent, undoReceipt: absent, formatSlot, nextWorkdayKey,
   };
