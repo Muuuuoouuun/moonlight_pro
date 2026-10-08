@@ -5,7 +5,7 @@ import React from 'react';
 import ts from 'typescript';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Button, EmptyState, Skeleton, TruthBadge, Kbd, useToast } from '../hub-primitives.jsx';
-import { CheckItemProgress, FinishedTodayList, FocusCard, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card.jsx';
+import { CheckItemProgress, FinishedTodayList, FocusCard, RemainingList, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card.jsx';
 import { ScheduledList } from '../check-items/schedule-band.jsx';
 import { Iconed } from '../hub-icons.jsx';
 import { fetchDailyBriefSignals, readEnvelope } from '../daily-brief-signals.js';
@@ -24,9 +24,9 @@ const code = ts.transpileModule(source.replace(/^import[^\n]+\n/gm, '').replace(
 function surface(brief, schedule) {
   const hookReact = { ...React, useState: initial => React.useState(initial?.events ? schedule : initial) };
   const absent = () => null;
-  return new Function('React', 'deps', `const {Iconed,Button,EmptyState,Skeleton,TruthBadge,Kbd,useToast,CheckItemProgress,FinishedTodayList,FocusCard,outcomeIsPanel,useCheckItemDeck,ScheduledList,readEnvelope,useDailyBriefSignals,useGuruRecommendations,DailyReviewCue,PublishDue,GuruRecommendation,GuruRecommendationList,GuidanceInlineTip,HomeMorningBrief,SIGNAL_TARGETS,recommendationForSubject}=deps;\n${code}\nreturn {Home,TodaySchedule,LoginRequired};`)(hookReact, {
+  return new Function('React', 'deps', `const {Iconed,Button,EmptyState,Skeleton,TruthBadge,Kbd,useToast,CheckItemProgress,FinishedTodayList,FocusCard,RemainingList,outcomeIsPanel,useCheckItemDeck,ScheduledList,readEnvelope,useDailyBriefSignals,useGuruRecommendations,DailyReviewCue,PublishDue,GuruRecommendation,GuruRecommendationList,GuidanceInlineTip,HomeMorningBrief,SIGNAL_TARGETS,recommendationForSubject}=deps;\n${code}\nreturn {Home,TodaySchedule,LoginRequired};`)(hookReact, {
     Iconed, Button, EmptyState, Skeleton, TruthBadge, Kbd, useToast,
-    CheckItemProgress, FinishedTodayList, FocusCard, outcomeIsPanel, useCheckItemDeck, ScheduledList, readEnvelope,
+    CheckItemProgress, FinishedTodayList, FocusCard, RemainingList, outcomeIsPanel, useCheckItemDeck, ScheduledList, readEnvelope,
     useDailyBriefSignals: () => brief, useGuruRecommendations: () => ({status:'preview'}),
     DailyReviewCue: absent, PublishDue: absent, GuruRecommendation: absent,
     GuruRecommendationList: absent, GuidanceInlineTip: absent,

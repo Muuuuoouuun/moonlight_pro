@@ -9,8 +9,8 @@
 
 import React from 'react';
 import { Iconed } from '../hub-icons';
-import { Kbd, TextField } from '../hub-primitives';
-import { SIGNAL_TARGETS, decisionDraftTarget, withEntityRef } from '@/lib/signal-targets';
+import { Kbd, SegmentedControl, TextAreaField, TextField } from '../hub-primitives';
+import { SIGNAL_TARGETS, withEntityRef } from '@/lib/signal-targets';
 import {
   createTaskForItem,
   dayAfter,
@@ -26,9 +26,10 @@ import { MAX_SNOOZE_DAYS } from '@/lib/check-items/outcome-input';
 import { ScheduleBand, ScheduledNowBand } from './schedule-band';
 import { UnblockPanel } from '../unblock-panel';
 import { useCheckWrite } from '../use-check-write';
+import { linkDecision, newDecisionIds, saveDecisionWithFollowup } from '../decision-actions';
 import './check-items.css';
 
-const PANEL_KEYS = new Set(['task', 'reschedule', 'snooze', 'unblock-resolved', 'unblock-decision']);
+const PANEL_KEYS = new Set(['task', 'reschedule', 'snooze', 'unblock-resolved', 'unblock-decision', 'decide']);
 const UNBLOCK_BRANCH = { 'unblock-resolved': 'resolved', 'unblock-decision': 'decision' };
 
 export function outcomeIsPanel(outcome) {
@@ -62,6 +63,41 @@ export function CheckItemProgress({ finished = [], remaining = 0, scheduled = 0,
         </div>
       ) : null}
     </div>
+  );
+}
+
+// ── 남은 목록 ───────────────────────────────────────────────────
+// 한 장씩이 기본이지만, 무엇이 남았는지 한눈에 보고 바로 고를 수 있어야 한다(§13). 접힌 채로 둔다 — 표면 예산.
+// 고르면 그 카드가 맨 앞에 온다(차례를 바꾸는 것뿐, 아무것도 저장하지 않는다).
+export function RemainingList({ deck = [], currentKey = null, onFocus }) {
+  if (deck.length < 2) return null;
+  return (
+    <details className="ci-remaining">
+      <summary>남은 <span className="mono">{deck.length}</span>건 한눈에 보기 · 골라서 먼저 보기</summary>
+      <ol>
+        {deck.map((item) => {
+          const key = item.signalKey || item.id;
+          const current = key === currentKey;
+          const tags = [
+            item.scheduled ? '잡아 둔 시간' : '',
+            item.returnedFromSnooze ? '보류했던 것' : '',
+            item.stillFlagged ? '오늘 기록 있음' : '',
+          ].filter(Boolean);
+          return (
+            <li key={key}>
+              <button type="button" className="ci-remaining__row hub-row" aria-current={current ? 'true' : undefined} disabled={current} onClick={() => onFocus?.(key)}>
+                {item.tone === 'danger'
+                  ? <span role="img" aria-label="긴급" style={{ display: 'inline-flex', color: 'var(--danger)' }}><Iconed name="flag" size={12} /></span>
+                  : <span aria-hidden="true" className="ci-remaining__dot" />}
+                <span className="ci-remaining__kind">{item.kindLabel || item.kind}</span>
+                <span className="ci-remaining__title">{item.title}</span>
+                <span className="ci-remaining__meta">{current ? '지금 보는 카드' : tags.join(' · ')}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </details>
   );
 }
 
@@ -194,7 +230,7 @@ function SnoozePanel({ item, onFinished, fetchImpl }) {
     if (result.stale) return;
     if (result.restore) { setUntil(result.restore.until); setNote(result.restore.note); }
     if (!result.ok) { setError(result.message); return; }
-    onFinished?.({ outcome: 'snoozed', message: `${formatDayLabel(until)}에 다시 보여 드립니다` });
+    onFinished?.({ outcome: 'snoozed', message: `${formatDayLabel(until)}에 다시 보여 드립니다`, receipt: result.receipt });
   }
 
   return (
@@ -245,6 +281,82 @@ function CardUnblockPanel({ item, branch, onFinished, fetchImpl }) {
   );
 }
 
+// 결정으로 남기기 — 카드를 떠나지 않고 결정 + 그래서 할 일을 남긴다(확인할 것 스펙 §6·§13).
+// 영수증: 결정은 decision_logged, 할 일까지 만들었으면 task_created도 — 그 할 일이 열려 있는 동안 카드는 숨는다.
+const DECISION_SOURCE_TYPES = new Set(['project', 'deal', 'lead', 'account', 'automation', 'content']);
+export function decisionSeedFor(item) {
+  const subject = item?.subject || {};
+  return {
+    title: subject.name ? `${subject.name} · ` : '',
+    projectId: subject.type === 'project' ? subject.id : null,
+    sourceRef: DECISION_SOURCE_TYPES.has(subject.type) && subject.id ? { type: subject.type, id: String(subject.id) } : null,
+  };
+}
+
+function DecidePanel({ item, onFinished, fetchImpl }) {
+  const seed = React.useMemo(() => decisionSeedFor(item), [item]);
+  const [title, setTitle] = React.useState(seed.title);
+  const [rationale, setRationale] = React.useState('');
+  const [certainty, setCertainty] = React.useState('confirmed');
+  const [taskTitle, setTaskTitle] = React.useState('');
+  const [taskDueAt, setTaskDueAt] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [progress, setProgress] = React.useState({});
+  // 같은 요청은 같은 결정·할 일·영수증 id로만 다시 보낸다 — 입력이 바뀌면 이전 입력을 먼저 복원한다(useCheckWrite).
+  const { run, busy, locked } = useCheckWrite(`decide:${item.signalKey}`, fetchImpl);
+
+  async function submit(event) {
+    event.preventDefault();
+    const input = { item, title: title.trim(), rationale, certainty, taskTitle: taskTitle.trim(), taskDueAt };
+    const result = await run(input, () => ({ ...newDecisionIds(), receiptId: crypto.randomUUID(), taskReceiptId: crypto.randomUUID() }), async (ownedFetch, command) => {
+      const { item: target, ...form } = command.input;
+      const from = decisionSeedFor(target);
+      const saved = await saveDecisionWithFollowup(ownedFetch, {
+        title: form.title, rationale: form.rationale, projectId: from.projectId, sourceRef: from.sourceRef, source: 'check-items',
+        decidedAt: form.certainty === 'confirmed' ? undefined : '',
+        taskTitle: form.taskTitle, taskDueAt: form.taskDueAt, signalKey: target.signalKey,
+      }, { ids: command.ids, context: command.context });
+      if (!saved.ok) return saved;
+      await linkDecision(ownedFetch, saved.decisionId, { nextTaskId: saved.taskId, context: command.context });
+      const receipt = await postReceipt(ownedFetch, target, { outcome: 'decision_logged', recordRef: { table: 'decisions', id: saved.decisionId }, requestId: command.ids.receiptId, context: command.context });
+      if (!receipt.ok) return { ...receipt, progress: saved.progress };
+      if (saved.taskId) {
+        const taskReceipt = await postReceipt(ownedFetch, target, { outcome: 'task_created', recordRef: { table: 'tasks', id: saved.taskId }, requestId: command.ids.taskReceiptId, context: command.context });
+        if (!taskReceipt.ok) return { ...taskReceipt, progress: saved.progress };
+      }
+      return { ...receipt, decisionId: saved.decisionId, taskId: saved.taskId, progress: saved.progress };
+    });
+    if (result.stale) return;
+    if (result.restore) {
+      setTitle(result.restore.title); setRationale(result.restore.rationale); setCertainty(result.restore.certainty);
+      setTaskTitle(result.restore.taskTitle); setTaskDueAt(result.restore.taskDueAt);
+    }
+    if (result.progress) setProgress(result.progress);
+    if (!result.ok) { setError(result.message); return; }
+    onFinished?.({ outcome: 'decision_logged', message: result.taskId ? '결정을 남기고 할 일을 만들었습니다' : '결정을 남겼습니다' });
+  }
+
+  const frozen = locked || busy;
+  return (
+    <form className="ci-panel" onSubmit={submit} aria-label="결정으로 남기기">
+      <TextField label="무엇을 정했나" required value={title} maxLength={300} disabled={frozen} onChange={(e) => setTitle(e.target.value)} autoFocus />
+      <TextAreaField label="왜 (선택)" rows={2} value={rationale} maxLength={4000} disabled={frozen} onChange={(e) => setRationale(e.target.value)} />
+      <SegmentedControl label="확정 여부" value={certainty} onChange={(key) => { if (!frozen) setCertainty(key); }}
+        options={[{ key: 'confirmed', label: '지금 확정' }, { key: 'draft', label: '아직 미정' }]} />
+      <div className="ci-panel__row">
+        <TextField label="그래서 할 일 (선택)" value={taskTitle} maxLength={300} disabled={frozen} onChange={(e) => setTaskTitle(e.target.value)} fieldStyle={{ flex: '1 1 220px' }} />
+        <TextField label="기한" type="date" value={taskDueAt} disabled={frozen} onChange={(e) => setTaskDueAt(e.target.value)} fieldStyle={{ flex: '0 0 160px' }} />
+      </div>
+      <PanelError message={error} />
+      <div className="ci-panel__actions">
+        <button type="submit" className="fx-pill-btn fx-pill-btn--primary" disabled={busy || !title.trim()}>
+          {busy ? '저장 중…' : progress.decision ? '같은 요청 다시 확인' : locked ? '이전 결정 요청 확인' : taskTitle.trim() ? '결정과 할 일 남기기' : '결정 남기기'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── 카드 ─────────────────────────────────────────────────────────
 export function FocusCard({
   item,
@@ -279,6 +391,7 @@ export function FocusCard({
     if (key === 'reschedule') return <ReschedulePanel key={`reschedule-${item.signalKey}`} {...props} />;
     if (key === 'snooze') return <SnoozePanel key={`snooze-${item.signalKey}`} {...props} />;
     if (UNBLOCK_BRANCH[key] && item.unblock) return <CardUnblockPanel key={`unblock-${item.signalKey}`} branch={UNBLOCK_BRANCH[key]} {...props} />;
+    if (key === 'decide') return <DecidePanel key={`decide-${item.signalKey}`} {...props} />;
     return null;
   };
 
@@ -352,13 +465,18 @@ export function FocusCard({
       {links.length ? (
         <div className="ci-links">
           <span style={{ marginRight: 6 }}>그 밖에</span>
-          {links.map((link) => (
-            <button key={link.label} type="button" className="fx-pill-btn fx-pill-btn--ghost" onClick={() => onNavigate?.(link.action === 'decision' ? decisionDraftTarget(item) : withEntityRef(SIGNAL_TARGETS[link.action], item.source))}>
+          {links.map((link) => (link.action === 'decision' ? (
+            <button key={link.label} type="button" className="fx-pill-btn fx-pill-btn--ghost" aria-expanded={panel === 'decide'} onClick={() => onPanel?.(panel === 'decide' ? null : 'decide')}>
+              <Kbd>D</Kbd> {link.label}
+            </button>
+          ) : (
+            <button key={link.label} type="button" className="fx-pill-btn fx-pill-btn--ghost" onClick={() => onNavigate?.(withEntityRef(SIGNAL_TARGETS[link.action], item.source))}>
               {link.label} <Iconed name="arrowRight" size={11} />
             </button>
-          ))}
+          )))}
         </div>
       ) : null}
+      {panel === 'decide' && item.signalKey ? renderPanel('decide') : null}
 
       <div className="ci-card-foot">
         <button type="button" className="fx-pill-btn fx-pill-btn--ghost" onClick={onSkip}>
@@ -409,8 +527,15 @@ export function useCheckItemDeck(items, { finishedKeys = new Set() } = {}) {
     setSkipped(skipped.slice(0, -1));
   }, [skipped]);
 
+  // 남은 목록·딥링크에서 고른 카드를 맨 앞으로(건너뛴 목록에 있었으면 뺀다).
+  const focus = React.useCallback((key) => {
+    if (!key) return;
+    setPinned(key);
+    setSkipped((prev) => prev.filter((k) => k !== key));
+  }, []);
+
   const markPending = React.useCallback((key) => setPending((prev) => new Set(prev).add(key)), []);
   const clearPending = React.useCallback(() => setPending(new Set()), []);
 
-  return { deck, current, next, skip, previous, markPending, clearPending };
+  return { deck, current, next, skip, previous, focus, markPending, clearPending };
 }

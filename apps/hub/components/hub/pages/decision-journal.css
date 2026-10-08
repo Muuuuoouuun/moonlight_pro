@@ -59,3 +59,32 @@
   font-size: 12px;
   color: var(--danger);
 }
+
+/* 도구 줄(출처·찾기), 달 머리, 입력창 안 줄 — §13 사용성 다듬기 */
+.hub-app .dj-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.hub-app .dj-month {
+  margin: 8px 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+
+.hub-app .dj-month .mono { margin-left: 6px; font-size: 11px; color: var(--fg-dim); }
+
+.hub-app .dj-drawer-row { margin-top: 12px; }
+
+.hub-app .dj-drawer-task {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}

@@ -5,39 +5,12 @@
 // 쓰고, 중간에 멈추면 무엇이 남았는지 그대로 말한다. `progress`를 넘기면 이미 끝난 단계는 건너뛴다.
 
 import { deliveryDraft } from '../../../../packages/project-delivery/index.ts';
-
-import { sendCheckWrite, taskAcknowledges, decisionAcknowledges } from '@/lib/check-write-ack';
+import { failureReason as why, linkDecision, newDecisionIds, saveDecisionWithFollowup, sendJson as send } from './decision-actions';
 
 export const UNBLOCK_BRANCHES = Object.freeze(['resolved', 'decision', 'next-version']);
 
-async function send(fetchImpl, url, method, body) {
-  const acknowledges = (data, submitted) => {
-    if (url === '/api/hub/tasks') return taskAcknowledges(data.task, submitted);
-    if (url === '/api/hub/decisions' && method === 'POST') return decisionAcknowledges(data.decision, submitted);
-    if (url === '/api/hub/projects') {
-      const row = data.project;
-      return row?.id === submitted.id && typeof row.workspace_id === 'string'
-        && (!submitted.expectedWorkspaceId || row.workspace_id === submitted.expectedWorkspaceId)
-        && row.status === 'active' && row.meta?.delivery?.blocker === ''
-        && row.meta.delivery.nextVersion === submitted.delivery.nextVersion;
-    }
-    return data.decision?.id === submitted.id && (!submitted.nextTaskId || data.decision.meta?.nextTaskId === submitted.nextTaskId) && (!submitted.unblockedProjectId || data.decision.meta?.unblockedProjectId === submitted.unblockedProjectId);
-  };
-  return sendCheckWrite(fetchImpl, url, method, body, acknowledges);
-}
-
-function why(result) {
-  if (result.status === 'preview') return '저장소 연결이 필요합니다 — 저장되지 않았습니다.';
-  if (result.status === 'invalid-input') return String(result.data?.error || '입력을 확인해 주세요.');
-  if (result.status === 'unknown') return '저장 여부를 확인하지 못했습니다. 같은 입력과 ID로 다시 확인하세요.';
-  return '';
-}
-
 /** 재시도해도 같은 결정·할 일이 되도록 한 번 만들어 두는 id 묶음. */
-export function newUnblockIds(now = Date.now()) {
-  return { decisionId: globalThis.crypto.randomUUID(), taskId: globalThis.crypto.randomUUID(), decidedAt: new Date(now).toISOString() };
-}
-
+export const newUnblockIds = newDecisionIds;
 /** 다음 버전으로 넘길 범위 — 기존 글 뒤에 한 줄로 덧붙인다. */
 export function appendNextVersion(current, addition) {
   const before = String(current || '').trim();
@@ -81,7 +54,7 @@ export async function readProjectForUnblock(fetchImpl, projectId) {
 /**
  * @param project  { id, name, delivery, updatedAt }
  * @param input    { branch, note?, nextVersionText?, decision?: { title, rationale, taskTitle, taskDueAt, clearBlocker } }
- * @param options  { ids, progress, signalKey }
+ * @param options  { ids, progress, signalKey, context }
  * @returns {{ ok, stage, message, progress, decisionId?, taskId?, unblocked, conflict? }}
  *   progress — { decision, task, project } 끝난 단계. 실패 뒤 같은 값을 넘기면 남은 단계만 한다.
  */
@@ -106,46 +79,21 @@ export async function unblockProject(fetchImpl, project, input, { ids = newUnblo
   }
 
   const decision = input.decision || {};
-  const title = String(decision.title || '').trim();
-  if (!title) return { ok: false, stage: 'input', message: '무엇을 정했는지 적어 주세요.', progress: done, unblocked: false };
-  const taskTitle = String(decision.taskTitle || '').trim();
   const clearBlocker = decision.clearBlocker !== false;
 
-  // 1. 결정 — 명시 ACK를 확인하지 못하면 같은 ID로 멈춘다.
-  if (!done.decision) {
-    const saved = await send(fetchImpl, '/api/hub/decisions', 'POST', {
-      id: ids.decisionId,
-      ...(context ? { expectedWorkspaceId: context.workspaceId, recoveryOwner: context.ownerKey } : {}),
-      title: title.slice(0, 300),
-      rationale: String(decision.rationale || '').trim().slice(0, 4000) || null,
-      projectId: project.id,
-      decidedAt: ids.decidedAt,
-      source: 'project-unblock',
-      sourceRef: { type: 'project', id: project.id },
-    });
-    if (!saved.ok) return { ok: false, stage: 'decision', progress: done, unblocked: false, message: why(saved) || '결정의 저장 응답을 확인하지 못했습니다. 같은 요청으로 다시 확인하세요.' };
-    done.decision = true;
-  }
-
-  // 2. 그래서 할 일 — 실패하면 결정은 남았다고 말한다.
-  if (taskTitle && !done.task) {
-    const task = await send(fetchImpl, '/api/hub/tasks', 'POST', {
-      id: ids.taskId,
-      ...(context ? { expectedWorkspaceId: context.workspaceId, recoveryOwner: context.ownerKey } : {}),
-      title: taskTitle.slice(0, 300),
-      projectId: project.id,
-      decisionId: ids.decisionId,
-      source: 'project-unblock',
-      ...(decision.taskDueAt ? { dueAt: decision.taskDueAt } : {}),
-      ...(signalKey ? { signalKey } : {}),
-    });
-    if (!task.ok) {
-      return { ok: false, stage: 'task', progress: done, decisionId: ids.decisionId, unblocked: false,
-        message: `결정은 남았습니다 · ${task.status === 'unknown' ? '할 일의 저장 응답을 확인하지 못했습니다' : '할 일을 만들지 못했습니다'}${why(task) ? ` — ${why(task)}` : ''}. 다시 누르면 같은 할 일 요청부터 이어 갑니다.` };
-    }
-    done.task = true;
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('moonlight:tasks-saved'));
-  }
+  // 1·2. 결정 → 그래서 할 일(decision-actions.js) — 결정이 실패하면 멈추고, 할 일이 실패하면 결정은 남았다고 말한다.
+  const saved = await saveDecisionWithFollowup(fetchImpl, {
+    title: decision.title,
+    rationale: decision.rationale,
+    projectId: project.id,
+    source: 'project-unblock',
+    sourceRef: { type: 'project', id: project.id },
+    taskTitle: decision.taskTitle,
+    taskDueAt: decision.taskDueAt,
+    signalKey,
+  }, { ids, progress: { decision: done.decision, task: done.task }, context });
+  Object.assign(done, saved.progress);
+  if (!saved.ok) return { ...saved, progress: done, unblocked: false };
 
   // 3. 막힌 점 비우고 진행으로 — 버전 충돌이면 결정은 남았고 막힘만 남았다고 말한다.
   if (clearBlocker && !done.project) {
@@ -162,12 +110,7 @@ export async function unblockProject(fetchImpl, project, input, { ids = newUnblo
 
   // 4. 결정에 표시용 링크 — 실패해도 막힘 풀기는 성공이다(결정 일지는 할 일의 decision_id로도 찾는다).
   if (done.task || done.project) {
-    const linked = await send(fetchImpl, '/api/hub/decisions', 'PATCH', {
-      id: ids.decisionId,
-      ...(context ? { expectedWorkspaceId: context.workspaceId, recoveryOwner: context.ownerKey } : {}),
-      ...(done.task ? { nextTaskId: ids.taskId } : {}),
-      ...(done.project ? { unblockedProjectId: project.id } : {}),
-    });
+    const linked = await linkDecision(fetchImpl, ids.decisionId, { nextTaskId: done.task ? ids.taskId : null, unblockedProjectId: done.project ? project.id : null, context });
     if (!linked.ok) return { ok: true, stage: 'done', progress: done, decisionId: ids.decisionId, taskId: done.task ? ids.taskId : null, unblocked: done.project, message: '기록은 남았지만 결정의 표시용 연결은 확인하지 못했습니다.' };
   }
 
