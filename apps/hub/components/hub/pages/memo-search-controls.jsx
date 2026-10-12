@@ -35,7 +35,7 @@ export function MemoSearchControls({ filters, context, onApply }) {
         <Button variant="outline" aria-expanded={open} aria-controls="memo-search-details" onClick={() => setOpen((value) => !value)}>조건 {open ? '접기' : '열기'}</Button>
       </div>
       {open && <div id="memo-search-details" className="memo-search-details">
-        <div className="memo-actions memo-search-presets" aria-label="빠른 기간 선택">{[[1, '오늘'], [7, '최근 7일'], [30, '최근 30일']].map(([days, label]) => <Button variant="outline" key={days} onClick={() => {
+        <div className="memo-actions memo-search-presets" aria-label="빠른 기간 선택">{[[1, '오늘'], [7, '최근 7일'], [30, '최근 30일']].map(([days, label]) => <Button variant="outline" size="xs" key={days} onClick={() => {
           const next = { ...draft, ...memoPeriod(days) }; setDraft(next); onApply(next);
         }}>{label}</Button>)}</div>
         <div className="memo-search-filter-grid"><TextField label="시작일 · 한국 시간" type="date" value={draft.dateFrom} onChange={(event) => update({ dateFrom: event.target.value })} />

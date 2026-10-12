@@ -318,7 +318,7 @@ export function Memos() {
                 { value: 'decision_rationale', label: '의사결정 배경 분석' },
                 { value: 'general', label: '종합 패턴 분석' },
               ]} />
-              <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternLoading || !analysisReady}>
+              <Button variant="primary" size="xs" icon={patternLoading ? 'clock' : 'sparkle'} onClick={runPatternAnalysis} disabled={patternLoading || !analysisReady}>
                 {patternLoading ? '분석 중…' : '패턴 분석'}
               </Button>
               <Button variant="ghost" size="xs" onClick={() => setSelection({ owner: analysisOwner, ids: [] })}>선택 취소</Button>

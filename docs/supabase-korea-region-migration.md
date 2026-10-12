@@ -2,6 +2,7 @@
 
 > **완료: 2026-09-20.** `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`)
 > 운영자 확정: 데이터 전부 이관 · 로컬 전용 개발 프로젝트 분리 · 구 프로젝트는 백업으로 보존
+> **현재 상태: 2026-10-03 20:17 KST.** 운영자 승인으로 `moonlight_os-dev`(`hypvqvtenfiwqaozazdw`)를 일시중지해 `INACTIVE`를 확인했다. 구 싱가포르도 이미 `INACTIVE`였으며, `moonlight_os-kr`(`ncgpnqfulnlshegalmbd`) 하나만 `ACTIVE_HEALTHY`로 남아 무료 활성 프로젝트 슬롯 한 칸이 비었다. 중지 완료 후 Vercel Hub·Engine health HTTP 200·`status: ok`, Hub→Engine `live`, 인증 프로젝트 원장 `live`·13개를 확인했다. §6의 개발 DB 미완 기록은 2026-09-20 당시 상태다.
 
 ## 1. 결과
 

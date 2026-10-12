@@ -1724,7 +1724,22 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
                 </span>
               )}
             </div>,
-            agenda.state !== 'live' ? <SyncBadge state={agenda.state} /> : null
+            // 카드당 CTA 1개(daily-brief-layout.test.mjs) — 연결된 상태(live·error)는 헤더 버튼이,
+            // 미연결(preview)은 아래 본문의 연결 버튼 하나가 맡는다. 푸터는 두지 않는다.
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {agenda.state !== 'live' && <SyncBadge state={agenda.state} />}
+              {(agenda.state === 'live' || agenda.state === 'error') && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  icon="calendar"
+                  onClick={() => onNavigate?.('dashboard/work/calendar')}
+                  title="캘린더 열기 및 일정 관리"
+                >
+                  캘린더 열기
+                </Button>
+              )}
+            </div>
           )}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             {agenda.state === 'error' ? (
@@ -1732,11 +1747,12 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
                 캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.
               </div>
             ) : agenda.state !== 'live' ? (
-              <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
                   <Iconed name="calendar" size={14} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
                   <span>Google Calendar 미연결</span>
                 </div>
+                <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/work/calendar')}>Google Calendar 연결</Button>
               </div>
             ) : agendaItems.length === 0 ? (
               <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
@@ -1746,7 +1762,7 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {agendaItems.slice(0, 3).map((event, i) => (
-                  <div key={event.outcomeKey || event.id} style={{ padding: '8px 14px', borderBottom: i < Math.min(agendaItems.length, 3) - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                  <div key={event.outcomeKey || event.id} className="hub-row" style={{ padding: '8px 14px', borderBottom: i < Math.min(agendaItems.length, 3) - 1 ? '1px solid var(--line-soft)' : 'none' }}>
                     <CalendarOutcome eventKey={event.outcomeKey} title={event.title} whenLabel={event.whenLabel} />
                   </div>
                 ))}
@@ -1757,12 +1773,6 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
                 )}
               </div>
             )}
-          </div>
-          {/* 카드당 CTA 1개 — 미연결·읽기 실패·실시간 상태별 라벨은 푸터 하나가 맡는다. */}
-          <div style={{ padding: '8px 12px', borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', borderBottomLeftRadius: 'var(--r-lg)', borderBottomRightRadius: 'var(--r-lg)', marginTop: 'auto' }}>
-            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/calendar')} style={{ width: '100%', justifyContent: 'center' }}>
-              {agenda.state === 'live' || agenda.state === 'error' ? '캘린더 열기' : 'Google Calendar 연결'}
-            </Button>
           </div>
         </Card>
 
