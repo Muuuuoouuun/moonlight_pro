@@ -7,7 +7,7 @@ import * as delivery from '../../../../../packages/project-delivery/index.ts';
 const source = readFileSync(new URL('./project-delivery.jsx', import.meta.url), 'utf8');
 const compiled = ts.transpile(source.replace(/^import .*;\n/gm, '').replace(/^export /gm, ''), { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 });
 function load(React, extra = {}) {
-  const scope = { React, Button: 'Button', Drawer: 'Drawer', Checkbox: 'Checkbox', Iconed: 'Iconed', styles: new Proxy({}, { get: (_, key) => key }), requestAnimationFrame: fn => fn(), ...delivery, ...extra };
+  const scope = { React, Button: 'Button', Drawer: 'Drawer', Checkbox: 'Checkbox', ChipToggle: 'ChipToggle', Iconed: 'Iconed', styles: new Proxy({}, { get: (_, key) => key }), requestAnimationFrame: fn => fn(), ...delivery, ...extra };
   return new Function(...Object.keys(scope), `${compiled}\nreturn { ProjectDeliveryEditor, ProjectDeliverySummary, deliveryVerificationAt, deliveryValidationIssue, Field };`)(...Object.values(scope));
 }
 function walk(node, predicate, ancestors = []) {

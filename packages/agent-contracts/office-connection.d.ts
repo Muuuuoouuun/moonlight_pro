@@ -1,0 +1,15 @@
+export const OFFICE_CONNECTION_VERSION: string;
+export const OFFICE_CONNECTION_POLICY: Readonly<Record<string, unknown>>;
+export type OfficeWorkBoundary = {scope:'classin'|'personal';brandId:string|null};
+export type OfficeArtifactRef = {id:string;revision:number;contentHash:string;sourceHash:string};
+export type OfficeTimeCalculation = {kind:'net_time';basis:'estimated'|'observed';weeks:number;savedMinutesPerWeek:number;setupMinutes:number;maintenanceMinutesPerWeek:number;firstPeriodMinutes:number;repeatedPeriodMinutes:number};
+export function parseOfficeWorkBoundary(value:unknown):OfficeWorkBoundary;
+export function sameOfficeWorkBoundary(a:unknown,b:unknown):boolean;
+export function parseOfficeArtifactRef(value:unknown):OfficeArtifactRef;
+export function canonicalOfficeConnectionJSON(value:unknown):string;
+export function calculateOfficeNetTime(value:Omit<OfficeTimeCalculation,'firstPeriodMinutes'|'repeatedPeriodMinutes'>):OfficeTimeCalculation;
+export function parseOfficeTimeCalculation(value:unknown):OfficeTimeCalculation;
+export function parseOfficeConnectionReview(value:unknown,artifact:OfficeArtifactRef,goalBinding:string):any;
+export function parseOfficeConnectionPacket(value:unknown):any;
+export function officeConnectionBinding(value:any):string;
+export function officeConnectionHumanCurrent(value:any):boolean;

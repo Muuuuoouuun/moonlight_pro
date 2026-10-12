@@ -6,6 +6,7 @@ import { Button, Card, CertaintyBadge, Drawer, EmptyState, Kbd, SegmentedControl
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { createResearchRunWriter, researchContentHref, researchRunSummary } from './research-run-ui';
 import { useContentLedger } from '../use-content-ledger';
+import { researchBriefReadHref, selectedResearchBrief } from '@/lib/research-inbox-navigation';
 import './research-inbox.css';
 
 const STATUS = [
@@ -33,7 +34,7 @@ const commandMessage = result => ({
 async function readJson(url, signal, collection = 'briefs') {
   const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
   const data = await response.json();
-  if (!response.ok || !data || data.source === 'error' || !['live', 'partial', 'preview', 'error'].includes(data.status)
+  if (!response.ok || !data || data.source === 'error' || !['live', 'partial', 'preview', 'error', 'not-found', 'invalid-input'].includes(data.status)
     || (['live', 'partial'].includes(data.status) && (!Array.isArray(data[collection])
       || data[collection].some(row => !row || typeof row.id !== 'string')))) throw Error('read-failed');
   return data;
@@ -45,6 +46,7 @@ export function ResearchFacts({ brief }) {
 
 export function ResearchInbox() {
   const router = useRouter(), searchParams = useSearchParams(), toast = useToast();
+  const briefParam = searchParams.get('brief'), brandParam = searchParams.get('brand');
   const [state, setState] = React.useState({ status: 'loading', briefs: [] });
   const catalog = useContentLedger({ catalogOnly: true });
   const [statusFilter, setStatusFilter] = React.useState(searchParams.get('brief') ? 'all' : 'new');
@@ -79,11 +81,11 @@ export function ResearchInbox() {
     await Promise.resolve();
     if (!current()) return;
     try {
-      const data = await readJson('/api/hub/research/briefs', controller.signal);
+      const data = await readJson(researchBriefReadHref(briefParam, brandParam), controller.signal);
       if (current()) setState({ ...data, briefs: ['live', 'partial'].includes(data.status) ? data.briefs : [] });
     } catch { if (current()) setState({ status: 'error', briefs: [] }); }
     finally { if (current()) lifecycle.controller = null; }
-  }, [lifecycle]);
+  }, [lifecycle, briefParam, brandParam]);
   const reloadRuns = React.useCallback(async () => {
     if (!lifecycle.active) return;
     lifecycle.runsController?.abort();
@@ -99,6 +101,10 @@ export function ResearchInbox() {
     } catch { if (current()) setRunsState({ status: 'error', runs: [], settings: null }); }
     finally { if (current()) lifecycle.runsController = null; }
   }, [lifecycle]);
+  React.useEffect(() => {
+    setSelectedId(briefParam); setMobileDetail(briefParam !== null);
+    if (briefParam !== null) { setStatusFilter('all'); setBrandFilter(brandParam || 'all'); }
+  }, [briefParam, brandParam]);
   React.useEffect(() => {
     const first = runsState.settings?.brands?.[0];
     if (first) setRunForm(current => current.brand ? current : { ...current, brand: first.slug, limit: first.maxPerRun || 1 });
@@ -130,7 +136,7 @@ export function ResearchInbox() {
   const all = state.briefs || [];
   const visible = all.filter(brief => (statusFilter === 'all' || brief.state === statusFilter)
     && (brandFilter === 'all' || brief.brandId === brandFilter));
-  const selected = visible.find(brief => brief.id === selectedId) || visible[0] || null;
+  const selected = selectedResearchBrief(visible, briefParam, selectedId);
   const brands = catalog.brands || [];
   const brandName = id => brands.find(brand => brand.id === id)?.name || '브랜드';
 
@@ -139,7 +145,7 @@ export function ResearchInbox() {
     router.replace(`/dashboard/content/research?brief=${brief.id}${brandFilter === 'all' ? '' : `&brand=${brandFilter}`}`, { scroll: false });
   }
   function back() {
-    setMobileDetail(false);
+    setMobileDetail(false); setSelectedId(null);
     router.replace(`/dashboard/content/research${brandFilter === 'all' ? '' : `?brand=${brandFilter}`}`, { scroll: false });
   }
   async function post(command) {
@@ -223,10 +229,12 @@ export function ResearchInbox() {
     <div className="research-filters"><div className="research-status"><SegmentedControl label="검토 상태" options={STATUS.map(entry => ({ key: entry.value, label: entry.label }))} value={statusFilter} onChange={setStatusFilter} /></div><SelectField label="브랜드" value={brandFilter} options={[{ value: 'all', label: '모든 브랜드' },
       ...brands.map(brand => ({ value: brand.id, label: brand.name }))]} onChange={event => setBrandFilter(event.target.value)} /></div>
     {state.status === 'loading' ? <Card><Skeleton lines={5} label="리서치함 불러오는 중" /></Card> :
-      state.status === 'error' ? <Card><EmptyState icon="x" title="리서치를 불러오지 못했어요" description="연결 상태를 확인한 뒤 다시 읽어 주세요." action={<Button variant="outline" onClick={reload}>다시 불러오기</Button>} /></Card> :
+      state.status === 'error' ? <Card><div role="alert"><EmptyState icon="x" title="리서치를 불러오지 못했어요" description="연결 상태를 확인한 뒤 다시 읽어 주세요." action={<Button variant="outline" onClick={reload}>다시 불러오기</Button>} /></div></Card> :
+      ['not-found', 'invalid-input'].includes(state.status) ? <Card><div role="alert"><EmptyState icon="x" title="링크의 리서치를 찾을 수 없어요" description="주소가 잘못됐거나 현재 범위에서 확인할 수 없는 자료입니다. 원래 링크를 확인해주세요." action={<><Button variant="outline" onClick={reload}>같은 링크 다시 확인</Button><Button variant="ghost" onClick={back}>최근 목록 보기</Button></>} /></div></Card> :
       state.status === 'preview' ? <Card><EmptyState icon="link" title="리서치 저장소 연결 필요" description="저장소와 마이그레이션을 연결한 뒤 사용합니다." /></Card> :
       <div className={`research-workspace${mobileDetail ? ' research-detail-open' : ''}`}>
         <section className="research-list" aria-label="리서치 후보"><div className="research-list-head"><strong>검토용 원고 <span className="num">{visible.length}</span></strong>
+          {briefParam !== null && <Button variant="ghost" size="xs" onClick={back}>최근 목록 보기</Button>}
           {state.status === 'partial' && <TruthBadge state="partial" label="최근 100건만 표시" />}</div>
           {visible.length ? visible.map(brief => <button className={`research-row hub-row${selected?.id === brief.id ? ' research-row--active' : ''}`}
             type="button" key={brief.id} onClick={() => open(brief)} aria-current={selected?.id === brief.id ? 'true' : undefined}>

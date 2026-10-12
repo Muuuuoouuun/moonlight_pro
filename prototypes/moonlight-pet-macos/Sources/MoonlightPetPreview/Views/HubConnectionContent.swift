@@ -86,6 +86,9 @@ struct HubConnectionContent: View {
             focusedField = .username
         }
         .onDisappear { password = "" }
+        .onChange(of: model.hub.needsLogin) { _, needsLogin in
+            if !needsLogin && (model.hub.taskReady || model.hub.calendarReady) { done() }
+        }
     }
 
     private var addressSettings: some View {

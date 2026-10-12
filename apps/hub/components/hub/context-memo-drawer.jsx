@@ -5,7 +5,7 @@ import { Button, Drawer, EmptyState, Skeleton } from './hub-primitives';
 import { MemoComposer } from './pages/memo-composer';
 import { MemoUseComposer } from './pages/memo-use-composer';
 import { fetchJournal, useMemoDocument } from './pages/use-memos';
-import { contextMemoKey } from '@/lib/project-customer-context';
+import { claimContextMemoId, contextMemoKey, contextMemoStorageKey, releaseContextMemoId } from '@/lib/project-customer-context';
 import { isCanonicalUuid } from '@/lib/uuid';
 import { rememberJournalWorkspace } from '@/lib/journal-browser-store';
 import { MEMO_CHANGED_EVENT } from '@/lib/journal-search-client';
@@ -16,7 +16,7 @@ function ContextDocument({ id, storageKey, ledger, contexts, onClose, onReload, 
     workspaceConfirmed: isCanonicalUuid(ledger.workspaceId), source: ledger.status, entry: ledger.entry,
     contexts, onSaved: (entry) => {
       window.dispatchEvent(new Event(MEMO_CHANGED_EVENT));
-      if (storageKey) { try { sessionStorage.removeItem(storageKey); } catch { /* draft store reports failures */ } }
+      if (storageKey) releaseContextMemoId(sessionStorage, storageKey);
       onSaved?.(entry);
       onClose();
     } });
@@ -38,13 +38,9 @@ export function ContextMemoDrawer({ contexts = [], noteId = null, onClose, onSav
         const ledger = await fetchJournal(noteId ? `?note=${encodeURIComponent(noteId)}` : '');
         if (!active) return;
         if (ledger.workspaceId) rememberJournalWorkspace(ledger.workspaceId);
-        const storageKey = noteId ? null : `moonlight:context-memo:v1:${ledger.workspaceId || 'preview'}:${identity}`;
-        let id = noteId;
-        if (!id) {
-          try { const stored = sessionStorage.getItem(storageKey); if (isCanonicalUuid(stored)) id = stored; } catch { /* writer displays recovery errors */ }
-          id ||= crypto.randomUUID();
-          try { sessionStorage.setItem(storageKey, id); } catch { /* writer displays recovery errors */ }
-        }
+        // Same key as the record window's memo mode — one draft per tab and context set.
+        const storageKey = noteId ? null : contextMemoStorageKey(ledger.workspaceId, identity);
+        const id = noteId || claimContextMemoId(sessionStorage, storageKey);
         setState({ ...ledger, id, storageKey });
       } catch (failure) { if (active) setState({ status: 'error', message: failure.message }); }
     }

@@ -119,7 +119,7 @@ export async function getOfficeWorkflowContext(input, {
     if (activity?.error || !Array.isArray(activity?.rows)) return fail('customer-activities-read-failed');
     if (activity.rows.some(item=>item.workspace_id!==workspaceId || item[ACTIVITY_LINKS[entityType]]!==entityId || !CONTACT_KINDS.has(item.kind))) return fail('customer-activities-scope-mismatch');
     const activities=activity.rows.slice(0,5).map(item=>({id:item.id,kind:item.kind,body:item.body||'',occurredAt:item.occurred_at||item.created_at,updatedAt:item.updated_at||item.created_at}));
-    const facts={customer:{id:entityId,entityType,name:row.name||row.title||'',stage:row.meta?.stage_detail||row.stage||null,
+    const facts={customer:{id:entityId,entityType,brandId:typeof row.brand_id==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(row.brand_id)?row.brand_id.toLowerCase():null,name:row.name||row.title||'',stage:row.meta?.stage_detail||row.stage||null,
       nextAction:row.next_action||row.meta?.next_action||'',nextContactAt:row.next_action_at||row.meta?.next_action_at||null},activities,
       activityWindow:{limit:5,hasMore:activity.rows.length>5,relationship:'direct-entity-only'}};
     const sourceRefs=[{id:`${table}:${entityId}`,type:table,entityId,updatedAt:row.updated_at||row.created_at,label:facts.customer.name||'선택 고객'},

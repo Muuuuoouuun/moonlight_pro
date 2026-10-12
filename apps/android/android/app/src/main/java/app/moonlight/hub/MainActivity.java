@@ -141,8 +141,12 @@ public class MainActivity extends BridgeActivity {
         return "https".equalsIgnoreCase(uri.getScheme())
             && hub.getHost() != null
             && hub.getHost().equalsIgnoreCase(uri.getHost())
-            && (uri.getPort() == -1 || uri.getPort() == 443)
+            && httpsPort(hub.getPort()) == httpsPort(uri.getPort())
             && uri.getUserInfo() == null;
+    }
+
+    private static int httpsPort(int port) {
+        return port == -1 ? 443 : port;
     }
 
     private static String trim(String value) {

@@ -4,6 +4,7 @@ import Foundation
 // credentials, or commands that save data.
 enum PetCommand: String {
     case memo, tasks
+    case sessionChanged = "session-changed"
 
     init?(url: URL) {
         guard url.scheme == "moonlight-pet", url.user == nil, url.password == nil,

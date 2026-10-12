@@ -1,0 +1,12 @@
+{
+  "candidateCommit": "c6d1ca8de5ca8e531c145a7f869b1fd85fec16f6",
+  "candidateCommittedAt": "2026-09-30T01:10:57+09:00",
+  "privateSuiteFrozenAt": "2026-09-29T16:11:24.833037+00:00",
+  "freezeSecondsAfterCommit": 27.833037,
+  "preImplementationFreeze": false,
+  "preCommitFreeze": false,
+  "reviewerHadInspectedNewImplementationAtFreeze": false,
+  "reviewerHadInspectedCandidateOutputsAtFreeze": false,
+  "caseWordsValuesCriteriaDisclosedBeforeCandidateEvaluation": false,
+  "interpretation": "Fresh private data at execution; authored after implementation began and after candidate commit, with only prior failure categories and the approved correction category known. Not a pre-implementation or pre-commit freeze."
+}

@@ -52,7 +52,7 @@ Run `npm run db:check` before enabling the content, journal, inquiry, discovery-
 
 Apply a reviewed migration with `npm run db:migrate -- --expect-ref <project-ref> <filename.sql>`, then rerun `npm run db:check`. The command requires an explicit file and expected project. The 0044 bootstrap is verified by its private objects; subsequent files are recorded by full filename and SHA256 and identical completed files are skipped. Write new migration SQL without its own BEGIN/COMMIT. Earlier migrations have no recorded history; verify their live state before any legacy reapply. See [supabase/README.md](supabase/README.md).
 
-`npm test` covers every `*.test.mjs` in the repo — `scripts/`, `apps/hub/lib/`, `apps/hub/components/**`, `apps/engine/**`, and `packages/**`. CI delegates to the same command, so the two scopes cannot drift. To run one file:
+`npm test` covers the root `*.test.mjs` globs — `scripts/`, `apps/hub/lib/`, `apps/hub/app/**`, `apps/hub/components/**`, `apps/engine/**`, and `packages/**`. Desktop `*.test.js` tests run separately with `npm --workspace @com-moon/desktop test`; CI runs both commands. To run one root test file:
 
 ```bash
 node --import ./scripts/register-hub-alias.mjs --test <file>
@@ -64,8 +64,9 @@ Public Engine write routes should be protected before deployment:
 
 - `COM_MOON_SHARED_WEBHOOK_SECRET` for Hub-to-Engine and project webhook writes
 - `COM_MOON_HUB_WRITE_SECRET` for server-to-server Hub writes. Browser writes are allowed only
-  same-origin **and** either in a development runtime or on a loopback origin — a remote production
-  deployment refuses every browser write, because the Hub has no login layer of its own
+  with a verified operator session, configured operator login/session secrets, and an exact
+  request-origin match in production. Development also permits the guard's same-origin or
+  equivalent-loopback checks. Protected Hub reads use the operator-session route gate.
 - `TELEGRAM_WEBHOOK_SECRET` for Telegram `secret_token`
 - `COM_MOON_OAUTH_STATE_SECRET` for Google OAuth state signing, falling back to the shared webhook secret. Google OAuth connect routes refuse unsigned state.
 - `COM_MOON_ALLOW_OPEN_WEBHOOKS=true` is only for unauthenticated local smoke tests. Keep it unset/false outside local dev.
@@ -73,7 +74,7 @@ Public Engine write routes should be protected before deployment:
 ## Verification Notes
 
 CI currently blocks build/typecheck failures and high-or-higher production audit issues.
-`npm audit --omit=dev --audit-level=moderate` still reports Next's internal `postcss@8.4.31`; this is an upstream moderate advisory and should be revisited when Next ships a patched internal dependency.
+The current lockfile resolves Next `16.3.8` and its internal `postcss@8.5.23`. Run `npm audit --omit=dev --audit-level=moderate` for the current advisory result; the older `postcss@8.4.31` finding is a historical snapshot.
 
 ## Branches
 

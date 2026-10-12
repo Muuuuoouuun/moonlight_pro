@@ -370,9 +370,9 @@ export async function DELETE(req) {
 
     const { ritualKey, matchProjectId } = normalized.value;
 
-    if (!resolveSupabaseConfig()) {
+    if (!resolveDefaultWorkspaceId() || !resolveSupabaseConfig()) {
       return NextResponse.json(
-        { status: "preview", message: "Supabase is not configured. This delete was not saved." },
+        { status: "preview", message: "Workspace or Supabase is not configured. This delete was not saved." },
         { status: 202 },
       );
     }

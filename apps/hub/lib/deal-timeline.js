@@ -83,22 +83,6 @@ export function formatCloseLabel(value) {
   return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(new Date(ms));
 }
 
-// revenue.jsx `fmt`과 같은 K/M 임계값 — 100만원 미만 건을 ₩0.1M로 쓰지 않는다.
-export function formatWon(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n === 0) return "₩0";
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
-  return `₩${n}`;
-}
-
-// 차이 금액 — "+₩300K" · "−₩200K"(U+2212) · 0은 "₩0". 예상 대비 확정의 차이를 말할 때만 쓴다.
-export function formatSignedWon(value) {
-  const n = Math.round(Number(value) || 0);
-  if (n === 0) return "₩0";
-  return `${n > 0 ? "+" : "−"}${formatWon(Math.abs(n))}`;
-}
-
 // 이번 주(월–일)·다음 주·그 뒤·이번 달의 경계. 모두 KST 일련번호.
 export function timelineContext(now = new Date()) {
   const today = kstDayNumber(now) ?? kstDayNumber(Date.now());

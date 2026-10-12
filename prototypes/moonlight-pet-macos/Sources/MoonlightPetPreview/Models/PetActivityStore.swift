@@ -1,19 +1,6 @@
 import Foundation
 import Combine
 
-enum PetNoticeKind: String, Codable { case inquiry, calendar, agent }
-struct PetNotice: Identifiable, Equatable {
-    let id: String
-    let title: String
-    let detail: String
-    let kind: PetNoticeKind
-    let createdAt: Date
-    let path: String
-    var eventDate: Date? = nil
-    var agentID: String? = nil
-    var scope: String? = nil
-}
-
 /// Local presentation state only. Hiding a notice never changes Hub unread state.
 @MainActor
 final class PetActivityStore: ObservableObject {
@@ -33,6 +20,7 @@ final class PetActivityStore: ObservableObject {
     var onBanner: ((PetNotice) -> Bool)?
     var onBannerDismissed: (() -> Void)?
     private let defaults: UserDefaults
+    private(set) var currentOrigin = ""
     private var api: (any HubActivityServing)?
     private var generation = 0
     private var loop: Task<Void, Never>?
@@ -66,7 +54,7 @@ final class PetActivityStore: ObservableObject {
     deinit { loop?.cancel(); nextBanner?.cancel() }
 
     func configure(service: (any HubActivityServing)?, origin: String?) {
-        loop?.cancel(); generation += 1; api = service; isRefreshing = false
+        loop?.cancel(); generation += 1; api = service; currentOrigin = origin ?? ""; isRefreshing = false
         dismissBanner(); nextBanner?.cancel(); nextBanner = nil; notices = []; inquiryNotices = []; calendarNotices = []; agentNotices = []
         totalInquiryCount = 0; eligible = []; hasInquiryBaseline = false; receivedInquiries = []; sourcesReady = []
         storageKey = origin.map { "petNotices.delivery.v1." + $0 }
@@ -102,7 +90,7 @@ final class PetActivityStore: ObservableObject {
             receivedInquiries.formUnion(tokens)
             inquiryNotices = page.inquiries.map {
                 PetNotice(id: $0.token, title: $0.title, detail: $0.subtitle, kind: .inquiry,
-                          createdAt: $0.updatedAt ?? now, path: $0.path)
+                          createdAt: $0.updatedAt ?? now, path: $0.path, agentID: OfficeRoleCatalog.noticeOwner(for: "inquiry"), origin: currentOrigin)
             }
             if page.unreadCount > page.inquiries.count {
                 messages.append("문의 최신 \(page.inquiries.count)개 · 전체 미확인 \(page.unreadCount)개")
@@ -117,7 +105,7 @@ final class PetActivityStore: ObservableObject {
             calendarNotices = page.events.filter { !$0.allDay && $0.start >= now && $0.start.timeIntervalSince(now) <= 600 }.map {
                 let token = "calendar:\($0.id):\(Int($0.start.timeIntervalSince1970))"
                 return PetNotice(id: token, title: $0.title, detail: "\($0.timeLabel) 시작 · 일정이 곧 있어요.", kind: .calendar,
-                                 createdAt: $0.start, path: "/dashboard/work/calendar", eventDate: $0.start)
+                                 createdAt: $0.start, path: "/dashboard/work/calendar", eventDate: $0.start, agentID: OfficeRoleCatalog.noticeOwner(for: "calendar"), origin: currentOrigin)
             }
             eligible.formUnion(calendarNotices.map(\.id))
             if page.partial { messages.append("일정 일부만 확인했어요. 전체 일정은 Hub에서 확인해 주세요.") }
@@ -137,16 +125,19 @@ final class PetActivityStore: ObservableObject {
         if onBanner?(next) == true { state.delivered.append(next.id); persist() }
         else { banner = nil }
     }
-    func addAgentReply(id: String, agentID: String, scope: String, title: String, detail: String) {
+    func addAgentReply(id: String, agentID: String, conversation: OfficeConversationKey, title: String, detail: String, path: String = "") {
+        guard conversation.origin == currentOrigin,
+              OfficeRoleCatalog.noticeOwner(for: "agentReply", actualOwnerId: agentID) != nil else { return }
         let token = "agent:" + id
         agentNotices.insert(PetNotice(id: token, title: title, detail: detail, kind: .agent,
-            createdAt: Date(), path: "", agentID: agentID, scope: scope), at: 0)
+            createdAt: Date(), path: path, agentID: agentID, scope: conversation.scope.rawValue, origin: currentOrigin, conversation: conversation), at: 0)
         agentNotices = Array(agentNotices.prefix(30))
         sourcesReady.insert(.agent); eligible.insert(token)
         presentNext()
     }
-    func acknowledgeAgentReplies(agentID: String, scope: String) {
-        let ids = Set(agentNotices.filter { $0.agentID == agentID && $0.scope == scope }.map(\.id))
+    func acknowledgeAgentReplies(conversation: OfficeConversationKey) {
+        guard conversation.origin == currentOrigin else { return }
+        let ids = Set(agentNotices.filter { $0.conversation == conversation }.map(\.id))
         guard !ids.isEmpty else { return }
         agentNotices.removeAll { ids.contains($0.id) }
         if let banner, ids.contains(banner.id) { dismissBanner() }

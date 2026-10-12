@@ -5,7 +5,7 @@ const id = 'ABCDEFAB-1234-4234-8234-ABCDEFABCDEF';
 test('search normalizes literal text, canonical context and bounded limits', () => {
   const result = normalizeJournalSearch({ q: '  a%_\\*(한글 🌓)  ', contextType: 'project', contextId: id, limit: '3' });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.value.filters, { q: 'a%_\\*(한글 🌓)', dateFrom: '', dateTo: '', kind: '', contextType: 'project', contextId: id.toLowerCase(), used: 'all' });
+  assert.deepEqual(result.value.filters, { q: 'a%_\\*(한글 🌓)', dateFrom: '', dateTo: '', kind: '', noteScope: '', contextType: 'project', contextId: id.toLowerCase(), used: 'all' });
   assert.equal(result.value.limit, 3);
   assert.equal(normalizeJournalSearch().value.limit, 40);
   assert.equal(normalizeJournalSearch({ q: ` ${'a'.repeat(200)} ` }).ok, true);

@@ -16,11 +16,13 @@ export async function GET(request) {
   }
   try {
     const result = await getRecentAgentRuns({ agent, ref, limit });
+    const failed = result.status === "error" || result.source === "error";
     return NextResponse.json({
       ...result,
-      status: result.source === "supabase" ? "live" : result.source,
+      status: failed ? "error" : result.source === "supabase" ? "live" : result.source,
+      ...(failed ? { source: "error", retryable: result.retryable !== false } : {}),
     });
   } catch {
-    return NextResponse.json({ status: "error", error: "agent-runs-read-failed", runs: [] }, { status: 502 });
+    return NextResponse.json({ status: "error", source: "error", error: "agent-runs-read-failed", retryable: true, runs: [] });
   }
 }

@@ -77,6 +77,33 @@ test("a write the tab refuses after a good probe is reported as memory, and the 
   assert.equal(store.read(KEY), null);
 });
 
+test("a temporarily rejected removal cannot restore a cleared draft, and a later write replaces it", () => {
+  for (const failure of ["remove", "access", "missing"]) {
+    const tab = tabStorage();
+    let unavailable = false;
+    const remove = tab.removeItem;
+    tab.removeItem = (key) => {
+      if (unavailable) throw new Error("SecurityError");
+      remove(key);
+    };
+    const store = createRecordDraftStore(() => {
+      if (unavailable && failure === "access") throw new Error("SecurityError");
+      return unavailable && failure === "missing" ? null : tab;
+    });
+    store.write(KEY, { summary: "이미 제출한 기록" });
+    unavailable = true;
+    store.clear(KEY);
+    unavailable = false;
+    assert.equal(tab.items.has(KEY), true, "삭제가 막혀 탭에는 옛 초안이 남아 있다");
+    assert.equal(store.read(KEY), null, "저장소 접근이 돌아와도 제출한 초안을 되살리지 않는다");
+    assert.equal(store.write(KEY, { summary: "새 기록" }), "tab");
+    assert.deepEqual(store.read(KEY), { value: { summary: "새 기록" }, place: "tab" }, "새 쓰기가 삭제 표시를 풀고 탭 사본을 읽는다");
+    store.clear(KEY);
+    assert.equal(store.read(KEY), null);
+    assert.equal(tab.items.has(KEY), false);
+  }
+});
+
 test("an unreadable tab entry falls back to the memory copy instead of throwing", () => {
   const tab = tabStorage({ seed: { [KEY]: "{not json" } });
   const store = createRecordDraftStore(() => tab);

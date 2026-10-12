@@ -10,8 +10,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const data = await getBrandLedger();
-  return NextResponse.json(data, { status: data.status === "error" ? 502 : 200 });
+  try {
+    const data = await getBrandLedger();
+    return NextResponse.json(data.status === "error" || data.source === "error"
+      ? { ...data, status: "error", source: "error", retryable: data.retryable !== false }
+      : data);
+  } catch {
+    return NextResponse.json({ status: "error", source: "error", error: "brand-ledger-read-failed", retryable: true, brands: [] });
+  }
 }
 
 // Create a PMS container (brand row) with a taxonomy category, so KA·딜 / 일반

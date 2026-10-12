@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 import {
   decodeGoogleGmailState,
@@ -26,12 +27,7 @@ export async function GET(req) {
 
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const mailbox = state.mailbox || "me";
-  const returnPath =
-    typeof state.returnPath === "string" &&
-    state.returnPath.startsWith("/") &&
-    !state.returnPath.startsWith("//")
-      ? state.returnPath
-      : fallbackReturnPath;
+  const returnPath = sanitizeReturnPath(state.returnPath, fallbackReturnPath);
   const target = new URL(returnPath, origin);
 
   if (error) {

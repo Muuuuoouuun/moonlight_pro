@@ -1,0 +1,61 @@
+/* 결정 일지 행 조각(확인할 것 스펙 §6) — Futura 타임라인 카드 안팎. 토큰만, 보더 1px. */
+
+.hub-app .dj-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .dj-followups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px 16px;
+  border-radius: var(--r);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  font-size: 12.5px;
+}
+
+.hub-app .dj-followups--note { margin: 8px 0 0; color: var(--fg-dim); }
+
+.hub-app .dj-followups__label {
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.hub-app .dj-followups ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .dj-followups li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .dj-task { color: var(--fg); }
+.hub-app .dj-task--done { color: var(--fg-dim); text-decoration: line-through; }
+.hub-app .dj-due { font-size: 12px; color: var(--fg-muted); }
+
+.hub-app .dj-quick {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .dj-error {
+  font-size: 12px;
+  color: var(--danger);
+}

@@ -43,6 +43,18 @@
   .hub-drawer[data-presentation="compact"] .hub-drawer__header { padding: 22px 20px 18px; }
   .hub-drawer[data-presentation="compact"] .hub-drawer__body { padding: 0 20px 20px; }
   .hub-drawer[data-presentation="compact"] .hub-drawer__footer { padding: 14px 20px max(14px, env(safe-area-inset-bottom)); }
+
+  /* 전체 높이 시트(Drawer sheet="full" — 긴 글을 쓰는 기록 창, 2026-09-30 Q-CR11). 같은 바닥 시트가
+     보이는 높이를 다 쓰고, 화면 키보드가 올라오면 그 위로 줄어든다: 두 값은 Drawer가 visualViewport를
+     듣고 적는다(use-keyboard-inset.js). 값이 없으면(옛 브라우저) 100dvh · 바닥 0 그대로다. 높이는
+     키보드를 따라 곧바로 바뀐다 — 전이를 걸지 않는다(키보드와 어긋나 출렁인다). */
+  .hub-app .hub-drawer[data-presentation="compact"][data-sheet="full"] {
+    bottom: var(--hub-sheet-keyboard, 0px);
+    height: calc(var(--hub-sheet-viewport, 100dvh) - 16px);
+    max-height: none;
+  }
+  /* 머리에 행동이 선 시트 — 닫기 · 제목 · 저장 한 줄. 본문이 제 여백을 가지므로 머리는 선 하나로 나눈다. */
+  .hub-drawer[data-presentation="compact"][data-sheet="full"] .hub-drawer__header { padding: 10px 12px 10px 14px; border-bottom: 1px solid var(--line-soft); }
 }
 @keyframes hubCompactSheetIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 @keyframes hubCompactSheetOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(16px); } }

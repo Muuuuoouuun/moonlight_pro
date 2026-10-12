@@ -29,3 +29,30 @@ test('reads only office runs in the window and keeps the Hub read envelope', asy
   assert.equal(failed.status, 'error');
   assert.equal(failed.source, 'error');
 });
+
+test('usage read detects truncation with one lookahead row while preserving the 1000-row summary', async () => {
+  const row = { mode: 'draft', result: 'ok', recommendation: { elapsedMs: 10 } };
+  let seen;
+  for (const count of [0, 1000, 1001]) {
+    const value = await readOfficeUsage({ fetchRows: async (_table, options) => {
+      if (!options.offset) seen = options;
+      return { configured: true, rows: Array(count).fill(row).slice(options.offset || 0, (options.offset || 0) + options.limit) };
+    } });
+    assert.equal(seen.limit, 1001);
+    assert.equal(value.rowLimit, 1000);
+    assert.equal(value.truncated, count > 1000);
+    assert.equal(value.requests, Math.min(count, 1000));
+  }
+});
+
+test('usage read does not treat a rows array with a read error as live', async () => {
+  const value = await readOfficeUsage({ fetchRows: async () => ({ configured: true, rows: [], error: 'read-failed' }) });
+  assert.equal(value.status, 'error');
+  assert.equal(value.source, 'error');
+  assert.equal(value.requests, undefined);
+});
+
+test('usage read keeps an explicitly unconfigured connection in preview', async () => {
+  const value = await readOfficeUsage({ fetchRows: async () => ({ configured: false, rows: [] }) });
+  assert.equal(value.status, 'preview');
+});

@@ -12,12 +12,11 @@ import {
   closeDatePresets,
   dateInputValue,
   formatDayLabel,
-  formatSignedWon,
-  formatWon,
   isoFromDateInput,
   kstDayNumber,
   sameCloseDay,
 } from "@/lib/deal-timeline";
+import { formatSignedWon, formatWon } from "@/lib/won-format";
 import {
   PAID_NOTE_MAX,
   addInstallment,
@@ -137,7 +136,7 @@ export function DealPaymentsBlock({ deal, onUpdatePayments, onUpdateRecurring })
   const paidTotal = dealPaidTotal(deal);
   const [active, setActive] = React.useState(null); // { id, mode: 'confirm' | 'edit' }
   const [draft, setDraft] = React.useState({});
-  // 새 결제 일정은 로컬 폼에서 금액을 채운 뒤에만 저장한다 — 빈(₩0) 행을 먼저 저장하면
+  // 새 결제 일정은 로컬 폼에서 금액을 채운 뒤에만 저장한다 — 빈(0원) 행을 먼저 저장하면
   // normalizePayment가 그 행을 버려 편집할 틈도 없이 사라진다(2026-09-25 통합 검증).
   const [adding, setAdding] = React.useState(null); // { label, expectedAmount, expectedAt } | null
   React.useEffect(() => { setActive(null); setAdding(null); }, [deal.id]);
@@ -380,7 +379,7 @@ export function DealDock({ item, stages, describe, customerKey, primaryRef, open
         <CertaintyBadge state={certainty.key} label={certainty.label} />
         {lifecycle && <LifecycleBadge state={lifecycle.key} label={lifecycle.label} />}
         <span className="stat deals-tl-dock__amount" data-unknown={item.amount ? undefined : "true"}>
-          {item.amount ? formatWon(item.amount) : "₩ ?"}
+          {item.amount ? formatWon(item.amount) : "금액 미정"}
         </span>
         <IconButton icon="edit" tooltip="거래 편집 (E)" onClick={onEdit} />
         <IconButton icon="x" tooltip="닫기 (Esc)" onClick={() => onClose(true)} />

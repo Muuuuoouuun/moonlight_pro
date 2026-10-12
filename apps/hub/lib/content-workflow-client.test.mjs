@@ -3,6 +3,15 @@ import { test } from 'node:test';
 let client;
 try { client = await import('./content-workflow-client.js'); } catch {}
 const api = () => { assert.ok(client, 'content workflow client helpers must exist'); return client; };
+
+test('reel validation errors explain the affected scene and keep generic recovery messages intact', () => {
+  const c = api();
+  assert.equal(c.studioErrorMessage({ status: 'invalid-input', error: 'invalid-reels-script-duration', sceneNumber: 2 }), '2번 장면: 장면 길이는 0보다 크고 600초 이하여야 합니다.');
+  assert.match(c.studioErrorMessage({ status: 'invalid-input', error: 'invalid-reels-script-json' }), /원본 JSON.*수정/);
+  assert.match(c.studioErrorMessage({ status: 'invalid-input', error: 'invalid-reels-script-content', sceneNumber: 1 }), /1번 장면.*화면 설명이나 대사/);
+  assert.equal(c.studioErrorMessage({ status: 'error', error: 'unknown', sceneNumber: 2 }, '작성 내용 보존'), '작성 내용 보존');
+  assert.equal(c.studioErrorMessage({ status: 'error', error: 502 }, '작성 내용 보존'), '작성 내용 보존');
+});
 const item = { id:'item-1',workspace_id:'ws-1',title:'기획 제목',source_idea:'처음 생각\n그대로',brand_id:'brand-1',next_action:'사례 추가',updated_at:'2026-09-12T00:00:00Z',meta:{brief:{audience:'강사',message:'복습 행동'},blocker:'evidence',primary_variant_id:'thread-2'} };
 const variants = [
   {id:'thread-1',content_id:'item-1',variant_type:'x_thread',channel:'x',title:'첫 글',body:'첫 번째',updated_at:'2026-09-12T01:00:00Z'},

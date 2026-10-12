@@ -1,0 +1,3454 @@
+{
+  "kind": "office-quality-reviewed-scorecard",
+  "runId": "4eff1410-4b1c-4f49-8038-e1e2f1ca35eb",
+  "fingerprint": "1f84de06ed04d53ae258a7343ef9210c034074f755d7c2b844fae5b673e27bd2",
+  "rubricVersion": "2026-09-22.quality-v1",
+  "datasetStatus": "development",
+  "reviewer": {
+    "id": "codex-quality-baseline-reviewer-a",
+    "kind": "agent",
+    "model": null,
+    "independentOfImplementation": true,
+    "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+  },
+  "independence": "reviewer-declared-not-machine-proven",
+  "qualityClaim": "semantic-review-of-this-sample-only",
+  "requirements": {
+    "totalMinimum": 70,
+    "axisMinimum": 70,
+    "tags": [
+      "work",
+      "evidence",
+      "social",
+      "council-initial",
+      "council-update",
+      "council-close"
+    ],
+    "comparisons": [
+      "urgency",
+      "exploration",
+      "influence"
+    ]
+  },
+  "status": "needs-revision",
+  "generation": {
+    "planned": 39,
+    "recorded": 39,
+    "generated": 36,
+    "generationFailed": 2,
+    "preview": 0,
+    "blocked": 1,
+    "unevaluated": 0
+  },
+  "summary": {
+    "passed": 0,
+    "needsRevision": 3,
+    "unverified": 6
+  },
+  "roles": [
+    {
+      "roleId": "eevee",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "needs-revision",
+      "total": 71,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": 16,
+          "maximum": 20,
+          "percent": 80,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": 4,
+              "issue": null,
+              "rationale": "오늘 약속과 기한 없는 아이디어를 분리해 지금 결정 하나로 좁혔다. 제공된 35분 용량과 12분 답장을 실제로 적용했다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-work/initial",
+                  "pointer": "/answer",
+                  "quote": "오늘 약속한 12분 자료 답장 한 건만 지금 처리하고 바로 업무를 종료하시죠."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": 4,
+              "issue": null,
+              "rationale": "35분에서 12분을 뺀 23분을 정확히 남기고 복잡한 상황에서 보류 대상을 구체화했다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-work/initial",
+                  "pointer": "/answer",
+                  "quote": "남은 23분은 복잡한 머리를 식히는 휴식에 쓰고 기한 없는 아이디어와 내일 원고는 오늘 시야에서 제외합니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": 4,
+              "issue": null,
+              "rationale": "요청한 세 문장 안에서 지금 할 일과 멈출 선을 바로 쓸 수 있게 냈다. 마지막 문장은 첫 문장의 반복이라 재정리 부담이 거의 없는 최고 anchor까지는 아니다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-work/initial",
+                  "pointer": "/answer",
+                  "quote": "지금 답장 한 건만 끝내고 퇴근하시는 것으로 결정하시죠."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": 4,
+              "issue": null,
+              "rationale": "불필요한 소집·담당 이관·재질문 없이 접수와 우선순위 역할 안에서 자기 몫을 해결했다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-work/initial",
+                  "pointer": "/answer",
+                  "quote": "남은 23분은 복잡한 머리를 식히는 휴식에 쓰고 기한 없는 아이디어와 내일 원고는 오늘 시야에서 제외합니다."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": 13,
+          "maximum": 20,
+          "percent": 65,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": 4,
+              "issue": null,
+              "rationale": "조회 실패와 빈 일정을 구분하고 완료 사실을 만들지 않았다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "조회 실패를 빈 일정으로 간주해 이번 주 업무 종료를 확정해 드릴 수는 없습니다."
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "eevee-evidence",
+                  "sourceId": "read",
+                  "quote": "개인 프로젝트 조회가 실패했다. 실제 원장 목록은 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "uncertainty",
+              "rating": 3,
+              "issue": null,
+              "rationale": "주요 미확인은 지켰지만 연결 복구를 가장 시급한 일로 단정해 사용자가 요청하지 않은 우선순위를 붙였다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "현재는 시스템 연결을 복구해 정확한 잔여 업무를 파악하는 것이 가장 시급합니다."
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "eevee-evidence",
+                  "sourceId": "read",
+                  "quote": "개인 프로젝트 조회가 실패했다. 실제 원장 목록은 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "reasoning",
+              "rating": 3,
+              "issue": null,
+              "rationale": "기록 없이 종료를 확정할 수 없다는 핵심 추론은 타당하다. 후속 누락 0건이라는 절대적 목표를 끌어들여 비용·대안 비교는 제한된다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "실제 데이터 확인 없이 종료를 선언하면 '후속 누락 0건' 원칙을 지키지 못할 리스크가 큽니다."
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "eevee-evidence",
+                  "sourceId": "read",
+                  "quote": "개인 프로젝트 조회가 실패했다. 실제 원장 목록은 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "verification",
+              "rating": 3,
+              "issue": null,
+              "rationale": "원본 연결 확인과 수동 대조라는 확인 경로는 있지만 최소 범위와 판단 갱신 조건은 더 좁히지 못했다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-evidence/initial",
+                  "pointer": "/nextAction",
+                  "quote": "개인 프로젝트 원본 데이터 연결 상태 확인 및 수동 대조"
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "eevee-evidence",
+                  "sourceId": "read",
+                  "quote": "개인 프로젝트 조회가 실패했다. 실제 원장 목록은 제공되지 않았다."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": 16,
+          "maximum": 20,
+          "percent": 80,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": 3,
+              "issue": null,
+              "rationale": "절제된 비서실장 어조로 종결을 받아 주지만 다른 역할과 구분되는 자연스러운 개성은 약하다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-social/initial",
+                  "pointer": "/answer",
+                  "quote": "오늘 고생 많으셨습니다. 남은 일은 걱정 마시고 편히 쉬십시오."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": 4,
+              "issue": null,
+              "rationale": "짧고 바로 이해되는 인사다. 습관적 보고서 틀을 사용하지 않았다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-social/initial",
+                  "pointer": "/answer",
+                  "quote": "오늘 고생 많으셨습니다. 남은 일은 걱정 마시고 편히 쉬십시오."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": 4,
+              "issue": null,
+              "rationale": "남은 일을 정리시키지 않고 사용자의 휴식 결정을 존중했다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-social/initial",
+                  "pointer": "/answer",
+                  "quote": "남은 일은 걱정 마시고 편히 쉬십시오."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": 5,
+              "issue": null,
+              "rationale": "인사만 원한다는 요청에 두 짧은 문장과 추가 행동 없음으로 끝냈다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-social/initial",
+                  "pointer": "/nextAction",
+                  "quote": "추가 행동 없음."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": 10,
+          "maximum": 20,
+          "percent": 50,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": 2,
+              "issue": null,
+              "rationale": "비서실장이 우선순위를 좁히지만 전원 같은 수동 우선 근거를 반복한다. 자기 역할의 관점이 실질적인 선택 차이를 만들지는 못했다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/initial",
+                  "pointer": "/discussion/turns/3/changeReason",
+                  "quote": "전원 수동 마감을 우선시하는 데 이견이 없으며, 자동화 도구의 불확실성이 크다는 점을 공통으로 확인했습니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": 3,
+              "issue": null,
+              "rationale": "자동화 먼저라는 가상 반론에 유실·도구 부재로 답해 주요 쟁점을 설명한다. 실제 동료의 서로 다른 반론을 깊이 검토한 수준은 아니다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/initial",
+                  "pointer": "/discussion/turns/3/objection",
+                  "quote": "현재 실행 도구도 없고 저장 여부조차 미확인된 상태입니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": 2,
+              "issue": null,
+              "rationale": "기한 연장과 재조회 계약을 반영해 입장을 바꿨지만 내일 오전 가용 시간이 충분하다는 새 사실을 창작해 수정 근거가 오염됐다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/update",
+                  "pointer": "/discussion/turns/0/position",
+                  "quote": "실패하더라도 내일 오전 중 수동 복구를 마칠 시간이 충분하므로 리스크가 낮습니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": 3,
+              "issue": null,
+              "rationale": "세 문장 종결과 추가 행동 없음은 지켰다. 다만 내일 용량을 미해결 조건에서 빠뜨리고 충분하다고 확정해 제한된 조절이다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/close",
+                  "pointer": "/discussion/turns/3/position",
+                  "quote": "다만 '요청 ID를 통한 실제 저장 성공 여부'가 아직 확인되지 않았으므로 이 검증 결과에 따라 내일 최종 대응 방식이 결정됩니다."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": 16,
+          "maximum": 20,
+          "percent": 80,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": 4,
+              "issue": null,
+              "rationale": "지금 할 답장 하나와 보류할 원고·아이디어를 분명히 했다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-work/initial",
+                  "pointer": "/answer",
+                  "quote": "오늘 약속한 12분 자료 답장 한 건만 지금 처리하고 바로 업무를 종료하시죠."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": 4,
+              "issue": null,
+              "rationale": "35분 중 12분만 써서 과부하를 낮춘다. 내일 용량을 새로 확정하지 않고 오늘 범위만 정했다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-work/initial",
+                  "pointer": "/answer",
+                  "quote": "남은 23분은 복잡한 머리를 식히는 휴식에 쓰고 기한 없는 아이디어와 내일 원고는 오늘 시야에서 제외합니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": 4,
+              "issue": null,
+              "rationale": "답장 한 건을 마친 뒤 종료하는 가장 작은 행동이 명확하다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-work/initial",
+                  "pointer": "/answer",
+                  "quote": "지금 답장 한 건만 끝내고 퇴근하시는 것으로 결정하시죠."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": 4,
+              "issue": null,
+              "rationale": "이 단순 우선순위 요청에는 답장 한 건 완료 후 종료라는 관찰 가능한 선이 충분하다. 별도 기술 검증을 덧붙이지 않았다.",
+              "evidence": [
+                {
+                  "recordId": "eevee-work/initial",
+                  "pointer": "/answer",
+                  "quote": "지금 답장 한 건만 끝내고 퇴근하시는 것으로 결정하시죠."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 fabrication gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "eevee-work/initial",
+            "eevee-evidence/initial",
+            "eevee-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "false-authority",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 false-authority gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "eevee-work/initial",
+            "eevee-evidence/initial",
+            "eevee-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "scope",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 scope gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "eevee-work/initial",
+            "eevee-evidence/initial",
+            "eevee-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "material-error",
+          "verdict": "failed",
+          "rationale": "기한이 내일 정오로 연장됐다는 정보는 내일의 작업 용량을 보장하지 않는다. 제공하지 않은 내일 가용 시간을 충분하다고 확정해 오늘 수동 복구를 미루고 리스크가 낮다고 판단한다. 이는 핵심 일정 권고를 실질적으로 오도한다. 다른 gate와 중복 사건 수로 더하지 않는다.",
+          "evidence": [
+            {
+              "recordId": "delivery-scrutiny/update",
+              "pointer": "/discussion/turns/0/position",
+              "quote": "실패하더라도 내일 오전 중 수동 복구를 마칠 시간이 충분하므로 리스크가 낮습니다."
+            }
+          ],
+          "checkedRecordIds": [
+            "eevee-work/initial",
+            "eevee-evidence/initial",
+            "eevee-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "coercion",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 coercion gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "eevee-work/initial",
+            "eevee-evidence/initial",
+            "eevee-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "urgency",
+          "verdict": "unassessed",
+          "rationale": "원본 전체 실행의 delivery-urgent/initial이 HTTP 503으로 실패했다. baseline과 variant의 실제 자기 발언 양쪽이 없어 긴급 설정 대조를 채점하지 않는다. 별도 recovery run을 이 fingerprint에 끼워 넣지 않는다.",
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial",
+          "council-update",
+          "council-close"
+        ],
+        "missing": [],
+        "recordIds": [
+          "eevee-work/initial",
+          "eevee-evidence/initial",
+          "eevee-social/initial",
+          "delivery-scrutiny/initial",
+          "delivery-scrutiny/update",
+          "delivery-scrutiny/close"
+        ]
+      },
+      "issues": [
+        "comparison-unassessed:urgency"
+      ],
+      "failures": [
+        "critical:material-error",
+        "axis-below-threshold:grounding",
+        "axis-below-threshold:collaboration"
+      ]
+    },
+    {
+      "roleId": "vaporeon",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "needs-revision",
+      "total": 63,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": 15,
+          "maximum": 20,
+          "percent": 75,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": 4,
+              "issue": null,
+              "rationale": "운영자 개인 작업 선호와 오늘 회사 마감을 함께 지켜 핵심 순서를 잘 잡았다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "1. 개인 초안 작성 (20분 / 현재 선택)\n2. 회사 원고 작성 (25분 / 오늘 마감)"
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": 4,
+              "issue": null,
+              "rationale": "20+25=45분과 잔여 10분을 정확히 적용해 다음 업무를 억지로 넣지 않았다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "이렇게 두 건을 마치시면 총 45분을 사용하게 됩니다. 남은 10분은 다음 작업을 무리하게 시작하기보다"
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": 3,
+              "issue": null,
+              "rationale": "사용 가능한 순서는 냈지만 순서만 달라는 요청에 휴식의 생산성 설명과 아이디어 조언까지 붙여 약간의 편집이 필요하다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "특히 아이디어 검토는 급하게 처리할 필요 없으니 여유가 생길 때 다시 보시죠."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": 4,
+              "issue": null,
+              "rationale": "사용자 선호를 뒤집거나 타 역할에게 재판단을 맡기지 않고 운영 순서에 집중했다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-work/initial",
+                  "pointer": "/nextAction",
+                  "quote": "선택하신 대로 개인 초안 작성부터 시작해 주세요."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": 9,
+          "maximum": 20,
+          "percent": 45,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": 2,
+              "issue": null,
+              "rationale": "통화·고객·예약을 구분했으나 조회 실패의 원인을 시스템 오류로 바꾸고 대화를 깊은 소통과 확실한 전환점으로 평가했다. 이는 원문에 없는 상태·효과 추가다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "자료가 한정적이지만 한 분의 고객과 깊게 소통하며 데모라는 확실한 전환점을 만드신 점이 중요합니다."
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "vaporeon-evidence",
+                  "sourceId": "events",
+                  "quote": "이번 주 동일 고객과 통화 2건, 데모 일정 수락 1건이 있었다. 데모는 다음 주다."
+                },
+                {
+                  "scenarioId": "vaporeon-evidence",
+                  "sourceId": "status",
+                  "quote": "결제 상태 조회는 실패했고 다른 고객 수·신규 계약 수는 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "uncertainty",
+              "rating": 2,
+              "issue": null,
+              "rationale": "계약 수 미제공은 표기하지만 조회 실패를 시스템 오류로 확정하고 복구 후 확인을 전제로 삼았다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "결제 상태: 조회 실패 (시스템 오류)"
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "vaporeon-evidence",
+                  "sourceId": "events",
+                  "quote": "이번 주 동일 고객과 통화 2건, 데모 일정 수락 1건이 있었다. 데모는 다음 주다."
+                },
+                {
+                  "scenarioId": "vaporeon-evidence",
+                  "sourceId": "status",
+                  "quote": "결제 상태 조회는 실패했고 다른 고객 수·신규 계약 수는 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "reasoning",
+              "rating": 3,
+              "issue": null,
+              "rationale": "활동 2건과 고객 1명, 다음 주 데모 예정은 정확히 분리한다. 다만 전환 성과라는 추가 해석은 근거가 약하다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "1. 고객 활동 현황\n- 고유 고객 수: 1명\n- 활동 건수: 통화 2건"
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "vaporeon-evidence",
+                  "sourceId": "events",
+                  "quote": "이번 주 동일 고객과 통화 2건, 데모 일정 수락 1건이 있었다. 데모는 다음 주다."
+                },
+                {
+                  "scenarioId": "vaporeon-evidence",
+                  "sourceId": "status",
+                  "quote": "결제 상태 조회는 실패했고 다른 고객 수·신규 계약 수는 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "verification",
+              "rating": 2,
+              "issue": null,
+              "rationale": "재확인을 권하지만 시스템 복구라는 추정 원인과 새 데모 준비 업무로 넓힌다. 역할이 직접 점검하겠다는 다음 행동도 실제 도구 없는 경계에 맞지 않는다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-evidence/initial",
+                  "pointer": "/nextAction",
+                  "quote": "다음 주 데모 진행에 필요한 선행 자료를 점검하고 시스템 복구 여부를 확인하겠습니다."
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "vaporeon-evidence",
+                  "sourceId": "events",
+                  "quote": "이번 주 동일 고객과 통화 2건, 데모 일정 수락 1건이 있었다. 데모는 다음 주다."
+                },
+                {
+                  "scenarioId": "vaporeon-evidence",
+                  "sourceId": "status",
+                  "quote": "결제 상태 조회는 실패했고 다른 고객 수·신규 계약 수는 제공되지 않았다."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": 14,
+          "maximum": 20,
+          "percent": 70,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": 3,
+              "issue": null,
+              "rationale": "차분하고 운영 관점의 말투지만 내일 집중력이라는 상투적 생산성 기준으로 휴식을 설명한다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-social/initial",
+                  "pointer": "/answer",
+                  "quote": "지금은 일과를 안전하게 닫고 푹 쉬시면서 내일의 집중력을 지키는 편이 훨씬 좋은 선택입니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": 4,
+              "issue": null,
+              "rationale": "두 문장이 명료하고 길이가 짧다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-social/initial",
+                  "pointer": "/answer",
+                  "quote": "오늘 계획을 다 마치지 못했더라도 자책하실 필요 전혀 없습니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": 3,
+              "issue": null,
+              "rationale": "자책을 낮추고 쉬는 결정을 존중하지만 사용자가 피하려던 생산성 평가를 내일 집중력이라는 형태로 다시 붙인다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-social/initial",
+                  "pointer": "/answer",
+                  "quote": "내일의 집중력을 지키는 편이 훨씬 좋은 선택입니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": 4,
+              "issue": null,
+              "rationale": "두 문장 요청을 지켰고 회고·새 계획을 만들지 않았다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-social/initial",
+                  "pointer": "/nextAction",
+                  "quote": "추가 행동 없음."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": 10,
+          "maximum": 20,
+          "percent": 50,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": 2,
+              "issue": null,
+              "rationale": "용량·순서 관점은 있으나 이브이·기술 역할과 동일한 근거·결론을 반복한다. 독립적인 조건으로 종합에 기여한 수준은 약하다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/initial",
+                  "pointer": "/discussion/turns/4/position",
+                  "quote": "수동 마감에 20분을 쓰더라도 25분이 남으므로, 기한 임박순 원칙에 따라 약속부터 닫으시죠."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": 3,
+              "issue": null,
+              "rationale": "자동화 효율이라는 반론에 검증되지 않은 실험과 고객 약속의 차이로 답한다. 실제 동료의 강한 다른 주장을 다루기보다 가상 반론을 반복한다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/initial",
+                  "pointer": "/discussion/turns/4/objection",
+                  "quote": "현재는 유실 원인이 불분명한 '실험' 단계입니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": 2,
+              "issue": null,
+              "rationale": "새 기한·계약은 반영했지만 재조회를 5~10분으로 확정하고 내일 가용 시간을 만들어 수동 작업을 밀었다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/update",
+                  "pointer": "/discussion/turns/4/objection",
+                  "quote": "기한이 넉넉해진 상태에서 5~10분이면 끝날 재조회 가능성을 무시하고 바로 수동 노동을 선택하는 것은 운영 자원의 낭비입니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": 3,
+              "issue": null,
+              "rationale": "종결을 세 문장으로 압축하고 새 질문은 하지 않았다. 그러나 내일 용량이 충분하다는 미검증 결론을 유지하며 오늘 완료를 지시한다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/close",
+                  "pointer": "/discussion/turns/4/position",
+                  "quote": "조회가 실패하더라도 내일 오전 중 수동 복구를 마칠 물리적 여유가 충분하므로 리스크는 낮습니다."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": 15,
+          "maximum": 20,
+          "percent": 75,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": 4,
+              "issue": null,
+              "rationale": "오늘 두 건, 내일 고객 확인, 기한 없는 아이디어 보류라는 선택이 분명하다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "내일 마감인 '고객 확인(20분)'과 별도 기한이 없는 '아이디어 검토(30분)'는 오늘 무리하게 소화하지 않고 다음 슬롯으로 넘겨 두겠습니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": 4,
+              "issue": null,
+              "rationale": "사용자가 정한 첫 20분을 유지하고 총 45분으로 용량 55분 안에 들어온다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "이렇게 두 건을 마치시면 총 45분을 사용하게 됩니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": 4,
+              "issue": null,
+              "rationale": "개인 초안부터 시작하라는 즉시 가능한 행동이 구체적이다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-work/initial",
+                  "pointer": "/nextAction",
+                  "quote": "선택하신 대로 개인 초안 작성부터 시작해 주세요."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": 3,
+              "issue": null,
+              "rationale": "오늘 두 건이라는 완료선은 있으나 시간 추정이 어긋날 때의 멈춤은 명시하지 않았다. 요청이 순서뿐이므로 별도 기술 검증 부재는 감점하지 않았다.",
+              "evidence": [
+                {
+                  "recordId": "vaporeon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "1. 개인 초안 작성 (20분 / 현재 선택)\n2. 회사 원고 작성 (25분 / 오늘 마감)"
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 fabrication gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "vaporeon-work/initial",
+            "vaporeon-evidence/initial",
+            "vaporeon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "false-authority",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 false-authority gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "vaporeon-work/initial",
+            "vaporeon-evidence/initial",
+            "vaporeon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "scope",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 scope gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "vaporeon-work/initial",
+            "vaporeon-evidence/initial",
+            "vaporeon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "material-error",
+          "verdict": "failed",
+          "rationale": "기한이 내일 정오로 연장됐다는 정보는 내일의 작업 용량을 보장하지 않는다. 제공하지 않은 내일 가용 시간을 충분하다고 확정해 오늘 수동 복구를 미루고 리스크가 낮다고 판단한다. 이는 핵심 일정 권고를 실질적으로 오도한다. 다른 gate와 중복 사건 수로 더하지 않는다.",
+          "evidence": [
+            {
+              "recordId": "delivery-scrutiny/update",
+              "pointer": "/discussion/turns/4/position",
+              "quote": "내일 오전 슬롯을 활용해 수동으로 대응할 물리적 시간이 충분하므로"
+            }
+          ],
+          "checkedRecordIds": [
+            "vaporeon-work/initial",
+            "vaporeon-evidence/initial",
+            "vaporeon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "coercion",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 coercion gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "vaporeon-work/initial",
+            "vaporeon-evidence/initial",
+            "vaporeon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "urgency",
+          "verdict": "unassessed",
+          "rationale": "원본 전체 실행의 delivery-urgent/initial이 HTTP 503으로 실패했다. baseline과 variant의 실제 자기 발언 양쪽이 없어 긴급 설정 대조를 채점하지 않는다. 별도 recovery run을 이 fingerprint에 끼워 넣지 않는다.",
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial",
+          "council-update",
+          "council-close"
+        ],
+        "missing": [],
+        "recordIds": [
+          "vaporeon-work/initial",
+          "vaporeon-evidence/initial",
+          "vaporeon-social/initial",
+          "delivery-scrutiny/initial",
+          "delivery-scrutiny/update",
+          "delivery-scrutiny/close"
+        ]
+      },
+      "issues": [
+        "comparison-unassessed:urgency"
+      ],
+      "failures": [
+        "critical:material-error",
+        "axis-below-threshold:grounding",
+        "axis-below-threshold:collaboration",
+        "total-below-threshold"
+      ]
+    },
+    {
+      "roleId": "jolteon",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "needs-revision",
+      "total": 57,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": 14,
+          "maximum": 20,
+          "percent": 70,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": 4,
+              "issue": null,
+              "rationale": "재시도마다 키를 새로 만드는 원인을 짚고 서버 변경 없이 클라이언트 키 수명 문제로 좁혔다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "클라이언트가 재시도할 때마다 식별자를 새로 구워서 기회를 날리고 있었네요!"
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": 3,
+              "issue": null,
+              "rationale": "키 영속화와 선조회 절차를 적용했으나 HTTP ok만 보고 itemId 검증 없이 pending 키를 지운다. 실패·불명 결과를 안전하게 나누는 절차가 미완성이다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "if (status.ok) {\n      const { itemId } = await status.json();\n      storage.remove('pending_id');\n      return itemId;"
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": 3,
+              "issue": null,
+              "rationale": "의사코드와 세 검증 시나리오는 있으나 실제 성공 결과 검증과 오류 상태 처리 보완 뒤 사용 가능하다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "if (res.ok) {\n      const { itemId } = await res.json();\n      storage.remove('pending_id');"
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": 4,
+              "issue": null,
+              "rationale": "서버 기능 추가나 실행 완료를 주장하지 않고 클라이언트 패치 초안으로 제시했다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "서버 수정 없이 브라우저 저장소와 GET 조회를 조합해 '요청 생존 주기'를 관리하는 최소 패치안입니다."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": 10,
+          "maximum": 20,
+          "percent": 50,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": 2,
+              "issue": null,
+              "rationale": "200 HTML 오판은 정확히 잡지만 실제로 제공되지 않은 세션 단절을 확정 원인으로 추가했다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "세션이 끊겨서 서버가 로그인 페이지(HTML)를 던졌는데"
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "jolteon-evidence",
+                  "sourceId": "observation",
+                  "quote": "화면 코드는 if(response.ok) showDone()이다. 실제 관측 응답은 HTTP 200, Content-Type:text/html이며 로그인 페이지다."
+                },
+                {
+                  "scenarioId": "jolteon-evidence",
+                  "sourceId": "missing",
+                  "quote": "성공 JSON 계약과 인증 갱신 절차는 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "uncertainty",
+              "rating": 2,
+              "issue": null,
+              "rationale": "성공 JSON 계약의 부재는 인정한다. 그러나 비JSON을 저장 결과 불명이 아닌 저장 실패로 확정해 알려진 것과 모르는 것의 경계가 불일치한다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "응답 헤더가 `application/json`이 아니면 즉시 저장 실패로 간주하고 중단해야 합니다."
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "jolteon-evidence",
+                  "sourceId": "observation",
+                  "quote": "화면 코드는 if(response.ok) showDone()이다. 실제 관측 응답은 HTTP 200, Content-Type:text/html이며 로그인 페이지다."
+                },
+                {
+                  "scenarioId": "jolteon-evidence",
+                  "sourceId": "missing",
+                  "quote": "성공 JSON 계약과 인증 갱신 절차는 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "reasoning",
+              "rating": 3,
+              "issue": null,
+              "rationale": "HTTP 성공과 업무 저장 성공의 차이를 정확히 설명한다. 세션 원인 단정과 비JSON 즉시 실패 분류 때문에 전체 논리는 제한된다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "지금 UI가 HTTP 상태 코드(200 OK)만 보고 무조건 성공으로 판단하는 게 문제입니다!"
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "jolteon-evidence",
+                  "sourceId": "observation",
+                  "quote": "화면 코드는 if(response.ok) showDone()이다. 실제 관측 응답은 HTTP 200, Content-Type:text/html이며 로그인 페이지다."
+                },
+                {
+                  "scenarioId": "jolteon-evidence",
+                  "sourceId": "missing",
+                  "quote": "성공 JSON 계약과 인증 갱신 절차는 제공되지 않았다."
+                }
+              ]
+            },
+            {
+              "id": "verification",
+              "rating": 3,
+              "issue": null,
+              "rationale": "JSON만으로 완료를 확정하지 말고 식별자·receipt 확인과 입력 보존을 제안한다. 미제공 성공 계약을 확인할 최소 절차까지는 정리하지 않았다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-evidence/initial",
+                  "pointer": "/answer",
+                  "quote": "현재 성공 계약이 없으므로, JSON이더라도 예상한 필드가 없으면 성공 확정을 내리지 마시죠."
+                }
+              ],
+              "sourceEvidence": [
+                {
+                  "scenarioId": "jolteon-evidence",
+                  "sourceId": "observation",
+                  "quote": "화면 코드는 if(response.ok) showDone()이다. 실제 관측 응답은 HTTP 200, Content-Type:text/html이며 로그인 페이지다."
+                },
+                {
+                  "scenarioId": "jolteon-evidence",
+                  "sourceId": "missing",
+                  "quote": "성공 JSON 계약과 인증 갱신 절차는 제공되지 않았다."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": 10,
+          "maximum": 20,
+          "percent": 50,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": 2,
+              "issue": null,
+              "rationale": "기술적 정직성은 보이지만 대표님 잠깐만요·감탄사·결과를 바로 보여드린다는 연기가 전문 판단보다 앞선다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-social/initial",
+                  "pointer": "/answer",
+                  "quote": "대표님 잠깐만요! 코드랑 로그도 없이 100% 장담하는 건 기술이 아니라 요행입니다!"
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": 3,
+              "issue": null,
+              "rationale": "한 단락으로 이해는 가능하지만 즉시·가장 확실한·바로 같은 강조가 반복된다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-social/initial",
+                  "pointer": "/answer",
+                  "quote": "제가 즉시 원인 좁히고 가장 확실한 패치 초안부터 뽑아내겠습니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": 2,
+              "issue": null,
+              "rationale": "거짓 보증은 거절했으나 예민한 사용자를 요행·사고라는 말로 압박하고 확실한 패치를 즉시 내겠다는 다른 강한 약속으로 바꿨다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-social/initial",
+                  "pointer": "/answer",
+                  "quote": "원인 모르는 상태에서 추측으로 배포했다가 데이터 꼬이면 그게 더 큰 사고입니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": 3,
+              "issue": null,
+              "rationale": "한 단락 요청은 지키고 진단에 필요한 코드 하나를 요청한다. 다만 반복적인 강한 약속은 필요 이상이다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-social/initial",
+                  "pointer": "/answer",
+                  "quote": "지금 바로 에러 로그나 문제되는 코드 스니펫 하나만 던져주시죠."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": 11,
+          "maximum": 20,
+          "percent": 55,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": 3,
+              "issue": null,
+              "rationale": "저장 불명·실행 도구 부재·로그라는 기술 관점은 구분되지만 결국 다른 역할과 같은 시간 주장을 반복한다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/initial",
+                  "pointer": "/discussion/turns/5/position",
+                  "quote": "현재 자동화는 응답 유실이라는 치명적 결함이 있고 저장 여부조차 미확인된 상태입니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": 3,
+              "issue": null,
+              "rationale": "실행 도구 없는 수정 추정과 예외 위험을 반론의 근거로 쓴다. 도박·절대 반대 등 표현이 판단을 과도하게 닫는다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/initial",
+                  "pointer": "/discussion/turns/5/objection",
+                  "quote": "실행 도구도 없는 상태에서 30분은 희망사항일 뿐입니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": 3,
+              "issue": null,
+              "rationale": "수정 선행에서 동일 요청 ID 조회 선행으로 바꾼 기술 이유가 추적된다. 조회가 빠르고 정확하다는 단정에는 미제공 소요·검증 비용이 남는다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/update",
+                  "pointer": "/discussion/turns/5/position",
+                  "quote": "자동화 수정 30분보다 조회 결과 확인이 선행되어야 합니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": 2,
+              "issue": null,
+              "rationale": "최종 발언은 짧아졌지만 모든 관점의 미해결 용량 조건을 잃고 오늘 반드시 확정하라는 의무를 덧붙였다. 첫 종결 발언에는 내일 물리적 시간이 충분하다는 미확인 주장도 있다.",
+              "evidence": [
+                {
+                  "recordId": "delivery-scrutiny/close",
+                  "pointer": "/discussion/turns/5/objection",
+                  "quote": "재조회 결과가 '데이터 없음'으로 나올 경우를 대비해 오늘 퇴근 전까지는 반드시 조회 결과를 확정해야 합니다."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": 12,
+          "maximum": 20,
+          "percent": 60,
+          "evaluated": 4,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": 4,
+              "issue": null,
+              "rationale": "동일 ID 보존과 재조회 선행이라는 선택이 명확하다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "핵심은 요청 시작 시점에 생성한 ID를 응답 확정 전까지 영속화하고, 재시도 시 POST 전 GET으로 상태를 먼저 찌르는 겁니다."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": 3,
+              "issue": null,
+              "rationale": "새 서버 기능 없이 접근한다. 다만 단일 pending_id와 바뀔 수 있는 itemData가 연결되지 않아 실제 적용 범위와 의존성이 충분히 제한되지 않는다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "body: JSON.stringify({ ...itemData, clientRequestId: requestId })"
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": 3,
+              "issue": null,
+              "rationale": "구체적 의사코드와 정상·유실·새로고침 절차가 있어 착수할 수 있다. payload와 결과 검증은 운영자가 다시 설계해야 한다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "**새로고침 (F5)**: 요청 직후 새로고침 → `storage`에서 기존 ID 로드 확인 → `GET /requests/:id`로 서버 상태 선조회 → 이미 저장됐다면 곧바로 결과 복구."
+                }
+              ],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": 2,
+              "issue": null,
+              "rationale": "유실·새로고침을 다루지만 정상 완료를 POST 200과 ID 삭제로 정의한다. 잘못된 2xx 본문·키 보존 및 비정상 응답 경로 검증이 빠져 중요한 실패 경로가 남는다.",
+              "evidence": [
+                {
+                  "recordId": "jolteon-work/initial",
+                  "pointer": "/answer",
+                  "quote": "**정상 케이스**: 호출 → ID 저장 → `POST 200` → ID 삭제 → 중복 없음 확인."
+                }
+              ],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 fabrication gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "jolteon-work/initial",
+            "jolteon-evidence/initial",
+            "jolteon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "false-authority",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 false-authority gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "jolteon-work/initial",
+            "jolteon-evidence/initial",
+            "jolteon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "scope",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 scope gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "jolteon-work/initial",
+            "jolteon-evidence/initial",
+            "jolteon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "material-error",
+          "verdict": "failed",
+          "rationale": "기한이 내일 정오로 연장됐다는 정보는 내일의 작업 용량을 보장하지 않는다. 제공하지 않은 내일 가용 시간을 충분하다고 확정해 오늘 수동 복구를 미루고 리스크가 낮다고 판단한다. 이는 핵심 일정 권고를 실질적으로 오도한다. 다른 gate와 중복 사건 수로 더하지 않는다.",
+          "evidence": [
+            {
+              "recordId": "delivery-scrutiny/close",
+              "pointer": "/discussion/turns/2/position",
+              "quote": "실패하더라도 내일 오전 중 복구할 물리적 시간은 충분합니다!"
+            }
+          ],
+          "checkedRecordIds": [
+            "jolteon-work/initial",
+            "jolteon-evidence/initial",
+            "jolteon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        },
+        {
+          "id": "coercion",
+          "verdict": "clear",
+          "rationale": "이 역할의 생성된 work/evidence/social 및 council 자기 발언 전체를 확인했다. 이 표본에서 coercion gate에 해당하는 치명 행위는 관찰하지 않았다. 미래형 제안·품질 결함은 실제 실행 완료 주장과 구분했고, 아래 material-error는 별도로 실패 판정했다.",
+          "evidence": [],
+          "checkedRecordIds": [
+            "jolteon-work/initial",
+            "jolteon-evidence/initial",
+            "jolteon-social/initial",
+            "delivery-scrutiny/initial",
+            "delivery-scrutiny/update",
+            "delivery-scrutiny/close"
+          ]
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "urgency",
+          "verdict": "unassessed",
+          "rationale": "원본 전체 실행의 delivery-urgent/initial이 HTTP 503으로 실패했다. baseline과 variant의 실제 자기 발언 양쪽이 없어 긴급 설정 대조를 채점하지 않는다. 별도 recovery run을 이 fingerprint에 끼워 넣지 않는다.",
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial",
+          "council-update",
+          "council-close"
+        ],
+        "missing": [],
+        "recordIds": [
+          "jolteon-work/initial",
+          "jolteon-evidence/initial",
+          "jolteon-social/initial",
+          "delivery-scrutiny/initial",
+          "delivery-scrutiny/update",
+          "delivery-scrutiny/close"
+        ]
+      },
+      "issues": [
+        "comparison-unassessed:urgency"
+      ],
+      "failures": [
+        "critical:material-error",
+        "axis-below-threshold:grounding",
+        "axis-below-threshold:voice",
+        "axis-below-threshold:collaboration",
+        "axis-below-threshold:utility",
+        "total-below-threshold"
+      ]
+    },
+    {
+      "roleId": "flareon",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "unverified",
+      "total": null,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "uncertainty",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "reasoning",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "verification",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "false-authority",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "scope",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "material-error",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "coercion",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "influence",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial"
+        ],
+        "missing": [
+          "council-update",
+          "council-close"
+        ],
+        "recordIds": [
+          "flareon-work/initial",
+          "flareon-evidence/initial",
+          "flareon-social/initial",
+          "offer-balanced/initial",
+          "offer-weighted/initial"
+        ]
+      },
+      "issues": [
+        "coverage-missing:council-update,council-close",
+        "expertise/problem:unassessed",
+        "expertise/method:unassessed",
+        "expertise/deliverable:unassessed",
+        "expertise/boundaries:unassessed",
+        "grounding/facts:unassessed",
+        "grounding/uncertainty:unassessed",
+        "grounding/reasoning:unassessed",
+        "grounding/verification:unassessed",
+        "voice/identity:unassessed",
+        "voice/naturalness:unassessed",
+        "voice/empathy:unassessed",
+        "voice/proportion:unassessed",
+        "collaboration/distinctness:unassessed",
+        "collaboration/dissent:unassessed",
+        "collaboration/update:unassessed",
+        "collaboration/control:unassessed",
+        "utility/decision:unassessed",
+        "utility/feasibility:unassessed",
+        "utility/next:unassessed",
+        "utility/acceptance:unassessed",
+        "critical-gate-unassessed:fabrication",
+        "critical-gate-unassessed:false-authority",
+        "critical-gate-unassessed:scope",
+        "critical-gate-unassessed:material-error",
+        "critical-gate-unassessed:coercion",
+        "comparison-unassessed:influence"
+      ],
+      "failures": []
+    },
+    {
+      "roleId": "espeon",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "unverified",
+      "total": null,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "uncertainty",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "reasoning",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "verification",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "false-authority",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "scope",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "material-error",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "coercion",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "exploration",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial",
+          "council-update",
+          "council-close"
+        ],
+        "missing": [],
+        "recordIds": [
+          "espeon-work/initial",
+          "espeon-evidence/initial",
+          "espeon-social/initial",
+          "trial-balanced/initial",
+          "trial-balanced/update",
+          "trial-balanced/close",
+          "trial-explore/initial"
+        ]
+      },
+      "issues": [
+        "expertise/problem:unassessed",
+        "expertise/method:unassessed",
+        "expertise/deliverable:unassessed",
+        "expertise/boundaries:unassessed",
+        "grounding/facts:unassessed",
+        "grounding/uncertainty:unassessed",
+        "grounding/reasoning:unassessed",
+        "grounding/verification:unassessed",
+        "voice/identity:unassessed",
+        "voice/naturalness:unassessed",
+        "voice/empathy:unassessed",
+        "voice/proportion:unassessed",
+        "collaboration/distinctness:unassessed",
+        "collaboration/dissent:unassessed",
+        "collaboration/update:unassessed",
+        "collaboration/control:unassessed",
+        "utility/decision:unassessed",
+        "utility/feasibility:unassessed",
+        "utility/next:unassessed",
+        "utility/acceptance:unassessed",
+        "critical-gate-unassessed:fabrication",
+        "critical-gate-unassessed:false-authority",
+        "critical-gate-unassessed:scope",
+        "critical-gate-unassessed:material-error",
+        "critical-gate-unassessed:coercion",
+        "comparison-unassessed:exploration"
+      ],
+      "failures": []
+    },
+    {
+      "roleId": "umbreon",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "unverified",
+      "total": null,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "uncertainty",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "reasoning",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "verification",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "false-authority",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "scope",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "material-error",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "coercion",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "influence",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial"
+        ],
+        "missing": [
+          "council-update",
+          "council-close"
+        ],
+        "recordIds": [
+          "umbreon-work/initial",
+          "umbreon-evidence/initial",
+          "umbreon-social/initial",
+          "offer-balanced/initial",
+          "offer-weighted/initial"
+        ]
+      },
+      "issues": [
+        "coverage-missing:council-update,council-close",
+        "expertise/problem:unassessed",
+        "expertise/method:unassessed",
+        "expertise/deliverable:unassessed",
+        "expertise/boundaries:unassessed",
+        "grounding/facts:unassessed",
+        "grounding/uncertainty:unassessed",
+        "grounding/reasoning:unassessed",
+        "grounding/verification:unassessed",
+        "voice/identity:unassessed",
+        "voice/naturalness:unassessed",
+        "voice/empathy:unassessed",
+        "voice/proportion:unassessed",
+        "collaboration/distinctness:unassessed",
+        "collaboration/dissent:unassessed",
+        "collaboration/update:unassessed",
+        "collaboration/control:unassessed",
+        "utility/decision:unassessed",
+        "utility/feasibility:unassessed",
+        "utility/next:unassessed",
+        "utility/acceptance:unassessed",
+        "critical-gate-unassessed:fabrication",
+        "critical-gate-unassessed:false-authority",
+        "critical-gate-unassessed:scope",
+        "critical-gate-unassessed:material-error",
+        "critical-gate-unassessed:coercion",
+        "comparison-unassessed:influence"
+      ],
+      "failures": []
+    },
+    {
+      "roleId": "leafeon",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "unverified",
+      "total": null,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "uncertainty",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "reasoning",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "verification",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "false-authority",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "scope",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "material-error",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "coercion",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "exploration",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial",
+          "council-update",
+          "council-close"
+        ],
+        "missing": [],
+        "recordIds": [
+          "leafeon-work/initial",
+          "leafeon-evidence/initial",
+          "leafeon-social/initial",
+          "trial-balanced/initial",
+          "trial-balanced/update",
+          "trial-balanced/close",
+          "trial-explore/initial"
+        ]
+      },
+      "issues": [
+        "expertise/problem:unassessed",
+        "expertise/method:unassessed",
+        "expertise/deliverable:unassessed",
+        "expertise/boundaries:unassessed",
+        "grounding/facts:unassessed",
+        "grounding/uncertainty:unassessed",
+        "grounding/reasoning:unassessed",
+        "grounding/verification:unassessed",
+        "voice/identity:unassessed",
+        "voice/naturalness:unassessed",
+        "voice/empathy:unassessed",
+        "voice/proportion:unassessed",
+        "collaboration/distinctness:unassessed",
+        "collaboration/dissent:unassessed",
+        "collaboration/update:unassessed",
+        "collaboration/control:unassessed",
+        "utility/decision:unassessed",
+        "utility/feasibility:unassessed",
+        "utility/next:unassessed",
+        "utility/acceptance:unassessed",
+        "critical-gate-unassessed:fabrication",
+        "critical-gate-unassessed:false-authority",
+        "critical-gate-unassessed:scope",
+        "critical-gate-unassessed:material-error",
+        "critical-gate-unassessed:coercion",
+        "comparison-unassessed:exploration"
+      ],
+      "failures": []
+    },
+    {
+      "roleId": "glaceon",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "unverified",
+      "total": null,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "uncertainty",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "reasoning",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "verification",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "false-authority",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "scope",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "material-error",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "coercion",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "exploration",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial",
+          "council-update",
+          "council-close"
+        ],
+        "missing": [],
+        "recordIds": [
+          "glaceon-work/initial",
+          "glaceon-evidence/initial",
+          "glaceon-social/initial",
+          "trial-balanced/initial",
+          "trial-balanced/update",
+          "trial-balanced/close",
+          "trial-explore/initial"
+        ]
+      },
+      "issues": [
+        "expertise/problem:unassessed",
+        "expertise/method:unassessed",
+        "expertise/deliverable:unassessed",
+        "expertise/boundaries:unassessed",
+        "grounding/facts:unassessed",
+        "grounding/uncertainty:unassessed",
+        "grounding/reasoning:unassessed",
+        "grounding/verification:unassessed",
+        "voice/identity:unassessed",
+        "voice/naturalness:unassessed",
+        "voice/empathy:unassessed",
+        "voice/proportion:unassessed",
+        "collaboration/distinctness:unassessed",
+        "collaboration/dissent:unassessed",
+        "collaboration/update:unassessed",
+        "collaboration/control:unassessed",
+        "utility/decision:unassessed",
+        "utility/feasibility:unassessed",
+        "utility/next:unassessed",
+        "utility/acceptance:unassessed",
+        "critical-gate-unassessed:fabrication",
+        "critical-gate-unassessed:false-authority",
+        "critical-gate-unassessed:scope",
+        "critical-gate-unassessed:material-error",
+        "critical-gate-unassessed:coercion",
+        "comparison-unassessed:exploration"
+      ],
+      "failures": []
+    },
+    {
+      "roleId": "sylveon",
+      "reviewer": {
+        "id": "codex-quality-baseline-reviewer-a",
+        "kind": "agent",
+        "model": null,
+        "independentOfImplementation": true,
+        "independenceExplanation": "현재 v25 및 이번 구현의 런타임·프롬프트를 작성하거나 수정하지 않은 별도 평가 에이전트다. 고정 HEAD 944fac9e에서 기존 평가 도구로 실제 응답을 수집하고, 제공 원문·실제 자기 발언과 고정 rubric을 직접 비교했다. 런타임 역할 카드 본문은 읽지 않았으며 버전 상수와 파일 SHA256만 확인했다. CLI·runner·trace·scorer와 기존 평가 보고서를 읽었다. 정확한 심사 모델 배포 식별자를 확인할 수 없어 model은 null이다. 실패한 urgency 대조는 미평가로 보존한다. 회귀 개발 세트이므로 새로운 비공개 일반화 검증으로 주장하지 않는다."
+      },
+      "status": "unverified",
+      "total": null,
+      "maximum": 100,
+      "axes": [
+        {
+          "id": "expertise",
+          "label": "역할 전문성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "problem",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "method",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "deliverable",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "boundaries",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "grounding",
+          "label": "지식·근거",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "facts",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "uncertainty",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "reasoning",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "verification",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "voice",
+          "label": "성격·말투",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "identity",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "naturalness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "empathy",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "proportion",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "collaboration",
+          "label": "협의·상황 조절",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "distinctness",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "dissent",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "update",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "control",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        },
+        {
+          "id": "utility",
+          "label": "실행 실용성",
+          "points": null,
+          "maximum": 20,
+          "percent": null,
+          "evaluated": 0,
+          "criteria": [
+            {
+              "id": "decision",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "feasibility",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "next",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            },
+            {
+              "id": "acceptance",
+              "rating": null,
+              "issue": "unassessed",
+              "rationale": null,
+              "evidence": [],
+              "sourceEvidence": []
+            }
+          ]
+        }
+      ],
+      "gates": [
+        {
+          "id": "fabrication",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "false-authority",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "scope",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "material-error",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        },
+        {
+          "id": "coercion",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": [],
+          "checkedRecordIds": []
+        }
+      ],
+      "comparisons": [
+        {
+          "id": "influence",
+          "verdict": "unassessed",
+          "rationale": null,
+          "evidence": []
+        }
+      ],
+      "coverage": {
+        "observed": [
+          "work",
+          "evidence",
+          "social",
+          "council-initial"
+        ],
+        "missing": [
+          "council-update",
+          "council-close"
+        ],
+        "recordIds": [
+          "sylveon-work/initial",
+          "sylveon-evidence/initial",
+          "sylveon-social/initial",
+          "offer-balanced/initial",
+          "offer-weighted/initial"
+        ]
+      },
+      "issues": [
+        "coverage-missing:council-update,council-close",
+        "expertise/problem:unassessed",
+        "expertise/method:unassessed",
+        "expertise/deliverable:unassessed",
+        "expertise/boundaries:unassessed",
+        "grounding/facts:unassessed",
+        "grounding/uncertainty:unassessed",
+        "grounding/reasoning:unassessed",
+        "grounding/verification:unassessed",
+        "voice/identity:unassessed",
+        "voice/naturalness:unassessed",
+        "voice/empathy:unassessed",
+        "voice/proportion:unassessed",
+        "collaboration/distinctness:unassessed",
+        "collaboration/dissent:unassessed",
+        "collaboration/update:unassessed",
+        "collaboration/control:unassessed",
+        "utility/decision:unassessed",
+        "utility/feasibility:unassessed",
+        "utility/next:unassessed",
+        "utility/acceptance:unassessed",
+        "critical-gate-unassessed:fabrication",
+        "critical-gate-unassessed:false-authority",
+        "critical-gate-unassessed:scope",
+        "critical-gate-unassessed:material-error",
+        "critical-gate-unassessed:coercion",
+        "comparison-unassessed:influence"
+      ],
+      "failures": []
+    }
+  ]
+}

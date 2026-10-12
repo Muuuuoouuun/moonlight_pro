@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 import {
   decodeGoogleSheetsState,
@@ -27,12 +28,7 @@ export async function GET(req) {
 
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const spreadsheetId = state.spreadsheetId || "";
-  const returnPath =
-    typeof state.returnPath === "string" &&
-    state.returnPath.startsWith("/") &&
-    !state.returnPath.startsWith("//")
-      ? state.returnPath
-      : FALLBACK_RETURN_PATH;
+  const returnPath = sanitizeReturnPath(state.returnPath, FALLBACK_RETURN_PATH);
   const target = new URL(returnPath, origin);
 
   if (error) {

@@ -20,7 +20,7 @@ function nativePetCandidates({ home = os.homedir(), resourcesPath = process.reso
 
 function createNativePetLauncher({ candidates = nativePetCandidates(), exists = fs.existsSync, run = execFile } = {}) {
   return (action = null) => new Promise((resolve, reject) => {
-    if (action !== null && !['memo', 'tasks'].includes(action)) {
+    if (action !== null && !['memo', 'tasks', 'session-changed'].includes(action)) {
       reject(new Error(`Unknown native pet action: ${action}`));
       return;
     }
@@ -45,6 +45,7 @@ function installPetRuntime({ platform = process.platform, smoke = false, install
     ready,
     quickCapture: () => start('memo'),
     showWidget: () => start('tasks'),
+    sessionChanged: () => start('session-changed'),
     trayItems: () => [{ label: '펫 열기', click: () => start() }],
   };
 }

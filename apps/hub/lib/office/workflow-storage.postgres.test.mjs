@@ -15,6 +15,7 @@ const rootUrl = new URL('../../../../', import.meta.url);
 const migration = new URL('supabase/migrations/20260921_0038_office_requests.sql', rootUrl);
 const retryMigration = new URL('supabase/migrations/20260922_0040_office_apply_transient_retry.sql', rootUrl);
 const qualityDeadlineMigration = new URL('supabase/migrations/20261001_0062_office_weekly_quality_deadline.sql', rootUrl);
+const inboxMigration = new URL('supabase/migrations/20261003_0066_office_request_inbox.sql', rootUrl);
 
 test('Office PostgreSQL receipts, retention and task application share real command transaction rules', async t => {
   let bin;
@@ -71,6 +72,7 @@ test('Office PostgreSQL receipts, retention and task application share real comm
     const source = await readFile(migration, 'utf8'); sql(source); sql(source);
     const retrySource = await readFile(retryMigration, 'utf8'); sql(retrySource); sql(retrySource);
     try { const deadlineSource = await readFile(qualityDeadlineMigration, 'utf8'); sql(deadlineSource); sql(deadlineSource); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    try { const inboxSource = await readFile(inboxMigration, 'utf8'); sql(inboxSource); sql(inboxSource); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     sql(`INSERT INTO workspaces(id,slug,name) VALUES(${quote(w)},${quote(w)},'Office'),(${quote(other)},${quote(other)},'Other');`);
 
     await t.test('weekly draft quality review stays running through its budget; other flows keep their deadline', () => {
@@ -119,6 +121,57 @@ test('Office PostgreSQL receipts, retention and task application share real comm
       assert.ok(Number(sql(`SELECT octet_length((${json(result)})::text)`)) > 32768);
       const validated = parseOfficeWorkflowResult(result, r, c);
       assert.equal(finish(r, claimed.request.attempt_token, validated).status, 'generated');
+    });
+    await t.test('inbox RPC is private, read-only, scope isolated and stably paged across origins', () => {
+      const signature = 'public.office_request_inbox_v1(uuid,text,text,integer,jsonb)';
+      assert.notEqual(sql(`SELECT to_regprocedure(${quote(signature)}) IS NULL`), 't', 'Office inbox RPC must exist');
+      const inboxActor = 'inbox-operator';
+      const inbox = (scope = 'personal', limit = 20, before = null, workspace = w, owner = inboxActor) => call('office_request_inbox_v1', [quote(workspace), quote(owner), scope === null ? 'null' : quote(scope), String(limit), before === null ? 'null' : json(before)]);
+      const seed = (changes = {}, workspace = w, owner = inboxActor) => {
+        const r = request(changes), claimed = call('office_request_claim_v1', [quote(workspace), quote(owner), json(r), json(context(r))]);
+        assert.equal(claimed.claimed, true);
+        assert.equal(call('office_request_finish_v1', [quote(workspace), quote(owner), quote(r.requestId), quote(claimed.request.attempt_token), json(generated(r))]).status, 'generated');
+        return r;
+      };
+      const a = seed(), b = seed({ intent: 'customer_reply', originRef: { entityType: 'lead', entityId: randomUUID(), private: 'hidden-origin' } });
+      seed({ scope: 'classin' }); seed({}, other); seed({}, w, 'other-inbox-actor');
+      sql(`UPDATE office_requests SET created_at='2030-01-01T00:00:00.123456Z',application=${json({ state: 'pending', command: { body: 'private command' }, payloadHash: 'hidden-hash' })} WHERE id IN (${quote(a.requestId)},${quote(b.requestId)})`);
+      const before = sql('SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM office_requests r');
+      const first = inbox('personal', 1);
+      assert.equal(first.status, 'ready'); assert.equal(first.items.length, 2, 'RPC returns one lookahead row');
+      assert.equal(first.items[0].requestId, [a.requestId, b.requestId].sort().reverse()[0]);
+      const last = first.items[0], second = inbox('personal', 1, { createdAt: last.createdAt, id: last.requestId });
+      assert.equal(second.items.length, 1); assert.notEqual(second.items[0].requestId, last.requestId);
+      assert.deepEqual(new Set(first.items.map(row => row.intent)), new Set(['weekly_report', 'customer_reply']));
+      assert.deepEqual(inbox('personal', 20, null, w, 'absent-inbox-actor').items, []);
+      assert.equal(inbox('classin').items.length, 1); assert.equal(inbox('personal', 20, null, other).items.length, 1);
+      assert.doesNotMatch(JSON.stringify(first), /hidden-|private command|attempt_token|input_snapshot|context_snapshot|result|application|workspace_id|actor_id/);
+      assert.deepEqual(Object.keys(first.items[0]).sort(), ['createdAt','expired','intent','mode','originRef','ownerId','participants','requestId','scope','state','status'].sort());
+      assert.equal(sql('SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM office_requests r'), before, 'inbox never mutates requests');
+      for (const role of ['anon', 'authenticated']) assert.equal(sql(`SELECT has_function_privilege(${quote(role)},${quote(signature)},'EXECUTE')`), 'f');
+      assert.equal(sql(`SELECT has_function_privilege('service_role',${quote(signature)},'EXECUTE')`), 't');
+      for (const role of ['anon', 'authenticated', 'service_role']) assert.equal(sql(`SELECT has_table_privilege(${quote(role)},'office_requests','SELECT')`), 'f');
+      assert.equal(sql(`SELECT has_function_privilege('service_role','public.office_request_envelope_v1(public.office_requests,boolean)','EXECUTE')`), 'f');
+      for (const invalid of [inbox('all'), inbox(null), inbox('personal', 0), inbox('personal', 21), inbox('personal', 20, {}), inbox('personal', 20, { id: a.requestId, createdAt: 'infinity' }), inbox('personal', 20, { id: a.requestId, createdAt: last.createdAt, actorId: 'other' })]) assert.equal(invalid.status, 'invalid-input');
+      for (let index = 0; index < 22; index++) seed();
+      assert.equal(inbox().items.length, 21, 'database bounds the lookahead to 20+1');
+    });
+    await t.test('inbox metadata follows receipt expiry and overdue-generation truth before retention cleanup', () => {
+      assert.notEqual(sql("SELECT to_regprocedure('public.office_request_inbox_v1(uuid,text,text,integer,jsonb)') IS NULL"), 't', 'Office inbox RPC must exist');
+      const owner = 'inbox-retention', ids = [];
+      for (const state of ['running', 'generated', 'error', 'unknown']) {
+        const r = request(), claimed = call('office_request_claim_v1', [quote(w), quote(owner), json(r), json(context(r))]);
+        ids.push(r.requestId);
+        if (state !== 'running') sql(`UPDATE office_requests SET state=${quote(state)} WHERE id=${quote(r.requestId)}`);
+      }
+      sql(`UPDATE office_requests SET deadline_at=now()-interval '1 second' WHERE id=${quote(ids[0])}`);
+      sql(`UPDATE office_requests SET expires_at=now()-interval '1 second',result=${json({ body: 'expired body' })} WHERE id=${quote(ids[1])}`);
+      const rows = call('office_request_inbox_v1', [quote(w), quote(owner), quote('personal'), '20', 'null']).items;
+      assert.deepEqual(rows.map(row => row.status).sort(), ['error', 'expired', 'unknown', 'unknown']);
+      assert.deepEqual(rows.map(row => row.state).sort(), ['error', 'expired', 'unknown', 'unknown']);
+      assert.equal(rows.find(row => row.requestId === ids[1]).expired, true);
+      assert.doesNotMatch(JSON.stringify(rows), /expired body|attempt_token|result/);
+      assert.equal(sql(`SELECT result->>'body' FROM office_requests WHERE id=${quote(ids[1])}`), 'expired body', 'read projection redacts without a retention write');
     });
     await t.test('origin list is bounded, sorted, actor isolated and excludes generation snapshots', () => {
       const a = ready(), b = ready();

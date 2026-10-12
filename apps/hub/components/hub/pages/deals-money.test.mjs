@@ -8,6 +8,7 @@ import * as paymentsLib from "../../../lib/deal-payments.js";
 import * as recurringLib from "../../../lib/deal-recurring.js";
 import * as planLib from "../../../lib/deal-payment-plan.js";
 import * as moneyLib from "../../../lib/deal-money.js";
+import * as wonLib from "../../../lib/won-format.js";
 import { DEAL_STAGES } from "../../../lib/deal-stages.js";
 
 // 거래 "돈" 보기(목업 10, 2026-09-26) — 실제 컴포넌트 코드(deals-money.jsx + 그 독 deals-dock.jsx)를
@@ -53,7 +54,7 @@ function load(harness) {
     React: harness.React,
     useToast: () => ({ success() {}, error() {}, info() {} }),
     UNDO_WINDOW_MS: 3500,
-    ...timelineLib, ...paymentsLib, ...recurringLib, ...planLib, ...moneyLib,
+    ...timelineLib, ...paymentsLib, ...recurringLib, ...planLib, ...moneyLib, ...wonLib,
   };
   for (const name of ["Button", "CertaintyBadge", "EmptyState", "IconButton", "Kbd", "LifecycleBadge", "SegmentedControl", "TruthBadge", "Iconed", "ContactRecordDrawer"]) deps[name] = name;
   return new Function(...Object.keys(deps), `${javascript}; return { DealsMoney, MoneyHeader };`)(...Object.values(deps));
@@ -136,22 +137,22 @@ test("머리 — 들어온 돈 / 목표, KPI 넷(늦은 입금만 danger), 리�
   const app = mount("MoneyHeader", headerProps());
   const h2 = app.findAll((n) => n.type === "h2")[0];
   assert.equal(app.findAll((n) => n.type === "h2").length, 1);
-  assert.match(text(h2), /9월에 들어온 매출 ₩600K/);
-  assert.match(text(app.findAll((n) => n.type === "button" && n.props.className === "deals-money-target")[0]), /\/ 목표 ₩6.0M/);
+  assert.match(text(h2), /9월에 들어온 매출 60만원/);
+  assert.match(text(app.findAll((n) => n.type === "button" && n.props.className === "deals-money-target")[0]), /\/ 목표 600만원/);
   const kpis = app.findAll((n) => n.props?.className === "deals-money-kpi");
   assert.deepEqual(kpis.map((k) => text(k.props.children[0])), ["늦은 입금", "월말 확실", "가능까지", "매달 정기"]);
   assert.deepEqual(kpis.map((k) => k.props["data-kind"]), ["late", "sure", "maybe", "recurring"]);
-  assert.match(text(kpis[0]), /₩2.4M/);
-  assert.match(text(kpis[1]), /₩3.0M/, "월말 확실 = 들어옴 0.6 + 늦음 2.4 + 이번 달 남은 확실 0");
-  assert.match(text(kpis[2]), /₩7.8M/, "가능까지 = 월말 확실 + 이번 달 가능 4.8");
-  assert.match(text(kpis[3]), /₩600K/);
+  assert.match(text(kpis[0]), /240만원/);
+  assert.match(text(kpis[1]), /300만원/, "월말 확실 = 들어옴 0.6 + 늦음 2.4 + 이번 달 남은 확실 0");
+  assert.match(text(kpis[2]), /780만원/, "가능까지 = 월말 확실 + 이번 달 가능 4.8");
+  assert.match(text(kpis[3]), /60만원/);
   assert.equal(text(app.findAll((n) => n.props?.className === "deals-money-top__actions")[0]), "ACTIONS");
   const segs = app.findAll((n) => n.props?.className === "deals-money-seg");
   assert.deepEqual(segs.map((s) => s.props["data-kind"]), ["paid", "late", "maybe"], "0인 조각은 그리지 않는다");
   const tick = app.findAll((n) => n.props?.className === "deals-money-ribbon__target")[0];
   assert.match(tick.props.style.left, /%$/);
-  assert.match(text(tick), /목표 ₩6.0M/);
-  assert.match(text(app.findAll((n) => n.props?.className === "deals-money-legend__note")[0]), /날짜 없는 가능 ₩2.4M/);
+  assert.match(text(tick), /목표 600만원/);
+  assert.match(text(app.findAll((n) => n.props?.className === "deals-money-legend__note")[0]), /날짜 없는 가능 240만원/);
 });
 
 test("머리 — 늦은 입금이 없으면 danger가 아니라 '없음', 목표가 없으면 '목표 정하기', 목표를 못 읽으면 아무것도", () => {
@@ -171,7 +172,7 @@ test("읽는 중·읽기 실패·미연결에는 ₩0을 사실처럼 쓰지 않
     assert.equal(text(app.findAll((n) => n.type === "h2")[0]), "거래", syncState);
     assert.equal(app.findAll((n) => n.type === "dl").length, 0, syncState);
     assert.equal(app.findAll((n) => n.props?.className === "deals-money-ribbon").length, 0, syncState);
-    assert.doesNotMatch(text(app.findAll((n) => n.type === "section")[0]), /₩0/, syncState);
+    assert.doesNotMatch(text(app.findAll((n) => n.type === "section")[0]), /(?<![\d,])0원/, syncState);
     assert.equal(app.findAll((n) => n.type === "TruthBadge" && n.props.state === syncState).length, 1, syncState);
   }
   const live = mount("MoneyHeader", headerProps());
@@ -201,11 +202,11 @@ test("현금흐름 · 주 — 밀린 돈 칸 + 이번 주부터 10주, 매달 �
   assert.equal(cols[0].props["data-carry"], "true");
   assert.equal(cols[1].props["data-current"], "true");
   const axis = app.findAll((n) => n.props?.className === "deals-money-axis__cell");
-  assert.match(text(axis[0]), /2.4M밀린 돈/);
+  assert.match(text(axis[0]), /240만밀린 돈/);
   assert.match(text(axis[1]), /—이번 주/);
-  assert.match(text(axis[2]), /600K4.8M\?9\/28/);
+  assert.match(text(axis[2]), /60만480만\?9\/28/);
   assert.equal(app.findAll((n) => n.props?.className === "deals-money-now").length, 1, "현재 위치 점은 하나");
-  assert.match(text(app.findAll((n) => n.props?.className === "deals-money-floor")[0]), /매달 정기 바닥 · 주당 ≈ ₩138K/);
+  assert.match(text(app.findAll((n) => n.props?.className === "deals-money-floor")[0]), /매달 정기 바닥 · 주당 ≈ 14만원/);
   const table = app.findAll((n) => n.type === "table" && n.props.className === "deals-money-sr")[0];
   assert.equal(app.findAll((n) => n.type === "tr", table).length, 12);
   assert.equal(app.findAll((n) => n.props?.className === "deals-money-col__seg" && n.props["data-kind"] === "late").length, 1);
@@ -218,7 +219,7 @@ test("현금흐름 · 월 — 이번 달부터 3달 뒤까지, 이번 달에만 
   const cols = app.findAll((n) => n.props?.className === "deals-money-col");
   assert.equal(cols.length, 4);
   const labels = app.findAll((n) => n.props?.className === "deals-money-axis__l").map(text);
-  assert.deepEqual(labels, ["9월 · 목표 6.0M", "10월", "11월", "12월"]);
+  assert.deepEqual(labels, ["9월 · 목표 600만", "10월", "11월", "12월"]);
   assert.equal(app.findAll((n) => n.props?.className === "deals-money-col__target").length, 1);
   assert.equal(app.findAll((n) => n.props?.className === "deals-money-floor").length, 0, "바닥선은 주 차트에만");
   assert.doesNotMatch(labels.join(" "), /8월/);
@@ -231,12 +232,12 @@ test("목록 — 밀린 돈 → 이번 주·다음 주 → 그 뒤 → 날짜·�
   const groups = app.findAll((n) => n.props?.className === "deals-money-grp");
   assert.deepEqual(groups.map((g) => g.props["data-group"]), ["late", "soon", "later", "undated"]);
   const heads = groups.map((g) => text(app.findAll((n) => n.props?.className === "deals-money-grp__head", g)[0]));
-  assert.equal(heads[0], "밀린 돈₩2.4M");
-  assert.equal(heads[1], "이번 주 · 다음 주₩600K + 4.8M?");
-  assert.equal(heads[3], "날짜 · 일정 없음₩1.2M + 2.4M?");
+  assert.equal(heads[0], "밀린 돈240만원");
+  assert.equal(heads[1], "이번 주 · 다음 주60만원 + 480만원?");
+  assert.equal(heads[3], "날짜 · 일정 없음120만원 + 240만원?");
   const late = rowOf(app, "late");
   assert.equal(late.props["data-rail"], "true");
-  assert.match(text(late), /9\/19한빛일시불 7일 늦음₩2,400,000입금 확인/);
+  assert.match(text(late), /9\/19한빛일시불 7일 늦음240만원입금 확인/);
   const maybe = rowOf(app, "maybe");
   assert.equal(maybe.props["data-certainty"], "maybe");
   assert.match(text(maybe), /가능/);
@@ -254,7 +255,7 @@ test("그 뒤는 앞의 5건만 — 나머지는 펼치기(건수 · 합), 다�
   const later = () => app.findAll((n) => n.props?.className === "deals-money-grp" && n.props["data-group"] === "later")[0];
   assert.equal(app.findAll((n) => n.type === "li", later()).length, moneyLib.MONEY_GROUP_PREVIEW);
   const more = app.findAll((n) => n.type === "Button" && n.props.className === "deals-money-more", later())[0];
-  assert.match(text(more), /3건 더 · ₩900K \+ 500K\? 펼치기/);
+  assert.match(text(more), /3건 더 · 90만원 \+ 50만원\? 펼치기/);
   more.props.onClick();
   app.render();
   assert.equal(app.findAll((n) => n.type === "li", later()).length, 8);
@@ -272,7 +273,7 @@ test("입금 확인 — 행 안에서 펼쳐 금액·날짜, 다르면 이유 �
   app.findAll((n) => n.type === "input" && n.props.type === "number", form())[0].props.onChange({ target: { value: "2000000" } });
   app.render();
   const note = app.findAll((n) => n.type === "input" && n.props.maxLength === paymentsLib.PAID_NOTE_MAX)[0];
-  assert.match(text(app.findAll((n) => n.type === "label" && n.props.className === "deals-form__note")[0]), /예상보다 −₩400K/);
+  assert.match(text(app.findAll((n) => n.type === "label" && n.props.className === "deals-form__note")[0]), /예상보다 −40만원/);
   note.props.onChange({ target: { value: "분할 입금" } });
   app.render();
   form().props.onSubmit({ preventDefault() {} });

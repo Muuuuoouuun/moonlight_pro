@@ -1,4 +1,4 @@
-import { parseOfficeDeliberation, parseOfficeDiscussion } from '@com-moon/agent-contracts/office';
+import { parseOfficeDeliberation, parseOfficeDiscussion, evaluateOfficeDiscussion } from '@com-moon/agent-contracts/office';
 
 // Changing participants keeps the chosen controls, drops departed weights and
 // gives a newly selected perspective the ordinary weight.
@@ -11,6 +11,15 @@ export function officeDiscussionState(result, request) {
   if (result.discussion === undefined) return { state: request?.deliberation === undefined ? 'legacy' : 'invalid', discussion: null };
   try {
     const expected = request || { ownerId: result.ownerId, mode: result.mode, participants: result.participants, deliberation: result.discussion.settings };
-    return { state: 'current', discussion: parseOfficeDiscussion(result.discussion, expected) };
+    const discussion = parseOfficeDiscussion(result.discussion, expected);
+    return { state: 'current', discussion, evaluation: evaluateOfficeDiscussion(discussion, expected) };
   } catch { return { state: 'invalid', discussion: null }; }
+}
+
+// The synthesis prose can omit an objection that is still explicitly open in
+// the structured record. Keep it visible and include it in requested reviews.
+export function officeRemainingDissent(result, discussion = officeDiscussionState(result).discussion) {
+  const open = (discussion?.resolutions || []).filter(item => item.disposition === 'open')
+    .map(item => discussion.turns.find(turn => turn.turnRef === item.turnRef).objection);
+  return [...new Set([...(result?.dissent || []), ...open])];
 }

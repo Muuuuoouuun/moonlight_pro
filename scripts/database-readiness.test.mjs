@@ -44,6 +44,18 @@ test('Top 3 readiness requires its cap function and attached trigger', () => {
   assert.match(readinessSql([feature]), /pg_trigger/);
 });
 
+test('Office inbox readiness checks private RPC signature and metadata/paging body version', () => {
+  const feature = DATABASE_FEATURES.find(f => f.migration === '20261003_0066_office_request_inbox.sql');
+  assert.ok(feature, 'Office inbox migration is registered');
+  assert.deepEqual(feature.functions, ['office_request_inbox_v1(uuid,text,text,integer,jsonb)']);
+  assert.ok(feature.bodyIncludes.some(([, marker]) => marker === 'office_inbox_metadata_v1'));
+  assert.ok(feature.bodyIncludes.some(([, marker]) => marker === '(r.created_at,r.id)<(v_time,v_id)'));
+  const rows = rowsFor([feature]);
+  assert.equal(summarizeReadiness(rows, [feature])[0].ready, true);
+  assert.equal(summarizeReadiness(rows.filter(row => row.kind !== 'body_includes'), [feature])[0].ready, false);
+  assert.equal(summarizeReadiness(rows.map(row => row.kind === 'function' ? { ...row, protected: false } : row), [feature])[0].ready, false);
+});
+
 test('social multi-account readiness requires the account key, new unique index and removal of the old unique index', () => {
   const feature = DATABASE_FEATURES.find(f => f.migration === '20260924_0046_social_multiaccount_connections.sql');
   assert.ok(feature);

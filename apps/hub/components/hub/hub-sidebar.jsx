@@ -13,6 +13,7 @@ import {
   deriveSidebarScope,
   isSidebarAnchorActive,
   normalizeScope,
+  officeScopeSelectionPath,
   ownerAnchorKey,
   pathnameOf,
   resolveSidebarPath,
@@ -209,10 +210,12 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
   }, [onNavigate, scope]);
 
   // Switching scope while standing on a scope-aware anchor re-enters the same
-  // anchor in the new scope. On a global anchor (오늘 · AI · 설정) it only arms
-  // the next scope-aware navigation.
+  // anchor in the new scope. Office also consumes an explicit route scope;
+  // other global screens only arm the next scope-aware navigation.
   const changeScope = React.useCallback((next) => {
     const value = setScope(next);
+    const officeTarget = officeScopeSelectionPath(active, value);
+    if (officeTarget) { onNavigate(officeTarget); return; }
     const owner = ownerAnchorKey(active);
     const anchor = [...SIDEBAR_PRIMARY, ...SIDEBAR_UTILITIES].find(a => a.key === owner);
     if (!anchor?.scopeAware) return;

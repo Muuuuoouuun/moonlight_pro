@@ -151,10 +151,14 @@ struct ScreenDragSurface: NSViewRepresentable {
     let move: (PanelMove) -> Void
     var click: (() -> Void)? = nil
     var pressed: ((Bool) -> Void)? = nil
+    var clickEvent: ((NSEvent) -> Void)? = nil
 
-    func makeNSView(context: Context) -> DragView { DragView(move: move, click: click, pressed: pressed) }
+    func makeNSView(context: Context) -> DragView {
+        DragView(move: move, click: click, pressed: pressed, clickEvent: clickEvent)
+    }
     func updateNSView(_ view: DragView, context: Context) {
         view.move = move; view.click = click; view.pressed = pressed
+        view.clickEvent = clickEvent
     }
 
     final class DragView: NSView {
@@ -162,11 +166,14 @@ struct ScreenDragSurface: NSViewRepresentable {
         var move: (PanelMove) -> Void
         var click: (() -> Void)?
         var pressed: ((Bool) -> Void)?
+        var clickEvent: ((NSEvent) -> Void)?
         private var drag = ScreenDragTracker()
         private weak var dragWindow: NSWindow?
 
-        init(move: @escaping (PanelMove) -> Void, click: (() -> Void)?, pressed: ((Bool) -> Void)?) {
+        init(move: @escaping (PanelMove) -> Void, click: (() -> Void)?, pressed: ((Bool) -> Void)?,
+             clickEvent: ((NSEvent) -> Void)? = nil) {
             self.move = move; self.click = click; self.pressed = pressed
+            self.clickEvent = clickEvent
             super.init(frame: .zero)
         }
         required init?(coder: NSCoder) { nil }
@@ -191,7 +198,9 @@ struct ScreenDragSurface: NSViewRepresentable {
         override func mouseUp(with event: NSEvent) {
             log.info("widget drag ended activated=\(self.drag.isDragging)")
             if drag.isDragging { move(.finish(pointer: window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)) }
-            else if bounds.contains(convert(event.locationInWindow, from: nil)) { click?() }
+            else if bounds.contains(convert(event.locationInWindow, from: nil)) {
+                if let clickEvent { clickEvent(event) } else { click?() }
+            }
             pressed?(false)
             drag.end()
             PetGlassDrag.end(in: dragWindow)

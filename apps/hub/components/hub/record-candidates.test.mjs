@@ -108,3 +108,20 @@ test("the component keeps the hub contracts: envelope reads, tokens only, toast 
   assert.match(source, /if \(!result\.ok\) \{\s*hide\(candidate\.id, false\);\s*toast\.error/);
   assert.doesNotMatch(source, /SyncBadge/);
 });
+
+// 2026-09-30 넓은 기록창 ④ — 오늘 연락의 '저장하고 다음'은 다음 사람을 화면 순서에서 고른다.
+test("the visible candidates are reported in screen order only when they change — and never while reading", () => {
+  assert.match(source, /export function RecordCandidates\(\{ onRecord, onNavigate, onVisible \}\) \{/);
+  // 읽은 것(live · partial)만 줄에 세운다 — 읽지 못했으면 빈 목록이다(없는 후보를 줄에 세우지 않는다).
+  assert.match(source, /const shown = data\.status === "live" \|\| data\.status === "partial" \? visible : \[\];/);
+  // 읽는 중에는 알리지 않는다 — 다시 읽는 동안 호출처의 줄이 잠깐 비었다 돌아오지 않게.
+  assert.match(source, /const shownIds = data\.status === "loading" \? null : shown\.map\(\(candidate\) => candidate\.id\)\.join\("\|"\);/);
+  assert.match(source, /React\.useEffect\(\(\) => \{\s*if \(shownIds != null\) onVisibleRef\.current\?\.\(shownRef\.current\);\s*\}, \[shownIds\]\);/);
+  // 버린 · 정리한 후보(hidden)는 보이는 목록에서 이미 빠져 있다.
+  assert.match(source, /const visible = data\.candidates\.filter\(\(candidate\) => !hidden\.has\(candidate\.id\)\);/);
+  // 알림은 그리기를 바꾸지 않는다 — 콜백 없이도 같은 화면이다.
+  assert.equal(
+    renderToStaticMarkup(React.createElement(RecordCandidates, { onVisible() {} })),
+    renderToStaticMarkup(React.createElement(RecordCandidates, {})),
+  );
+});

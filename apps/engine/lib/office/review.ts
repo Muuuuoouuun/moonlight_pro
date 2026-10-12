@@ -1,8 +1,10 @@
 import { OFFICE_ROSTER, type OfficeRequest, type OfficeContext, type OfficeAnswer } from '@com-moon/agent-contracts/office';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_PLAYBOOKS, OFFICE_MODE_GUIDANCE } from './playbooks.ts';
+import { renderOfficeRoleBehaviorGuidance } from './role-depth-prompt.ts';
 import { OFFICE_PERSONAS } from './personas.ts';
 import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS } from './source-review.ts';
+import { renderOfficeRoleBrief } from './role-cards.ts';
 
 // Same-model second pass, not independent verification or a claim that the answer is correct.
 export function buildOfficeReview(request: OfficeRequest, context: OfficeContext, draft: OfficeAnswer) {
@@ -18,7 +20,9 @@ export function buildOfficeReview(request: OfficeRequest, context: OfficeContext
       '현재 요청이 말하는 선호를 기본 업무 선호보다 우선한다. 확정 기한과 제안 기한을 구분한다. 가용 시간 합계·비용 산식을 다시 계산하고, 아직 예상인 절감 시간을 실제 절약으로 바꾸지 않는다.',
       '구현·스펙·검증 절차를 요청받았을 때는 필요한 성공·오류·불명·복구 조건을 결과물에 포함한다. 성공 응답 계약을 모르면 error가 아니라는 이유나 임의 상태값으로 성공 분기를 만들지 않는다. 저장/재시도 설계에는 재조회·입력 보존·중복 방지 기준을 갖춘다. 다만 이미 정한 범위의 확인·인사·종결만 요청받았다면 검증 절차나 수용 기준을 새 과제로 추가하지 않는다. 전문 판단 기준은 요청의 범위를 넓히는 허가가 아니다.',
       buildOfficeOperatingPolicy(request.scope),
-      ...views.map(id => `${OFFICE_ROSTER.find(p => p.id === id)!.name}의 역할·말투와 산출물 기준:\n${OFFICE_PERSONAS[id]}\n${OFFICE_PLAYBOOKS[id]}`),
+      ...views.map(id => id === request.ownerId
+        ? `${OFFICE_ROSTER.find(p => p.id === id)!.name}의 역할·말투와 산출물 기준:\n${OFFICE_PERSONAS[id]}\n${OFFICE_PLAYBOOKS[id]}`
+        : `${OFFICE_ROSTER.find(p => p.id === id)!.name}의 관점 요약(공개 발언은 회의 기록에 있다):\n${renderOfficeRoleBrief(id)}`),
       OFFICE_MODE_GUIDANCE[request.mode],
       '수정된 답 자체를 반환한다. 검수 절차나 사고 과정, 점수, "검증을 통과했다"는 선언을 출력하지 않는다. 요청한 원고/코드/스펙은 실제 결과물로 남기고, 이미 작업 지시가 있으면 형식적인 재승인 질문으로 끝내지 않는다.',
       `내부 답변은 ${owner.character}의 관심과 판단 차이를 살린다. 자연스러운 존댓말로 대화하듯 답하고 대표님 호칭·자기소개·접수 문장을 매번 붙이지 않는다. 고객/공식 문장은 그 대상의 말투로 쓴다. 사용자가 말하지 않은 조급함·불안·자금난을 추정하지 않는다. 과한 느낌표·이모지·캐릭터 구호를 빼고, 창작 글의 1인칭 경험은 실제 원문에 있는 범위만 쓴다. 추가 업무가 필요 없는 질문·인사·휴식 요청은 짧게 끝내고 nextAction을 '추가 행동 없음.'으로 둔다.`,
@@ -35,10 +39,11 @@ nextAction은 answer에서 추천한 첫 동작과 일치시킨다. 별도의 �
       request.mode === 'council' ? `비교를 요청한 회의 answer에는 ${views.map(id => OFFICE_ROSTER.find(p => p.id === id)!.name).join(', ')}의 실제 판단 차이와 그 영향을 담는다. 같은 결론을 역할 이름마다 반복하지 않는다. 종결 요청에서는 관점별 발표를 다시 펼치지 않고 추천과 미해결 조건만 남긴다. 공개 발언 기록의 반론을 해결된 합의로 바꾸지 않는다. 고객의 자료 요청은 자료·서비스의 존재나 제공 확약의 근거가 아니다. 이번에 필요한 범위의 문구만 만들며 새 확인 과제를 의무적으로 붙이지 않는다.` : '',
       OFFICE_SOURCE_REVIEW_INSTRUCTIONS,
       `[마지막 편집 기준]
-내부 대화는 편안한 해요체로 바로 답한다. 고객 문구·공식 문서는 독자에 맞춘다. 가벼운 확인·휴식·종결 발화에는 한두 문장만 남기고 nextAction='추가 행동 없음.'으로 끝낸다. 종결한 뒤 재계획·추가 승인·양식 요청을 붙이지 않는다. 복잡한 산출물도 서론에서 요청을 다시 설명하거나 동일 결론을 여러 제목으로 반복하지 않는다.
+내부 대화는 담당 역할의 '말투'에 적힌 어미로 바로 답한다(역할 소개의 '해요체 기본' 문장보다 우선). 고객 문구·공식 문서는 독자에 맞춘다. 가벼운 확인·휴식·종결 발화에는 한두 문장만 남기고 nextAction='추가 행동 없음.'으로 끝낸다. 종결한 뒤 재계획·추가 승인·양식 요청을 붙이지 않는다. 복잡한 산출물도 서론에서 요청을 다시 설명하거나 동일 결론을 여러 제목으로 반복하지 않는다.
 초안의 관측과 원인 가설을 분리한다. 로그인 HTML이 왔다는 관측만으로 인증 만료 원인을 확정하지 않는다. 성공 계약 미제공 상황에서 응답의 id 존재만 보고 SUCCESS로 처리하는 코드도 임의 계약이다. 그 분기는 제거하고 확인된 계약을 받아 판정하는 자리로 남긴다. 재시도 키와 원문은 확인된 완료 결과 전까지 보존한다. 버튼 잠금은 서버 중복 방지의 근거가 아니다.
 고객의 요청·문의·관심은 자료 존재·계정 발급·시범 접속·온보딩·맞춤 지원의 증거가 아니다. 제공 범위가 미정이면 고객 문구에서 제공·준비 중·반영 약속을 제거하고 확인이 필요한 범위로 한정한다. 효과 수치를 지운 자리에 쉬운 적응이나 맞춤 도입 같은 새 효과를 쓰지 않는다. 정정 문장도 사실 근거가 있어야 하며 리스크 없음·무조건 안전을 선언하지 않는다.
 추정 소요시간은 추정으로 유지하며 최소 시간·확정 완료 가능성으로 바꾸지 않는다. 권고를 바꿀 조건은 원래 권고를 실제로 약화시키는 조건이어야 한다. JSON은 한 번만 인코딩한다. 본문 줄바꿈을 보이는 역슬래시+n 문자로 출력하지 않는다.`,
+      ...views.map(renderOfficeRoleBehaviorGuidance),
     ].join('\n\n'),
     prompt: JSON.stringify({ scope: request.scope, mode: request.mode, sourceContext: context, untrustedRecentConversation: request.history, userRequest: request.message, untrustedDraft: draft }),
   };

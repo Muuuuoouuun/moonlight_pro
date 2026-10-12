@@ -13,6 +13,7 @@ import { businessTruthCompleteness, buildWeeklyScorecard, normalizeCampaignBusin
 import { ContentIdeaCapture } from "./content-idea-capture";
 import { contentQueueScope, contentQueueTabs } from "@/lib/content-workflow";
 import { useContentLedger } from "../use-content-ledger";
+import { campaignStudioHref } from '@/lib/content-studio-routing';
 import "./content-workflow.css";
 
 function statusKeyOf(item) {
@@ -394,6 +395,7 @@ function CampaignStrategyPanel({ campaign, detail, onSave }) {
 
 function CampaignTabPanel({ tab, campaign, detail, onStrategySave }) {
   const router = useRouter();
+  const params = useSearchParams();
   // 콘텐츠 lifecycle은 카테고리 — semantic 색 금지(§5.2/§5.3), 라벨이 상태를 전달한다.
   const sTone = { Active: 'neutral', Planning: 'neutral', Draft: 'neutral', Live: 'neutral', Scheduled: 'neutral', Review: 'neutral', Idea: 'neutral' };
 
@@ -462,10 +464,12 @@ function CampaignTabPanel({ tab, campaign, detail, onStrategySave }) {
             size="sm"
             icon="studio"
             style={{ marginTop: 12, width: '100%' }}
-            onClick={() => router.push(`/dashboard/content/studio?new=draft&campaign=${encodeURIComponent(campaign.id)}`)}
+            disabled={!campaignStudioHref(campaign, params.get('scope'))}
+            onClick={() => router.push(campaignStudioHref(campaign, params.get('scope')))}
           >
-            Open Studio
+            Studio 연결 상태 확인
           </Button>
+          <p style={{ fontSize: 12, color: 'var(--fg-muted)' }}>캠페인 귀속 저장은 아직 지원하지 않습니다.</p>
         </Card>
       </div>
     );

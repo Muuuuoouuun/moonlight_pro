@@ -78,7 +78,7 @@ struct NotificationContent: View {
                         .font(.system(size: 15)).frame(width: 18)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(notice.title)
+                        Text((notice.owner.map { $0.title + " · " } ?? "") + notice.title)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Palette.glassInk)
                             .lineLimit(2).multilineTextAlignment(.leading)
@@ -101,9 +101,12 @@ struct NotificationContent: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(GlassQuietStyle())
-            .accessibilityLabel("\(notice.title), \(notice.detail), 내용 보기")
+            .accessibilityLabel("\(notice.title), \(notice.detail), 담당자와 대화")
             Menu {
-                Button("내용 보기") { model.openNotification(notice) }
+                Button("담당자와 대화") { model.openNotification(notice) }
+                if model.originalURL(for: notice) != nil {
+                    Button("Hub 원문 열기") { model.openNotificationOriginal(notice) }
+                }
                 if model.activity.isUnread(notice.id) {
                     Button("이 Mac에서 확인함") { model.activity.acknowledge(id: notice.id) }
                 }

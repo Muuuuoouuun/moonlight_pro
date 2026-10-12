@@ -10,6 +10,49 @@ const requestId = '94f430e4-13e7-491f-9c2f-4b83d8ab9f12';
 const taskId = 'c8814141-551c-413f-8dfa-adfe5142960f';
 const otherTaskId = 'd9925252-662d-424f-9e0a-bef6253a7a10';
 const input = { requestId, taskId, scope: 'personal', instruction: '영수증을 정리한다', expectedEvidence: '정리된 파일 경로와 누락 목록' };
+const meetingId = 'a1111111-1111-4111-8111-111111111111';
+const officeTurnId = 'b2222222-2222-4222-8222-222222222222';
+
+test('meeting skill drafts, saved requests and copy text retain the exact originating round', async () => {
+  const linked = { ...input, meetingId, officeTurnId };
+  const draft = officeSkillRequestDraft({ agenda: { taskId }, officeScope: 'personal', result: {}, meetingId, officeTurnId });
+  assert.equal(draft.meetingId, meetingId);
+  assert.equal(draft.officeTurnId, officeTurnId);
+  for (const invalid of [{ ...input, meetingId }, { ...input, officeTurnId }, { ...linked, officeTurnId: 'bad' }]) {
+    assert.match(validateOfficeSkillRequest(invalid), /회의/);
+  }
+  const saved = await saveOfficeSkillRequest(linked, { fetcher: async (_url, init) => {
+    assert.deepEqual(JSON.parse(init.body), linked);
+    return Response.json({ status: 'ready', persisted: true, request: linked });
+  } });
+  assert.equal(saved.persisted, true);
+  for (const response of [input, { ...linked, officeTurnId: requestId }, { ...linked, meetingId: requestId }]) {
+    const result = await saveOfficeSkillRequest(linked, { fetcher: async () => Response.json({ status: 'ready', persisted: true, request: response }) });
+    assert.equal(result.persisted, false);
+  }
+  assert.match(officeSkillRequestText(linked), new RegExp(`회의 ID: ${meetingId}`));
+  assert.match(officeSkillRequestText(linked), new RegExp(`회의 판 ID: ${officeTurnId}`));
+});
+
+test('meeting history reads its durable detail and rejects another meeting or malformed read envelope', async () => {
+  const row = { ...input, meetingId, officeTurnId, state: 'requested' };
+  const result = await loadOfficeSkillRequests(taskId, { meetingId, fetcher: async (url) => {
+    assert.equal(url, `/api/hub/office/meetings/${meetingId}`);
+    return Response.json({ status: 'ready', meeting: { meetingId }, skillRequests: [row,
+      { ...row, requestId: otherTaskId, meetingId: requestId }, { ...row, taskId: otherTaskId }] });
+  } });
+  assert.equal(result.status, 'live');
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].officeTurnId, officeTurnId);
+  assert.equal(result.windowFull, false);
+  for (const data of [{ status: 'error', source: 'error', skillRequests: [] },
+    { status: 'ready', meeting: { meetingId: requestId }, skillRequests: [row] }]) {
+    assert.equal((await loadOfficeSkillRequests(taskId, { meetingId, fetcher: async () => Response.json(data) })).status, 'error');
+  }
+  let called = false;
+  assert.equal((await loadOfficeSkillRequests(taskId, { meetingId: 'bad', fetcher: async () => { called = true; } })).status, 'error');
+  assert.equal(called, false);
+});
 
 test('an imported task keeps its known lane; a task without a project is personal only', () => {
   const brand = { taskId, taskWorkspace: 'brand' };

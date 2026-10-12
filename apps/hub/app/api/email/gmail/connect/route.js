@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 import {
   buildGoogleGmailAuthUrl,
@@ -13,7 +14,7 @@ export async function GET(req) {
   const { searchParams, origin } = req.nextUrl;
   const workspaceId = resolveDefaultWorkspaceId();
   const mailbox = searchParams.get("mailbox") || resolveOperatorEmail();
-  const returnPath = searchParams.get("returnPath") || "/dashboard/automations/email";
+  const returnPath = sanitizeReturnPath(searchParams.get("returnPath"), "/dashboard/automations/email");
 
   if (!hasGoogleGmailOAuthStateSecret()) {
     const target = new URL(returnPath, origin);

@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-29T16:16:17.520Z",
+  "head": "c6d1ca8de5ca8e531c145a7f869b1fd85fec16f6",
+  "datasetFileSha256": "9936863af8e559e28887a6c433ba8b172fe20ea650b853913ef9ad49db28c19f",
+  "suiteHash": "1a3bb6975d554044d2577fc9343b096de542c6c4f2c6341b01c8840be11419de",
+  "runId": "1a471673-e2dd-4808-bd61-4e48f48f2ad2",
+  "output": "/var/folders/l6/tx5c_hw97452y83gkpgpnxcr0000gn/T/moonlight-office-next-holdout-ikkr1qrd/run.jsonl",
+  "model": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview"
+  }
+}

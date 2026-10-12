@@ -1,5 +1,16 @@
 import Foundation
 
+// Legacy scenarios choose distinct topic IDs explicitly; production requires full identity.
+@MainActor private extension PetActivityStore {
+    func addAgentReply(id: String, agentID: String, scope: String, title: String, detail: String) {
+        addAgentReply(id: id, agentID: agentID,
+            conversation: .init(origin: currentOrigin, scope: OfficeChatScope(rawValue: scope)!, topicID: agentID), title: title, detail: detail)
+    }
+    func acknowledgeAgentReplies(agentID: String, scope: String) {
+        acknowledgeAgentReplies(conversation: .init(origin: currentOrigin, scope: OfficeChatScope(rawValue: scope)!, topicID: agentID))
+    }
+}
+
 private struct PetActivityCheckFailure: Error, CustomStringConvertible {
     let description: String
 }
@@ -69,6 +80,7 @@ func runPetActivityStoreTests() async throws -> Int {
         store.configure(service: api, origin: "https://initial.example.test")
         defer { store.configure(service: nil, origin: nil) }
         try await waitForLoad(store, api: api)
+        try petCheck(store.notices.first?.agentID == "flareon", "Inquiry notices must identify their actual revenue owner")
         try petCheck(store.notices.count == 1 && store.totalInquiryCount == 34 && store.banner == nil && delivered.isEmpty, "Initial unread data must list quietly with exact total count")
         try petCheck(store.message?.contains("전체 미확인 34개") == true, "Bounded inquiry preview must disclose exact larger count")
         await api.set(inquiries: [testInquiry(id, sequence: 2)])
@@ -332,6 +344,33 @@ func runPetActivityStoreTests() async throws -> Int {
         store = nil
         for _ in 0..<20 { await Task.yield() }
         try petCheck(released == nil, "Background polling must not retain a discarded activity store")
+        count += 1
+    }
+    do {
+        let origin = "https://notice-topic.example", store = PetActivityStore(defaults: defaults)
+        store.configure(service: nil, origin: origin)
+        defer { store.configure(service: nil, origin: nil) }
+        let first = OfficeConversationKey(origin: origin, scope: .all, topicID: "inquiry:first")
+        let second = OfficeConversationKey(origin: origin, scope: .all, topicID: "inquiry:second")
+        store.addAgentReply(id: "first", agentID: "flareon", conversation: first, title: "첫 답변", detail: "")
+        store.addAgentReply(id: "second", agentID: "flareon", conversation: second, title: "둘째 답변", detail: "")
+        store.addAgentReply(id: "invalid", agentID: "invented", conversation: first, title: "금지", detail: "")
+        store.addAgentReply(id: "foreign", agentID: "flareon", conversation: .init(origin: "https://other.example", scope: .all, topicID: first.topicID), title: "금지", detail: "")
+        try petCheck(store.notices.count == 2, "unknown owner and foreign-origin replies never enter notification inbox")
+        store.acknowledgeAgentReplies(conversation: first)
+        try petCheck(store.notices.count == 1 && store.notices[0].topicKey == second, "same owner and scope must not acknowledge a different topic")
+        let date = Date(timeIntervalSince1970: 10)
+        let inquiry = PetNotice(id: "notice", title: "실제 제목", detail: "실제 요약", kind: .inquiry, createdAt: date, path: "/dashboard/revenue/inquiries?inquiry=one", origin: origin)
+        try petCheck(inquiry.owner == .flareon && inquiry.topicKey?.scope == .all, "inquiry owner is revenue and unknown scope stays all")
+        try petCheck(inquiry.topicSource.summary.contains("미조회") && inquiry.topicSource.summary.contains("실제 제목") && inquiry.topicSource.summary.contains("실제 요약") && inquiry.topicSource.summary.contains("1970"), "summary exposes title, detail, time and reading boundary")
+        try petCheck(inquiry.originalURL(currentOrigin: origin)?.absoluteString == origin + inquiry.path, "secondary action opens verified same-origin source")
+        try petCheck(inquiry.originalURL(currentOrigin: "https://other.example") == nil, "foreign Hub cannot open old source link")
+        for path in ["//outside.example/dashboard/revenue/inquiries", "https://outside.example", "/dashboard/revenue/inquiries#secret", "/api/operator/session", "/dashboard/revenue/../agents/council", "/dashboard/revenue/inquiries\\outside"] {
+            let malformed = PetNotice(id: "bad", title: "", detail: "", kind: .inquiry, createdAt: date, path: path, origin: origin)
+            try petCheck(malformed.originalURL(currentOrigin: origin) == nil, "malformed or unauthorized source path rejected: \(path)")
+        }
+        let event = PetNotice(id: "event", title: "일정", detail: "시작", kind: .calendar, createdAt: date, path: "/dashboard/work/calendar", eventDate: date, origin: origin)
+        try petCheck(event.owner == .vaporeon && event.topicKey?.scope == .all, "calendar notification belongs to operations without inventing business scope")
         count += 1
     }
     return count

@@ -15,7 +15,7 @@ export async function GET(req) {
     {
       status: "disabled",
       reason: "automation-retired",
-      message: "일괄 브리핑 자동화는 종료되었습니다. Office에서 필요한 요약과 검토를 직접 요청하세요.",
+      message: "일괄 브리핑 자동화는 종료되었습니다. 오피스에서 필요한 요약과 검토를 직접 요청하세요.",
     },
     { status: 410 },
   );

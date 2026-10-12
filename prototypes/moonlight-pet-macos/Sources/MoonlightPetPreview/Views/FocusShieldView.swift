@@ -13,7 +13,7 @@ struct FocusShieldView: View {
                 .ignoresSafeArea()
             if showsControls {
                 VStack(spacing: 0) {
-                    PetPortrait(character: model.selectedCharacter, size: 80)
+                    PetPortrait(character: model.presentationCharacter, size: 80)
                         .padding(.bottom, -9)
                         .zIndex(1)
                         .accessibilityHidden(true)

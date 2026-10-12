@@ -1586,7 +1586,8 @@ export function Projects({ workspace }) {
 
   // 프로젝트 상태 칩은 ProjectStatusBadge(→ LifecycleBadge) 하나가 소유한다(§8.2).
   // 색 이름 맵을 여기에 되살리지 않는다 — state-usage.test.mjs가 고정한다.
-  const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
+  // 빨강은 '긴급'에만 — '높음'은 점수일 뿐 손실 상태가 아니다(§5.2 no warning-by-default). 순위는 라벨이 말한다.
+  const prioTone = { critical: 'danger', high: 'neutral', med: 'neutral', medium: 'neutral', low: 'neutral' };
   const updateTone = { reported: 'neutral', active: 'neutral', blocked: 'danger', done: 'neutral' };
   const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
   // 콘텐츠 lifecycle은 §5.3 중립 — statusLabel이 상태를 말한다.
@@ -1757,12 +1758,12 @@ export function Projects({ workspace }) {
   // 매번 호출하던 buildProjectTimeline을 memo로 이동.
   const projectTimeline = React.useMemo(() => buildProjectTimeline(queriedProjects), [queriedProjects]);
 
-  // j/k 순회 대상 — tree 뷰는 접힌 브랜드 섹션 제외 평탄화, board 뷰는 컬럼 순서 평탄화
-  // (Deals 칸반과 동일 문법). 다른 뷰(todos·timeline)는 각자 문법이 있어 비활성.
+  // j/k 순회 대상 — tree는 workspace가 공표한 실제 표시 순서(접힌 완료 묶음 제외),
+  // table은 접힌 브랜드 섹션 제외, board는 컬럼 순서. 다른 뷰는 각자 문법이 있어 비활성.
   const kbRows = React.useMemo(() => {
     if (view === 'tree') {
       const rank = new Map(indexKeyboardOrder.map((id, index) => [id, index]));
-      return visibleProjects.slice().sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)).map(p => ({ id: p.id }));
+      return visibleProjects.filter(p => rank.has(p.id)).sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)).map(p => ({ id: p.id }));
     }
     if (view === 'table') {
       return listSections
@@ -1777,13 +1778,14 @@ export function Projects({ workspace }) {
 
   const kbSelection = useCrmSelection(kbRows);
   const openKbSelected = React.useCallback((id) => {
+    if (view === 'tree' && !kbRows.some(row => row.id === id)) return;
     if (view === 'board' && !String(id).startsWith('project-')) {
       const t = todos.find(x => x.id === id);
       if (t) { editTodo(t); return; }
     }
     const projectId = String(id).startsWith('project-') ? String(id).slice('project-'.length) : id;
     openProjectDetail(projectId);
-  }, [view, todos, editTodo, openProjectDetail]);
+  }, [view, kbRows, todos, editTodo, openProjectDetail]);
   useCrmKeyboard({
     enabled: (view === 'tree' || view === 'table' || view === 'board') && !drawerOpen,
     selection: kbSelection,
@@ -2800,6 +2802,7 @@ export function Projects({ workspace }) {
                     onSendOrder={sendProjectOrder}
                     onConsultCouncil={(project) => setCouncilWidgetProject(project)}
                     onManageDelivery={manageDelivery}
+                    onUnblocked={async () => { projectsLedgerCache = null; await loadLedger({ projectId: p.id }); }}
                     onComplete={completeProject}
                     onArchive={archiveProject}
                     onRemove={requestProjectDelete}

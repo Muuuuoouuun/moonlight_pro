@@ -1,0 +1,45 @@
+✔ selected scope limits operating context; personal requests do not inherit the company contact queue (0.8835ms)
+✔ only selected expertise enters bounded prompts and user content cannot become system guidance (0.887542ms)
+✔ evaluation covers all nine owners plus scope, stale data, council and preference regressions (0.831584ms)
+✔ evaluation records failures without claiming semantic passes or losing later cases (0.800375ms)
+✔ only the source-reviewed answer is returned; the untrusted draft cannot alter review instructions (0.978708ms)
+✔ council requests bounded role statements first and rejects incomplete role output before synthesis (0.795833ms)
+✔ failed or invalid review never falls back to a successful unreviewed draft (0.324125ms)
+✔ quality rubric is twenty semantic criteria with six anchored levels, not keyword scores (1.683667ms)
+✔ frozen plan has all nine roles, 33 conversations, 39 turns, three controlled comparisons (7.534875ms)
+✔ runner keeps actual prior answers, council settings and all evidence without a score (4.204542ms)
+✔ missing actor speech is unobserved even if the owner answer is generated (0.3675ms)
+✔ failure codes survive; previews, dependent failures and unrun cases are distinct (0.536667ms)
+✔ at most two independent conversations run in parallel; their turn order stays intact (17.0335ms)
+✔ JSONL flush preserves completed work; interrupted calls require an explicit retry (28.866667ms)
+✔ long real answers use disclosed excerpts in bounded history while original is preserved (0.211084ms)
+✔ numerical ratings without exact quotes remain unevaluated, not zero or passed (5.512125ms)
+✔ all five axes need 70 percent and a high total cannot hide a weak axis or critical failure (12.3775ms)
+✔ stale quotes, wrong role attribution, missing source citations and missing comparison sides cannot pass (6.900333ms)
+✔ missing independent review, runtime integrity or role coverage is explicitly unverified (7.797ms)
+✔ criterion citations must cover its behavior and cannot use facts introduced in a later turn (6.781625ms)
+✔ role dossiers keep attribution and per-role independent reviewers override the coordinator (4.779542ms)
+✔ provider tracing retains settings and failure codes without copying private errors (0.327875ms)
+✔ provider tracing preserves actual version, finish, numeric usage, and block reason only (0.151083ms)
+✔ provider tracing classifies thrown aborts and ignores arbitrary exception codes (0.230667ms)
+✔ provider tracing records bounded generation diagnostics when provider calls succeeded (0.1055ms)
+✔ provider failure codes precede diagnostic fallback and existing error codes remain compatible (0.081542ms)
+✔ a failed generation stage remains the cause when its sibling is cancelled (0.1305ms)
+✔ real provider failures outrank cancellation and stage diagnostics regardless of call order (0.086375ms)
+✔ listing and rubric CLI modes never invoke a generator (0.208459ms)
+✔ provider-specific live evaluation binds the run and both provenance snapshots without a Gemini gate (17.538958ms)
+✔ configuration failure and sidecar binding failure stop before any model or run journal (0.616791ms)
+✔ a changed custom provider snapshot invalidates integrity and cannot be resumed (14.438167ms)
+✔ runtime coverage cannot promote the first interrupted segment after a successful resume or score (325.389833ms)
+✔ runtime coverage preserves a gap when the second resumed segment is interrupted (40.453542ms)
+✔ runtime coverage binds both result prefixes and extends a checked segment through normal resumes (42.846125ms)
+✔ complete legacy runtime checks remain score-compatible but lack historical segment start boundaries (182.342125ms)
+✔ runtime coverage fails closed on malformed bounds, false checks, and a legacy downgrade after scoped checks (180.856ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1052.318167

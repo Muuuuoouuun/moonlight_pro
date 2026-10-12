@@ -4,8 +4,12 @@ import { createHash } from 'node:crypto';
 import { parseOfficeRequest } from '@com-moon/agent-contracts/office';
 import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext } from '@com-moon/agent-contracts/office-workflow';
 import { buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
+import * as sourceReview from './source-review.ts';
 import { generateOfficeResponse } from './service.ts';
 import { generateOfficeWorkflow } from './workflow-service.ts';
+import { officeResponseSchema } from './response-schema.ts';
+import { officeWorkflowResponseSchema } from './workflow-response-schema.ts';
+import { officeDiscussionSynthesisSchema } from './deliberation.ts';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_WORKFLOW_POLICY_VERSION } from './workflow-prompt.ts';
 import { OFFICE_ROLE_CARDS } from './role-cards.ts';
@@ -19,6 +23,33 @@ const indexesFor = (catalog, quotes) => quotes.map(quote => {
 });
 const readReviewed = (raw, request, context, catalog = buildOfficeSourceCatalog(request, context)) => readSourceReviewedOutput(raw, request, context, catalog).answer;
 const reviewCheck = (raw, request, context, catalog = buildOfficeSourceCatalog(request, context)) => readSourceReviewedOutput(raw, request, context, catalog).sourceCheck;
+
+test('source review reports bounded deduplicated counts without upgrading partial tracking', () => {
+  const request = { message: '실제 제공된 조건입니다.' }, catalog = buildOfficeSourceCatalog(request, {});
+  for (const [sourceIndexes, expected, state] of [
+    [[], { selected: 0, traced: 0, untraced: 0 }, 'none'],
+    [[0, 0], { selected: 1, traced: 1, untraced: 0 }, 'traced'],
+    [[0, 0, 99, -1], { selected: 3, traced: 1, untraced: 2 }, 'traced'],
+    [[99], { selected: 1, traced: 0, untraced: 1 }, 'untraced'],
+  ]) {
+    const reviewed = readSourceReviewedOutput({ answer: '공개 답변', sourceIndexes, corrections: [] }, request, {}, catalog);
+    assert.deepEqual(reviewed.sourceCounts, expected);
+    assert.equal(reviewed.sourceCheck, state);
+  }
+});
+
+test('source review retains validated correction notes separately from the public answer', () => {
+  const request = { message: '제공 여부는 확인되지 않았습니다.' };
+  const catalog = buildOfficeSourceCatalog(request, {});
+  for (const sourceIndexes of [[], [0], [99]]) {
+    const raw = { answer: '공개 답변', sourceIndexes, corrections: ['UNTRUSTED_NOTE: 앞의 확약을 원문과 대조한다.'] };
+    const result = readSourceReviewedOutput(raw, request, {}, catalog);
+    assert.deepEqual(result.corrections, raw.corrections);
+    assert.notEqual(result.corrections, raw.corrections);
+    assert.deepEqual(result.answer, { answer: '공개 답변' });
+    assert.ok(catalog.every(entry => !entry.quote.includes(raw.corrections[0])));
+  }
+});
 
 test('the private review schema selects bounded integer indexes without changing the public schema', () => {
   const before = structuredClone(publicSchema);
@@ -57,6 +88,14 @@ test('source catalogs contain only original context, current and previous user t
     assert.ok(candidates.every(quote => !quote.includes('[ClassIn 업무에만 적용할 기준]')));
     for (const { index } of catalog) assert.deepEqual(readReviewed({ answer: '공개 답변', sourceIndexes: [index], corrections: [] }, request, context, catalog), { answer: '공개 답변' });
   }
+});
+
+test('machine values in the context (source, scope, ids, statuses) are not citable catalog entries', () => {
+  const request = { message: '현재 사용자 원문', scope: 'all' };
+  const context = { source: 'live', scope: 'all', projects: [{ id: '9f0e1c2a-1b2c-4d3e-8f90-1234567890ab', name: 'Moonlight 제품 탭', status: 'active', scope: 'personal' }], note: '최근 프로젝트 최대 8개' };
+  const candidates = buildOfficeSourceCatalog(request, context).map(entry => entry.quote);
+  for (const value of ['live', 'all', 'active', 'personal', '9f0e1c2a-1b2c-4d3e-8f90-1234567890ab']) assert.ok(!candidates.includes(value), value);
+  for (const text of ['현재 사용자 원문', 'Moonlight 제품 탭', '최근 프로젝트 최대 8개']) assert.ok(candidates.includes(text), text);
 });
 
 test('catalog chunks preserve text, line boundaries, surrogate pairs and CRLF without duplication', () => {
@@ -183,22 +222,23 @@ function inputs(surface, mode = 'chat') {
   return { request, context };
 }
 function answer(surface, request, text = '검수한 공개 답변입니다.') {
-  if (surface === 'chat') return { answer: text, nextAction: '추가 실행은 없습니다.', ...(request.mode === 'council' ? { recommendation: '확인된 범위로 답합니다.', evidence: [], dissent: [] } : {}) };
+  if (surface === 'chat') return { answer: text, nextAction: '추가 실행은 없습니다.', ...(request.mode === 'council' ? { resolutionsByTurn: {}, recommendation: '확인된 범위로 답합니다.', evidence: [], dissent: [] } : {}) };
   return {
     summary: '검수한 답변입니다.', artifact: { kind: 'text', body: text }, evidence: [], uncertainties: [], dissent: [], nextStep: null,
-    ...(request.mode === 'council' ? { council: { perspectives: request.participants.map(ownerId => ({ ownerId, judgment: '확인된 범위로 답합니다.', tradeoff: '제공 여부는 미확인입니다.' })), recommendation: '확인된 범위로 답합니다.' } } : {}),
+    ...(request.mode === 'council' ? { resolutionsByTurn: {}, council: { perspectives: request.participants.map(ownerId => ({ ownerId, judgment: '확인된 범위로 답합니다.', tradeoff: '제공 여부는 미확인입니다.' })), recommendation: '확인된 범위로 답합니다.' } } : {}),
   };
 }
 function turn(data) {
   return {
     position: `PEER_ONLY_${data.roleId}_${data.phase}`, evidence: [], objection: '', revisionCondition: '확인된 자료가 추가되면 수정합니다.', changed: false,
-    replyTo: data.phase === 'response' ? [participants.find(id => id !== data.roleId)] : [], changeReason: data.phase === 'response' ? '새로운 원문이 없어 판단을 유지합니다.' : '',
+    ...(data.phase === 'response' ? { peerReviewsByOwner: { [participants.find(id => id !== data.roleId)]: { quoteIndex: data.peerReviewCatalog.find(item => item.field === 'position').index, assessment: 'needs_evidence', reason: '미확인 자료를 확인해야 합니다.' } } } : { peerReviews: [], replyTo: [] }),
+    changeReason: data.phase === 'response' ? '새로운 원문이 없어 판단을 유지합니다.' : '',
   };
 }
 function providerReply(value) { return { ok: true, text: JSON.stringify(value), model }; }
 function assertPrivateFieldsAbsent(value) {
   const serialized = JSON.stringify(value);
-  assert.doesNotMatch(serialized, /"sourceIndexes"|"sourceQuotes"|"sourceCatalog"|"corrections"|REVIEW_NOTE_ONLY/);
+  assert.doesNotMatch(serialized, /"sourceIndexes"|"sourceQuotes"|"sourceCatalog"|"corrections"|"peerReviewsByOwner"|"resolutionsByTurn"|"quoteIndex"|REVIEW_NOTE_ONLY/);
 }
 function assertSourceChoiceBoundary(input, request, context) {
   const data = JSON.parse(input.prompt);
@@ -208,7 +248,7 @@ function assertSourceChoiceBoundary(input, request, context) {
   assert.deepEqual(input.responseJsonSchema.properties.sourceIndexes.items, { type: 'integer', minimum: 0, maximum: catalog.length - 1 });
   assert.equal(input.responseJsonSchema.properties.sourceQuotes, undefined);
   for (const quote of [message, previousUserText, contextText]) assert.ok(choices.includes(quote));
-  for (const excluded of [assistantText, draftText, '해당 목록의 정수 index만 쓰며 원문을 다시 쓰거나 sourceQuotes를 출력하지 않는다.', OFFICE_ROLE_CARDS[request.ownerId].voice.examples[0].response]) assert.ok(choices.every(quote => !quote.includes(excluded)));
+  for (const excluded of [assistantText, draftText, correctionText, '해당 목록의 정수 index만 쓰며 원문을 다시 쓰거나 sourceQuotes를 출력하지 않는다.', OFFICE_ROLE_CARDS[request.ownerId].voice.examples[0].response]) assert.ok(choices.every(quote => !quote.includes(excluded)));
   for (const peer of [...(data.untrustedPositions || []), ...(data.untrustedDiscussion || [])]) assert.ok(choices.every(quote => !quote.includes(peer.position)));
   if (context.contextHash) {
     for (const excluded of [context.contextHash, context.originKey, context.status]) assert.ok(!choices.includes(excluded));
@@ -229,6 +269,73 @@ function assertWorkflowPromptHash(result, calls, council = false) {
 }
 
 for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow', generateOfficeWorkflow]]) {
+  for (const mode of ['chat', 'council']) {
+    test(`${surface} ${mode} sends shared source-state guidance through every real service phase without changing call contracts`, async t => {
+      const { request, context } = inputs(surface, mode);
+      const deadline = new AbortController(), budgets = [], calls = [];
+      t.mock.method(AbortSignal, 'timeout', milliseconds => { budgets.push(milliseconds); return deadline.signal; });
+      const result = await generate(request, context, async input => {
+        calls.push(input);
+        const data = JSON.parse(input.prompt);
+        return providerReply({
+          ...(data.phase ? turn(data) : answer(surface, request)),
+          ...(data.sourceCatalog ? { sourceIndexes: indexesFor(data.sourceCatalog, [message]), corrections: [] } : {}),
+        });
+      });
+      assert.equal(result.status, 'generated');
+      assert.deepEqual(budgets, [48_000]);
+      assert.equal(calls.length, mode === 'chat' ? 2 : 5);
+      const phases = calls.map(input => JSON.parse(input.prompt).phase ?? (mode === 'council' ? 'synthesis' : input.responseJsonSchema.properties.sourceIndexes ? 'review' : 'draft'));
+      assert.deepEqual(phases, mode === 'chat' ? ['draft', 'review'] : ['position', 'position', 'response', 'response', 'synthesis']);
+      for (const [index, input] of calls.entries()) {
+        const phase = phases[index], data = JSON.parse(input.prompt);
+        // This checks delivery and isolation of an instruction, not the semantic
+        // correctness of a provider's answer. Live evaluation remains separate.
+        const marker = '[근거 상태 보존 · 2026-09-30.source-state-v1]';
+        assert.equal(input.systemInstruction.split(marker).length - 1, 1, `${surface}/${mode}/${phase}: missing shared source-state guidance`);
+        assert.equal(sourceReview.OFFICE_SOURCE_STATE_VERSION, '2026-09-30.source-state-v1');
+        assert.equal(input.systemInstruction.split(sourceReview.OFFICE_SOURCE_STATE_INSTRUCTIONS).length - 1, 1);
+        for (const text of [message, contextText, previousUserText, assistantText]) assert.equal(input.systemInstruction.includes(text), false);
+        assert.equal(data.userRequest, request.message);
+        assert.deepEqual(data.untrustedRecentConversation, conversation);
+        assert.equal(input.tools, undefined);
+        assert.equal(input.model, ['draft', 'position'].includes(phase) ? undefined : model);
+        assert.equal(input.maxOutputTokens, data.phase ? 4096 : 8192);
+        assert.equal(input.thinkingLevel, data.phase ? 'low' : phase === 'draft' ? undefined : 'high');
+        assert.equal(input.signal, data.phase ? calls[0].signal : deadline.signal);
+        if (phase === 'draft') {
+          assert.equal(data.sourceCatalog, undefined);
+          assert.equal(input.responseJsonSchema.properties.sourceIndexes, undefined);
+          assert.equal(input.responseJsonSchema.properties.corrections, undefined);
+          assert.equal(input.systemInstruction.includes(sourceReview.OFFICE_SOURCE_REVIEW_INSTRUCTIONS), false, 'drafts must not request private review fields');
+        } else {
+          assertSourceChoiceBoundary(input, request, context);
+          assert.ok(data.sourceCatalog.every(entry => !entry.quote.includes(marker)));
+        }
+        if (data.phase) {
+          assert.deepEqual(Object.keys(input.responseJsonSchema.properties).sort(), ['sourceIndexes', 'corrections', 'position', 'evidence', 'objection', 'revisionCondition', 'changed', 'changeReason', ...(phase === 'position' ? ['replyTo', 'peerReviews'] : ['peerReviewsByOwner'])].sort());
+        } else {
+          const schema = surface === 'chat' ? officeResponseSchema(mode) : officeWorkflowResponseSchema(mode);
+          assert.deepEqual(input.responseJsonSchema, phase === 'draft' ? schema : mode === 'council' ? officeDiscussionSynthesisSchema(officeSourceReviewSchema(schema, data.sourceCatalog), result.discussion.turns) : officeSourceReviewSchema(schema, data.sourceCatalog));
+        }
+      }
+      assertPrivateFieldsAbsent(result);
+      if (surface === 'workflow') assertWorkflowPromptHash(result, calls, mode === 'council');
+    });
+  }
+
+  test(`${surface} source tracing remains citation checking and does not certify a dependent claim`, async () => {
+    const { request, context } = inputs(surface);
+    const unsupported = '제공 여부가 확인되어 바로 사용할 수 있습니다.';
+    const result = await generate(request, context, async input => {
+      const data = JSON.parse(input.prompt);
+      return providerReply({ ...answer(surface, request, unsupported), ...(data.sourceCatalog ? { sourceIndexes: indexesFor(data.sourceCatalog, [message]), corrections: [] } : {}) });
+    });
+    assert.equal(result.status, 'generated');
+    assert.equal(result.sourceCheck, 'traced');
+    assert.equal(surface === 'chat' ? result.answer : result.artifact.body, unsupported);
+  });
+
   test(`${surface} keeps the initial contract and strips valid editing fields from the final response`, async () => {
     const { request, context } = inputs(surface);
     const calls = [];
@@ -280,7 +387,7 @@ for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow'
     assert.doesNotMatch(JSON.stringify(result), /UNREVIEWED_DRAFT_ONLY/);
   });
 
-  test(`${surface} strips review fields before exchanging council opinions and publishing the synthesis`, async () => {
+  test(`${surface} forwards attributed review notes only to synthesis while keeping public council turns clean`, async () => {
     const { request, context } = inputs(surface, 'council');
     const calls = [];
     const result = await generate(request, context, async input => {
@@ -291,11 +398,14 @@ for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow'
       if (data.untrustedPositions) assertPrivateFieldsAbsent(data.untrustedPositions);
       if (data.untrustedDiscussion) assertPrivateFieldsAbsent(data.untrustedDiscussion);
       if (data.untrustedDraft) assertPrivateFieldsAbsent(data.untrustedDraft);
-      return providerReply({ ...(data.phase ? turn(data) : answer(surface, request)), sourceIndexes: indexesFor(data.sourceCatalog, [message, previousUserText, contextText]), corrections: [correctionText] });
+      if (data.phase) assert.equal(data.untrustedReviewNotes, undefined);
+      return providerReply({ ...(data.phase ? turn(data) : answer(surface, request)), sourceIndexes: indexesFor(data.sourceCatalog, [message, previousUserText, contextText]), corrections: [`${correctionText} (${data.phase ?? 'synthesis'}:${data.roleId ?? request.ownerId})`] });
     });
     assert.equal(calls.length, 5);
     assert.equal(result.status, 'generated');
     assert.equal(result.discussion.turns.length, 4);
+    assert.deepEqual(JSON.parse(calls.at(-1).prompt).untrustedReviewNotes, ['position', 'response'].flatMap(round => participants.map(ownerId => ({ turnRef: `${round}:${ownerId}`, corrections: [`${correctionText} (${round}:${ownerId})`] }))));
+    assert.doesNotMatch(calls.at(-1).systemInstruction, /REVIEW_NOTE_ONLY/);
     assertPrivateFieldsAbsent(result);
     if (surface === 'workflow') assertWorkflowPromptHash(result, calls, true);
   });
@@ -336,6 +446,26 @@ for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow'
         assert.equal(result.answer, undefined);
         assert.equal(result.artifact, undefined);
         assert.equal(result.discussion, undefined);
+      }
+    }
+  });
+
+  test(`${surface} never forwards malformed correction notes or exposes a partial council`, async () => {
+    for (const failedPhase of ['position', 'response', 'synthesis']) {
+      for (const corrections of [[null], ['bad\0note'], ['x'.repeat(351)], Array(6).fill('note')]) {
+        const { request, context } = inputs(surface, 'council');
+        const calls = [];
+        const result = await generate(request, context, async input => {
+          const data = JSON.parse(input.prompt); calls.push(data);
+          const shouldFail = (data.phase ?? 'synthesis') === failedPhase && (!data.phase || data.roleId === 'flareon');
+          return providerReply({ ...(data.phase ? turn(data) : answer(surface, request)), sourceIndexes: [], corrections: shouldFail ? corrections : [correctionText] });
+        });
+        assert.equal(calls.length, { position: 2, response: 4, synthesis: 5 }[failedPhase]);
+        assert.equal(result.status, 'error');
+        assert.equal(result.discussion, undefined);
+        assert.equal(result.answer, undefined);
+        assert.equal(result.artifact, undefined);
+        assertPrivateFieldsAbsent(result);
       }
     }
   });

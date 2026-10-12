@@ -1,0 +1,336 @@
+/* 확인할 것 — 한 장씩 카드 (docs/superpowers/specs/2026-09-30-check-items-finish-and-unblock-design.md §7.1).
+ * Futura 페이지 텍스처(`.hub-futura`, 홈 확정) 안에서만 쓰인다. 색은 토큰만, 보더는 1px, 모션은 §9 토큰.
+ */
+
+.hub-app .ci-focus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 40px;
+  align-items: start;
+}
+
+.hub-app .ci-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  max-width: 720px;
+  width: 100%;
+  justify-self: center;
+}
+
+.hub-app .ci-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+/* ── 진행 줄 ───────────────────────────────────────────────── */
+.hub-app .ci-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hub-app .ci-progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hub-app .ci-progress__counts {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .ci-progress__track {
+  display: flex;
+  gap: 4px;
+}
+
+.hub-app .ci-progress__seg {
+  flex: 1 1 0;
+  height: 6px;
+  border-radius: var(--fx-pill);
+  background: var(--surface-3);
+}
+
+.hub-app .ci-progress__seg[data-state="done"] { background: var(--fg); }
+.hub-app .ci-progress__seg[data-state="now"] { background: var(--accent); }
+.hub-app .ci-progress__seg[data-state="held"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.hub-app .ci-progress__seg[data-state="sched"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--fg); }
+
+/* ── 카드 ───────────────────────────────────────────────────── */
+.hub-app .ci-card {
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+}
+
+.hub-app .ci-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 14px;
+  padding: 2px 10px;
+  border: 1px dotted var(--line-strong);
+  border-radius: var(--fx-pill);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .ci-note {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.hub-app .ci-outcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.hub-app .ci-outcome {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 54px;
+  box-sizing: border-box;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  box-shadow: var(--fx-shadow);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    box-shadow var(--dur-hover) var(--ease-hub),
+    transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .ci-outcome:hover { box-shadow: var(--fx-shadow-lift); transform: translateY(-1px); }
+.hub-app .ci-outcome:disabled { cursor: default; color: var(--fg-dim); box-shadow: none; transform: none; }
+.hub-app .ci-outcome[aria-expanded="true"] { box-shadow: inset 0 0 0 1px var(--accent); }
+
+.hub-app .ci-outcome--primary {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.hub-app .ci-outcome--primary .ci-outcome__record { color: var(--surface-3); }
+
+.hub-app .ci-outcome__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+.hub-app .ci-outcome__record {
+  font-size: 12px;
+  color: var(--fg-dim);
+  text-align: right;
+}
+
+.hub-app .ci-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.hub-app .ci-panel__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .ci-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hub-app .ci-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hub-app .ci-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hub-app .ci-preset[aria-pressed="true"] { border-color: var(--fg); color: var(--fg); font-weight: 500; }
+.hub-app .ci-preset small { font-size: 11px; font-weight: 400; color: var(--fg-dim); }
+
+.hub-app .ci-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--danger-bg);
+  box-shadow: inset 1px 0 0 var(--danger);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+
+.hub-app .ci-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .ci-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+/* ── 오늘 끝낸 것 ──────────────────────────────────────────── */
+.hub-app .ci-receipts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .ci-receipt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  font-size: 12.5px;
+}
+
+.hub-app .ci-receipt__title { color: var(--fg-dim); text-decoration: line-through; }
+.hub-app .ci-receipt__line { display: block; margin-top: 2px; color: var(--fg-muted); }
+
+/* ── 시간 잡기 띠(§4.7) — 끝내기 아래 점선 1px. 권장은 CertaintyBadge recommended가 말한다 ── */
+.hub-app .ci-band-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hub-app .ci-band {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r);
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.hub-app .ci-band[data-emphasis="true"] { border-style: solid; color: var(--fg); }
+
+.hub-app .ci-band__lead,
+.hub-app .ci-band__slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hub-app .ci-band__slot .mono { font-size: 13px; color: var(--fg); }
+
+.hub-app .ci-band__actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.hub-app .ci-band__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .ci-presets--compact .ci-preset {
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── 레일: 잡아 둔 일 ──────────────────────────────────────── */
+.hub-app .ci-block {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  font-size: 12.5px;
+}
+
+.hub-app .ci-block__title { color: var(--fg); }
+.hub-app .ci-block[data-state="done"] .ci-block__title { color: var(--fg-dim); text-decoration: line-through; }
+.hub-app .ci-block__line { display: block; margin-top: 2px; color: var(--fg-muted); }
+.hub-app .ci-block__actions { display: inline-flex; gap: 2px; }
+.hub-app .ci-block__picker { grid-column: 1 / -1; }
+
+@media (max-width: 900px) {
+  .hub-app .ci-focus { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .hub-app .ci-card { padding: 20px; }
+}
+
+@media (max-width: 600px) {
+  .hub-app .ci-outcome { grid-template-columns: minmax(0, 1fr); gap: 4px; min-height: 60px; }
+  .hub-app .ci-outcome kbd { display: none; }
+  .hub-app .ci-outcome__record { text-align: left; }
+  .hub-app .ci-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-app .ci-band__actions { margin-left: 0; width: 100%; }
+  .hub-app .ci-band__actions > button { flex: 1 1 0; }
+}

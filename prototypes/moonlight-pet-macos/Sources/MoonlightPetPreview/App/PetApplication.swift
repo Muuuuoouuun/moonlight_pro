@@ -45,6 +45,8 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         switch command {
         case .memo: coordinator.openMode(.memo)
         case .tasks: coordinator.showWidget(mode: .tasks)
+        case .sessionChanged:
+            if model.hub.isEnabled { Task { await model.hub.connect(baseURL: model.hubBaseURL) } }
         }
     }
 
@@ -82,7 +84,7 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         let noticesItem = NSMenuItem(title: "알림 보기", action: #selector(showNotifications), keyEquivalent: "")
         noticesItem.target = self
         menu.addItem(noticesItem)
-        let councilItem = NSMenuItem(title: "Council 안건 준비", action: #selector(showCouncil), keyEquivalent: "")
+        let councilItem = NSMenuItem(title: "담당자에게 묻기", action: #selector(showCouncil), keyEquivalent: "")
         councilItem.target = self
         menu.addItem(councilItem)
         let hubItem = NSMenuItem(title: "Hub 열기", action: #selector(openHub), keyEquivalent: "")
