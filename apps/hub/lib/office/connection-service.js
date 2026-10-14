@@ -14,7 +14,7 @@ function council(source) {
   if (!sameOfficeWorkBoundary(boundary, source.boundary)) fail('회의 요청 당시 브랜드를 나중에 바꿀 수 없습니다.');
   const request = parseOfficeRequest(turn.request), result = turn.result;
   if(request.includeProjects)fail('프로젝트 전체 문맥은 브랜드별 원문으로 결속되지 않았습니다. 해당 원자료만 사용하는 새 회의를 준비해 주세요.');
-  if (request.mode !== 'council' || request.scope !== boundary.scope || result?.status !== 'generated' || result.version !== OFFICE_VERSION || result.mode !== 'council' || result.ownerId !== request.ownerId || result.scope !== request.scope || !same(result.participants, request.participants)) fail('현재 생성된 Office 회의 결론을 선택해 주세요.');
+  if (request.mode !== 'council' || request.scope !== boundary.scope || result?.status !== 'generated' || result.version !== OFFICE_VERSION || result.mode !== 'council' || result.ownerId !== request.ownerId || result.scope !== request.scope || !same(result.participants, request.participants)) fail('현재 생성된 오피스 회의 결론을 선택해 주세요.');
   const answer = parseOfficeAnswer(Object.fromEntries(['answer','nextAction','recommendation','evidence','dissent'].map(k => [k,result[k]])), 'council');
   const discussion = parseOfficeDiscussion(result.discussion, request);
   const context = parseOfficeContext(result.context, request.scope);

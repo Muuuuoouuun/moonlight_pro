@@ -1,13 +1,16 @@
 "use client";
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { isDailyReviewDate } from '@/lib/daily-review';
 import { zonedClock } from '@/lib/daily-review-rhythm';
-import { DailyReviewComposer } from './pages/daily-review-composer';
 import { useDailyReview } from './pages/use-daily-review';
 // 팝업과 오늘·홈의 cue 행이 어느 페이지에서든 그려지므로 스타일도 셸에서 읽는다.
 import './pages/daily-review.css';
+
+// 작성 팝업 본체는 열 때만 받는다 — 하루 한 번 쓰는 팝업이 모든 화면의 첫 번들에 실릴 이유가 없다.
+const DailyReviewComposer = dynamic(() => import('./pages/daily-review-composer').then((m) => m.DailyReviewComposer), { ssr: false });
 
 // 하루 리뷰 팝업을 셸로 올린다(2026-09-23 지속 루프 설계 §4.1·§4.2).
 // - model은 하나: 페이지·팝업·오늘/홈 cue가 같은 초안·revision·충돌 상태를 본다.

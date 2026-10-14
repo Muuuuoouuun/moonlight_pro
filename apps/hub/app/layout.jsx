@@ -25,6 +25,12 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="ko">
+      <head>
+        {/* 본문 글꼴은 첫 화면 글자 전부에 쓰인다 — CSS를 다 읽은 뒤에야 받기 시작하면 대체 글꼴로
+            그렸다가 늦게 바뀌며 줄바꿈이 한 번 흔들린다. 앞당겨 받는다. */}
+        <link rel="preload" href="/fonts/SUIT-Variable.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/JetBrainsMono-Variable.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+      </head>
       <body className="app-body">{children}</body>
     </html>
   );

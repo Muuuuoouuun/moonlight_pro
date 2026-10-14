@@ -26,7 +26,7 @@ beforeEach(() => {
     if (url.pathname.includes('/rpc/')) return Response.json(table === 'journal_context_search_v1' ? state.search : state.rpc);
     let rows = table === 'workspaces' ? state.workspaces : table === 'journal_entries' ? state.rows : table === 'journal_links' ? state.links : state.contexts;
     if (state.bypass || !Array.isArray(rows)) return Response.json(rows);
-    rows = rows.filter((r) => [...url.searchParams].every(([k, v]) => !v.startsWith('eq.') || String(r[k]) === v.slice(3)));
+    rows = rows.filter((r) => [...url.searchParams].every(([k, v]) => !v.startsWith('eq.') || String(k === 'note_meta->>scope' ? r.note_meta?.scope : r[k]) === v.slice(3)));
     if (url.searchParams.has('or')) {
       const cursor = /occurred_at\.lt\.([^,]+),and\(occurred_at\.eq\.[^,]+,id\.lt\.([^)]+)/.exec(url.searchParams.get('or'));
       rows = rows.filter((r) => Date.parse(r.occurred_at) < Date.parse(cursor[1]) || (Date.parse(r.occurred_at) === Date.parse(cursor[1]) && r.id < cursor[2]));
@@ -150,4 +150,19 @@ test('tags persist through the write command, acknowledgement and a later detail
   const reload = await ledger.getJournalLedger({ note: id(1) });
   assert.equal(reload.status, 'live');
   assert.deepEqual(reload.entry.noteMeta, noteMeta);
+});
+
+
+test('explicit scope is preserved and filtered; legacy notes are never inferred personal', async () => {
+  state.rows = [row({id:id(3),note_meta:{kind:'note',enhancement:'',scope:'company'}}), row({id:id(2),note_meta:{kind:'note',enhancement:'',scope:'personal'}}), row({id:id(1)})];
+  const result = await ledger.getJournalLedger({scope:'personal'});
+  assert.equal(result.status,'live'); assert.deepEqual(result.entries.map(r=>r.id),[id(2)]);
+  assert.equal(result.entries[0].noteMeta.scope,'personal');
+  state.bypass = true;
+  assert.equal((await ledger.getJournalLedger({scope:'company'})).status,'error');
+  state.bypass = false;
+  state.rpc.entry = row({contexts:[],links:[],note_meta:{...input.noteMeta,scope:'company'}});
+  const saved = await ledger.writeJournal({...input,noteMeta:{...input.noteMeta,scope:'company'}});
+  assert.equal(saved.status,'saved'); assert.equal(saved.entry.noteMeta.scope,'company');
+  assert.equal(state.calls.find(call=>call.table==='journal_workflow_v1').body.p_command.noteMeta.scope,'company');
 });

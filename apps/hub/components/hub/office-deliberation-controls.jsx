@@ -3,6 +3,7 @@
 import { OFFICE_DELIBERATION_PROFILES, OFFICE_ROSTER } from '@com-moon/agent-contracts/office';
 import { SegmentedControl, SelectField } from './hub-primitives';
 import { officeDeliberationForParticipants, officeDiscussionState } from './office-deliberation-client';
+import { OfficeSpeechEvidence, OfficeCollaborationSummary, OfficeObjectionResolutions } from './office-discussion-evidence';
 import styles from './office-deliberation-controls.module.css';
 
 const AXES = [
@@ -44,7 +45,7 @@ export function OfficeDeliberationControls({ value, participants, onChange, disa
 }
 
 export function OfficeDiscussion({ result, request }) {
-  const { state, discussion } = officeDiscussionState(result, request);
+  const { state, discussion, evaluation } = officeDiscussionState(result, request);
   if (state === 'none') return null;
   if (state === 'legacy') return <p className={styles.note}>이전 관점 시뮬레이션 · 역할별 발언 기록 없음</p>;
   if (state === 'invalid') return <p className={styles.note} role="status">토론 기록 확인 필요 · 역할별 기록을 확인하지 못했습니다.</p>;
@@ -52,6 +53,7 @@ export function OfficeDiscussion({ result, request }) {
     <summary>역할별 검토 기록 · {discussion.turns.length}개 발언</summary>
     <div className={styles.record}>
       <p className={styles.note}>같은 모델의 역할별 개별 검토 · 모델 호출 <span className="mono">{discussion.modelCalls}</span>회</p>
+      <OfficeCollaborationSummary evaluation={evaluation} />
       <dl className={styles.settings}>
         <div><dt>상황</dt><dd>{OFFICE_DELIBERATION_PROFILES[discussion.settings.profile].label}</dd></div>
         {AXES.map(axis => <div key={axis.key}><dt>{axis.label}</dt><dd>{axis.levels[discussion.settings[axis.key]]}</dd></div>)}
@@ -65,8 +67,10 @@ export function OfficeDiscussion({ result, request }) {
           <div><dt>반론</dt><dd>{turn.objection || '기록된 반론 없음'}</dd></div>
           <div><dt>판단을 바꿀 조건</dt><dd>{turn.revisionCondition}</dd></div>
           {turn.round === 'response' ? <><div><dt>답한 관점</dt><dd>{turn.replyTo.map(personName).join(' · ')}</dd></div><div><dt>{turn.changed ? '수정 이유' : '유지 이유'}</dt><dd>{turn.changeReason}</dd></div></> : null}
+          <OfficeSpeechEvidence speech={turn} />
         </dl>
       </li>)}</ol>
+      <OfficeObjectionResolutions discussion={discussion} />
     </div>
   </details>;
 }

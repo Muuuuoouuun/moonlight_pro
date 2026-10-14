@@ -53,7 +53,7 @@ export function parseOfficeConnectionReview(value, artifact, goalBinding) {
 }
 export function parseOfficeConnectionPacket(value) {
   keys(value, ['version', 'kind', 'boundary', 'artifact', 'sourceOwnerId', 'body', 'sourceSnapshot', 'sourceTruth', 'targetTaskId', 'targetOwnerId', 'targetEpoch', 'goalBinding', 'inputSummary', 'completionCriteria', 'roleInputs', 'review', 'humanReview', 'customerProjection']);
-  check(value.version === OFFICE_CONNECTION_VERSION && ['office_council', 'customer_reply'].includes(value.kind), '연결할 Office 결과 종류를 확인해 주세요.');
+  check(value.version === OFFICE_CONNECTION_VERSION && ['office_council', 'customer_reply'].includes(value.kind), '연결할 오피스 결과 종류를 확인해 주세요.');
   const boundary = parseOfficeWorkBoundary(value.boundary), artifact = parseOfficeArtifactRef(value.artifact);
   check(boundary.scope !== 'personal' || boundary.brandId !== null, '개인 브랜드 연결에는 요청 당시 선택 브랜드가 필요합니다.');
   check(OFFICE_IDS.includes(value.sourceOwnerId) && OFFICE_IDS.includes(value.targetOwnerId) && value.targetOwnerId !== 'eevee', '현재 전문 담당 한 명에게 연결해 주세요.');

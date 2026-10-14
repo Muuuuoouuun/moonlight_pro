@@ -16,7 +16,7 @@ export const SOURCE_PEOPLE = [
     "collection": "sales",
     "personId": "dale-carnegie",
     "name": "Dale Carnegie",
-    "charCount": 2977
+    "charCount": 9143
   },
   {
     "entryId": "sales.napoleon-hill",

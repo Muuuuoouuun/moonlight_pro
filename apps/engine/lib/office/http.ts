@@ -2,7 +2,7 @@ import { parseOfficeRequest, parseOfficeContext, OfficeInputError, officeFailure
 import { generateOfficeResponse } from './service.ts';
 export function createOfficeEngineHandler(auth:(request:Request)=>{ok:boolean},generate=generateOfficeResponse) {
  return async (req:Request) => {
-  if(!auth(req).ok) return Response.json({status:'error',error:'Office 인증에 실패했습니다.'},{status:401});
+  if(!auth(req).ok) return Response.json({status:'error',error:'오피스 인증에 실패했습니다.'},{status:401});
   let input;
   try {
    const body=await req.text();

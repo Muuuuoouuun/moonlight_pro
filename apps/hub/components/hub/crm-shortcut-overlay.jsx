@@ -9,7 +9,7 @@ import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 
 const SHORTCUTS = [
   { keys: ["⌘", "K"], label: "명령 팔레트 (이동)" },
-  { keys: ["⌘", "J"], label: "Office 열기" },
+  { keys: ["⌘", "J"], label: "오피스 열기" },
   { keys: ["C"], label: "빠른 입력 (할 일·정리 전) — 어디서든" },
   { keys: ["J", "K"], label: "위/아래 선택 이동 (목록)" },
   { keys: ["E"], label: "선택 항목 편집" },
@@ -42,7 +42,7 @@ export function ShortcutOverlay({ open, onClose }) {
       position: "fixed", inset: 0, zIndex: 100,
       background: "oklch(0 0 0 / 0.6)", backdropFilter: "blur(6px)",
       display: "flex", justifyContent: "center", paddingTop: "16vh",
-      animation: "mlFadeUp .15s ease-out",
+      animation: "mlFadeUp var(--dur-overlay) var(--ease-hub)",
     }}>
       <div
         role="dialog"

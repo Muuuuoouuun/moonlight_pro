@@ -70,8 +70,8 @@ test('council settings survive receipt and signed recovery; changing them cannot
   h.deps.generate = async (input, c) => {
     h.counts.generation++;
     return { ...generated(input, c), council: { perspectives: input.participants.map(ownerId => ({ ownerId, judgment: '기한 내 최소 범위', tradeoff: '추가 항목 보류' })), recommendation: '현재 약속부터 정리' }, discussion: {
-      version: OFFICE_DISCUSSION_VERSION, settings: input.deliberation, modelCalls: 3,
-      turns: input.participants.map(ownerId => ({ ownerId, round: 'position', position: '확인한 기간만 정리한다.', evidence: [], objection: '', revisionCondition: '새 기한이 확인되면 바꾼다.', changed: false, replyTo: [], changeReason: '' })),
+      version: OFFICE_DISCUSSION_VERSION, settings: input.deliberation, modelCalls: 3, resolutions: [],
+      turns: input.participants.map(ownerId => ({ ownerId, round: 'position', turnRef: `position:${ownerId}`, peerReviews: [], sourceCheck: 'none', sourceCounts: { selected: 0, traced: 0, untraced: 0 }, position: '확인한 기간만 정리한다.', evidence: [], objection: '', revisionCondition: '새 기한이 확인되면 바꾼다.', changed: false, replyTo: [], changeReason: '' })),
     } };
   };
   const original = h.deps.rpc;

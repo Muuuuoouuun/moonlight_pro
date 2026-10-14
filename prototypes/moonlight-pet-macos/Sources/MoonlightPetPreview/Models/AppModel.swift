@@ -61,9 +61,9 @@ typealias CompactMode = QuickMode
 enum CompanionSurface { case quick, widget }
 
 enum OfficeCompanionTab: String, CaseIterable, Identifiable {
-    case work, conversation
+    case work, conversation, meeting
     var id: String { rawValue }
-    var title: String { self == .work ? "작업" : "대화" }
+    var title: String { self == .work ? "작업" : self == .conversation ? "대화" : "회의" }
 }
 
 struct FocusClock: Equatable {
@@ -112,6 +112,19 @@ final class AppModel: ObservableObject {
     @Published private(set) var isCapturingMemo = false
     @Published private(set) var memoCaptureReceipt: String?
     @Published var usesDesktopRefraction = false
+    @Published var autoAlignsToEdge = false {
+        didSet {
+            defaults.set(autoAlignsToEdge, forKey: "petPreview.autoAlignsToEdge")
+            if autoAlignsToEdge != oldValue { onAlignmentChanged?() }
+        }
+    }
+    @Published var alignmentEdge: PanelEdge = .right {
+        didSet {
+            defaults.set(alignmentEdge.rawValue, forKey: "petPreview.alignmentEdge")
+            if alignmentEdge != oldValue { onAlignmentChanged?() }
+        }
+    }
+    var onAlignmentChanged: (() -> Void)?
     @Published var desktopRefractionStatus = "화면 기록 권한 필요 · 영상 저장 안 함"
     @Published var focusMinutes = 25
     @Published var remainingSeconds = 0
@@ -123,6 +136,7 @@ final class AppModel: ObservableObject {
         didSet {
             defaults.set(selectedCharacter.rawValue, forKey: "petPreview.character")
             if !chat.isSending { chat.agent = selectedCharacter.officeAgent }
+            if !office.isSending, office.meeting == nil { office.agent = selectedCharacter.officeAgent }
         }
     }
 
@@ -139,11 +153,14 @@ final class AppModel: ObservableObject {
     let council: CouncilDraftStore
     let chat = OfficeChatStore()
     let officeRequests = OfficeRequestStore()
+    let office = OfficeChatStore(durableMeetings: true)
     var onOpenMode: ((QuickMode) -> Void)?
     private var featureObservers: Set<AnyCancellable> = []
     private var hubObserver: AnyCancellable?
     private var connectionStarted = false
     private var refreshLoop: Task<Void, Never>?
+    private var sharedSessionMonitor: Task<Void, Never>?
+    private var sharedConnectionTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private var focusClock: FocusClock?
     private var timer: Timer?
@@ -163,7 +180,10 @@ final class AppModel: ObservableObject {
         taskDraft = defaults.string(forKey: "petPreview.taskDraft") ?? ""
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? Self.defaultHubURL
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
+        autoAlignsToEdge = defaults.bool(forKey: "petPreview.autoAlignsToEdge")
+        alignmentEdge = PanelEdge(rawValue: defaults.string(forKey: "petPreview.alignmentEdge") ?? "") ?? .right
         chat.agent = selectedCharacter.officeAgent
+        office.agent = selectedCharacter.officeAgent
         completionFeedback.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }.store(in: &featureObservers)
@@ -182,7 +202,7 @@ final class AppModel: ObservableObject {
         return memoDraft.isEmpty ? "이 Mac에 자동 저장" : "Mac에 자동 저장됨"
     }
 
-    deinit { refreshLoop?.cancel(); timer?.invalidate() }
+    deinit { refreshLoop?.cancel(); sharedSessionMonitor?.cancel(); sharedConnectionTask?.cancel(); timer?.invalidate() }
 
     func startHubConnection() {
         guard !connectionStarted else { return }
@@ -191,11 +211,13 @@ final class AppModel: ObservableObject {
         activity.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         council.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        office.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         officeRequests.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         hub.onConnectionChanged = { [weak self] service, origin in
             self?.completionFeedback.reset()
             self?.activity.configure(service: service as? any HubActivityServing, origin: origin)
             self?.chat.configure(service: service as? any HubOfficeServing, origin: origin)
+            self?.office.configure(service: service as? any HubOfficeServing, origin: origin)
             self?.officeRequests.configure(service: service as? any HubOfficeRequestsServing, origin: origin)
         }
         chat.onReply = { [weak self] turn in
@@ -207,7 +229,32 @@ final class AppModel: ObservableObject {
             }
         }
         guard hub.isEnabled else { activity.configure(service: nil, origin: nil); return }
-        Task { await hub.connect(baseURL: hubBaseURL) }
+        sharedSessionMonitor = Task { [weak self] in
+            var previous = await NativeHubSessionBridge.shared.read()
+            if let previous { self?.hubBaseURL = previous.origin.absoluteString }
+            self?.connectSharedHub(forceReconnect: false)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                guard self != nil else { return }
+                let current = await NativeHubSessionBridge.shared.read()
+                guard let current, current != previous else { continue }
+                previous = current
+                guard let self, self.hub.isEnabled else { continue }
+                self.hubBaseURL = current.origin.absoluteString
+                // A login/logout invalidates reads started under the old session.
+                // Do not wait behind a slow calendar response to apply logout.
+                self.connectSharedHub(forceReconnect: true)
+            }
+        }
+    }
+
+    private func connectSharedHub(forceReconnect: Bool) {
+        sharedConnectionTask?.cancel()
+        let address = hubBaseURL
+        sharedConnectionTask = Task { [weak self] in
+            guard let self else { return }
+            await self.hub.connect(baseURL: address, forceReconnect: forceReconnect)
+        }
     }
 
     func saveMemoToHub() { Task { await captureMemo() } }
@@ -256,7 +303,11 @@ final class AppModel: ObservableObject {
         refreshLoop = Task { [weak self] in
             while !Task.isCancelled {
                 guard self != nil else { return }
-                await self?.hub.refresh()
+                // Opening a freshly loaded panel should not immediately repeat
+                // its startup reads. Authentication changes use the local monitor.
+                if let self, self.hub.lastSyncedAt.map({ Date().timeIntervalSince($0) >= 30 }) ?? true {
+                    await self.hub.refresh()
+                }
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
             }
         }
@@ -320,11 +371,38 @@ final class AppModel: ObservableObject {
             saveMemoToHub()
         case .council: sendCouncilMessage()
         case .office:
-            if officeTab == .conversation { sendCouncilMessage() }
+            if officeTab == .meeting { office.sendDraft() }
+            else if officeTab == .conversation { sendCouncilMessage() }
             else if officeRequests.detail != nil { copyOfficeResult() }
             else if canReadOfficeResult { Task { await officeRequests.readSelected() } }
         default: openHub(mode)
         }
+    }
+
+    func prepareOfficeFromMemo() {
+        guard !office.isSending else { return }
+        saveMemo()
+        if office.meeting == nil { office.sourceTaskID = nil }
+        office.draft = memoDraft; office.source = .memo
+        officeTab = .meeting
+        onOpenMode?(.office)
+    }
+    func prepareOfficeFromTask(_ task: LocalTask) {
+        guard !office.isSending else { return }
+        office.startNewMeeting()
+        office.sourceTaskID = nil
+        if hub.isEnabled, let remote = hub.tasks.first(where: { $0.id == task.id }),
+           ["classin", "brand"].contains(remote.workspace ?? "") {
+            office.scope = remote.workspace == "classin" ? .classin : .personal
+            office.sourceTaskID = remote.id
+        }
+        office.draft = task.title; office.source = .task
+        officeTab = .meeting
+        onOpenMode?(.office)
+    }
+    func openOfficeMeetingInHub() {
+        guard let meeting = office.meeting, let url = try? meeting.hubURL(baseURL: hubBaseURL) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     func continueMemoInCouncil() { prepareCouncilFromMemo() }
@@ -443,6 +521,15 @@ final class AppModel: ObservableObject {
               let validated = try? HubTransport.validatedBaseURL(url) else { return }
         hubBaseURL = validated.absoluteString
         defaults.set(hubBaseURL, forKey: "petPreview.hubURL")
+    }
+
+    var hubApplicationURL: URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "app.moonlight.hub")
+    }
+
+    func openHubApplication() {
+        guard let url = hubApplicationURL else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
     }
 
     func openHub(_ mode: QuickMode) {

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setImmediate as nextTurn } from 'node:timers/promises';
-import { OFFICE_DISCUSSION_VERSION, OFFICE_IDS, parseOfficeRequest } from '@com-moon/agent-contracts/office';
+import { OFFICE_DISCUSSION_VERSION, OFFICE_IDS, parseOfficeRequest, officeDiscussionRounds, officeDiscussionReviewTargets } from '@com-moon/agent-contracts/office';
 import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext } from '@com-moon/agent-contracts/office-workflow';
 import { OfficeDiscussionError, runOfficeDiscussion } from './deliberation.ts';
 import { generateOfficeResponse } from './service.ts';
@@ -29,25 +29,33 @@ function workflowInputs(overrides = {}) {
   }, request);
   return { request, context };
 }
-function publicTurn({ roleId, phase }, participants) {
+function publicTurn({ roleId, phase, untrustedPositions, peerReviewCatalog }, participants) {
+  const target = officeDiscussionReviewTargets(participants)[roleId];
   return {
     position: `${roleId}의 ${phase} 공개 판단입니다.`, evidence: ['원문에서 자료 제공 여부는 확인되지 않았습니다.'],
     objection: roleId === 'umbreon' ? '자료가 준비되었다고 단정할 수 없습니다.' : '',
     revisionCondition: '제공 여부를 확인한 기록이 있으면 판단을 바꾸겠습니다.',
-    changed: phase === 'response' && roleId === 'flareon', replyTo: phase === 'response' ? [participants.find(id => id !== roleId)] : [],
+    changed: phase === 'response' && roleId === 'flareon',
     changeReason: phase === 'response' ? '공개 의견에서 지적한 미확인 사항을 반영했습니다.' : '',
+    ...(peerReviewCatalog ? { peerReviewsByOwner: Object.fromEntries(participants.filter(id => id !== roleId).map(id => [id, id === target ? { quoteIndex: peerReviewCatalog.find(item => item.ownerId === id && item.field === 'position').index, assessment: 'needs_evidence', reason: '제공 여부를 확인하는 조건에 답합니다.' } : null])) } : {
+      peerReviews: phase === 'response' ? [{ ownerId: target, field: 'position', quote: untrustedPositions?.find(turn => turn.ownerId === target)?.position || `${target}의 position 공개 판단입니다.`, assessment: 'needs_evidence', reason: '제공 여부를 확인하는 조건에 답합니다.' }] : [],
+      replyTo: phase === 'response' ? [target] : [],
+    }),
   };
 }
 function reply(value, overrides = {}) { return { ok: true, text: JSON.stringify({ sourceIndexes: [], corrections: [], ...value }), model, usageMetadata, ...overrides }; }
 function expectedTurns(request, rounds = 2) {
   return ['position', 'response'].slice(0, rounds).flatMap(round => request.participants.map(ownerId => ({
-    ...publicTurn({ roleId: ownerId, phase: round }, request.participants), ownerId, round,
+    ...publicTurn({ roleId: ownerId, phase: round }, request.participants), ownerId, round, turnRef: `${round}:${ownerId}`, sourceCheck: 'none', sourceCounts: { selected: 0, traced: 0, untraced: 0 },
   })));
 }
-function chatAnswer() { return { answer: '종합한 최종 답장입니다.', nextAction: '자료 제공 여부를 확인합니다.', recommendation: '확인된 내용으로 안내합니다.', evidence: ['제공 여부는 미확인입니다.'], dissent: ['자료 존재를 아직 확약할 수 없습니다.'] }; }
+function resolutions(request = chatRequest()) { return expectedTurns(request, officeDiscussionRounds(request.deliberation || { depth: 2, challenge: 2 })).filter(turn => turn.objection).map(turn => ({ turnRef: turn.turnRef, disposition: 'open', rationale: '제공 여부가 확인되지 않아 남겨 둡니다.' })); }
+function resolutionDecisions(request) { return Object.fromEntries(resolutions(request).map(({ turnRef, ...decision }) => [turnRef, decision])); }
+function chatAnswer(request = chatRequest()) { return { answer: '종합한 최종 답장입니다.', nextAction: '자료 제공 여부를 확인합니다.', recommendation: '확인된 내용으로 안내합니다.', evidence: ['제공 여부는 미확인입니다.'], dissent: ['자료 존재를 아직 확약할 수 없습니다.'], resolutionsByTurn: resolutionDecisions(request) }; }
 function workflowAnswer(request) {
   return {
     summary: '확인된 내용으로 안내합니다.', artifact: { kind: 'text', body: '종합한 최종 답장입니다.' },
+    resolutionsByTurn: resolutionDecisions(request),
     evidence: [{ sourceRefId: 'source-message', explanation: '전달받은 고객 기록입니다.' }], uncertainties: ['자료 제공 여부는 미확인입니다.'], dissent: ['자료 존재를 아직 확약할 수 없습니다.'], nextStep: null,
     council: { perspectives: request.participants.map(ownerId => ({ ownerId, judgment: `${ownerId}의 공개 판단을 반영했습니다.`, tradeoff: '확인 전 확약은 보류합니다.' })), recommendation: '확인된 내용으로 안내합니다.' },
   };
@@ -63,6 +71,90 @@ const surfaces = [
   { name: 'Office response', inputs: overrides => ({ request: chatRequest(overrides), context: chatContext }), generate: generateOfficeResponse, answer: chatAnswer, read: result => result.answer },
   { name: 'workflow', inputs: workflowInputs, generate: generateOfficeWorkflow, answer: workflowAnswer, read: result => result.artifact?.body },
 ];
+
+for (const surface of surfaces) test(`${surface.name} closes shared discussion schemas, including empty position reviews`, async () => {
+  const { request, context } = surface.inputs({ participants: ['flareon', 'umbreon', 'sylveon'] });
+  const schemas = [];
+  const result = await surface.generate(request, context, async input => {
+    const data = JSON.parse(input.prompt);
+    // The compact CLI executes Office response, not the legacy workflow's
+    // Gemini-only artifact schema (which intentionally has optional fields).
+    if (data.phase || surface.name === 'Office response') schemas.push(input.responseJsonSchema);
+    return reply(data.phase ? publicTurn(data, request.participants) : surface.answer(request));
+  });
+  assert.equal(result.status, 'generated');
+  assert.equal(schemas.length, surface.name === 'Office response' ? 7 : 6);
+  function checkObjects(value, path = '$') {
+    if (!value || typeof value !== 'object') return;
+    if (value.type === 'object') {
+      assert.equal(value.additionalProperties, false, `${path}: strict provider schemas require closed objects`);
+      assert.ok(value.properties, `${path}: object properties are explicit`);
+      assert.deepEqual([...value.required].sort(), Object.keys(value.properties).sort(), `${path}: all properties are required`);
+    }
+    for (const [key, child] of Object.entries(value)) checkObjects(child, `${path}.${key}`);
+  }
+  for (const schema of schemas) checkObjects(schema);
+});
+
+for (const surface of surfaces) {
+  test(`${surface.name} rejects missing, forged or invented objection resolutions without extra calls`, async () => {
+    for (const mutate of [answer => { delete answer.resolutionsByTurn; }, answer => { answer.resolutionsByTurn = {}; }, answer => { answer.resolutions = [resolutions()[0], resolutions()[0]]; }, answer => { answer.resolutionsByTurn['position:eevee'] = { disposition: 'open', rationale: '존재하지 않습니다.' }; }]) {
+      const { request, context } = surface.inputs();
+      let calls = 0;
+      const result = await surface.generate(request, context, async input => {
+        const data = JSON.parse(input.prompt); calls++;
+        if (data.phase) return reply(publicTurn(data, request.participants));
+        assert.deepEqual(data.objectionRefs, ['position:umbreon', 'response:umbreon']);
+        assert.deepEqual(input.responseJsonSchema.properties.resolutionsByTurn.required, ['position:umbreon', 'response:umbreon']);
+        const answer = surface.answer(request); mutate(answer); return reply(answer);
+      });
+      assert.equal(calls, 5);
+      assert.equal(result.status, 'error');
+      assert.equal(result.discussion, undefined);
+    }
+  });
+
+  test(`${surface.name} retains role source gaps even when synthesis cites a valid source`, async () => {
+    const { request, context } = surface.inputs();
+    let calls = 0;
+    const result = await surface.generate(request, context, async input => {
+      const data = JSON.parse(input.prompt); calls++;
+      return reply({ ...(data.phase ? publicTurn(data, request.participants) : surface.answer(request)), sourceIndexes: data.phase ? [0, 9999] : [0] });
+    });
+    assert.equal(result.status, 'generated');
+    assert.equal(calls, 5);
+    assert.equal(result.sourceCheck, 'traced');
+    assert.ok(result.discussion.turns.every(turn => turn.sourceCheck === 'traced' && turn.sourceCounts.selected === 2 && turn.sourceCounts.untraced === 1));
+  });
+}
+
+test('three-role Korean workflow keeps its combined byte budget and rejects excess without truncating', async () => {
+  const { request, context } = workflowInputs({ participants: ['flareon', 'umbreon', 'leafeon'] });
+  for (const [bodyLength, status] of [[3000, 'generated'], [12000, 'error']]) {
+    let calls = 0;
+    const body = '결'.repeat(bodyLength);
+    const result = await generateOfficeWorkflow(request, context, async input => {
+      calls++;
+      const data = JSON.parse(input.prompt);
+      if (data.phase) {
+        const value = publicTurn(data, request.participants);
+        value.position = `${data.roleId}의 판단 ${'가'.repeat(200)}`;
+        value.evidence = ['근'.repeat(100), '거'.repeat(100)];
+        value.revisionCondition = '조'.repeat(100);
+        return reply(value);
+      }
+      return reply({ ...workflowAnswer(request), artifact: { kind: 'text', body } });
+    });
+    assert.equal(calls, 7);
+    assert.equal(result.status, status);
+    if (status === 'generated') {
+      assert.equal(result.artifact.body, body);
+      assert.ok(new TextEncoder().encode(JSON.stringify(result)).byteLength <= 32768);
+      assert.ok(new TextEncoder().encode(JSON.stringify(result.discussion)).byteLength <= 24000);
+      assert.ok(result.discussion.turns.filter(turn => turn.round === 'response').every(turn => turn.peerReviews[0].quote.includes('가'.repeat(200))));
+    } else assert.equal(result.artifact, undefined);
+  }
+});
 
 // The delays below are controlled promises, not provider calls or elapsed-time sleeps.
 test('discussion calls roles independently in parallel, exchanges only public positions and preserves server order', async () => {
@@ -96,6 +188,7 @@ test('discussion calls roles independently in parallel, exchanges only public po
     assert.equal(input.responseJsonSchema.additionalProperties, false);
     assert.equal(input.responseJsonSchema.properties.ownerId, undefined);
     assert.equal(input.responseJsonSchema.properties.round, undefined);
+    for (const key of ['turnRef', 'sourceCheck', 'sourceCounts']) assert.equal(input.responseJsonSchema.properties[key], undefined);
     assert.ok(input.responseJsonSchema.required.includes('sourceIndexes'));
     assert.ok(input.responseJsonSchema.required.includes('corrections'));
     assert.equal(input.responseJsonSchema.properties.sourceIndexes.maxItems, 5);
@@ -114,6 +207,7 @@ test('discussion calls roles independently in parallel, exchanges only public po
       assert.equal(input.model, undefined);
     } else {
       assert.deepEqual(data.untrustedPositions, positions);
+      assert.deepEqual(data.reviewTargets, [officeDiscussionReviewTargets(request.participants)[data.roleId]]);
       assert.equal(input.model, model);
     }
   }
@@ -124,6 +218,10 @@ test('model-supplied attribution, malformed evidence and fictitious response tar
   const invalid = [
     { phase: 'position', patch: { ownerId: 'flareon' } },
     { phase: 'position', patch: { round: 'position' } },
+    { phase: 'position', patch: { turnRef: 'position:flareon' } },
+    { phase: 'position', patch: { sourceCheck: 'traced' } },
+    { phase: 'position', patch: { sourceCounts: { selected: 1, traced: 1, untraced: 0 } } },
+    { phase: 'position', patch: { changeReason: '동료를 읽지 않은 첫 의견입니다.' } },
     { phase: 'position', patch: { evidence: 'not an array' } },
     { phase: 'position', patch: { evidence: [{ sourceRefId: 'invented' }] } },
     { phase: 'position', patch: { evidence: ['one', 'two', 'three'] } },
@@ -134,6 +232,7 @@ test('model-supplied attribution, malformed evidence and fictitious response tar
     { phase: 'response', patch: { replyTo: ['espeon'] } },
     { phase: 'response', patch: { replyTo: [] } },
     { phase: 'response', patch: { changeReason: '' } },
+    { phase: 'response', patch: { peerReviews: [{ ownerId: 'umbreon', field: 'position', quote: '동료가 실제로 말하지 않았습니다.', assessment: 'supports', reason: '존재하지 않는 인용입니다.' }] } },
   ];
   for (const { phase, patch } of invalid) {
     const calls = [];
@@ -295,6 +394,8 @@ for (const surface of surfaces) {
     assert.equal(result.discussion.version, OFFICE_DISCUSSION_VERSION);
     assert.equal(result.discussion.modelCalls, calls.length);
     assert.deepEqual(result.discussion.turns, expectedTurns(request));
+    assert.deepEqual(result.discussion.resolutions, resolutions(request));
+    assert.equal(Object.hasOwn(result, 'resolutions'), false);
     const final = calls.at(-1);
     assert.equal(final.data.phase, undefined);
     assert.equal(final.input.signal, deadline.signal);

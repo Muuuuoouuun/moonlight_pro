@@ -33,3 +33,39 @@ test('a failed revision read is an error, never an empty inbox', async () => {
     : { configured: true, error: { status: 503 }, rows: null };
   assert.deepEqual(await listResearchBriefs({ workspaceId, fetchRows }), { status: 'error', briefs: [] });
 });
+
+test('an old deep link reads exactly one scoped root and its current revision', async () => {
+  const calls = [];
+  const fetchRows = async (table, options) => {
+    calls.push([table, options]);
+    if (table === 'research_briefs') {
+      assert.ok(options.filters.some(([key, value]) => key === 'id' && value === `eq.${briefId}`));
+      assert.equal(options.limit, 1);
+      return { configured: true, rows: [{ id: briefId, workspace_id: workspaceId, brand_id: brandId, latest_revision: 17, state: 'new' }] };
+    }
+    if (table === 'research_brief_revisions') {
+      assert.ok(options.filters.some(([key, value]) => key === 'revision' && value === 'eq.17'));
+      return { configured: true, rows: [{ brief_id: briefId, revision: 17, payload: { title: '오래된 원본' } }] };
+    }
+    return { configured: true, rows: [] };
+  };
+  const result = await listResearchBriefs({ workspaceId, briefId, brandId, fetchRows });
+  assert.equal(result.status, 'live');
+  assert.equal(result.briefs[0].id, briefId);
+  assert.equal(result.briefs[0].revision, 17);
+  assert.ok(calls.every(([, options]) => options.filters.some(([key, value]) => key === 'workspace_id' && value === `eq.${workspaceId}`)));
+});
+
+test('missing or differently scoped deep links never return another research item', async () => {
+  const calls = [];
+  const result = await listResearchBriefs({ workspaceId, briefId, brandId, fetchRows: async (table, options) => {
+    calls.push(table);
+    assert.ok(options.filters.some(([key, value]) => key === 'brand_id' && value === `eq.${brandId}`));
+    return { configured: true, rows: [] };
+  } });
+  assert.deepEqual(result, { status: 'not-found', briefs: [] });
+  assert.deepEqual(calls, ['research_briefs']);
+  for (const invalid of ['', 'old-slug', 'abc,or(workspace_id.eq.other)']) {
+    assert.deepEqual(await listResearchBriefs({ workspaceId, briefId: invalid, fetchRows: () => assert.fail('invalid ID must not query') }), { status: 'invalid-input', briefs: [] });
+  }
+});

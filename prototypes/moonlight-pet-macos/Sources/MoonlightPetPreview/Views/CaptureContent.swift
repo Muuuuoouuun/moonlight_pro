@@ -11,10 +11,10 @@ struct TaskCaptureContent: View {
     private var readMessage: String? {
         guard model.hub.isEnabled else { return nil }
         if let message = model.hub.errorMessage { return message }
-        if model.hub.needsLogin { return "Hub 로그인이 필요해요. 입력한 할 일은 그대로 보관합니다." }
+        if model.hub.needsLogin { return "Hub 앱에서 로그인하면 자동으로 연결돼요. 입력한 할 일은 그대로 보관합니다." }
         return model.hub.taskMessage
     }
-    private var isLoading: Bool { model.hub.isEnabled && (model.hub.isConnecting || model.hub.isRefreshing) }
+    private var isLoading: Bool { model.hub.isEnabled && !model.hub.taskReady && !model.hub.needsLogin && (model.hub.isConnecting || model.hub.isRefreshing) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -145,6 +145,7 @@ struct TaskCaptureContent: View {
             if model.hub.isEnabled { model.openHub(.tasks) } else { remove(task.id) }
         }
         .contextMenu {
+            Button("Office 회의 안건으로 준비") { model.prepareOfficeFromTask(task) }
             Button("이 할 일로 담당자에게 묻기") { model.prepareCouncilFromTask(task) }
             if model.hub.isEnabled {
                 Button("Hub에서 열기") { model.openHub(.tasks) }
@@ -215,6 +216,7 @@ struct MemoCaptureContent: View {
                         }
                         .buttonStyle(GlassQuietStyle()).font(.system(size: 11))
                         .help(message + " · Hub 연결 확인")
+                        .accessibilityLabel(model.hub.needsLogin ? "Hub 로그인 · " + message : "Hub 연결 확인 · " + message)
                     } else if model.memoDraft.isEmpty, let receipt = model.memoCaptureReceipt {
                         Text(receipt).font(.system(size: 11)).lineLimit(2)
                     } else if let receipt = model.hub.memoReceipt {

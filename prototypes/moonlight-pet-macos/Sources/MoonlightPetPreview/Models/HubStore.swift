@@ -22,7 +22,7 @@ final class HubStore: ObservableObject {
     @Published private(set) var taskReady = false
     @Published private(set) var calendarReady = false
 
-    var canWriteTasks: Bool { !isEnabled || (taskReady && !needsLogin && !isConnecting && !isSavingTask) }
+    var canWriteTasks: Bool { !isEnabled || (taskReady && !needsLogin && (!isConnecting || api != nil) && !isSavingTask) }
     var canSaveMemo: Bool { isEnabled && (taskReady || calendarReady) && !needsLogin && !isConnecting && !isSavingMemo }
     var connectionLabel: String {
         if !isEnabled { return "이 Mac에 저장" }
@@ -50,7 +50,7 @@ final class HubStore: ObservableObject {
     private var storageKey: String?
     private var pending = HubPendingState()
 
-    init(defaults: UserDefaults = .standard, makeAPI: @escaping (URL) throws -> any HubServing = { HubAPI(transport: try HubTransport(baseURL: $0)) }) {
+    init(defaults: UserDefaults = .standard, makeAPI: @escaping (URL) throws -> any HubServing = { HubAPI(transport: try HubTransport(baseURL: $0, desktopSession: HubDesktopSessionBridge())) }) {
         self.defaults = defaults; self.makeAPI = makeAPI
         isEnabled = defaults.object(forKey: "petHub.enabled") as? Bool ?? true
     }
@@ -66,7 +66,7 @@ final class HubStore: ObservableObject {
     }
 
     @discardableResult
-    func connect(baseURL: String, username: String = "", password: String = "") async -> String? {
+    func connect(baseURL: String, username: String = "", password: String = "", forceReconnect: Bool = false) async -> String? {
         let normalizedURL: URL
         do {
             guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else { throw HubTransportError.rejectedURL }
@@ -74,7 +74,7 @@ final class HubStore: ObservableObject {
         } catch { record(error); return nil }
         // Connection checks reuse the private cookie jar and active conversations.
         // The form retains a username after login but deliberately clears its password.
-        if isEnabled, api != nil, connectedOrigin == normalizedURL.absoluteString, password.isEmpty {
+        if !forceReconnect, isEnabled, api != nil, connectedOrigin == normalizedURL.absoluteString, password.isEmpty {
             errorMessage = nil
             await refresh()
             return connectedOrigin
@@ -83,12 +83,15 @@ final class HubStore: ObservableObject {
         onConnectionChanged?(nil, nil)
         let ticket = generation
         isEnabled = true; defaults.set(true, forKey: "petHub.enabled")
+        let previousService = api
         api = nil; connectedOrigin = nil; tasks = []; events = []; loadedCalendarWeek = nil; lastSyncedAt = nil
         taskReady = false; calendarReady = false; needsLogin = false
         errorMessage = nil; memoReceipt = nil; pending = HubPendingState(); storageKey = nil
         isRefreshing = false; refreshRequested = false; isSavingTask = false; isSavingMemo = false; isConnecting = true
         taskMessage = "Hub에서 불러오는 중이에요."; calendarMessage = taskMessage
         defer { if ticket == generation { isConnecting = false } }
+        await previousService?.disconnect()
+        guard ticket == generation else { return nil }
         do {
             let service = try makeAPI(normalizedURL)
             if !username.isEmpty || !password.isEmpty { try await service.login(username: username, password: password) }
@@ -114,6 +117,8 @@ final class HubStore: ObservableObject {
     }
 
     func useLocalStorage() {
+        let previousService = api
+        Task { await previousService?.disconnect() }
         onConnectionChanged?(nil, nil)
         generation += 1; api = nil; connectedOrigin = nil; isEnabled = false; refreshRequested = false
         defaults.set(false, forKey: "petHub.enabled")
@@ -122,10 +127,34 @@ final class HubStore: ObservableObject {
         tasks = []; events = []; loadedCalendarWeek = nil; taskReady = false; calendarReady = false; lastSyncedAt = nil; memoReceipt = nil
     }
 
+    @discardableResult
+    func signOut() async -> Bool {
+        guard let service = api, !isConnecting else { return false }
+        generation += 1
+        let ticket = generation
+        isConnecting = true
+        defer { if ticket == generation { isConnecting = false } }
+        onConnectionChanged?(nil, nil)
+        isRefreshing = false; refreshRequested = false; isSavingTask = false; isSavingMemo = false
+        taskReady = false; calendarReady = false; needsLogin = true; memoReceipt = nil
+        taskMessage = "Hub 로그인이 필요해요. 입력한 할 일은 그대로 보관합니다."
+        calendarMessage = "Hub 로그인이 필요해요."
+        do {
+            try await service.clearSession()
+            guard ticket == generation else { return false }
+            errorMessage = "자동 로그인을 해제했어요. 다시 사용하려면 로그인해 주세요."
+            return true
+        } catch {
+            guard ticket == generation else { return false }
+            record(error); return false
+        }
+    }
+
     func refresh() async {
         guard isEnabled, let service = api else { return }
         if isRefreshing { refreshRequested = true; return }
         let ticket = generation
+        let wasNeedingLogin = needsLogin
         let version = taskVersion
         let authentication = authenticationVersion
         let beganDuringTaskWrite = isSavingTask
@@ -142,36 +171,52 @@ final class HubStore: ObservableObject {
         var calendar = Calendar.current; calendar.firstWeekday = 2
         let start = calendar.dateInterval(of: .weekOfYear, for: selectedDate)!.start
         let end = calendar.date(byAdding: .day, value: 7, to: start)!
-        async let taskResult = Self.result { try await service.tasks() }
-        async let eventResult = Self.result { try await service.calendar(from: start, to: end) }
-        let (taskResponse, eventResponse) = await (taskResult, eventResult)
-        guard ticket == generation, isEnabled else { return }
-        if version == taskVersion && !beganDuringTaskWrite && !isSavingTask {
-            switch taskResponse {
-            case .success(let page):
-                tasks = page.tasks.filter { $0.status != "cancelled" }.sorted { !$0.isDone && $1.isDone }
-                taskReady = true
-                taskMessage = page.partial ? "일부 할 일만 불러왔어요. 전체 목록은 Hub에서 확인해 주세요." : nil
-            case .failure(let error):
-                taskReady = false; taskMessage = friendly(error)
-                if isUnauthorized(error) { requireLogin() }
+        await withTaskGroup(of: RefreshResult.self) { group in
+            group.addTask { .tasks(await Self.result { try await service.tasks() }) }
+            group.addTask { .calendar(await Self.result { try await service.calendar(from: start, to: end) }) }
+            var tasksSucceeded = false
+            var calendarSucceeded = false
+            for await result in group {
+                guard ticket == generation, isEnabled else { group.cancelAll(); return }
+                switch result {
+                case .tasks(let response):
+                    if case .success = response { tasksSucceeded = true }
+                    guard version == taskVersion, !beganDuringTaskWrite, !isSavingTask else { continue }
+                    switch response {
+                    case .success(let page):
+                        tasks = page.tasks.filter { $0.status != "cancelled" }.sorted { !$0.isDone && $1.isDone }
+                        taskReady = true
+                        taskMessage = page.partial ? "일부 할 일만 불러왔어요. 전체 목록은 Hub에서 확인해 주세요." : nil
+                    case .failure(let error):
+                        taskReady = false; taskMessage = friendly(error)
+                        if isAuthenticationError(error) { requireLogin(); errorMessage = friendly(error) }
+                    }
+                case .calendar(let response):
+                    if case .success = response { calendarSucceeded = true }
+                    let selectedWeek = calendar.dateInterval(of: .weekOfYear, for: selectedDate)!.start
+                    guard selectedWeek == start else { refreshRequested = true; continue }
+                    switch response {
+                    case .success(let page):
+                        events = page.events; loadedCalendarWeek = start; calendarReady = true
+                        calendarMessage = page.partial ? "일부 일정만 불러왔어요. Hub에서 연결 상태를 확인해 주세요." : nil
+                    case .failure(let error):
+                        calendarReady = false; calendarMessage = friendly(error)
+                        if isAuthenticationError(error) { requireLogin(); errorMessage = friendly(error) }
+                    }
+                }
+                if taskReady || calendarReady { lastSyncedAt = Date() }
+            }
+            // A read begun before a rejected write cannot confirm the current session.
+            if authentication == authenticationVersion, tasksSucceeded, calendarSucceeded {
+                needsLogin = false
+                if wasNeedingLogin { errorMessage = nil }
             }
         }
-        let selectedWeek = calendar.dateInterval(of: .weekOfYear, for: selectedDate)!.start
-        if selectedWeek != start { refreshRequested = true }
-        else { switch eventResponse {
-        case .success(let page):
-            events = page.events; loadedCalendarWeek = start; calendarReady = true
-            calendarMessage = page.partial ? "일부 일정만 불러왔어요. Hub에서 연결 상태를 확인해 주세요." : nil
-        case .failure(let error):
-            calendarReady = false; calendarMessage = friendly(error)
-            if isUnauthorized(error) { requireLogin() }
-        }
-        }
-        if taskReady || calendarReady { lastSyncedAt = Date() }
-        // A read begun before a rejected write cannot confirm the current session.
-        if authentication == authenticationVersion,
-           case .success = taskResponse, case .success = eventResponse { needsLogin = false }
+    }
+
+    private enum RefreshResult: Sendable {
+        case tasks(Result<HubTaskPage, Error>)
+        case calendar(Result<HubCalendarPage, Error>)
     }
 
     /// Returns only the confirmed snapshot, so the caller never clears newer input.
@@ -304,13 +349,16 @@ final class HubStore: ObservableObject {
     }
     private func record(_ error: Error) {
         errorMessage = friendly(error)
-        if isUnauthorized(error) { requireLogin() }
+        if isAuthenticationError(error) { requireLogin() }
     }
     private func requireLogin() {
         authenticationVersion += 1
         needsLogin = true
     }
-    private func isUnauthorized(_ error: Error) -> Bool { (error as? HubTransportError) == .unauthorized }
+    private func isAuthenticationError(_ error: Error) -> Bool {
+        guard let error = error as? HubTransportError else { return false }
+        return error == .unauthorized || error == .credentialStorage
+    }
     private func friendly(_ error: Error) -> String {
         if let error = error as? HubDataError { return error.localizedDescription }
         if let error = error as? HubTransportError { return error.localizedDescription }

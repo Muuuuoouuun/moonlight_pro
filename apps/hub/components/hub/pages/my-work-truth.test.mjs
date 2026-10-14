@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import * as primitives from '../hub-primitives.jsx';
 import { Iconed } from '../hub-icons.jsx';
 import * as mute from './my-work-mute.js';
+import { createMyWorkQuickTask } from '../../../lib/my-work-quick-task.js';
 import { MAX_FOCUS_PER_DAY, focusLimitMessage } from '../../../lib/task-today.js';
 
 // QA regression: preview/unknown empty reads and filtered/stale lists claimed all work complete.
@@ -23,7 +24,7 @@ const noAction = () => { throw new Error('A regression test must not write data 
 
 function evaluate(hookReact, fetchImpl) {
   const scope = {
-    ...primitives, ...mute, React: hookReact, Iconed, MAX_FOCUS_PER_DAY, focusLimitMessage,
+    ...primitives, ...mute, createMyWorkQuickTask, React: hookReact, Iconed, MAX_FOCUS_PER_DAY, focusLimitMessage,
     fetch: fetchImpl, useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: noAction }), usePathname: () => '/dashboard/work/my',
     useToast: () => ({}), useUndoableAction: () => ({ schedule: noAction, cancel: noAction }), UNDO_WINDOW_MS: 3500,
     JournalSources: () => null, MeetingWatchCard: () => null,

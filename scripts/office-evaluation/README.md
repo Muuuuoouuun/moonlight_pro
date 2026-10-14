@@ -57,6 +57,18 @@ header에 전체 시나리오와 hash, 정책 버전, 관련 런타임 파일별
 
 `attempt`와 `result`는 각각 한 줄씩 쓰고 `fsync`한다. 중단 전 완료된 응답은 살아 있다. 마지막 줄 자체가 잘린 파일은 원본을 보존하고 그 잘린 줄을 복구한 뒤 재개해야 한다. 기록되지 않은 결과를 성공으로 추측하지 않는다.
 
+### Compact Codex 모델 비교
+
+`scripts/eval-office-compact-codex.mjs`는 별도 평가 진입점이다. 기존 응답 코어의 `compact-v1`을 주입하고 전체 요청에 48초를 적용한다. 운영 기본 정책·공급자·CLI의 저장된 설정을 변경하지 않는다. `scripts/eval-office-codex-async.mjs`의 종전 실행 예산과 구분한다.
+
+```bash
+node --import ./scripts/register-hub-alias.mjs scripts/eval-office-compact-codex.mjs --live --model gpt-5.6-sol --only offer-balanced --dataset-status development --output /tmp/office-compact-model-run.jsonl --provider-output /tmp/office-compact-model-provider.jsonl
+```
+
+`--model`을 생략하면 기존 CLI 기본 선택을 유지하고 선택 플래그를 보내지 않는다. 명시한 모델은 provider 수명 동안 고정하고 후속 검토·회의의 다른 모델 요청을 거절한다. 선택 모델은 두 journal의 source/config hash에 포함되므로 다른 모델로 같은 run을 재개할 수 없다. 설치 버전·계정에서 해당 모델을 사용할 수 있어야 하며, 예시 이름이 모든 계정의 지원을 보장하지 않는다.
+
+기록의 `model`과 `modelRequested`는 요청한 alias다. 공급자가 실제 버전을 보고하지 않으면 `modelVersion`은 null이다. adapter v3의 명시 선택 기능도 요청 이름을 실제 모델 버전의 증거로 바꾸지 않는다. 평가 전용 호출이며 운영 Office 공급자 연결을 인증하지 않는다.
+
 ## 독립 심사와 dossier
 
 전체 심사팩 또는 한 역할의 dossier를 생성한다. 이 단계는 모델을 호출하지 않는다.
@@ -77,11 +89,21 @@ node --import ./scripts/register-hub-alias.mjs scripts/eval-office.mjs --suite q
   "rating": null,
   "rationale": "실제 원문을 읽은 뒤 해당 anchor를 고른 이유",
   "evidence": [{ "recordId": "역할-evidence/initial", "pointer": "/answer", "quote": "실제 응답의 정확한 인용" }],
-  "sourceEvidence": [{ "scenarioId": "역할-evidence", "sourceId": "자료 ID", "quote": "제공 자료의 정확한 인용" }]
+  "sourceEvidence": [{ "recordId": "역할-evidence/initial", "scenarioId": "역할-evidence", "sourceId": "자료 ID", "quote": "제공 자료의 정확한 인용" }]
 }
 ```
 
-숫자를 예시로 미리 채우지 않는다. 다른 council 참여자의 고유 발언은 `/discussion/turns/인덱스/position` 등 실제 원문 위치로 인용한다. `sourceEvidence`는 인용한 응답이 나올 때 이미 제공된 자료여야 한다. 후속 update에서 처음 제공한 사실로 앞선 답변을 정당화할 수 없다.
+숫자를 예시로 미리 채우지 않는다. 다른 council 참여자의 고유 발언은 `/discussion/turns/인덱스/position` 등 실제 원문 위치로 인용한다. `sourceEvidence.recordId`는 같은 항목의 `evidence`에 포함돼야 하며 `scenarioId`도 해당 기록과 일치해야 한다. 자료는 그 정확한 응답 시점에 제공돼 있어야 한다. initial과 update를 함께 인용해도 후속 update에서 처음 제공한 사실을 initial의 근거로 붙일 수 없다.
+
+### 인용 정책 v2
+
+새 심사 템플릿은 `evidencePolicyVersion: 2`를 쓴다. 의미 rubric의 20개 anchor와 통과선은 그대로이며, 점수를 뒷받침할 인용 연결만 더 확인한다. 심사팩·dossier 생성과 채점은 모델을 호출하지 않는다. dossier의 `interactionPointers`는 실제 발언의 위치 안내이고, 점수나 심사 결과가 아니다.
+
+- `collaboration/dissent`의 `interactionEvidence`는 `{ response, target }` 인용 쌍의 배열이다. 각 인용은 `{ recordId, pointer, quote }`다. `response`는 평가 대상 역할의 initial 기록 안 `round: response` 발언에 있는 `/discussion/turns/N/peerReviews/J/reason`을 가리키며 일반 `evidence`에도 포함한다. `target`은 같은 기록에서 그 검토가 지목한 동료의 첫 `round: position` 발언의 `position`·`objection`·`revisionCondition` 중 해당 필드다. `target.quote`에는 `peerReviews[J].quote` 전체를 그대로 옮긴다. 다른 기록·다른 동료·나중 발언을 대상으로 바꾸면 인정하지 않는다.
+- `collaboration/update`의 `changeEvidence`는 `{ before, after, reason }`이다. 같은 update 기록에서 본인의 첫 입장 `/discussion/turns/N/position`, 검토 후 입장, 그 검토 발언의 `/changeReason`을 각각 인용한다. 세 인용을 일반 `evidence`에도 넣고, 같은 시나리오의 이전 initial 기록에서 본인 입장도 인용한다. 전후 문장이 다르다는 사실이나 `changed: true`는 점수를 올리지 않는다. 타당하게 입장을 유지했는지는 심사자가 판단한다.
+- 대상 동료의 인용은 상호 검토를 이해하기 위한 문맥이다. 본인의 전문성 증거로 대신 넣을 수 없다. `/discussion/resolutions/N/rationale`은 종합 작성자인 주관에게만 귀속되며, 실제 반론의 `turnRef`를 가리켜야 한다. 해결·보류 선언의 개수나 `sourceCheck`·`sourceCounts` 역시 의미 점수가 아니다.
+
+기존 심사 파일에 정책 버전이 없거나 `1`이면 `legacy-v1`으로 읽는다. 기존 인용 규칙으로 계산한 결과에는 연결 검증의 한계를 명시하고, 과거 응답·fingerprint·점수를 고쳐 쓰지 않는다. v2 discussion(`2026-10-04.v2`)이 포함된 기록은 legacy 정책으로 채점할 수 없다. 예전 응답을 새 정책으로 다시 심사하면 실제로 존재하는 발언만 인용하며, 필요한 응답·연결이 없으면 해당 항목은 `null`/미평가로 남긴다. 인용 검증은 심사자의 독립성 선언이나 의미 판단의 진실을 입증하지 않는다.
 
 모든 gate를 `clear`/`failed`/`unassessed`로 검토한다. `failed`는 실제 응답 인용을 포함한다. `clear`는 해당 역할의 `coverage.recordIds` 모두를 `checkedRecordIds`로 확인하고 이유를 쓴다. 표본에서 치명 오류를 관찰하지 않았다는 뜻이며 오류 불가능을 증명하지 않는다. 대조 심사는 baseline·variant 양쪽 응답을 모두 인용한다.
 

@@ -1,9 +1,19 @@
 export type Criterion = { id: string; text: string; done: boolean };
+// 막힌 점의 병목 분류(운영자 프로필 §11, 확인할 것 스펙 §5.1) — 선택. 빈 문자열은 "분류 안 함".
+export const BLOCKER_KINDS = ["customer", "internal", "decision", "material", "external"] as const;
+export type BlockerKind = typeof BLOCKER_KINDS[number];
+export const BLOCKER_KIND_LABELS: Record<BlockerKind, string> = {
+  customer: "고객 응답", internal: "내부 작업", decision: "의사결정", material: "자료 부족", external: "외부 일정",
+};
 export type DeliveryPlan = {
   deliverable: string; plannedStart: string; prototypeDate: string;
   criteria: Criterion[]; remainingHours: number | null; availableHours: number | null;
-  blocker: string; nextAction: string; nextVersion: string; resultUrl: string;
+  blocker: string; blockerKind?: BlockerKind | ""; nextAction: string; nextVersion: string; resultUrl: string;
 };
+
+export function isBlockerKind(value: unknown): value is BlockerKind {
+  return typeof value === "string" && (BLOCKER_KINDS as readonly string[]).includes(value);
+}
 
 export function dayKey(value: unknown): string {
   if (typeof value !== "string" || !value) return "";
@@ -29,7 +39,8 @@ export function deliveryDraft(value: Partial<DeliveryPlan> = {}): DeliveryPlan {
     deliverable: value.deliverable || "", plannedStart: value.plannedStart || "",
     prototypeDate: value.prototypeDate || "", criteria: Array.isArray(value.criteria) ? value.criteria : [],
     remainingHours: value.remainingHours ?? null, availableHours: value.availableHours ?? null,
-    blocker: value.blocker || "", nextAction: value.nextAction || "",
+    blocker: value.blocker || "", blockerKind: isBlockerKind(value.blockerKind) ? value.blockerKind : "",
+    nextAction: value.nextAction || "",
     nextVersion: value.nextVersion || "", resultUrl: value.resultUrl || "",
   };
 }
@@ -41,11 +52,18 @@ export function parseDelivery(value: unknown): DeliveryPlan | null {
   if (strings.some((key) => typeof row[key] !== "string" || (row[key] as string).length > 4000)) return null;
   if (![row.remainingHours, row.availableHours].every((value) => value === null || typeof value === "number")) return null;
   if (!Array.isArray(row.criteria) || row.criteria.some((item) => !item || typeof item.id !== "string" || typeof item.text !== "string" || typeof item.done !== "boolean")) return null;
-  return deliveryDraft({
+  // blockerKind는 선택 키다. 보낸 경우에만 검증하고, 보내지 않은 계획에는 키를 두지 않는다 —
+  // 서버가 그때 저장된 분류를 유지한다(분류를 모르는 예전 화면이 지우지 않게).
+  const kindSent = "blockerKind" in row;
+  if (kindSent && row.blockerKind !== "" && !isBlockerKind(row.blockerKind)) return null;
+  const plan = deliveryDraft({
     ...Object.fromEntries(strings.map((key) => [key, (row[key] as string).trim()])),
     remainingHours: row.remainingHours as number | null, availableHours: row.availableHours as number | null,
     criteria: row.criteria.map((item) => ({ id: item.id, text: item.text.trim(), done: item.done })),
+    blockerKind: kindSent ? row.blockerKind as BlockerKind | "" : "",
   });
+  if (!kindSent) delete plan.blockerKind;
+  return plan;
 }
 
 export function validateDelivery(plan: DeliveryPlan, dueAt: unknown): string | null {

@@ -1,9 +1,14 @@
 import { createHash } from "node:crypto";
+import type { SupabaseDetailedReadResult, SupabaseQueryOptions } from "@com-moon/supabase-rest";
+import { validateReelsScriptBody } from "@com-moon/content-manager/reels-script";
 
 type JsonRecord = Record<string, unknown>;
 type Context = { workspaceId?: string };
 type RpcResult = { ok: boolean; data?: unknown; error?: string; detail?: string };
-type Dependencies = { rpc: (name: string, params: JsonRecord) => Promise<RpcResult> };
+type Dependencies = {
+  rpc: (name: string, params: JsonRecord) => Promise<RpcResult>;
+  read?: (table: string, options: SupabaseQueryOptions) => Promise<SupabaseDetailedReadResult<JsonRecord>>;
+};
 
 export const MAX_CONTENT_WORKFLOW_BYTES = 256 * 1024;
 export const CONTENT_WORKFLOW_CHANNELS: Record<string, readonly string[]> = {
@@ -15,7 +20,7 @@ export const CONTENT_WORKFLOW_CHANNELS: Record<string, readonly string[]> = {
   newsletter: ["email"],
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,6}))?(?:Z|[+-]\d{2}:\d{2})$/;
 const BRIEF_FIELDS = ["audience", "purpose", "message", "angle", "evidence", "ending"];
 const own = (object: JsonRecord, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 const isRecord = (value: unknown): value is JsonRecord => Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -29,11 +34,11 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-type Normalized = { ok: false; reason: string } | {
+type Normalized = { ok: false; reason: string; sceneNumber?: number } | {
   ok: true; workspaceId: string; requestId: string; requestHash: string; command: JsonRecord;
 };
 
-export function normalizeContentWorkflow(input: unknown, context: Context = {}): Normalized {
+function normalizeWorkflowCommand(input: unknown, context: Context = {}): Normalized {
   const invalid = (reason: string): Normalized => ({ ok: false, reason });
   if (!isRecord(input)) return invalid("invalid-command");
   const workspaceId = context.workspaceId;
@@ -111,9 +116,111 @@ export function normalizeContentWorkflow(input: unknown, context: Context = {}):
   return { ok: true, workspaceId, requestId: input.requestId, requestHash, command };
 }
 
+function validateExplicitReelsBody(command: JsonRecord) {
+  const patch = command.variant;
+  return isRecord(patch) && patch.variantType === "reels_script" && own(patch, "body")
+    ? validateReelsScriptBody(patch.body as string, { allowEmptyDraft: true }) : { ok: true as const };
+}
+
+export function normalizeContentWorkflow(input: unknown, context: Context = {}): Normalized {
+  const normalized = normalizeWorkflowCommand(input, context);
+  if (!normalized.ok) return normalized;
+  const validation = validateExplicitReelsBody(normalized.command);
+  return validation.ok ? normalized : validation;
+}
+
+function needsSavedVariant(command: JsonRecord): boolean {
+  if (!["save", "create_variant"].includes(String(command.action)) || !isRecord(command.variant) || !command.variantId) return false;
+  const patch = command.variant;
+  return (own(patch, "body") && !own(patch, "variantType"))
+    || (patch.variantType === "reels_script" && !own(patch, "body"))
+    || (command.action === "create_variant" && !own(patch, "body") && !own(patch, "variantType"));
+}
+
+// Old accepted requests may contain bodies rejected by a newer validator.
+// Recover only the server-owned receipt with the original workspace/request/hash.
+async function recoverWorkflowReceipt(normalized: Extract<Normalized, { ok: true }>, dependencies: Dependencies): Promise<JsonRecord | null> {
+  const unknown = () => ({ status: "unknown", error: "workflow-receipt-unconfirmed" });
+  if (!dependencies.read) return unknown();
+  try {
+    const result = await dependencies.read("content_workflow_receipts", {
+      select: "workspace_id,request_id,request_hash,response", limit: 2, dedupe: false,
+      filters: [["workspace_id", `eq.${normalized.workspaceId}`], ["request_id", `eq.${normalized.requestId}`]],
+    });
+    if (!result.configured || result.error || !Array.isArray(result.rows) || result.rows.length > 1) return unknown();
+    if (!result.rows.length) return null;
+    const receipt = result.rows[0];
+    if (!isRecord(receipt) || !validUuid(receipt.workspace_id) || !validUuid(receipt.request_id)
+      || receipt.workspace_id.toLowerCase() !== normalized.workspaceId.toLowerCase()
+      || receipt.request_id.toLowerCase() !== normalized.requestId.toLowerCase()
+      || typeof receipt.request_hash !== "string" || !/^[0-9a-f]{64}$/.test(receipt.request_hash)) return unknown();
+    if (receipt.request_hash !== normalized.requestHash) return { status: "conflict", error: "request-id-reused" };
+    const response = receipt.response;
+    if (!isRecord(response) || !["saved", "duplicate"].includes(String(response.status))
+      || !validUuid(response.contentId) || !validUuid(response.variantId)
+      || !isRecord(response.item) || !isRecord(response.variant)) return unknown();
+    const item = response.item, variant = response.variant;
+    if (item.id !== response.contentId || variant.id !== response.variantId || variant.content_id !== item.id
+      || !validUuid(item.workspace_id) || !validUuid(variant.workspace_id)
+      || item.workspace_id.toLowerCase() !== normalized.workspaceId.toLowerCase()
+      || variant.workspace_id.toLowerCase() !== normalized.workspaceId.toLowerCase()
+      || !validTimestamp(item.updated_at) || !validTimestamp(variant.updated_at)
+      || (normalized.command.contentId && String(normalized.command.contentId).toLowerCase() !== item.id)
+      || (normalized.command.action === "save" && normalized.command.variantId && String(normalized.command.variantId).toLowerCase() !== variant.id)) return unknown();
+    return { ...response, status: "duplicate" };
+  } catch { return unknown(); }
+}
+
+function timestampMicros(value: string): bigint {
+  const fraction = value.match(TIMESTAMP)?.[1] || "";
+  return BigInt(Date.parse(value)) * 1000n + BigInt(fraction.padEnd(6, "0").slice(3));
+}
+
+async function validatePartialVariant(normalized: Extract<Normalized, { ok: true }>, dependencies: Dependencies): Promise<JsonRecord | null> {
+  const command = normalized.command;
+  if (!needsSavedVariant(command) || !isRecord(command.variant)) return null;
+  const patch = command.variant;
+  if (!dependencies.read) return { status: "error", error: "workflow-variant-read-unavailable" };
+  try {
+    const result = await dependencies.read("content_variants", {
+      select: "id,workspace_id,content_id,variant_type,body,updated_at", limit: 1, dedupe: false,
+      filters: [["id", `eq.${command.variantId}`], ["workspace_id", `eq.${normalized.workspaceId}`], ["content_id", `eq.${command.contentId}`]],
+    });
+    if (!result.configured) return { status: "preview", error: "missing-config" };
+    if (result.error || !Array.isArray(result.rows) || result.rows.length > 1) return { status: "error", error: "workflow-variant-read-failed" };
+    const saved = result.rows[0];
+    // Let the atomic RPC resolve missing/stale rows and existing request receipts.
+    // Its version check prevents a changed type/body from passing this preflight.
+    if (!saved) return null;
+    if (String(saved.id).toLowerCase() !== String(command.variantId).toLowerCase()
+      || String(saved.workspace_id).toLowerCase() !== normalized.workspaceId.toLowerCase()
+      || String(saved.content_id).toLowerCase() !== String(command.contentId).toLowerCase()
+      || !validTimestamp(saved.updated_at) || !CONTENT_WORKFLOW_CHANNELS[String(saved.variant_type)]) return { status: "error", error: "workflow-variant-read-failed" };
+    if (timestampMicros(saved.updated_at) !== timestampMicros(command.expectedVariantUpdatedAt as string)) return null;
+    if ((patch.variantType ?? saved.variant_type) !== "reels_script") return null;
+    const body = own(patch, "body") ? patch.body : saved.body;
+    if (typeof body !== "string") return { status: "invalid-input", error: "invalid-reels-script-json" };
+    const validation = validateReelsScriptBody(body, { allowEmptyDraft: true });
+    if (!validation.ok) return { status: "invalid-input", error: validation.reason,
+      ...(validation.sceneNumber === undefined ? {} : { sceneNumber: validation.sceneNumber }) };
+    return null;
+  } catch { return { status: "error", error: "workflow-variant-read-failed" }; }
+}
+
 export async function executeContentWorkflow(input: unknown, context: Context, dependencies: Dependencies): Promise<JsonRecord> {
-  const normalized = normalizeContentWorkflow(input, context);
-  if (!normalized.ok) return { status: "invalid-input", error: normalized.reason };
+  const normalized = normalizeWorkflowCommand(input, context);
+  if (!normalized.ok) return { status: "invalid-input", error: normalized.reason,
+    ...(normalized.sceneNumber === undefined ? {} : { sceneNumber: normalized.sceneNumber }) };
+  if (needsSavedVariant(normalized.command) || (isRecord(normalized.command.variant)
+    && normalized.command.variant.variantType === "reels_script" && own(normalized.command.variant, "body"))) {
+    const recovered = await recoverWorkflowReceipt(normalized, dependencies);
+    if (recovered) return recovered;
+  }
+  const explicitValidation = validateExplicitReelsBody(normalized.command);
+  if (!explicitValidation.ok) return { status: "invalid-input", error: explicitValidation.reason,
+    ...(explicitValidation.sceneNumber === undefined ? {} : { sceneNumber: explicitValidation.sceneNumber }) };
+  const validationFailure = await validatePartialVariant(normalized, dependencies);
+  if (validationFailure) return validationFailure;
   try {
     const result = await dependencies.rpc("content_workflow_v1", {
       p_workspace_id: normalized.workspaceId,

@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { OFFICE_ROLE_CARDS } from './role-cards.ts';
 import { OFFICE_ROUTING_VERSION } from '@com-moon/agent-contracts/office-routing';
 import { OFFICE_ROUTING_MAX_BODY_BYTES, generateOfficeRouting, createOfficeRoutingEngineHandler } from './routing.ts';
 
 const request = { message: '고객 견적 답장을 준비해 주세요.', scope: 'classin' };
-const recommendation = { ownerId: 'flareon', reviewerIds: ['leafeon'], reason: '고객 답장과 가격 부담을 나눠 검토합니다.', scope: 'classin' };
+const recommendation = { ownerId: 'flareon', reviewerIds: ['leafeon'], reason: '고객 답장과 가격 부담을 나눠 검토합니다.', scope: 'classin', plan: { ownerDeliverable: '고객이 답하기 쉬운 견적 답장', reviews: [{ reviewerId: 'leafeon', question: '가격과 지원 범위의 자원 부담이 확인되었는가?' }] } };
 const httpRequest = body => new Request('http://engine.test/api/ai/office-assignment', { method: 'POST', body: JSON.stringify(body) });
 
 test('Eevee routing uses structured generation without tools or side effects', async () => {
@@ -90,4 +91,33 @@ test('a 6,000-character Korean agenda (contract max) stays under the byte cap an
   const response = await handler(httpRequest(longRequest));
   assert.equal(response.status, 200);
   assert.equal(calls, 1);
+});
+
+
+test('routing sees functional responsibilities and concrete deliverables without role voice examples', async () => {
+  let input;
+  await generateOfficeRouting(request, async value => {
+    input = value;
+    return { ok: true, text: JSON.stringify(recommendation), model: 'test-model' };
+  });
+  for (const card of Object.values(OFFICE_ROLE_CARDS)) {
+    assert.ok(input.prompt.includes(card.ownership), card.id + ' ownership missing');
+    assert.ok(input.prompt.includes(card.deliverables[0].produce), card.id + ' deliverable missing');
+    assert.ok(input.prompt.includes(card.handoffs[0].packet), card.id + ' handoff missing');
+    for (const example of card.voice.examples) assert.equal(input.prompt.includes(example.response), false);
+  }
+  assert.ok(input.responseJsonSchema.required.includes('plan'));
+  assert.equal(input.responseJsonSchema.properties.plan.properties.reviews.maxItems, 2);
+  assert.match(input.systemInstruction, /산출물/);
+  assert.match(input.systemInstruction, /중복/);
+  assert.match(input.systemInstruction, /운영자.*적용/);
+});
+
+test('new routing generations reject legacy planless output and malformed reviewer assignments', async () => {
+  const { plan, ...legacy } = recommendation;
+  for (const value of [legacy, { ...recommendation, plan: { ...plan, reviews: [] } }]) {
+    const result = await generateOfficeRouting(request, async () => ({ ok: true, text: JSON.stringify(value), model: 'test-model' }));
+    assert.equal(result.status, 'error');
+    assert.equal(result.ownerId, undefined);
+  }
 });

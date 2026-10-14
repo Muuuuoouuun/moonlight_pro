@@ -12,7 +12,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Dot, EmptyState, Input, SegmentedControl, Skeleton, TruthBadge } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
-import { useRevenueLedger } from "./revenue";
+import { useRevenueLedger } from "./revenue-core";
 import { clearExpandedSegments, sortSegmentsByPriority, toggleExpandedSegment } from "./segments-state.mjs";
 
 // 로컬 fetch 복제 제거(7차 속도) — Revenue 표면들이 데운 모듈 SWR 캐시를 그대로 재사용해

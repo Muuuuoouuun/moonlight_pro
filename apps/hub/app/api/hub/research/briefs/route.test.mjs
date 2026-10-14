@@ -38,6 +38,27 @@ test('read failure stays an HTTP 200 error envelope', async () => {
   });
 });
 
+test('deep-link GET keeps invalid and missing IDs distinct without writes or fallback listing', async () => {
+  await withEnv(async () => {
+    const calls = [];
+    globalThis.fetch = async (url, options) => { calls.push([url, options]); return Response.json([]); };
+    const invalid = await route.GET(new Request('https://hub.test/api/hub/research/briefs?brief=old-slug'));
+    assert.equal(invalid.status, 200);
+    assert.equal((await invalid.json()).status, 'invalid-input');
+    assert.equal(calls.length, 0);
+    const missing = await route.GET(new Request(`https://hub.test/api/hub/research/briefs?brief=${B}&brand=${W}`));
+    assert.equal(missing.status, 200);
+    assert.equal((await missing.json()).status, 'not-found');
+    assert.equal(calls.length, 1);
+    const query = new URL(calls[0][0]).searchParams;
+    assert.equal(query.get('id'), `eq.${B}`);
+    assert.equal(query.get('brand_id'), `eq.${W}`);
+    assert.equal(query.get('workspace_id'), `eq.${W}`);
+    assert.equal(query.get('limit'), '1');
+    assert.equal(calls[0][1].method || 'GET', 'GET');
+  });
+});
+
 test('valid review command uses server workspace and one service RPC', async () => {
   assert.ok(route);
   await withEnv(async () => {

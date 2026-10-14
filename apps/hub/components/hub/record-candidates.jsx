@@ -7,6 +7,8 @@
 //
 // 호출처 계약(오늘 연락):
 //   <RecordCandidates onRecord={(candidate) => 시트 열기} onNavigate={go} />
+//   onVisible(candidates)(선택): 지금 화면에 보이는 후보를 순서대로 알린다 — 목록이 바뀔 때만. 오늘 연락의
+//   '저장하고 다음'이 다음 사람을 화면 순서에서 고를 때 쓴다(읽지 못했으면 빈 목록 — 없는 후보를 줄에 세우지 않는다).
 //   기록이 서버에 저장된 뒤(persisted) `resolveRecordCandidate(candidate.id)`를 부른다 — 폰 후보는
 //   processed로 닫히고, 이 섹션은 이벤트를 받아 다시 읽는다. 캘린더 후보는 기록이 생기면 저절로 빠진다.
 //
@@ -252,7 +254,7 @@ export function RecordCandidatesView({
   );
 }
 
-export function RecordCandidates({ onRecord, onNavigate }) {
+export function RecordCandidates({ onRecord, onNavigate, onVisible }) {
   const toast = useToast();
   const data = useRecordCandidates();
   const [hidden, setHidden] = React.useState(() => new Set());
@@ -304,6 +306,17 @@ export function RecordCandidates({ onRecord, onNavigate }) {
   }, [hide, restore, toast]);
 
   const visible = data.candidates.filter((candidate) => !hidden.has(candidate.id));
+  // 보이는 후보가 바뀔 때만 알린다(같은 목록을 다시 그릴 때마다 호출처를 흔들지 않는다). 읽는 중에는 알리지
+  // 않는다 — 다시 읽는 동안 호출처의 줄이 잠깐 비었다 돌아오지 않게(호출처는 앞서 받은 목록을 그대로 쓴다).
+  const shown = data.status === "live" || data.status === "partial" ? visible : [];
+  const shownIds = data.status === "loading" ? null : shown.map((candidate) => candidate.id).join("|");
+  const onVisibleRef = React.useRef(onVisible);
+  onVisibleRef.current = onVisible;
+  const shownRef = React.useRef(shown);
+  shownRef.current = shown;
+  React.useEffect(() => {
+    if (shownIds != null) onVisibleRef.current?.(shownRef.current);
+  }, [shownIds]);
   return (
     <RecordCandidatesView
       status={data.status}

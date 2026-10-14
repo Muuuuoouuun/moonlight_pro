@@ -415,7 +415,7 @@ test("AI·자동화 children all carry a group label for the two-eyebrow layout"
 
 test('Office, work execution, coaching and brand advice keep four distinct existing destinations', () => {
   const expected = [
-    ['Office', 'dashboard/agents/office-council'],
+    ['오피스', 'dashboard/agents/office-council'],
     ['작업·실행', 'dashboard/agents/orders'],
     ['코칭·대화', 'dashboard/agents/chat'],
     ['브랜드 자문', 'dashboard/agents/council'],
@@ -876,6 +876,24 @@ test('AI utility anchor lands on Office in every scope and Office is findable in
   for (const scope of SIDEBAR_SCOPES) assert.equal(ai.paths[scope.key], 'dashboard/agents/office-council');
   const office = NAV_TREE.find(node => node.key === 'agents').children.find(child => child.key === 'office-council');
   for (const word of ['오피스', '이브이', '비서']) assert.ok(office.keywords.includes(word), word);
+});
+
+test('explicit Office scope selection replaces the meeting link without changing other global routes', () => {
+  const target = mobileNavRuntime.officeScopeSelectionPath;
+  assert.equal(typeof target, 'function');
+  const meeting = '10000000-0000-4000-8000-000000000001';
+  for (const scope of ['all', 'personal', 'classin']) {
+    for (const path of ['dashboard/agents/office-council', `/dashboard/agents/office-council?meeting=${meeting}&scope=personal`]) {
+      const result = target(path, scope);
+      const url = new URL(result, 'https://hub.invalid/');
+      assert.equal(url.pathname, '/dashboard/agents/office-council');
+      assert.equal(url.searchParams.get('scope'), scope);
+      assert.equal(url.searchParams.has('meeting'), false);
+    }
+  }
+  for (const path of ['dashboard/agents', 'dashboard/agents/runs', 'dashboard/agents/office-council/history', 'dashboard/settings', 'dashboard/daily-brief']) {
+    assert.equal(target(path, 'personal'), null);
+  }
 });
 
 test('report hub is a Home secondary tab, reachable through command catalog with no new anchor', () => {

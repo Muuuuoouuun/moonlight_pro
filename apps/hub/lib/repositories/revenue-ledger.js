@@ -16,6 +16,7 @@ import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
 import { normalizeGenreLabels } from "../sales-os/customer-labels.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 import { normalizeRevenueTargets } from "../revenue-target.js";
+import { formatWon } from "../won-format.js";
 
 const LEAD_STAGE_LABEL = {
   new: "New",
@@ -98,11 +99,9 @@ function formatRelativeShort(value) {
   return `${diffDays}d`;
 }
 
+// 리드 value는 편집 필드로 돌아가 parseMoneyLabel로 다시 저장된다 — 반올림하지 않는 정확한 표기를 쓴다.
 function formatMoneyLabel(amount) {
-  const n = toNumber(amount, 0);
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${(n / 1000).toFixed(0)}K`;
-  return `₩${n}`;
+  return formatWon(toNumber(amount, 0));
 }
 
 function ageDays(value) {

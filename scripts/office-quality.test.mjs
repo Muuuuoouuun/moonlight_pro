@@ -33,7 +33,9 @@ function evidenceFor(report, roleId, recordId) {
   return { recordId, pointer: `/discussion/turns/${index}/position`, quote: record.response.discussion.turns[index].position };
 }
 function completedArithmeticReview(report) {
-  const review = createOfficeQualityReviewTemplate(report, 'unit-test-reviewer');
+  // This historical position-only example keeps the original policy. Dedicated
+  // v2 tests exercise paired response citations and record-bound sources.
+  const review = createOfficeQualityReviewTemplate(report, 'unit-test-reviewer', { evidencePolicyVersion: 1 });
   review.reviewer = { id: 'unit-test-reviewer', kind: 'agent', model: 'no-model-called', independentOfImplementation: true, independenceExplanation: 'Declaration used only to test validation; no actual semantic review occurred.' };
   for (const role of review.roles) {
     const recordId = `${role.roleId}-work/initial`;

@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { Button, Drawer, Checkbox } from "../hub-primitives";
+import { Button, Drawer, Checkbox, ChipToggle } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
-import { dayKey, validDay, deliveryDraft, deliveryAssessment, completionIssue, validateDelivery, safeResultUrl } from "../../../../../packages/project-delivery/index.ts";
+import { dayKey, validDay, deliveryDraft, deliveryAssessment, completionIssue, validateDelivery, safeResultUrl, BLOCKER_KINDS, BLOCKER_KIND_LABELS } from "../../../../../packages/project-delivery/index.ts";
 import styles from "./project-delivery.module.css";
 
 const dateLabel = (value) => dayKey(value)?.replaceAll("-", ".") || "미정";
@@ -200,6 +200,11 @@ export function ProjectDeliveryEditor({ project, onClose, onSave, intent = "edit
                 <Field label="확보한 시간" {...fieldError("availableHours")}><input {...inputProps("availableHours")} type="number" min="0" max="10000" step="0.5" value={plan.availableHours ?? ""} onChange={(e) => update("availableHours", e.target.value === "" ? null : Number(e.target.value))} placeholder="선택" /></Field>
               </div>
               <Field label="막힌 점" {...fieldError("blocker")}><input {...inputProps("blocker")} value={plan.blocker} maxLength={1000} onChange={(e) => update("blocker", e.target.value)} placeholder="없으면 비워두세요" /></Field>
+              {/* 병목 분류(선택, 확인할 것 스펙 §5.1) — 막힘 풀기가 권할 갈래를 정한다. 막힌 점이 비면 서버가 함께 비운다. */}
+              {plan.blocker.trim() && <div role="group" aria-label="병목 분류 · 선택" style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                <span className={styles.eyebrow}>병목 · 선택</span>
+                {BLOCKER_KINDS.map((kind) => <ChipToggle key={kind} label={BLOCKER_KIND_LABELS[kind]} selected={plan.blockerKind === kind} onChange={(on) => update("blockerKind", on ? kind : "")} />)}
+              </div>}
               <Field label="다음 행동"><input {...inputProps("nextAction")} value={plan.nextAction} maxLength={1000} onChange={(e) => update("nextAction", e.target.value)} placeholder="막힌 점을 풀기 위해 할 한 가지" /></Field>
               <Field label="다음 버전으로 넘길 범위"><textarea {...inputProps("nextVersion")} rows={2} value={plan.nextVersion} maxLength={4000} onChange={(e) => update("nextVersion", e.target.value)} placeholder="이번 완료 범위에서 제외한 개선 사항" /></Field>
               {assessment.key !== "unknown" && <div className={styles.assessment} data-state={assessment.key}><strong>마무리 가능성 · {assessment.label}</strong><p>{assessment.reason}</p></div>}

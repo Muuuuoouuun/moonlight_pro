@@ -89,12 +89,13 @@ struct OfficeChatReply: Equatable, Sendable {
 }
 
 enum OfficeChatError: Error, Equatable, LocalizedError {
-    case invalidInput, invalidParticipants, invalidResponse, preview
+    case invalidInput, invalidParticipants, invalidResponse, preview, unconfirmed
     var errorDescription: String? {
         switch self {
         case .invalidInput: return "질문은 6,000자 이내로 적어 주세요. 대화가 길어졌다면 새 대화를 시작해 주세요."
         case .invalidParticipants: return "주관을 포함해 서로 다른 담당 2~3명을 선택해 주세요."
         case .invalidResponse: return "담당자의 답변을 확인하지 못했어요. 질문은 보관돼 있어요."
+        case .unconfirmed: return "회의 응답을 확인 중이에요. 다시 불러와 결과를 확인해 주세요."
         case .preview: return "Office AI 연결이 아직 준비되지 않았어요. 질문은 그대로 보관돼 있어요."
         }
     }

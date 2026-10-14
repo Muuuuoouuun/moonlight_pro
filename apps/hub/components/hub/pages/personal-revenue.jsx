@@ -15,6 +15,7 @@ import {
 import { filterDealsByWorkspace } from "../workspace-map";
 import { buildPersonalRevenueRoadmap } from "@/lib/personal-revenue-roadmap";
 import { dealExpectedTotal, dealPaidTotal } from "@/lib/deal-payments";
+import { formatWonShort } from "@/lib/won-format";
 
 const DRAWER_ID = "personal-revenue-deal-drawer";
 
@@ -27,11 +28,7 @@ const CERTAINTY_ICON = {
 };
 
 function formatMoney(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount === 0) return "₩0";
-  if (amount >= 1_000_000) return `₩${(amount / 1_000_000).toFixed(1)}M`;
-  if (amount >= 1_000) return `₩${Math.round(amount / 1_000)}K`;
-  return `₩${Math.round(amount).toLocaleString("ko-KR")}`;
+  return formatWonShort(Number(value) || 0);
 }
 
 function formatFullDate(value) {

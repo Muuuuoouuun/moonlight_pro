@@ -84,7 +84,8 @@ test("daily-brief rhythm visualizer integrates ProgressRing alongside linear pro
   assert.match(dailyBriefSource, /<ProgressRing\s+value=\{percent\}\s+size=\{28\}/);
 });
 
-test("home triage progress applies completed styling and sparkle when finished", () => {
-  assert.match(homeSource, /fx-progress\$\{done >= total \? ' fx-progress--completed' : ''\}/);
-  assert.match(homeSource, /done >= total \? ' ✦' : ''/);
+test("home check-items never celebrate a navigation-only 'done' count", () => {
+  // 홈 진행 막대는 이동 버튼을 누른 수를 "끝냄"으로 셌다 — 저장 없이 축하했다. 확인할 것 스펙
+  // §4.5: 끝냄은 서버 영수증만 세고, 다 끝내도 축하 연출은 두지 않는다(Q134 미결).
+  assert.doesNotMatch(homeSource, /fx-progress--completed|' ✦'/);
 });

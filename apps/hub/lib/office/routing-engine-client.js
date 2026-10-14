@@ -1,6 +1,6 @@
 import { parseOfficeRoutingResult } from '@com-moon/agent-contracts/office-routing';
 
-const preview = { status: 'preview', error: 'Office Engine 연결이 필요합니다. 담당자를 직접 선택해 주세요.' };
+const preview = { status: 'preview', error: '오피스 Engine 연결이 필요합니다. 담당자를 직접 선택해 주세요.' };
 const failure = { status: 'error', error: '담당 추천을 확인하지 못했습니다. 담당자를 직접 선택해 주세요.' };
 
 export async function callOfficeRoutingEngine(request, { fetcher = fetch, engineUrl = process.env.COM_MOON_ENGINE_URL, secret = process.env.COM_MOON_SHARED_WEBHOOK_SECRET, retries = 0 } = {}) {

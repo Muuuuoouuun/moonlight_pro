@@ -6,7 +6,8 @@
   "git": {
     "deploymentEnabled": {
       "codex/full-qa-20261002": false,
-      "codex/office-connection-20261002": false
+      "codex/office-connection-20261002": false,
+      "codex/moonlight-sync-20261007": false
     }
   }
 }

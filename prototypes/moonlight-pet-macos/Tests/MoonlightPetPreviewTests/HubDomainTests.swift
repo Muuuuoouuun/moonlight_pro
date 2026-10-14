@@ -6,8 +6,15 @@ private func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
 }
 
 private actor ControlledHub: HubServing {
+    var credentialFailure = false
+    var disconnectCount = 0
+    func setCredentialFailure(_ value: Bool) { credentialFailure = value }
+    var anonymous = false
+    func setAnonymous(_ value: Bool) { anonymous = value }
     var rejectsLogin = false
     func rejectLogin(_ value: Bool) { rejectsLogin = value }
+    var rejectsReads = false
+    func rejectReads(_ value: Bool) { rejectsReads = value }
     var rejectsWrites = false
     func rejectWrites(_ value: Bool) { rejectsWrites = value }
     var failsRead = false
@@ -46,7 +53,12 @@ private actor ControlledHub: HubServing {
     func login(username: String, password: String) async throws {
         if rejectsLogin { throw HubTransportError.unauthorized }
     }
+    func clearSession() async throws { anonymous = true }
+    func disconnect() async { disconnectCount += 1 }
     func tasks() async throws -> HubTaskPage {
+        if credentialFailure { throw HubTransportError.credentialStorage }
+        if anonymous { throw HubTransportError.unauthorized }
+        if rejectsReads { throw HubTransportError.unauthorized }
         if holdRead { startedRead = true; await withCheckedContinuation { releaseRead = $0 } }
         if failsRead { throw HubTransportError.offline }
         return HubTaskPage(tasks: [row] + (confirmedTask.map { [$0] } ?? []), partial: partial)
@@ -58,6 +70,9 @@ private actor ControlledHub: HubServing {
     }
     func release() { holdRead = false; releaseRead?.resume(); releaseRead = nil }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage {
+        if credentialFailure { throw HubTransportError.credentialStorage }
+        if anonymous { throw HubTransportError.unauthorized }
+        if rejectsReads { throw HubTransportError.unauthorized }
         if holdCalendar { startedCalendar = true; await withCheckedContinuation { releaseCalendar = $0 } }
         return HubCalendarPage(events: [], partial: partial)
     }
@@ -98,7 +113,10 @@ struct HubDomainTests {
     @MainActor static func main() async {
         do {
             try modelChecks()
+            try await sharedSessionReplacementChecks()
+            try await progressiveLoadingChecks()
             try await loginChecks()
+            try await anonymousMemoNoticeChecks()
             try await connectionRecoveryChecks()
             try await sessionExpiryChecks()
             try await recoveryChecks()
@@ -144,6 +162,56 @@ struct HubDomainTests {
         print("PASS: Session expiry ordering checks (8)")
     }
 
+    @MainActor static func sharedSessionReplacementChecks() async throws {
+        let suite = "pet-shared-session-replacement-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let previous = ControlledHub()
+        let current = ControlledHub()
+        await previous.configure(hold: true)
+        await current.rejectReads(true)
+        var clients = 0
+        let store = HubStore(defaults: defaults, makeAPI: { _ in
+            clients += 1
+            return clients == 1 ? previous : current
+        })
+        let oldRead = Task { await store.connect(baseURL: "https://shared.test") }
+        while !(await previous.startedRead) { await Task.yield() }
+        _ = await store.connect(baseURL: "https://shared.test", forceReconnect: true)
+        let appliedLogout = store.needsLogin && !store.taskReady
+        await previous.release()
+        _ = await oldRead.value
+        try check(appliedLogout, "Hub logout must apply without waiting for an old read")
+        try check(store.needsLogin && !store.taskReady, "Late results from a previous session must not restore access")
+        await current.rejectReads(false)
+        _ = await store.connect(baseURL: "https://shared.test", forceReconnect: true)
+        try check(store.taskReady && !store.needsLogin, "Hub re-login must recover the native connection")
+        print("PASS: Shared session replacement, logout ordering and re-login (3)")
+    }
+
+    @MainActor static func progressiveLoadingChecks() async throws {
+        for slowCalendar in [true, false] {
+            let suite = "pet-progressive-read-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let api = ControlledHub()
+            if slowCalendar { await api.holdWritesAndCalendar() }
+            else { await api.configure(hold: true) }
+            let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+            let loading = Task { await store.connect(baseURL: "https://progress.test") }
+            let deadline = Date().addingTimeInterval(2)
+            while !(slowCalendar ? store.taskReady : store.calendarReady) && Date() < deadline { await Task.yield() }
+            let readyBeforeOtherRead = slowCalendar ? store.taskReady && !store.calendarReady : store.calendarReady && !store.taskReady
+            let canUseTasks = !slowCalendar || store.canWriteTasks
+            if slowCalendar { await api.releaseEvents() } else { await api.release() }
+            _ = await loading.value
+            try check(readyBeforeOtherRead, "A fast read must render without waiting for the other surface")
+            try check(canUseTasks, "A slow calendar must not block task input after connection")
+            try check(store.taskReady && store.calendarReady, "Both snapshots must remain available when loading finishes")
+        }
+        print("PASS: Progressive loading and slow-source isolation (6)")
+    }
+
     @MainActor static func loginChecks() async throws {
         let suite = "pet-login-check-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
@@ -162,6 +230,35 @@ struct HubDomainTests {
         await api.configure(readError: true)
         let readFailure = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
         try check(readFailure && !store.taskReady, "A task read error must not misrepresent accepted credentials")
+    }
+
+    @MainActor static func anonymousMemoNoticeChecks() async throws {
+        let suite = "pet-anonymous-memo-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("보존할 메모 초안", forKey: "petPreview.memo")
+        let api = ControlledHub()
+        await api.setAnonymous(true)
+        let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+        await store.connect(baseURL: "https://example.com")
+        try check(store.needsLogin && !store.canSaveMemo, "Anonymous pet must block Hub save")
+        try check(store.errorMessage?.contains("로그인") == true, "Memo must explain why Hub save is disabled")
+        try check(defaults.string(forKey: "petPreview.memo") == "보존할 메모 초안", "Login failure must keep the local memo")
+        await api.setAnonymous(false)
+        await store.refresh()
+        try check(!store.needsLogin && store.canSaveMemo && store.errorMessage == nil, "Recovered authentication must clear stale login notice")
+        await api.setCredentialFailure(true)
+        await store.refresh()
+        try check(store.needsLogin && store.errorMessage?.contains("키체인") == true && !store.canSaveMemo, "Memo must show Keychain access failure")
+        await api.setCredentialFailure(false)
+        await store.refresh()
+        try check(store.canSaveMemo && store.errorMessage == nil, "Recovered Keychain access clears its notice")
+        await store.connect(baseURL: "https://other.example.com")
+        let disconnected = await api.disconnectCount
+        try check(disconnected == 1, "Changing origin must invalidate the old transport before replacement")
+        let signedOut = await store.signOut()
+        try check(signedOut && store.needsLogin && !store.canSaveMemo, "Signing out disables saving and automatic login")
+        try check(defaults.string(forKey: "petPreview.memo") == "보존할 메모 초안", "Sign-out must preserve the draft")
     }
 
     @MainActor static func connectionRecoveryChecks() async throws {

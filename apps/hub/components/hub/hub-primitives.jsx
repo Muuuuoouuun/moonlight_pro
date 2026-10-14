@@ -3,6 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
+import { useKeyboardInset } from "./use-keyboard-inset";
 import './hub-compact-drawer.css';
 import './hub-edit-drawer.css';
 export { useToast, ToastProvider } from './hub-toast';
@@ -50,8 +51,9 @@ export function Dot({ tone = 'neutral', size = 6, style }) {
 
 export function Kbd({ children, style }) {
   return (
-    <kbd className="mono" style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    // display는 .hub-kbd가 가진다 — 터치 화면에서 숨기려면 인라인이 아니라 클래스여야 한다.
+    <kbd className="mono hub-kbd" style={{
+      alignItems: 'center', justifyContent: 'center',
       minWidth: 18, height: 18, padding: '0 5px',
       fontSize: 10.5, fontWeight: 500,
       color: 'var(--moon-300)',
@@ -81,9 +83,11 @@ export function Card({ children, style, pad = true, interactive = false, classNa
   );
 }
 
+// Wraps instead of squeezing: when the right slot is wider than the row (390px phones), it drops below the
+// title rather than crushing the title to one word per line.
 export function SectionTitle({ children, right, style, subtitle }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
       <div>
         <h3 style={{ margin: 0, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</h3>
         {subtitle && <div style={{ fontSize: 12, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
@@ -388,7 +392,7 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
             color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
             borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
             marginBottom: -1,
-            transition: 'color .12s ease',
+            transition: 'color var(--dur-hover) var(--ease-hub)',
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
             {t.label}
@@ -428,7 +432,7 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
       style={{
         position: 'relative',
         width: size, height: size, borderRadius: 4,
-        border: shaped ? 'none' : `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+        border: shaped ? 'none' : `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-control)'}`,
         background: !shaped && isChecked ? 'var(--moon-300)' : 'transparent',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0, opacity: disabled ? 0.55 : 1,
@@ -440,11 +444,11 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
           <path d="M2 8V5a2 2 0 0 1 2-2h5l3 3h8a2 2 0 0 1 2 2v5M13 20H4a2 2 0 0 1-2-2V8h20"
             fill="none" stroke="var(--fg-muted)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
           <circle cx="18" cy="18" r="5" fill={isChecked ? 'var(--moon-300)' : 'var(--surface)'}
-            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-control)'} strokeWidth="1" vectorEffect="non-scaling-stroke" />
           {isChecked && <path d="m15.5 18 1.7 1.7 3.5-3.5" fill="none" stroke="var(--bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
         </> : <>
           <path d="M12 1 23 12 12 23 1 12Z" fill={isChecked ? 'var(--moon-300)' : 'none'}
-            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-control)'} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
           {isChecked && <path d="m7 12 3.5 3.5 6-6" fill="none" stroke="var(--bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
         </>}
       </svg> : isChecked && (
@@ -736,7 +740,7 @@ export function CheckboxRow({ checked, onChange, text, leading = null, disabled 
         // 전이(transition)는 `.hub-app .hub-checkbox`(hub-tokens.css)가 소유한다 — 인라인은 클래스 규칙을 이긴다.
         style={{
           width: size, height: size, borderRadius: 4,
-          border: `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+          border: `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-control)'}`,
           background: isChecked ? 'var(--moon-300)' : 'transparent',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0,
@@ -1048,10 +1052,21 @@ const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:n
 // scrollable body + optional footer bar. Owns ESC-to-close, focus-in-on-mount +
 // focus-restore-on-unmount, and a light Tab focus trap — not field rendering or
 // save/delete semantics. EditDrawer and the Guru diagnosis drawer compose on top.
-export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
+// `bodyStyle` mirrors `footerStyle`: a caller whose content owns its own scroll regions (the wide
+// record window's two columns) drops the body padding/scroll instead of fighting it with margins.
+// Two optional props serve long writing on a phone (2026-09-30 넓은 기록창 ③ · Q-CR11) — same overlay,
+// no new presentation:
+//   `sheet="full"` — the compact bottom sheet (≤600px) takes the full visible height and follows the
+//     on-screen keyboard (visualViewport → --hub-sheet-keyboard / --hub-sheet-viewport, read by
+//     hub-compact-drawer.css). Above 600px it changes nothing.
+//   `headerAction` — one action at the trailing end of the header (the sheet's 저장, so the keyboard
+//     never covers it). Close moves to the leading end so the two targets are not neighbours.
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyle, headerAction = null, sheet = 'auto', initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
   const asideRef = React.useRef(null);
   const bodyRef = React.useRef(null);
   const compact = presentation === 'compact';
+  const fullSheet = compact && sheet === 'full';
+  useKeyboardInset(asideRef, { enabled: fullSheet, keyboardVar: '--hub-sheet-keyboard', viewportVar: '--hub-sheet-viewport' });
 
   // ESC는 이 드로어가 최상위 레이어일 때만 닫는다 — 드로어 위에 ⌘K 팔레트가 열려 있으면
   // 팔레트가 먼저 닫혀야 한다(esc-layers.js). onClose는 ref로 읽어 부모 리렌더가 레이어
@@ -1109,6 +1124,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
         onKeyDown={handleKeyDown}
         className="hub-drawer"
         data-presentation={presentation}
+        data-sheet={fullSheet ? 'full' : undefined}
         data-exiting={exiting}
         style={{
           position: 'fixed', zIndex: 'var(--z-drawer)', background: 'var(--surface)', color: 'var(--fg)',
@@ -1119,14 +1135,17 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
           }),
         }}
       >
-        <div className="hub-drawer__header" style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="hub-drawer__header" data-action={headerAction ? '' : undefined} style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {headerAction && <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: '-10px 0 -10px -10px' }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
             {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
           </div>
-          <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: -10 }} />
+          {headerAction
+            ? <div className="hub-drawer__action" style={{ flex: 'none', display: 'flex', alignItems: 'center' }}>{headerAction}</div>
+            : <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: -10 }} />}
         </div>
-        <div ref={bodyRef} className="hub-drawer__body scroll-y" style={{ flex: 1, padding: compact ? undefined : 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div ref={bodyRef} className="hub-drawer__body scroll-y" style={{ flex: 1, padding: compact ? undefined : 16, display: 'flex', flexDirection: 'column', gap: 14, ...bodyStyle }}>
           {children}
         </div>
         {footer && (

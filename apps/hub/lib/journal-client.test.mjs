@@ -9,6 +9,17 @@ test('manual note save preserves raw text and keeps enhancement separate',()=>{
   assert.equal(request.expectedRevision,3); assert.deepEqual(request.contexts,[{type:'project',id}]);
   assert.equal(noteFingerprint(draft),noteFingerprint({...draft,contexts:[{type:'project',id,label:'이름 변경'}]}));
 });
+test('note scope survives edit and immutable retries while legacy unclassified notes remain unclassified', () => {
+  for (const scope of ['personal', 'company']) {
+    const scoped = { ...entry, noteMeta: { ...entry.noteMeta, scope } };
+    const draft = noteToDraft(scoped);
+    assert.equal(draft.noteMeta.scope, scope);
+    assert.equal(buildNoteSave({ ...draft, body: '수정한 본문' }, requestId).noteMeta.scope, scope);
+    assert.notEqual(noteFingerprint(draft), noteFingerprint({ ...draft, noteMeta: { ...draft.noteMeta, scope: scope === 'personal' ? 'company' : 'personal' } }));
+  }
+  assert.equal(Object.hasOwn(noteToDraft(entry).noteMeta, 'scope'), false);
+  assert.equal(Object.hasOwn(buildNoteSave(noteToDraft(entry), requestId).noteMeta, 'scope'), false);
+});
 test('an empty selection never silently sends the entire personal memo',()=>{
   assert.equal(selectedNoteExcerpt(entry.body,0,0),null);
   assert.equal(selectedNoteExcerpt(entry.body,0,2),null);
