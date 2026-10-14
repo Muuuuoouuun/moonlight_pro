@@ -64,7 +64,7 @@ export function summarizeAiUsage(rows, windows) {
     const slot = ["current", "previous"].find((name) => time >= Date.parse(windows[name].from) && time < Date.parse(windows[name].to));
     if (!slot) continue;
     const model = typeof row.model === "string" && row.model ? row.model : "unknown";
-    const costUsd = estimateCallCostUsd({ model, promptTokens: count(row.prompt_tokens), outputTokens: count(row.output_tokens), thinkingTokens: count(row.thinking_tokens) });
+    const costUsd = estimateCallCostUsd({ model, promptTokens: count(row.prompt_tokens), outputTokens: count(row.output_tokens), thinkingTokens: count(row.thinking_tokens), occurredAt: at });
     const month = months[slot];
     addRow(month.totals, row, costUsd);
     if (!month.models.has(model)) month.models.set(model, emptyTotals());

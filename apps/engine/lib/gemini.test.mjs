@@ -220,8 +220,10 @@ test('temperature and safetySettings are included in payload when specified', as
     });
   }, async () => {
     const safetySettings = [{ category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' }];
+    // Gemini 4 drops temperature (gemini-signal.test.mjs); a 3-series model still receives it.
     const res = await generateGeminiText({
       prompt: '안전성 테스트',
+      model: 'gemini-3.5-flash',
       temperature: 0.2,
       safetySettings,
     });

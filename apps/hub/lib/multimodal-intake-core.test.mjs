@@ -183,7 +183,10 @@ test("formatMeetingBriefForShare formats structured data into ready-to-share tex
 
 test("extractMultimodalIntakeHub supports thinkingBudget and parses meeting minutes with usage", async () => {
   const orig = process.env.GEMINI_API_KEY;
+  const origModel = process.env.GEMINI_MODEL;
   process.env.GEMINI_API_KEY = "test-key";
+  // thinkingBudget is the Gemini 2.5 option; 3+ never receives it (gemini-model.test.mjs).
+  process.env.GEMINI_MODEL = "gemini-2.5-flash";
 
   const extracted = {
     title: "주간 운영 회의",
@@ -219,5 +222,7 @@ test("extractMultimodalIntakeHub supports thinkingBudget and parses meeting minu
   } finally {
     if (orig !== undefined) process.env.GEMINI_API_KEY = orig;
     else delete process.env.GEMINI_API_KEY;
+    if (origModel !== undefined) process.env.GEMINI_MODEL = origModel;
+    else delete process.env.GEMINI_MODEL;
   }
 });

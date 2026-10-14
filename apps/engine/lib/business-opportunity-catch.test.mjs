@@ -5,6 +5,7 @@ import { beforeEach, test } from 'node:test';
 const state = (globalThis.__businessCatchTest = {});
 const stubs = {
   gemini: `
+    export const DEFAULT_GEMINI_MODEL = 'test-default';
     export function getGeminiIntegrationStatus() { return { configured: true }; }
     export async function generateGeminiText(input) {
       globalThis.__businessCatchTest.generation = input;

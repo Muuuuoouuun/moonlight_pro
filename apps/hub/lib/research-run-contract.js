@@ -33,7 +33,7 @@ export function projectResearchRun(row={}) {
   const usage=row.usage,prompt=usage?.promptTokenCount,output=usage?.candidatesTokenCount,total=usage?.totalTokenCount;
   const knownCount=value=>Number.isSafeInteger(value)&&value>=0;
   const thinking=knownCount(usage?.thoughtsTokenCount)?usage.thoughtsTokenCount:knownCount(total)&&knownCount(prompt)&&knownCount(output)&&total>=prompt+output?total-prompt-output:null;
-  const estimatedCostUsd=knownCount(prompt)&&knownCount(output)&&knownCount(thinking)?estimateCallCostUsd({model:row.model,promptTokens:prompt,outputTokens:output,thinkingTokens:thinking}):null;
+  const estimatedCostUsd=knownCount(prompt)&&knownCount(output)&&knownCount(thinking)?estimateCallCostUsd({model:row.model,promptTokens:prompt,outputTokens:output,thinkingTokens:thinking,occurredAt:row.finished_at??row.started_at}):null;
   return {id:row.id,brand:row.brand_slug,topic:row.topic,status:row.status,startedAt:row.started_at??null,finishedAt:row.finished_at??null,
     preparedCount:row.counts?.preparedCount??0,sourceCount:row.counts?.sourceCount??0,searchCalls:row.counts?.searchCalls??0,
     duplicateCount:row.counts?.duplicateCount??0,failedCount:row.counts?.failedCount??0,model:row.model??null,
