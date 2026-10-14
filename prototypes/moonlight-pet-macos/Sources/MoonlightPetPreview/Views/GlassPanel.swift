@@ -71,6 +71,9 @@ final class GlassPanel: NSView {
             needsLayout = true
         }
     }
+    var ornamentEdge: PanelEdge = .right {
+        didSet { needsLayout = true }
+    }
 
     private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?, readingTone: GlassReadingTone, allowsCapture: Bool) {
         radius = cornerRadius
@@ -167,7 +170,8 @@ final class GlassPanel: NSView {
         var frame = bounds.insetBy(dx: CompanionLayout.gutter, dy: CompanionLayout.gutter)
         if let ornament, showsOrnament {
             frame.size.height -= CompanionLayout.perchRise
-            ornament.frame = NSRect(x: frame.maxX - CompanionLayout.perchInset - CompanionLayout.perchSize,
+            ornament.frame = NSRect(x: ornamentEdge == .left ? frame.minX + CompanionLayout.perchInset
+                                    : frame.maxX - CompanionLayout.perchInset - CompanionLayout.perchSize,
                                     y: bounds.maxY - CompanionLayout.gutter - CompanionLayout.perchSize,
                                     width: CompanionLayout.perchSize, height: CompanionLayout.perchSize)
         }

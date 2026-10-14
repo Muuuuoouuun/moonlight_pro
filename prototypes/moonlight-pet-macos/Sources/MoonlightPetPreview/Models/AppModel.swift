@@ -112,6 +112,19 @@ final class AppModel: ObservableObject {
     @Published private(set) var isCapturingMemo = false
     @Published private(set) var memoCaptureReceipt: String?
     @Published var usesDesktopRefraction = false
+    @Published var autoAlignsToEdge = false {
+        didSet {
+            defaults.set(autoAlignsToEdge, forKey: "petPreview.autoAlignsToEdge")
+            if autoAlignsToEdge != oldValue { onAlignmentChanged?() }
+        }
+    }
+    @Published var alignmentEdge: PanelEdge = .right {
+        didSet {
+            defaults.set(alignmentEdge.rawValue, forKey: "petPreview.alignmentEdge")
+            if alignmentEdge != oldValue { onAlignmentChanged?() }
+        }
+    }
+    var onAlignmentChanged: (() -> Void)?
     @Published var desktopRefractionStatus = "화면 기록 권한 필요 · 영상 저장 안 함"
     @Published var focusMinutes = 25
     @Published var remainingSeconds = 0
@@ -163,6 +176,8 @@ final class AppModel: ObservableObject {
         taskDraft = defaults.string(forKey: "petPreview.taskDraft") ?? ""
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? Self.defaultHubURL
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
+        autoAlignsToEdge = defaults.bool(forKey: "petPreview.autoAlignsToEdge")
+        alignmentEdge = PanelEdge(rawValue: defaults.string(forKey: "petPreview.alignmentEdge") ?? "") ?? .right
         chat.agent = selectedCharacter.officeAgent
         completionFeedback.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()

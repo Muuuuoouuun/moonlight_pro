@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 /// Focus and text editing do not latch the transient character wash on.
 struct GlassPressState {
@@ -47,6 +49,12 @@ enum PanelMove {
     case finish(pointer: CGPoint)
     case nudge(CGPoint)
     case nextDisplay
+}
+
+enum PanelEdge: String, CaseIterable, Identifiable {
+    case left, right
+    var id: String { rawValue }
+    var title: String { self == .left ? "왼쪽" : "오른쪽" }
 }
 
 struct PanelDisplay: Equatable {
@@ -100,6 +108,21 @@ struct SavedPetPlacement: Codable {
 }
 
 enum PanelGeometry {
+    /// Leave room for the separate idle icon on the outside of a quick panel.
+    /// Perched panels already include their character in the window bounds.
+    static func edgeAligned(_ frame: CGRect, edge: PanelEdge, outsidePet: CGSize? = nil,
+                            in visible: CGRect) -> CGRect {
+        var available = visible
+        if let outsidePet {
+            let reserved = min(outsidePet.width + 10, max(0, visible.width - 17))
+            available.size.width -= reserved
+            if edge == .left { available.origin.x += reserved }
+        }
+        var result = fitted(frame, in: available)
+        result.origin.x = edge == .left ? available.minX + 8 : available.maxX - 8 - result.width
+        return result
+    }
+
     static func companion(size: CGSize, pet: CGRect, perched: Bool,
                           anchor: CompanionAnchor? = nil, in visible: CGRect) -> CGRect {
         if perched {
@@ -119,10 +142,11 @@ enum PanelGeometry {
                              width: size.width, height: size.height), in: visible)
     }
 
-    static func pet(size: CGSize, companion: CGRect, perched: Bool, in visible: CGRect) -> CGRect {
+    static func pet(size: CGSize, companion: CGRect, perched: Bool, edge: PanelEdge? = nil, in visible: CGRect) -> CGRect {
         let origin = perched
-            ? CGPoint(x: companion.maxX - size.width, y: companion.maxY - size.height)
-            : CGPoint(x: companion.maxX + size.width + 10 <= visible.maxX - 8
+            ? CGPoint(x: edge == .left ? companion.minX : companion.maxX - size.width, y: companion.maxY - size.height)
+            : CGPoint(x: edge == .left ? companion.minX - size.width - 10 : edge == .right ? companion.maxX + 10
+                : companion.maxX + size.width + 10 <= visible.maxX - 8
                 ? companion.maxX + 10 : companion.minX - size.width - 10,
                       y: companion.midY - size.height / 2)
         return fitted(CGRect(origin: origin, size: size), in: visible)
