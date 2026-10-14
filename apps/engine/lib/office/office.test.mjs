@@ -24,8 +24,11 @@ test('council keeps its simulation boundary while returning separate role calls 
  const prompt=buildOfficePrompt(council,context);assert.match(prompt.systemInstruction,/단일 모델의 관점 시뮬레이션/);
  let calls=0;
  const good=await generateOfficeResponse(council,context,async input=>{
-  calls++;const {phase,roleId}=JSON.parse(input.prompt);
+  calls++;const {phase,roleId,untrustedDiscussion,peerReviewCatalog}=JSON.parse(input.prompt);
   const output=phase?{position:'제공된 사실로 판단합니다.',evidence:[],objection:'자료 부족',revisionCondition:'자료가 추가되면 재검토합니다.',changed:false,replyTo:phase==='response'?[council.participants.find(id=>id!==roleId)]:[],changeReason:phase==='response'?'반론을 확인했지만 추가 근거가 없습니다.':''}:{answer:'비교',nextAction:'확인',recommendation:'추천',evidence:[],dissent:['자료 부족']};
+  if(phase==='response') { delete output.replyTo; output.peerReviewsByOwner={ [council.participants.find(id=>id!==roleId)]: {quoteIndex:peerReviewCatalog.find(item=>item.field==='position').index,assessment:'supports',reason:'현재 제공된 사실의 범위를 지킵니다.'} }; }
+  else if(phase) output.peerReviews=[];
+  else output.resolutionsByTurn=Object.fromEntries(untrustedDiscussion.filter(turn=>turn.objection).map(turn=>[turn.turnRef,{disposition:'open',rationale:'추가 근거가 필요합니다.'}]));
   return {ok:true,model:'test',text:JSON.stringify(reviewedOutput(input,output))};
  });assert.equal(good.status,'generated');assert.equal(good.simulation,true);assert.equal(calls,5);assert.equal(good.discussion.modelCalls,5);
  const bad=await generateOfficeResponse(council,context,async()=>({ok:true,text:'{"answer":"완료","nextAction":"실행"}',model:'test'}));assert.equal(bad.status,'error');

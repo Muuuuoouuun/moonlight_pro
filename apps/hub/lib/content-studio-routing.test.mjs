@@ -63,3 +63,37 @@ test('a new draft URL retains its brand through lookup and reload; persisted ite
   const query = new URLSearchParams(routing.studioDocumentQuery({ contentId: 'item', variantId: 'variant', brandId: 'ignored-query-brand' }, 'old-draft'));
   assert.deepEqual([...query], [['item', 'item'], ['variant', 'variant']]);
 });
+
+test('Campaign links use durable IDs and retain scope, brand and unresolved references', () => {
+  const campaignId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const brandId = '11111111-2222-4333-8444-555555555555';
+  assert.equal(routing.campaignStudioHref({ id: 'local-campaign-123' }), null);
+  const url = new URL(routing.campaignStudioHref({ id: campaignId, brandId }, 'classin'), 'https://local.test');
+  assert.equal(url.searchParams.get('campaign'), campaignId);
+  assert.equal(url.searchParams.get('brand'), brandId);
+  assert.equal(url.searchParams.get('scope'), 'classin');
+  const draftQuery = new URLSearchParams(routing.studioDocumentQuery({ brandId }, 'draft-key', { scope: 'classin', campaignId: 'legacy-unresolved' }));
+  assert.equal(draftQuery.get('campaign'), 'legacy-unresolved');
+  assert.equal(draftQuery.get('scope'), 'classin');
+  assert.equal(draftQuery.get('brand'), brandId);
+  assert.equal(new URLSearchParams(routing.studioDocumentQuery({}, 'key', { campaignId: '' })).has('campaign'), true);
+  const unlinked = new URL(routing.studioWithoutCampaignHref({ brandId }, 'classin'), 'https://local.test');
+  assert.equal(unlinked.searchParams.has('campaign'), false);
+  assert.equal(unlinked.searchParams.get('brand'), brandId);
+  assert.equal(unlinked.searchParams.get('scope'), 'classin');
+});
+
+test('Campaign context needs a current matching read and failures can retry the same reference', async () => {
+  const id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  let calls = 0;
+  const fetchImpl = async url => {
+    calls++; assert.equal(new URL(url, 'https://local.test').searchParams.get('campaign'), id);
+    return { ok: true, json: async () => calls === 1 ? { status: 'error' } : { status: 'live', campaign: { id, brandId: null } } };
+  };
+  await assert.rejects(routing.resolveStudioCampaignContext(id, { fetchImpl }), /확인하지 못/);
+  assert.equal((await routing.resolveStudioCampaignContext(id, { fetchImpl })).id, id);
+  await assert.rejects(routing.resolveStudioCampaignContext('old-slug', { fetchImpl: () => assert.fail('invalid references must not query') }));
+  for (const data of [{ status: 'preview' }, { status: 'not-found' }, { status: 'live', campaign: { id: 'other' } }]) {
+    await assert.rejects(routing.resolveStudioCampaignContext(id, { fetchImpl: async () => ({ ok: true, json: async () => data }) }));
+  }
+});

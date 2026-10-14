@@ -1,6 +1,6 @@
 import { parseOfficeBreakdownResult } from '@com-moon/agent-contracts/office-harness';
 
-const preview = { status: 'preview', error: 'Office Engine 연결이 필요합니다. 안건을 직접 나눠 담당을 골라 주세요.' };
+const preview = { status: 'preview', error: '오피스 Engine 연결이 필요합니다. 안건을 직접 나눠 담당을 골라 주세요.' };
 const failure = { status: 'error', error: '업무 나누기를 확인하지 못했습니다. 안건을 직접 나눠 담당을 골라 주세요.' };
 
 export async function callOfficeBreakdownEngine(request, { fetcher = fetch, engineUrl = process.env.COM_MOON_ENGINE_URL, secret = process.env.COM_MOON_SHARED_WEBHOOK_SECRET, retries = 0 } = {}) {

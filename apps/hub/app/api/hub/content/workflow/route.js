@@ -2,13 +2,16 @@ import { NextResponse } from "next/server.js";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { getContentWorkflow } from "@/lib/repositories/content-workflow-ledger";
 import { forwardContentWorkflow } from "@/lib/content-workflow-forwarder";
+import { getContentCampaignContext } from '@/lib/repositories/content-campaign-context';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req) {
   try {
-    return NextResponse.json(await getContentWorkflow(new URL(req.url).searchParams.get("item")));
+    const params = new URL(req.url).searchParams;
+    if (params.has('campaign')) return NextResponse.json(await getContentCampaignContext(params.get('campaign'), { scope: params.get('scope') || 'all' }));
+    return NextResponse.json(await getContentWorkflow(params.get("item")));
   } catch {
     return NextResponse.json({ status: "error", error: "content-workflow-read-failed", item: null, variants: [], revisions: [] });
   }

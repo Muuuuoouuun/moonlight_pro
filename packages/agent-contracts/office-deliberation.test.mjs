@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { agentHash } from './index.js';
-import { OFFICE_DISCUSSION_VERSION, parseOfficeRequest, parseOfficeDeliberation, parseOfficeDiscussion, parseOfficeDiscussionTurn, officeDiscussionRounds } from './office.js';
+import { OFFICE_DISCUSSION_LEGACY_VERSION as OFFICE_DISCUSSION_VERSION, parseOfficeRequest, parseOfficeDeliberation, parseOfficeDiscussion, parseOfficeDiscussionTurn, officeDiscussionRounds } from './office.js';
 import { parseOfficeWorkflowRequest, parseOfficeWorkflowResult, OFFICE_WORKFLOW_VERSION } from './office-workflow.js';
 
 const participants = ['eevee', 'leafeon'];

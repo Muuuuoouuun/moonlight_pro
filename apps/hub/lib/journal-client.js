@@ -27,6 +27,7 @@ export function noteToDraft(entry) {
   return {
     id: entry.id, body: entry.body || '', title: entry.title || '', occurredAt: entry.occurredAt,
     noteMeta: { kind: entry.noteMeta?.kind || 'note', enhancement: entry.noteMeta?.enhancement || '',
+      ...(entry.noteMeta?.scope === undefined ? {} : { scope: entry.noteMeta.scope }),
       ...(entry.noteMeta?.tags === undefined ? {} : { tags: [...entry.noteMeta.tags] }) },
     contexts: entry.contexts || [], expectedRevision: entry.revision || 0,
   };

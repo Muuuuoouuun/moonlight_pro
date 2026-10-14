@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OFFICE_IDS, parseOfficeRequest } from '@com-moon/agent-contracts/office';
+import { OFFICE_IDS, parseOfficeRequest, officeDiscussionReviewTargets } from '@com-moon/agent-contracts/office';
 import { OFFICE_ROLE_DEPTH_REGISTRY, OFFICE_ROLE_DEPTH_VERSION } from '@com-moon/agent-contracts/office-role-depth';
 import { buildOfficePrompt } from './prompt.ts';
 import { buildOfficeReview } from './review.ts';
@@ -20,7 +20,7 @@ test('every council position and response receives only its own current behavior
     const calls = [];
     await runOfficeDiscussion(request, { ...context, scope: 'personal' }, new AbortController().signal, async input => {
       const data = JSON.parse(input.prompt); calls.push({ input, data });
-      return { ok: true, model: 'synthetic-role-check', text: JSON.stringify({ sourceIndexes: [], corrections: [], position: '제공 범위에서만 판단합니다.', evidence: [], objection: '', revisionCondition: '새 원문 확인 시 재검토합니다.', changed: false, replyTo: data.phase === 'response' ? [request.participants.find(id => id !== data.roleId)] : [], changeReason: data.phase === 'response' ? '새 사실이 없어 현재 판단을 유지합니다.' : '' }) };
+      return { ok: true, model: 'synthetic-role-check', text: JSON.stringify({ sourceIndexes: [], corrections: [], position: '제공 범위에서만 판단합니다.', evidence: [], objection: '', revisionCondition: '새 원문 확인 시 재검토합니다.', changed: false, ...(data.phase === 'response' ? { peerReviewsByOwner: Object.fromEntries(request.participants.filter(id => id !== data.roleId).map(id => [id, { quoteIndex: data.peerReviewCatalog.find(item => item.ownerId === id && item.field === 'position').index, assessment: 'needs_evidence', reason: '현재 원문에서 판단합니다.' }])) } : { replyTo: [], peerReviews: [] }), changeReason: data.phase === 'response' ? '새 사실이 없어 현재 판단을 유지합니다.' : '' }) };
     });
     assert.equal(calls.length, 4);
     for (const { input, data } of calls) {

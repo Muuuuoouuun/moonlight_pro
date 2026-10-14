@@ -9,12 +9,12 @@ const {OfficeRequestReadState}=await import('./office-request.jsx');
 const render=status=>renderToStaticMarkup(React.createElement(OfficeRequestReadState,{state:{status},onRetry(){},onNavigate(){},onLogin(){}}));
 
 test('the exact-request page reserves loading space and keeps errors and preview out of its skeleton',()=>{
-  assert.match(render('loading'),/지정한 Office 요청 확인 중/);
+  assert.match(render('loading'),/지정한 오피스 요청 확인 중/);
   assert.equal(render('ready'),'');
   for(const status of ['error','preview','invalid','unauthorized'])assert.doesNotMatch(render(status),/hub-skeleton/);
-  assert.match(render('preview'),/Office 저장 연결이 필요해요/);
-  assert.match(render('error'),/Office 요청을 읽지 못했어요/);
-  assert.match(render('invalid'),/Office 열기/);
+  assert.match(render('preview'),/오피스 저장 연결이 필요해요/);
+  assert.match(render('error'),/오피스 요청을 읽지 못했어요/);
+  assert.match(render('invalid'),/오피스 열기/);
 });
 test('an expired operator session offers login instead of endlessly repeating an unauthorized read',()=>{
   const html=render('unauthorized');

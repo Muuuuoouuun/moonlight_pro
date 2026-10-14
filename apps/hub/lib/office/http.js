@@ -26,6 +26,6 @@ export function createOfficeHubHandler({guard=assertHubWriteAllowed,readContext=
      status:'generated',elapsedMs:result.generation?.elapsedMs??elapsedMs,modelCalls:result.generation?.modelCalls??null,usage:result.generation?.usage??null},result:'ok'});
    }catch{ /* A generated answer is still useful when only its run log fails. */ }
    return Response.json({...result,version:OFFICE_VERSION,log:{persisted:log?.persisted===true,runId:log?.persisted===true?log.id:null},businessWrites:false});
-  }catch{return Response.json({status:'error',error:'Office 요청을 처리하지 못했습니다. 입력은 보존됩니다.'},{status:502});}
+  }catch{return Response.json({status:'error',error:'오피스 요청을 처리하지 못했습니다. 입력은 보존됩니다.'},{status:502});}
  };
 }

@@ -5,10 +5,14 @@ import { CalendarOutcome } from "../calendar-outcome";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { topNavigationForRoute } from "../hub-nav";
-import { Badge, Card, IconButton, Button, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer, Skeleton, TruthBadge } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer, Skeleton, TruthBadge, TextField } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmToday } from "../rhythm-today";
 import { RhythmHistory } from "../rhythm-history";
+import { DecisionFollowups, DecisionMeta, decisionMatches, decisionMonthGroups, decisionSourceOptions } from "./decision-journal";
+import { FEATURE_GATES } from "@/lib/feature-gates";
+import { linkDecision, saveDecisionWithFollowup } from "../decision-actions";
+import { todayKey } from "../check-items/check-item-actions";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import { calendarEventWhenLabel, mapGoogleEventsToGrid } from "@/lib/calendar-event-view";
@@ -778,20 +782,44 @@ export function Calendar({ onNavigate }) {
   );
 }
 
+// 확인할 것의 `결정으로 남기기`(lib/signal-targets.js decisionDraftTarget)가 넘기는 값 — 대상 이름과 출처.
+const DECISION_REF_TYPES = new Set(['project', 'deal', 'lead', 'account', 'automation', 'content']);
+// 운영 제외(lib/feature-gates.js): 결정 일지(확인할 것 단계 4)는 운영자 판정 전까지 이름·출처·그래서 할 일을 닫는다.
+const DECISION_JOURNAL = FEATURE_GATES.decisionJournal;
+function decisionPrefillFromQuery(params) {
+  const title = String(params.get('title') || '').trim().slice(0, 300);
+  const type = String(params.get('sourceType') || '');
+  const id = String(params.get('sourceId') || '').trim().slice(0, 180);
+  const projectId = String(params.get('projectId') || '').trim();
+  const sourceRef = DECISION_REF_TYPES.has(type) && id ? { type, id } : null;
+  if (!title && !sourceRef) return null;
+  return { title, ...(projectId ? { projectId } : {}), ...(sourceRef ? { source: 'check-items', sourceRef } : {}) };
+}
+
+const decisionDayLabel = (dayKey) => (dayKey
+  ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' }).format(new Date(`${dayKey}T12:00:00+09:00`))
+  : '');
+
+// 결정 일지 게이트가 켜지면 새 결정은 "오늘 확정"으로 시작한다 — 결정 남기기는 대개 이미 정한 것을 적는 일이라 한 번에 끝나게(§13).
+// 아직 정하지 않은 것은 입력창의 `아직 미정` 한 번으로 바꾼다. 그래서 할 일은 같은 입력창에서 함께 만든다.
 function buildDecisionDraft() {
+  const today = todayKey();
   return {
     kind: 'decision',
     isNew: true,
     id: createClientId(),
-    title: '새 결정 기록',
-    date: '',
-    status: 'Draft',
+    taskId: createClientId(),
+    title: '',
+    date: DECISION_JOURNAL ? decisionDayLabel(today) : '',
+    status: DECISION_JOURNAL ? 'Committed' : 'Draft',
     by: 'Me',
     links: 0,
     reason: '',
     projectId: '',
     rationale: '',
-    decidedAt: '',
+    decidedAt: DECISION_JOURNAL ? today : '',
+    taskTitle: '',
+    taskDueAt: '',
   };
 }
 
@@ -829,21 +857,32 @@ export function Decisions({ onNavigate, scope }) {
   const [decisionEdits, setDecisionEdits] = React.useState({}); // { [id]: patch } overlay onto local or live rows
   const [editDecisionId, setEditDecisionId] = React.useState(null);
   const [councilDecision, setCouncilDecision] = React.useState(null);
+  const [sourceFilter, setSourceFilter] = React.useState('all');
+  const [createdFollowups, setCreatedFollowups] = React.useState({}); // { [decisionId]: task[] } until the ledger re-reads
   const createdFromQueryRef = React.useRef(false);
 
-  const mergedDecisions = [...localDecisions, ...(Array.isArray(liveDecisions) ? liveDecisions : [])]
-    .map(d => (decisionEdits[d.id] ? { ...d, ...decisionEdits[d.id] } : d));
+  // 저장한 새 결정은 다시 읽으면 기록에도 생긴다 — 같은 id는 기록 쪽 하나만 둔다.
+  const liveList = Array.isArray(liveDecisions) ? liveDecisions : [];
+  const liveIds = new Set(liveList.map(d => d.id));
+  const mergedDecisions = [...localDecisions.filter(d => !liveIds.has(d.id)), ...liveList]
+    .map(d => (decisionEdits[d.id] ? { ...d, ...decisionEdits[d.id] } : d))
+    .map(d => {
+      if (!createdFollowups[d.id] || !Array.isArray(d.followups)) return d;
+      const read = d.followups;
+      return { ...d, followups: [...read, ...createdFollowups[d.id].filter(task => !read.some(row => row.id === task.id))] };
+    });
   const editingDecision = editDecisionId ? mergedDecisions.find(d => d.id === editDecisionId) : null;
 
-  const createDecision = React.useCallback(() => {
-    const draft = buildDecisionDraft();
+  // prefill — 확인할 것의 `결정으로 남기기`가 대상 이름·출처를 채워 연다(확인할 것 스펙 §6).
+  const createDecision = React.useCallback((prefill = null) => {
+    const draft = { ...buildDecisionDraft(), ...(prefill || {}) };
     setLocalDecisions(prev => [draft, ...prev]);
     setEditDecisionId(draft.id);
   }, []);
 
   React.useEffect(() => {
     if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
-    createDecision();
+    createDecision(DECISION_JOURNAL ? decisionPrefillFromQuery(searchParams) : null);
     createdFromQueryRef.current = true;
     router.replace(pathname);
   }, [createDecision, searchParams, router, pathname]);
@@ -854,12 +893,6 @@ export function Decisions({ onNavigate, scope }) {
     : decisionSyncState === 'loading'
       ? 'syncing'
       : decisionSyncState;
-  const decisionColor = decisionComplete
-    ? 'var(--fg-muted)'
-    : decisionSyncState === 'error'
-      ? 'var(--danger)'
-      : 'var(--fg-faint)';
-
   // Page-level `n` — quick-record a decision when no drawer is open and focus isn't in a field.
   React.useEffect(() => {
     const onKey = (e) => {
@@ -875,6 +908,7 @@ export function Decisions({ onNavigate, scope }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [editDecisionId, createDecision]);
+  const newDecision = React.useCallback(() => createDecision(), [createDecision]);
 
   // Keeps the timeline card's Draft/Committed badge and reason preview in sync with the
   // drawer while it's open (and after save) — those are precomputed display fields on the
@@ -885,7 +919,7 @@ export function Decisions({ onNavigate, scope }) {
       const patch = { ...prev[editDecisionId], [key]: value };
       if (key === 'decidedAt') {
         patch.status = value ? 'Committed' : 'Draft';
-        patch.date = value ? new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date(value)) : '';
+        patch.date = value ? decisionDayLabel(String(value).slice(0, 10)) : '';
       }
       if (key === 'rationale') patch.reason = value;
       return { ...prev, [editDecisionId]: patch };
@@ -895,11 +929,38 @@ export function Decisions({ onNavigate, scope }) {
   // Persist the drawer edit. New local rows (client-generated id) POST; existing rows PATCH.
   // `decided_at` left blank keeps the decision as Draft (work-ledger.js resolveDecisionStatus) —
   // there is no separate manual status field.
+  // 새 결정은 결정 → 그래서 할 일 순서로 한 번에(decision-actions.js) — 할 일만 실패하면 결정은 남았다고 말하고,
+  // 다시 저장하면 할 일부터 이어 간다. 기존 결정 편집은 지금처럼 PATCH 한 번.
+  const saveProgressRef = React.useRef({});
   const persistDecision = React.useCallback(async () => {
-    if (!editingDecision?.title?.trim()) return { ok: false, status: 'invalid-input' };
+    if (!editingDecision?.title?.trim()) return { ok: false, status: 'invalid-input', message: '무엇을 정했는지 적어 주세요.' };
+    if (editingDecision.isNew) {
+      const progress = saveProgressRef.current[editingDecision.id] || {};
+      const result = await saveDecisionWithFollowup(globalThis.fetch, {
+        title: editingDecision.title,
+        rationale: editingDecision.rationale,
+        projectId: editingDecision.projectId || null,
+        decidedAt: editingDecision.decidedAt || '',
+        source: editingDecision.source === 'check-items' ? 'check-items' : 'hub-work',
+        sourceRef: editingDecision.sourceRef || null,
+        taskTitle: editingDecision.taskTitle,
+        taskDueAt: editingDecision.taskDueAt,
+      }, { ids: { decisionId: editingDecision.id, taskId: editingDecision.taskId || createClientId() }, progress });
+      saveProgressRef.current[editingDecision.id] = result.progress;
+      if (!result.ok) {
+        return { ok: false, status: result.status === 'preview' ? 'preview' : 'error', message: result.message };
+      }
+      if (result.taskId) {
+        await linkDecision(globalThis.fetch, result.decisionId, { nextTaskId: result.taskId });
+        setCreatedFollowups(prev => ({ ...prev, [result.decisionId]: [{ id: result.taskId, title: editingDecision.taskTitle.trim(), status: 'todo', dueAt: editingDecision.taskDueAt || null }] }));
+      }
+      setLocalDecisions(prev => prev.map(d => (d.id === editDecisionId ? { ...d, isNew: false, followups: [] } : d)));
+      delete saveProgressRef.current[editingDecision.id];
+      return { ok: true, status: 'saved' };
+    }
     try {
       const response = await fetch('/api/hub/decisions', {
-        method: editingDecision.isNew ? 'POST' : 'PATCH',
+        method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           id: editingDecision.id,
@@ -907,29 +968,11 @@ export function Decisions({ onNavigate, scope }) {
           projectId: editingDecision.projectId || '',
           rationale: editingDecision.rationale || '',
           decidedAt: editingDecision.decidedAt || '',
-          source: 'hub-work',
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
         return { ok: false, status: data.status || 'error' };
-      }
-      if (editingDecision.isNew) {
-        const realId = data.decision?.id || editingDecision.id;
-        setLocalDecisions(prev => prev.map(d => (d.id === editDecisionId ? { ...d, id: realId, isNew: false } : d)));
-        // Guard the re-key: id is client-generated up front, so realId === editDecisionId in
-        // the common case, and setting+deleting the same overlay key would silently drop the
-        // just-saved edits (title/rationale/decidedAt/status/reason) back to their stale
-        // pre-edit values. Only remap when the server actually assigned a different id.
-        if (realId !== editDecisionId) {
-          setDecisionEdits(prev => {
-            if (!prev[editDecisionId]) return prev;
-            const next = { ...prev, [realId]: prev[editDecisionId] };
-            delete next[editDecisionId];
-            return next;
-          });
-          setEditDecisionId(realId);
-        }
       }
       return { ok: true, status: data.status };
     } catch (error) {
@@ -937,7 +980,13 @@ export function Decisions({ onNavigate, scope }) {
     }
   }, [editingDecision, editDecisionId]);
 
-  const list = mergedDecisions;
+  const sourceOptions = decisionSourceOptions(mergedDecisions.filter(d => !d.isNew));
+  const activeSource = sourceOptions.some(option => option.key === sourceFilter) ? sourceFilter : 'all';
+  const [query, setQuery] = React.useState('');
+  const bySource = activeSource === 'all' ? mergedDecisions : mergedDecisions.filter(d => d.isNew || d.source === activeSource);
+  const list = bySource.filter(d => d.isNew || decisionMatches(d, query));
+  const groups = DECISION_JOURNAL ? decisionMonthGroups(list) : [{ key: 'all', label: '', items: list }];
+  const searchable = DECISION_JOURNAL && mergedDecisions.filter(d => !d.isNew).length >= 6;
   const projectOptions = [{ value: '', label: '연결 안 함' }, ...(Array.isArray(linkableProjects) ? linkableProjects : []).map(p => ({ value: p.id, label: p.name }))];
 
   // 탭은 hub-nav의 SSOT에서 가져온다 — 페이지가 자체 목록을 들면 사이드바·탑바와 갈라진다.
@@ -947,7 +996,7 @@ export function Decisions({ onNavigate, scope }) {
     <div className="hub-futura hub-page fade-up">
       <header>
         <div className="fx-eyebrow">{navigation.anchor?.label || 'Work'}</div>
-        <h2 className="fx-page-title">Decisions</h2>
+        <h2 className="fx-page-title">{DECISION_JOURNAL ? '결정 일지' : 'Decisions'}</h2>
         <p className="fx-page-sub">일정 · 프로젝트 · 결정</p>
         {navigation.tabs.length > 0 && (
           <nav className="fx-tabs" aria-label={`${navigation.anchor.label} 하위 메뉴`}>
@@ -970,15 +1019,28 @@ export function Decisions({ onNavigate, scope }) {
         <div className="fx-section-head">
           <div>
             <h3 className="fx-section-title">
-              Decisions
-              <span className="mono" style={{ marginLeft: 10, fontSize: 11, fontWeight: 400, color: decisionColor }}>{decisionLabel}</span>
+              {DECISION_JOURNAL ? '결정 일지' : 'Decisions'}
+              {decisionLabel !== 'live' ? <TruthBadge state={decisionLabel} style={{ marginLeft: 10 }} /> : null}
             </h3>
             <p className="fx-section-desc">
-              실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
+              {DECISION_JOURNAL ? '정말 판단한 것의 기록. 어디서 나왔는지와 그래서 할 일이 함께 붙습니다.' : '실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.'}
             </p>
           </div>
-          <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision <Kbd>N</Kbd></Button>
+          <Button variant="primary" size="sm" icon="plus" onClick={newDecision}>{DECISION_JOURNAL ? '결정 남기기' : 'Record decision'} <Kbd>N</Kbd></Button>
         </div>
+
+        {((DECISION_JOURNAL && sourceOptions.length > 2) || searchable) && (
+          <div className="dj-toolbar">
+            {DECISION_JOURNAL && sourceOptions.length > 2 && <SegmentedControl label="출처" value={activeSource} onChange={setSourceFilter} options={sourceOptions} style={{ flexWrap: 'wrap' }} />}
+            {searchable && <TextField label="결정 찾기" type="search" value={query} placeholder="제목·근거·프로젝트·할 일" onChange={(e) => setQuery(e.target.value)} fieldStyle={{ flex: '1 1 220px', maxWidth: 320 }} />}
+          </div>
+        )}
+        {query.trim() && list.filter(d => !d.isNew).length === 0 && (
+          <Card>
+            <EmptyState icon="decisions" title="찾는 결정이 없습니다" description={`'${query.trim()}'이(가) 들어간 결정이 없습니다.`}
+              action={<Button variant="secondary" size="sm" onClick={() => setQuery('')}>검색 지우기</Button>} />
+          </Card>
+        )}
 
         {!decisionComplete && decisionSyncState !== 'loading' && (
           <Card>
@@ -1007,14 +1069,17 @@ export function Decisions({ onNavigate, scope }) {
               icon="decisions"
               title="결정 기록이 없습니다"
               description="Supabase decisions 기록에 아직 기록된 결정이 없습니다."
-              action={<Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>}
+              action={<Button variant="primary" size="sm" icon="plus" onClick={newDecision}>{DECISION_JOURNAL ? '결정 남기기' : 'Record decision'}</Button>}
             />
           </Card>
         )}
 
         {list.length > 0 && (
           <div className="fx-timeline-rail">
-            {list.map(d => (
+            {groups.map(group => (
+              <React.Fragment key={group.key}>
+                {group.label ? <div className="dj-month" role="heading" aria-level={4}>{group.label} <span className="mono">{group.items.length}</span></div> : null}
+                {group.items.map(d => (
                 <div key={d.id} className="fx-tl-item">
                   <div className="fx-tl-dot" aria-hidden="true" />
                   <div
@@ -1028,10 +1093,10 @@ export function Decisions({ onNavigate, scope }) {
                       <span className="fx-tl-date">{d.date}</span>
                       <CertaintyBadge
                         state={d.status === 'Committed' ? 'confirmed' : 'unknown'}
-                        label={d.status === 'Committed' ? '확정' : '미정 · Draft'}
+                        label={d.status === 'Committed' ? '확정' : '미정'}
                         style={FX_CERTAINTY_CHROME}
                       />
-                      <span className="fx-tl-by">by {d.by}</span>
+                      <span className="fx-tl-by">{d.by === 'Me' ? '나' : d.by}</span>
                       <div style={{ flex: 1 }} />
                       <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <Iconed name="link" size={11} /> {d.links}
@@ -1044,10 +1109,20 @@ export function Decisions({ onNavigate, scope }) {
                         onClick={(e) => { e.stopPropagation(); setCouncilDecision(d); }}
                       />
                     </div>
-                    <div className="fx-tl-title">{d.title}</div>
+                    <div className="fx-tl-title">{d.title || '새 결정'}</div>
                     <div className="fx-tl-reason">{d.reason || '근거가 아직 없습니다.'}</div>
+                    {DECISION_JOURNAL && !d.isNew && <DecisionMeta decision={d} />}
                   </div>
+                  {DECISION_JOURNAL ? <DecisionFollowups
+                    decision={d}
+                    onCreated={(decisionId, task) => {
+                      setCreatedFollowups(prev => ({ ...prev, [decisionId]: [...(prev[decisionId] || []), task] }));
+                      retry?.();
+                    }}
+                  /> : null}
                 </div>
+                ))}
+              </React.Fragment>
             ))}
           </div>
         )}
@@ -1056,11 +1131,12 @@ export function Decisions({ onNavigate, scope }) {
 
       {editingDecision && (
         <EditDrawer
-          title={editingDecision.isNew ? '결정 기록하기' : '결정 편집'}
-          subtitle={editingDecision.decidedAt ? 'Committed' : 'Draft · 결정일을 정하면 Committed로 바뀝니다'}
+          title={editingDecision.isNew ? '결정 남기기' : '결정 편집'}
+          subtitle={editingDecision.decidedAt ? `확정 · ${editingDecision.date || ''}`.trim() : '미정 · 정하면 확정으로 바꾸세요'}
+          saveLabel={editingDecision.isNew ? (editingDecision.taskTitle?.trim() ? '결정과 할 일 남기기' : '결정 남기기') : '변경사항 저장'}
           record={editingDecision}
           fields={[
-            { key: 'title', label: '제목', placeholder: '어떤 결정인가요?' },
+            { key: 'title', label: '무엇을 정했나', placeholder: '예: 가격은 월 3만 원으로 간다' },
             { key: 'decidedAt', label: '결정일', inputType: 'date', row: 'meta' },
             { key: 'projectId', label: '연결된 프로젝트', type: 'select', row: 'meta', options: projectOptions },
           ]}
@@ -1083,10 +1159,11 @@ export function Decisions({ onNavigate, scope }) {
           </div>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <textarea
+              aria-label="근거"
               value={editingDecision.rationale || ''}
               onChange={(e) => updateDraft('rationale', e.target.value)}
-              placeholder="맥락, 선택지, 근거를 적어주세요."
-              rows={5}
+              placeholder="왜 이렇게 정했나 — 맥락, 고른 것과 버린 것."
+              rows={4}
               style={{
                 width: '100%', resize: 'vertical',
                 background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
@@ -1094,6 +1171,23 @@ export function Decisions({ onNavigate, scope }) {
               }}
             />
           </label>
+          {DECISION_JOURNAL && <div className="dj-drawer-row">
+            <SegmentedControl
+              label="확정 여부"
+              value={editingDecision.decidedAt ? 'confirmed' : 'draft'}
+              onChange={(key) => updateDraft('decidedAt', key === 'confirmed' ? (editingDecision.decidedAt || todayKey()) : '')}
+              options={[{ key: 'confirmed', label: '확정' }, { key: 'draft', label: '아직 미정' }]}
+            />
+          </div>}
+          {DECISION_JOURNAL && editingDecision.isNew && (
+            <div className="dj-drawer-task">
+              <TextField label="그래서 할 일 (선택)" value={editingDecision.taskTitle || ''} maxLength={300}
+                placeholder="이 결정으로 생기는 다음 행동 하나" onChange={(e) => updateDraft('taskTitle', e.target.value)} />
+              {editingDecision.taskTitle?.trim() ? (
+                <TextField label="기한 (선택)" type="date" value={editingDecision.taskDueAt || ''} onChange={(e) => updateDraft('taskDueAt', e.target.value)} fieldStyle={{ maxWidth: 200 }} />
+              ) : null}
+            </div>
+          )}
         </EditDrawer>
       )}
 
@@ -1219,7 +1313,7 @@ export function Roadmap({ onNavigate }) {
 
       <Card pad={false} className="hub-table-card">
         {roadmap.state === 'loading' && (
-          <EmptyState icon="roadmap" title="로드맵을 읽는 중입니다" description="프로젝트와 마일스톤 기록을 확인하고 있습니다." style={{ minHeight: 220 }} />
+          <div style={{ padding: 16 }}><Skeleton lines={5} height={16} gap={14} label="로드맵을 읽는 중" /></div>
         )}
         {roadmap.state === 'preview' && (
           <EmptyState icon="roadmap" title="로드맵 기록이 연결되지 않았습니다" description="Supabase 연결 후 실제 프로젝트 일정만 표시됩니다." style={{ minHeight: 220 }} />

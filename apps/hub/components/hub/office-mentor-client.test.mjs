@@ -128,7 +128,7 @@ test('a source over the cap cuts only the longest field, marks the cut and repor
   const result = { ...officeResult(), answer: marked('본문', 30000), recommendation: marked('추천', 2000) };
   const { draft, sourceTruncation } = buildOfficeMentorDraft({ result, officeSource, question: '후속 질문', turns: [{ question: '첫 질문', answer: '첫 답' }] });
   assert.ok(draft.length <= OFFICE_MENTOR_DRAFT_LIMIT);
-  assert.equal(draft.includes('첫 답'), false, 'history goes before the Office source');
+  assert.equal(draft.includes('첫 답'), false, 'history goes before the 오피스 source');
   assert.equal(sourceTruncation.length, 1);
   assert.equal(sourceTruncation[0].label, '본문');
   assert.equal(sourceTruncation[0].total, 30000);
@@ -138,7 +138,7 @@ test('a source over the cap cuts only the longest field, marks the cut and repor
   for (const field of [result.recommendation, ...result.evidence, ...result.dissent, result.nextAction]) assert.ok(draft.includes(field));
   assert.match(draft, /확정된 기록 사실은 아닙니다/);
   assert.match(draft, /이번 질문: 후속 질문/);
-  assert.match(officeMentorPartialNote(sourceTruncation), /^멘토는 Office 원문 일부만 받았습니다 · 본문 30,000자 중 [\d,]+자\. 전체 원문은 Office 결과 카드에 있습니다\.$/);
+  assert.match(officeMentorPartialNote(sourceTruncation), /^멘토는 오피스 원문 일부만 받았습니다 · 본문 30,000자 중 [\d,]+자\. 전체 원문은 오피스 결과 카드에 있습니다\.$/);
   assert.equal(officeMentorPartialNote(null), null);
   assert.equal(buildOfficeMentorRequest({ result, officeSource, scope: 'personal', question: '후속 질문', turns: [{ question: '첫 질문', answer: '첫 답' }] }).sourceTruncation[0].label, '본문');
 });

@@ -588,6 +588,14 @@ export async function getTaskLedger() {
       id: p.id,
       name: p.name,
       status: normalizeProjectStatus(p.status),
+      // 막힌 프로젝트만 막힘 풀기(확인할 것 스펙 §5)에 필요한 계획·버전을 함께 싣는다 — 첫 화면 카드가
+      // 프로젝트를 다시 읽지 않고 버전 가드로 바로 풀 수 있게.
+      ...(p.status === "blocked" ? {
+        delivery: p.meta?.delivery ? { ...p.meta.delivery, nextAction: p.next_action || "" } : null,
+        updatedAt: p.updated_at ?? null,
+        dueAt: p.due_at ?? null,
+        nextAction: p.next_action ?? null,
+      } : {}),
     })),
     taskAggregation: {
       loaded: taskRows.length,

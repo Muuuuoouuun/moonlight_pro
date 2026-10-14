@@ -3,8 +3,8 @@ import { OFFICE_WORKFLOW_VERSION, OFFICE_CUSTOMER_PREPARATION_VERSION, parseOffi
 import type { generateGeminiText } from '../gemini.ts';
 import { buildOfficeWorkflowPrompt, buildOfficeWorkflowReview, OFFICE_WORKFLOW_POLICY_VERSION } from './workflow-prompt.ts';
 import { officeWorkflowResponseSchema } from './workflow-response-schema.ts';
-import { OFFICE_DISCUSSION_VERSION, parseOfficeDiscussion, officeFailureMessage } from '@com-moon/agent-contracts/office';
-import { runOfficeDiscussion, discussionSynthesisPrompt, OfficeDiscussionError, type OfficeDiagnosticEvent } from './deliberation.ts';
+import { OFFICE_DISCUSSION_VERSION, parseOfficeDiscussion, officeFailureMessage, type OfficeDiscussionTurn } from '@com-moon/agent-contracts/office';
+import { runOfficeDiscussion, discussionSynthesisPrompt, officeDiscussionSynthesisSchema, readOfficeSynthesisOutput, OfficeDiscussionError, type OfficeDiagnosticEvent } from './deliberation.ts';
 import { buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
 import { usageFor } from './usage.ts';
 import { groundWeeklyReport } from './weekly-report-policy.ts';
@@ -40,10 +40,11 @@ export async function runOfficeWorkflow(request: OfficeWorkflowRequest, context:
   const reviewSource = { facts: context.facts, sourceRefs: context.sourceRefs, missing: context.missing, asOf: context.asOf };
   const sourceCatalog = buildOfficeSourceCatalog(request, reviewSource);
   const reviewSchema = officeSourceReviewSchema(responseJsonSchema, sourceCatalog);
-  const parseReviewed = (text: string) => {
+  const parseReviewed = (text: string, turns?: OfficeDiscussionTurn[]) => {
     const reviewed = readSourceReviewedOutput(JSON.parse(text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')), request, reviewSource, sourceCatalog);
     // The contract upgrades this to 'untraced' when every returned evidence ref falls outside the sources.
-    return groundOfficeCustomerPreparation(groundWeeklyReport(parseOfficeWorkflowAnswer({ ...reviewed.answer, sourceCheck: reviewed.sourceCheck }, request, context), request, context), request, context);
+    const synthesis = turns ? readOfficeSynthesisOutput(reviewed.answer, turns) : null;
+    return { ...groundOfficeCustomerPreparation(groundWeeklyReport(parseOfficeWorkflowAnswer({ ...(synthesis?.answer ?? reviewed.answer), sourceCheck: reviewed.sourceCheck }, request, context), request, context), request, context), ...(synthesis ? { resolutions: synthesis.resolutions } : {}) };
   };
   const call = async (input: Parameters<typeof generateGeminiText>[0]) => {
     signal.throwIfAborted();
@@ -66,14 +67,14 @@ export async function runOfficeWorkflow(request: OfficeWorkflowRequest, context:
         council: { perspectives: latest.map(turn => ({ ownerId: turn.ownerId, judgment: turn.position, tradeoff: turn.objection || turn.revisionCondition })), recommendation: latest.find(turn => turn.ownerId === request.ownerId)!.position },
       };
       const review = officeSourceReviewPrompt(discussionSynthesisPrompt(buildOfficeWorkflowReview(request, context, draft), roles), sourceCatalog);
-      const reviewed = await call({ ...review, model: roles.model, signal, maxOutputTokens: 8192, responseJsonSchema: reviewSchema, thinkingLevel: 'high' });
+      const reviewed = await call({ ...review, model: roles.model, signal, maxOutputTokens: 8192, responseJsonSchema: officeDiscussionSynthesisSchema(reviewSchema, roles.turns), thinkingLevel: 'high' });
       if (!reviewed.ok || reviewed.model !== roles.model) {
         first ??= { phase: 'synthesis', category: signal.aborted ? 'deadline' : !reviewed.ok ? 'provider' : 'model-mismatch' };
         throw new OfficeDiscussionError('synthesis-failed');
       }
       signal.throwIfAborted();
-      const answer = parseReviewed(reviewed.text);
-      const discussion = parseOfficeDiscussion({ version: OFFICE_DISCUSSION_VERSION, settings: roles.settings, turns: roles.turns, modelCalls: roles.results.length + 1 }, request);
+      const { resolutions, ...answer } = parseReviewed(reviewed.text, roles.turns);
+      const discussion = parseOfficeDiscussion({ version: OFFICE_DISCUSSION_VERSION, settings: roles.settings, turns: roles.turns, modelCalls: roles.results.length + 1, resolutions }, request);
       signal.throwIfAborted();
       return parseOfficeWorkflowResult({ ...meta, status: 'generated', resultRevision: 1, ...answer, discussion,
         context: { asOf: context.asOf, contextHash: context.contextHash, missing: context.missing },

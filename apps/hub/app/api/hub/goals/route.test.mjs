@@ -22,5 +22,7 @@ test('authorized missing-persistence command fails without a preview success',as
 test('receipt endpoint rejects invalid IDs and preserves unknown persistence',async()=>{
   assert.equal((await receipt(new Request('http://localhost:3000/api/hub/goals/commands?commandId=bad'))).status,400);
   const response=await receipt(new Request('http://localhost:3000/api/hub/goals/commands?commandId=33333333-3333-4333-8333-333333333333'));
-  assert.equal(response.status,503);assert.equal((await response.json()).persisted,null);
+  assert.equal(response.status,200);
+  const data=await response.json();
+  assert.equal(data.status,'error');assert.equal(data.source,'error');assert.equal(data.persisted,null);
 });

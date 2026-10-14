@@ -19,23 +19,25 @@ struct HubTask: Codable, Identifiable, Equatable, Sendable {
     let title: String
     let status: String
     let updatedAt: String?
+    let workspace: String?
     var isDone: Bool { status == "done" }
     var local: LocalTask { LocalTask(id: id, title: title, isDone: isDone) }
-    enum CodingKeys: String, CodingKey { case id, title, status, updatedAt, updated_at }
-    init(id: UUID, title: String, status: String, updatedAt: String?) {
-        self.id = id; self.title = title; self.status = status; self.updatedAt = updatedAt
+    enum CodingKeys: String, CodingKey { case id, title, status, updatedAt, updated_at, workspace }
+    init(id: UUID, title: String, status: String, updatedAt: String?, workspace: String? = nil) {
+        self.id = id; self.title = title; self.status = status; self.updatedAt = updatedAt; self.workspace = workspace
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         title = try c.decode(String.self, forKey: .title)
+        workspace = try c.decodeIfPresent(String.self, forKey: .workspace)
         status = try c.decode(String.self, forKey: .status)
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt) ?? c.decodeIfPresent(String.self, forKey: .updated_at)
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id); try c.encode(title, forKey: .title)
-        try c.encode(status, forKey: .status); try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try c.encode(status, forKey: .status); try c.encodeIfPresent(updatedAt, forKey: .updatedAt); try c.encodeIfPresent(workspace, forKey: .workspace)
     }
 }
 

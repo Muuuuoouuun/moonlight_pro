@@ -7,9 +7,12 @@ import {
   hasOperatorLoginCredentials,
   hasOperatorSessionSecret,
   operatorLoginCredentialsMatch,
+  operatorLoginTtl,
   operatorSessionCookieOptions,
   verifyOperatorSessionRequest,
+  operatorRecoveryContext,
 } from "@/lib/operator-session";
+import { resolveDefaultWorkspaceId } from '@/lib/server-write';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +58,8 @@ export async function GET(req) {
     status: session.ok ? "authenticated" : "anonymous",
     reason: session.reason,
     configured: hasOperatorSessionSecret() && hasOperatorLoginCredentials(),
-  });
+    recovery: session.ok ? operatorRecoveryContext(req, resolveDefaultWorkspaceId()) : null,
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function POST(req) {
@@ -121,7 +125,8 @@ export async function POST(req) {
     );
   }
 
-  const token = createOperatorSessionToken({ subject: "operator" });
+  const ttlSeconds = operatorLoginTtl(body.rememberMe);
+  const token = createOperatorSessionToken({ subject: "operator", ttlSeconds });
   if (!token) {
     return NextResponse.json(
       { status: "not-configured", error: "Operator session secret is not configured." },
@@ -130,6 +135,6 @@ export async function POST(req) {
   }
 
   const response = NextResponse.json({ status: "authenticated" });
-  response.cookies.set(OPERATOR_SESSION_COOKIE, token, operatorSessionCookieOptions());
+  response.cookies.set(OPERATOR_SESSION_COOKIE, token, operatorSessionCookieOptions({ maxAge: ttlSeconds }));
   return response;
 }

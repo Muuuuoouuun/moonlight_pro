@@ -45,6 +45,8 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         switch command {
         case .memo: coordinator.openMode(.memo)
         case .tasks: coordinator.showWidget(mode: .tasks)
+        case .sessionChanged:
+            if model.hub.isEnabled { Task { await model.hub.connect(baseURL: model.hubBaseURL) } }
         }
     }
 

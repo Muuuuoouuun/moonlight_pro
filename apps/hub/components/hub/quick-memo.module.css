@@ -22,7 +22,7 @@
 .launcherLabel { display: block; width: 0; flex-shrink: 0; overflow: hidden; opacity: 0; transition: width var(--dur-panel) ease, opacity var(--dur-hover) ease; }
 .launcherLabel > span { display: block; width: 86px; white-space: nowrap; text-align: left; }
 .launcherLabel > span::before { content: ""; display: inline-block; width: 14px; }
-.launcherLabel .badge { display: block; padding-left: 14px; font-size: 10px; line-height: 1.4; }
+.launcherLabel .badge { display: block; padding-left: 14px; font-size: 10.5px; line-height: 1.4; }
 .statusDot { position: absolute; right: 9px; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: var(--fg); box-shadow: 0 0 0 2px var(--bg); }
 .statusDot[data-attention="true"] { width: 7px; height: 7px; border-radius: 2px; }
 .launcher:focus-visible .launcherLabel { width: 86px; opacity: 1; }

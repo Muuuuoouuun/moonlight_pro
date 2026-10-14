@@ -10,17 +10,18 @@
 // 기존 memo-capture 라우트는 남겨 두되(외부·재시도 대비) UI 는 더 이상 쓰지 않는다.
 
 import { MAX_MEMO_CHARS } from "./memo-capture.js";
-import { isJournalTimestamp } from "./journal.js";
+import { isJournalTimestamp, JOURNAL_SCOPES } from "./journal.js";
 
 export const MEMO_SAVED_EVENT = "moonlight:memo-saved";
 export const memoHref = (id) => `/dashboard/work/memos?note=${encodeURIComponent(id)}`;
 
 // 빠른 메모 초안을 journal 저장 명령으로 옮긴다.
-// journal 은 라벨을 noteMeta.tags 로 받는다. scope·source 는 journal note 모델에 자리가
-// 없어 전달하지 않는다 — 통합의 대가이고, 필요해지면 noteMeta 를 확장하는 쪽이 맞다.
+// 기존 SQL이 noteMeta JSON 전체를 저장한다. 범위도 같은 메타 계약으로 보존한다.
 export function journalSaveCommand(payload) {
   if (!isJournalTimestamp(payload?.occurredAt))
     throw new Error("메모 작성 시각을 확인하지 못했습니다. 입력을 유지했으니 새로고침 후 다시 저장하세요.");
+  if (!JOURNAL_SCOPES.includes(payload?.scope))
+    throw new Error("개인 또는 회사 업무 범위를 선택해 주세요. 입력은 유지했습니다.");
   return {
     action: "save",
     requestId: payload.id,
@@ -34,6 +35,7 @@ export function journalSaveCommand(payload) {
     noteMeta: {
       kind: "note",
       enhancement: "",
+      scope: payload.scope,
       ...(Array.isArray(payload.labels) && payload.labels.length ? { tags: payload.labels } : {}),
     },
     contexts: [],
@@ -71,7 +73,7 @@ export async function saveMemoAndVerify(payload, fetchImpl = fetch) {
       cache: "no-store", signal: AbortSignal.timeout(10000),
     });
     const verified = await check.json();
-    if (!check.ok || verified.status !== "live" || verified.entry?.id !== payload.id || verified.entry?.body !== payload.body)
+    if (!check.ok || verified.status !== "live" || verified.entry?.id !== payload.id || verified.entry?.body !== payload.body || verified.entry?.noteMeta?.scope !== payload.scope)
       throw new Error("read-back-mismatch");
     return { id: payload.id, status: receipt.status, memo: verified.entry };
   } catch {

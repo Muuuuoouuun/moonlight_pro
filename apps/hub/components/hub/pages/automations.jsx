@@ -3,7 +3,7 @@
 import React from "react";
 import { InquiryConnection } from '../inquiry-connection';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge, LifecycleBadge } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge, LifecycleBadge, Skeleton } from "../hub-primitives";
 
 const EMPTY_AUTOMATION_SUMMARY = {
   runsToday: 0,
@@ -168,7 +168,10 @@ export function AutomationsIndex({ onNavigate }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>자동화</span><span>실행 방식</span><span>상태</span><span>마지막 실행</span><span>성공 / 실행 (24h)</span><span style={{ textAlign: 'right' }} />
         </div>
-        {automations.length === 0 && (
+        {automations.length === 0 && syncState === 'loading' && (
+          <div style={{ padding: '14px 16px' }}><Skeleton lines={4} height={14} gap={12} label="자동화 기록 읽는 중" /></div>
+        )}
+        {automations.length === 0 && syncState !== 'loading' && (
           <EmptyState
             icon="automations"
             title={syncState === 'error' ? '자동화 기록을 읽지 못했습니다' : '자동화 기록이 비어 있습니다'}
@@ -714,7 +717,7 @@ export function Runs({ onNavigate } = {}) {
                   <span style={{ color: r.status === 'err' ? 'var(--danger)' : 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.detail}
                   </span>
-                  <span style={{ color: 'var(--fg-faint)', textAlign: 'center', fontSize: 10 }}>
+                  <span style={{ color: 'var(--fg-faint)', textAlign: 'center', fontSize: 10.5 }}>
                     <Iconed name={isSelected ? 'chevronD' : 'chevronR'} size={11} />
                   </span>
                 </div>

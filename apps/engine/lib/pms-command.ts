@@ -40,6 +40,10 @@ const PROJECT_STATUSES = new Set(["draft", "active", "blocked", "completed", "ar
 const TASK_STATUSES = new Set(["inbox", "todo", "doing", "blocked", "done"]);
 const PRIORITIES = new Set(["low", "medium", "high", "critical"]);
 const PROJECT_GENRES = new Set(["company", "sales", "it", "content", "other"]);
+// 확인할 것(2026-09-30 스펙 §5): 막힘 풀기 갈래 · 결정의 출처 · 할 일의 신호 키.
+const UNBLOCK_RESOLUTIONS = new Set(["resolved", "decision", "next-version"]);
+const DECISION_SOURCE_REF_TYPES = new Set(["project", "deal", "lead", "account", "automation", "content", "meeting", "memo"]);
+const SIGNAL_KEY = /^[a-z-]+:[^\s]{1,180}$/;
 // 제품에 붙는 일의 종류(제품 운영실 §0): 신기능·보수·연락. 보수는 반복 주기를 가질 수 있다.
 const PROJECT_WORK_TYPES = new Set(["feature", "maintenance", "contact"]);
 const PROJECT_RECURRENCES = new Set(["weekly", "monthly", "quarterly", "yearly"]);
@@ -120,6 +124,16 @@ function dateTime(value: unknown) {
   return Number.isNaN(parsed.getTime())
     ? { ok: false, value: null }
     : { ok: true, value: parsed.toISOString() };
+}
+
+function decisionSourceRef(value: unknown): { ok: true; value: { type: string; id: string } | null } | { ok: false } {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  if (typeof value !== "object" || Array.isArray(value)) return { ok: false };
+  const row = value as Record<string, unknown>;
+  const type = typeof row.type === "string" ? row.type : "";
+  const id = typeof row.id === "string" ? row.id.trim() : "";
+  if (!DECISION_SOURCE_REF_TYPES.has(type) || !id || id.length > 180) return { ok: false };
+  return { ok: true, value: { type, id } };
 }
 
 function has(input: Record<string, unknown>, key: string) {
@@ -270,6 +284,9 @@ export function normalizePmsCommand(
     // same way they hang off a project. Lives in meta (deals ↔ tasks has no FK column) — the
     // proven stage_detail pattern; operating-ledger reads it back as todo.dealId.
     const dealId = nullableUuidField(input, "dealId", "deal_id");
+    // 결정으로 막힘을 풀 때의 "그래서 할 일"(확인할 것 스펙 §5.3) — 결정 일지가 이 키로 할 일을 찾는다.
+    const decisionId = nullableUuidField(input, "decisionId", "decision_id");
+    const signalKey = text(input.signalKey ?? input.signal_key, 200);
     const title = text(input.title, 300);
     const status = text(input.status || "todo", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
@@ -281,6 +298,8 @@ export function normalizePmsCommand(
     if (!title) return { ok: false, reason: "missing-title" };
     if (!projectId.ok) return { ok: false, reason: "invalid-project-id" };
     if (!dealId.ok) return { ok: false, reason: "invalid-deal-id" };
+    if (!decisionId.ok) return { ok: false, reason: "invalid-decision-id" };
+    if (signalKey && !SIGNAL_KEY.test(signalKey)) return { ok: false, reason: "invalid-signal-key" };
     if (!TASK_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
     if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
     if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
@@ -305,6 +324,8 @@ export function normalizePmsCommand(
         meta: {
           source: text(input.source || "manual", 80),
           ...(dealId.value ? { deal_id: dealId.value } : {}),
+          ...(decisionId.value ? { decision_id: decisionId.value } : {}),
+          ...(signalKey ? { signal_key: signalKey } : {}),
           ...(checklist?.ok ? { checklist: checklist.items } : {}),
           ...(has(input, "itemType") ? { item_type: input.itemType } : {}),
         },
@@ -502,6 +523,10 @@ export function normalizePmsCommand(
       if (issue) return { ok: false, reason: issue };
       patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), delivery };
     }
+    // 막힘 풀기의 갈래·결정(확인할 것 스펙 §5.1) — 서버가 막힘 이력 한 줄에만 쓴다.
+    if (has(input, "unblockResolution") && !UNBLOCK_RESOLUTIONS.has(String(input.unblockResolution))) return { ok: false, reason: "invalid-unblock-resolution" };
+    if (has(input, "decisionId") && !uuid(input.decisionId)) return { ok: false, reason: "invalid-decision-id" };
+    if (has(input, "unblockNote") && typeof input.unblockNote !== "string") return { ok: false, reason: "invalid-unblock-note" };
     if (has(input, "deliveryEvent")) {
       if (!["start", "prototype", "pause", "resume"].includes(String(input.deliveryEvent))) return { ok: false, reason: "invalid-delivery-event" };
       // Server service resolves timestamps against the current row.
@@ -528,9 +553,12 @@ export function normalizePmsCommand(
     const decidedAt = dateTime(input.decidedAt || input.decided_at);
     const summary = text(input.summary, 2000) || text(input.rationale, 2000) || title;
 
+    const sourceRef = decisionSourceRef(input.sourceRef ?? input.source_ref);
+
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!title) return { ok: false, reason: "missing-title" };
     if (!decidedAt.ok) return { ok: false, reason: "invalid-decided-at" };
+    if (!sourceRef.ok) return { ok: false, reason: "invalid-source-ref" };
 
     return {
       ok: true,
@@ -545,7 +573,10 @@ export function normalizePmsCommand(
         summary,
         rationale,
         decided_at: decidedAt.value,
-        meta: { source: text(input.source || "manual", 80) },
+        meta: {
+          source: text(input.source || "manual", 80),
+          ...(sourceRef.value ? { sourceRef: sourceRef.value } : {}),
+        },
       },
     };
   }
@@ -570,6 +601,13 @@ export function normalizePmsCommand(
       const decidedAt = dateTime(input.decidedAt ?? input.decided_at);
       if (!decidedAt.ok) return { ok: false, reason: "invalid-decided-at" };
       patch.decided_at = decidedAt.value;
+    }
+    // 표시용 링크 — 서비스가 저장된 meta에 병합한다(source·sourceRef 보존).
+    for (const [key, reason] of [["nextTaskId", "invalid-next-task-id"], ["unblockedProjectId", "invalid-unblocked-project-id"]] as const) {
+      if (!has(input, key)) continue;
+      const value = uuid(input[key]);
+      if (!value) return { ok: false, reason };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), [key]: value };
     }
 
     if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };

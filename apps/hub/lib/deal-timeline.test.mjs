@@ -8,8 +8,6 @@ import {
   dealCustomerKey,
   dealDockItem,
   dealPromise,
-  formatSignedWon,
-  formatWon,
   isoFromDateInput,
   kstDayNumber,
   resolveDealView,
@@ -88,20 +86,6 @@ test("고객 열기 키는 리드 id → 같은 회사 리드 → 같은 회사 
   assert.equal(dealCustomerKey({ leadId: "gone", companyId: "c1" }, { leads, accounts }), "lead:l1");
   assert.equal(dealCustomerKey({ companyId: "c3" }, { leads, accounts }), "account:a3");
   assert.equal(dealCustomerKey({ companyId: "c9" }, { leads, accounts }), null);
-});
-
-test("금액 라벨은 revenue.jsx와 같은 K/M 임계값", () => {
-  assert.equal(formatWon(0), "₩0");
-  assert.equal(formatWon(900000), "₩900K");
-  assert.equal(formatWon(1800000), "₩1.8M");
-  assert.equal(formatWon(500), "₩500");
-});
-
-test("차이 금액은 부호를 붙인다 — 음수는 U+2212, 0은 부호 없이", () => {
-  assert.equal(formatSignedWon(-200000), "−₩200K");
-  assert.equal(formatSignedWon(300000), "+₩300K");
-  assert.equal(formatSignedWon(0), "₩0");
-  assert.equal(formatSignedWon("nope"), "₩0");
 });
 
 test("독 항목은 거래 하나 — 전액 입금된 거래도 열 수 있다", () => {

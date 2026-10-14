@@ -138,6 +138,9 @@
 .hub-app .customer-tl__item::before { content: ""; position: absolute; left: 9.5px; top: 30px; bottom: -6px; width: 1px; background: var(--line-soft); }
 .hub-app .customer-tl__item:last-child::before { display: none; }
 .hub-app .customer-tl__dot { width: 20px; height: 20px; margin-top: 2px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg-muted); display: inline-flex; align-items: center; justify-content: center; }
+/* 메모(연결 메모 · 활동 노트)는 네모 — 넓은 기록창의 읽기 칸과 같은 모양이다(record-window.css). 연락으로 세지
+   않는다는 뜻은 글자('메모 · 연락 아님')가 함께 말한다. 모서리와 면뿐, 색으로 나누지 않는다. */
+.hub-app .customer-tl__item[data-shape="memo"] .customer-tl__dot { border-radius: var(--r-xs); background: var(--surface-2); }
 .hub-app .customer-tl__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .hub-app .customer-tl__body--link { width: 100%; padding: 2px 4px; margin: -2px -4px; border: 0; border-radius: var(--r-sm); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .hub-app .customer-tl__title { font-size: 13px; line-height: 1.5; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }

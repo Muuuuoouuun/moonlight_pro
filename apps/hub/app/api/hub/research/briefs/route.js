@@ -10,8 +10,11 @@ const json = (data, status = 200) => NextResponse.json(data, {
   status, headers: { 'Cache-Control': 'private, no-store, max-age=0' },
 });
 
-export async function GET() {
-  try { return json(await listResearchBriefs()); }
+export async function GET(req) {
+  try {
+    const params = req ? new URL(req.url).searchParams : new URLSearchParams();
+    return json(await listResearchBriefs({ briefId: params.get('brief'), brandId: params.get('brand') }));
+  }
   catch { return json({ status: 'error', briefs: [] }); }
 }
 

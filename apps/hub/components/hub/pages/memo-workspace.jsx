@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import Link from 'next/link';
 import { Button } from "../hub-primitives";
 import {
   linksForMemo,
@@ -11,6 +12,7 @@ import styles from "./memo-workspace.module.css";
 import { MemoCaptureLink } from "../journal-links";
 import { MEMO_SAVED_EVENT } from "@/lib/memo-save";
 import { isCanonicalUuid } from "@/lib/uuid";
+import { journalMemosFromLegacyHref } from '@/lib/memo-workspace-links';
 const EMPTY = {
   memos: [],
   links: [],
@@ -86,7 +88,7 @@ export function MemoWorkspace({
           { cache: "no-store", signal: AbortSignal.timeout(10000) },
         );
         const next = await response.json();
-        if (!response.ok || !Array.isArray(next.memos))
+        if (!response.ok || next?.status === "error" || next?.source === "error" || !Array.isArray(next?.memos))
           throw new Error("read-failed");
         if (request === requestRef.current) setData(next);
         return next;
@@ -224,7 +226,10 @@ export function MemoWorkspace({
       </header>
       {!taskId && (
         <div className={styles.notice}>
-          <p>새 메모는 메모 목록에서 작성하고 확인합니다.</p>
+          <p>이 작업대는 기존 메모·받은함 이력을 보여줍니다. 새로 남긴 메모는 메모 목록에서 확인합니다.</p>
+          {journalMemosFromLegacyHref(projectFilter) && <Link className="hub-row" href={journalMemosFromLegacyHref(projectFilter)} style={{ display: 'flex', alignItems: 'center', minHeight: 44, fontSize: 12, color: 'var(--fg)', overflowWrap: 'anywhere' }}>
+            {projectFilter ? '이 프로젝트에 연결한 새 메모 보기 →' : '새 메모 목록에서 찾기 →'}
+          </Link>}
           <MemoCaptureLink
             context={isCanonicalUuid(projectFilter) ? { type: "project", id: projectFilter } : undefined}
             label="새 메모 남기기"
@@ -320,7 +325,7 @@ export function MemoWorkspace({
                   ? "업무 연결 정보를 불러오지 못했습니다. 연결 기능을 사용할 수 없습니다."
                   : taskId
                     ? "확인된 연결 메모가 없습니다."
-                    : "표시할 기존 메모가 없습니다. ‘새 메모 남기기’에서 기록을 시작하세요."}
+                    : "표시할 기존 메모가 없습니다. 새로 저장한 기록은 위의 메모 목록 링크에서 확인하세요."}
             </p>
           )}
           <p className={styles.notice}>

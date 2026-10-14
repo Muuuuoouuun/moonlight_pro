@@ -29,13 +29,13 @@ function workflowInputs(mode) {
   return { request, context };
 }
 function responseAnswer(request) {
-  return { answer: '자료 제공 여부를 확인하겠습니다.', nextAction: '제공 여부를 확인합니다.', ...(request.mode === 'council' ? { recommendation: '확인 후 안내합니다.', evidence: [], dissent: [] } : {}) };
+  return { answer: '자료 제공 여부를 확인하겠습니다.', nextAction: '제공 여부를 확인합니다.', ...(request.mode === 'council' ? { resolutionsByTurn: {}, recommendation: '확인 후 안내합니다.', evidence: [], dissent: [] } : {}) };
 }
 function workflowAnswer(request) {
   return {
     summary: '자료 제공 여부를 확인합니다.', artifact: { kind: 'text', body: '자료 제공 여부를 확인하겠습니다.' },
     evidence: [], uncertainties: ['자료 제공 여부'], dissent: [], nextStep: null,
-    ...(request.mode === 'council' ? { council: { perspectives: request.participants.map(ownerId => ({ ownerId, judgment: '제공 여부를 먼저 확인합니다.', tradeoff: '확인 전 확약을 보류합니다.' })), recommendation: '확인 후 안내합니다.' } } : {}),
+    ...(request.mode === 'council' ? { resolutionsByTurn: {}, council: { perspectives: request.participants.map(ownerId => ({ ownerId, judgment: '제공 여부를 먼저 확인합니다.', tradeoff: '확인 전 확약을 보류합니다.' })), recommendation: '확인 후 안내합니다.' } } : {}),
   };
 }
 function phaseOf(input, request) {
@@ -45,7 +45,8 @@ function validReply(input, request, answer) {
   const data = JSON.parse(input.prompt);
   const value = data.phase ? {
     position: `${data.roleId}의 ${data.phase} 판단입니다.`, evidence: [], objection: '', revisionCondition: '자료 제공 여부를 확인하면 판단을 갱신합니다.',
-    changed: false, replyTo: data.phase === 'response' ? request.participants.filter(id => id !== data.roleId) : [],
+    ...(data.phase === 'response' ? { peerReviewsByOwner: Object.fromEntries(request.participants.filter(id => id !== data.roleId).map(id => [id, { quoteIndex: data.peerReviewCatalog.find(item => item.ownerId === id && item.field === 'position').index, assessment: 'supports', reason: '동료의 공개 판단을 검토합니다.' }])) } : { peerReviews: [], replyTo: [] }),
+    changed: false,
     changeReason: data.phase === 'response' ? '동료의 의견을 검토했으나 미확인 여부가 달라지지 않았습니다.' : '',
   } : answer(request);
   return { ok: true, text: JSON.stringify({ ...(input.responseJsonSchema.properties.sourceIndexes ? { sourceIndexes: [], corrections: [] } : {}), ...value }), model };

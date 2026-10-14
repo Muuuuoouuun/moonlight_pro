@@ -5,7 +5,7 @@ import { callOfficeRoutingEngine } from './routing-engine-client.js';
 import { OFFICE_ROUTING_MAX_BODY_BYTES, createOfficeRoutingHubHandler } from './routing-http.js';
 
 const request = { message: '고객 견적 답장을 준비해 주세요.', scope: 'classin' };
-const result = { status: 'recommended', version: OFFICE_ROUTING_VERSION, ownerId: 'flareon', reviewerIds: ['leafeon'], reason: '고객 답장과 가격 부담을 나눠 검토합니다.', scope: 'classin' };
+const result = { status: 'recommended', version: OFFICE_ROUTING_VERSION, ownerId: 'flareon', reviewerIds: ['leafeon'], reason: '고객 답장과 가격 부담을 나눠 검토합니다.', scope: 'classin', plan: { ownerDeliverable: '고객 답장 초안', reviews: [{ reviewerId: 'leafeon', question: '가격 부담의 근거가 있는가?' }] } };
 const hubRequest = (body, origin = true) => new Request('http://localhost:3100/api/hub/office/assignment', { method: 'POST', headers: origin ? { origin: 'http://localhost:3100' } : {}, body: JSON.stringify(body) });
 
 test('Hub client sends only the copied agenda and shared secret to the dedicated Engine route', async () => {

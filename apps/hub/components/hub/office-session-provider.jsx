@@ -1,26 +1,19 @@
 'use client';
 import React from 'react';
-import { createOfficeSessionStore, officeUnloadGuard } from './office-session';
-import { officeMentorSessions } from './office-mentor-session';
+import { loadedOfficeUnloadStores, officeUnloadGuard } from './office-unload';
 
-const OfficeSessionContext = React.createContext(null);
+export const OfficeSessionContext = React.createContext(null);
 
-// Mentor consultations live in a module store that outlives page navigation, so the
-// Hub shell guards their unsent questions together with the Office composer drafts.
-export function OfficeSessionProvider({ children, mentorStore = officeMentorSessions }) {
-  const [store] = React.useState(createOfficeSessionStore);
+// The shell holds an empty box; the Office screen fills it with the composer store the
+// first time it opens (use-office-session.js), so the Office code stays out of the first
+// bundle. Mentor consultations live in a module store that outlives page navigation and
+// registers itself when loaded, so one guard covers both kinds of unsent text.
+export function OfficeSessionProvider({ children }) {
+  const [holder] = React.useState(() => ({ store: null }));
   React.useEffect(() => {
-    const guard = officeUnloadGuard([store, mentorStore]);
+    const guard = event => officeUnloadGuard([holder.store, ...loadedOfficeUnloadStores()])(event);
     window.addEventListener('beforeunload', guard);
     return () => window.removeEventListener('beforeunload', guard);
-  }, [store, mentorStore]);
-  return <OfficeSessionContext.Provider value={store}>{children}</OfficeSessionContext.Provider>;
-}
-
-export function useOfficeSession(scope) {
-  const store = React.useContext(OfficeSessionContext);
-  if (!store) throw new Error('Office는 Hub 세션 안에서 열어 주세요.');
-  const getSnapshot = React.useCallback(() => store.get(scope), [store, scope]);
-  const session = React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
-  return { session, store, update: patch => store.update(scope, patch) };
+  }, [holder]);
+  return <OfficeSessionContext.Provider value={holder}>{children}</OfficeSessionContext.Provider>;
 }

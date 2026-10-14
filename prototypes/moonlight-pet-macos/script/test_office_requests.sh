@@ -26,7 +26,7 @@ swiftc -parse-as-library -o "$output_dir/check" \
  "$src/Models/LocalTask.swift" "$src/Models/HubModels.swift" "$src/Models/OfficeRoleCatalog.generated.swift" \
  "$src/Models/OfficeDiscussionModels.swift" "$src/Models/OfficeChatModels.swift" "$src/Models/OfficeConversationModels.swift" \
  "$src/Models/OfficeRequestModels.swift" "$src/Models/OfficeRequestStore.swift" \
- "$src/Support/HubTransport.swift" "$src/Support/HubAPI.swift" "$src/Support/HubOfficeRequestsAPI.swift" \
+ "$src/Support/HubCredentials.swift" "$src/Support/HubTransport.swift" "$src/Support/HubAPI.swift" "$src/Support/HubOfficeRequestsAPI.swift" \
  Tests/MoonlightPetPreviewTests/OfficeRequestContractTests.swift \
  Tests/MoonlightPetPreviewTests/OfficeRequestStoreTests.swift "$output_dir/Runner.swift"
 "$output_dir/check"

@@ -57,14 +57,6 @@ function shortDay(day) {
   return `${m + 1}/${d}`;
 }
 
-// 차트 칸 밑의 짧은 값 — "2.4M" · "600K". 0은 호출처가 "—"로 쓴다.
-export function formatShortWon(value) {
-  const n = Math.round(Number(value) || 0);
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${Math.round(n / 1000)}K`;
-  return String(n);
-}
-
 // 계약된 거래 — 클로징이거나 결제가 한 번이라도 들어왔다.
 export function isContractedDeal(deal) {
   if (!deal) return false;

@@ -3,6 +3,7 @@ import type { SupabaseDetailedReadResult, SupabaseFilter, SupabaseQueryOptions, 
 import { CONTENT_WORKFLOW_CHANNELS, MAX_CONTENT_WORKFLOW_BYTES } from "./content-workflow.ts";
 import { getEditorialGuidance } from "@com-moon/content-manager/editorial-criteria";
 import { getFormatPrompt } from "@com-moon/content-manager/format-prompts";
+import { validateReelsScriptBody } from "@com-moon/content-manager/reels-script";
 import { isOfficeStudioOperation, OFFICE_STUDIO_POLICY_VERSION } from "@com-moon/agent-contracts/office-studio";
 import { OFFICE_PERSONAS, OFFICE_PERSONA_VERSION } from "./office/personas.ts";
 import { OFFICE_PLAYBOOKS } from "./office/playbooks.ts";
@@ -267,19 +268,17 @@ function generationInput(command: GenerateCommand, sourceData: Row) {
 }
 
 function validStructuredBody(body: string, variantType: string): boolean {
-  if (variantType !== "card_news" && variantType !== "reels_script") return true;
+  if (variantType === "reels_script") return validateReelsScriptBody(body).ok;
+  if (variantType !== "card_news") return true;
   try {
     const value = JSON.parse(body);
-    const key = variantType === "card_news" ? "slides" : "scenes";
+    const key = "slides";
     if (!isRecord(value) || !hasExactKeys(value, [key]) || !Array.isArray(value[key]) || value[key].length < 1 || value[key].length > 30) return false;
     const ids = new Set();
     return value[key].every((entry: unknown) => {
       if (!isRecord(entry) || !isId(entry.id) || ids.has(entry.id)) return false;
       ids.add(entry.id);
-      if (key === "slides") return hasExactKeys(entry, ["id", "title", "sub"]) && isText(entry.title, 2000) && isText(entry.sub, 16000) && Boolean(entry.title.trim() || entry.sub.trim());
-      return hasExactKeys(entry, ["id", "visual", "spoken", "subtitle", "duration", "notes"])
-        && ["visual", "spoken", "subtitle", "notes"].every((field) => isText(entry[field], 16000))
-        && Boolean(entry.visual.trim() || entry.spoken.trim()) && typeof entry.duration === "number" && Number.isFinite(entry.duration) && entry.duration > 0 && entry.duration <= 600;
+      return hasExactKeys(entry, ["id", "title", "sub"]) && isText(entry.title, 2000) && isText(entry.sub, 16000) && Boolean(entry.title.trim() || entry.sub.trim());
     });
   } catch { return false; }
 }

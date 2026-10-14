@@ -2,7 +2,7 @@ import { invokeSupabaseRpc, resolveDefaultWorkspaceId } from '@com-moon/supabase
 import { isAgentUuid } from '@com-moon/agent-contracts';
 
 const OWNER = 'operator'; // Moonlight has one operator; Agent actor is the recorder, not the owner.
-const REQUEST_KEYS = ['requestId', 'taskId', 'scope', 'instruction', 'expectedEvidence'];
+const REQUEST_KEYS = ['requestId', 'taskId', 'scope', 'instruction', 'expectedEvidence', 'meetingId', 'officeTurnId'];
 const RECEIPT_KEYS = ['state', 'summary', 'evidence', 'commandId'];
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const exactKeys = (value, keys) => record(value) && Object.keys(value).every((key) => keys.includes(key));
@@ -13,8 +13,11 @@ export function validateSkillRequest(input) {
   if (!exactKeys(input, REQUEST_KEYS) || !isAgentUuid(input.requestId) || !isAgentUuid(input.taskId)
     || !['classin', 'personal'].includes(input.scope) || !bounded(input.instruction, 4000)
     || !bounded(input.expectedEvidence, 500) || Buffer.byteLength(JSON.stringify(input), 'utf8') > 16384) return null;
+  const linked = input.meetingId !== undefined || input.officeTurnId !== undefined;
+  if (linked && (!isAgentUuid(input.meetingId) || !isAgentUuid(input.officeTurnId))) return null;
   return { requestId: input.requestId.toLowerCase(), taskId: input.taskId.toLowerCase(), scope: input.scope,
-    instruction: input.instruction.trim(), expectedEvidence: input.expectedEvidence.trim() };
+    instruction: input.instruction.trim(), expectedEvidence: input.expectedEvidence.trim(),
+    ...(linked ? { meetingId: input.meetingId.toLowerCase(), officeTurnId: input.officeTurnId.toLowerCase() } : {}) };
 }
 
 export function validateSkillReceipt(input) {

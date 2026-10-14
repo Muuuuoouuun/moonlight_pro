@@ -1,3 +1,4 @@
+import { taskRecoveryAssertion } from '@/lib/operator-session';
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
@@ -77,6 +78,7 @@ async function forwardProjectWrite(req, action) {
 
   const parsed = await readHubWriteJson(req);
   if (parsed.error) return parsed.error;
+  if (!taskRecoveryAssertion(req, parsed.data, resolveDefaultWorkspaceId())) return NextResponse.json({ status: 'conflict', error: 'check-write-owner-changed' }, { status: 409 });
 
   const result = await forwardPmsCommand({
     ...parsed.data,

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRevenueLedgerCache } from '../components/hub/revenue-shared-cache.js';
 
-const file = fs.readFileSync(new URL('../components/hub/pages/revenue.jsx', import.meta.url), 'utf8');
+const file = fs.readFileSync(new URL('../components/hub/pages/revenue-core.jsx', import.meta.url), 'utf8');
 const start = file.indexOf('export function useRevenueLedger()');
 const source = file.slice(start, file.indexOf('\n}\n', start) + 3).replace('export ', '');
 const run = new Function('React', 'revenueLedgerCache', source + '\nreturn useRevenueLedger();');

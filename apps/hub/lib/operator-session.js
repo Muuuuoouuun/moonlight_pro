@@ -1,8 +1,14 @@
 import { createHmac, randomBytes, scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "node:util";
+import { isCanonicalUuid } from './uuid.js';
 
 export const OPERATOR_SESSION_COOKIE = "com_moon_operator_session";
 const DEFAULT_TTL_SECONDS = 12 * 60 * 60;
+export const REMEMBERED_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+export function operatorLoginTtl(rememberMe) {
+  return rememberMe === true ? REMEMBERED_SESSION_TTL_SECONDS : DEFAULT_TTL_SECONDS;
+}
 const derivePassword = promisify(scrypt);
 const SCRYPT_OPTIONS = { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const PASSWORD_HASH_PATTERN = /^scrypt\$131072\$8\$1\$([a-f0-9]{32})\$([a-f0-9]{128})$/;
@@ -29,7 +35,8 @@ export function createOperatorSessionToken({
   now = Date.now(),
 } = {}) {
   const exp = now + Math.max(1, Number(ttlSeconds) || DEFAULT_TTL_SECONDS) * 1000;
-  const payload = Buffer.from(JSON.stringify({ sub: subject, iat: now, exp }), "utf8").toString("base64url");
+  // Login boundaries must remain distinct even when two logins share a clock tick.
+  const payload = Buffer.from(JSON.stringify({ sub: subject, iat: now, exp, jti: randomBytes(16).toString('hex') }), "utf8").toString("base64url");
   const signature = sign(payload);
   return signature ? `${payload}.${signature}` : "";
 }
@@ -66,6 +73,32 @@ function cookieValue(header, name) {
 export function verifyOperatorSessionRequest(req) {
   const token = cookieValue(req.headers.get("cookie"), OPERATOR_SESSION_COOKIE);
   return verifyOperatorSessionToken(token);
+}
+
+// A public recovery owner is a fence, never a credential. Do not expose the
+// cookie, operator name, password hash, or session signature to browser storage.
+export function operatorRecoveryContext(req, workspaceId, { now = Date.now() } = {}) {
+  const token = cookieValue(req.headers.get('cookie'), OPERATOR_SESSION_COOKIE);
+  const verified = verifyOperatorSessionToken(token, { now });
+  if (!verified.ok || !hasOperatorLoginCredentials() || !isCanonicalUuid(workspaceId)) return null;
+  const { session } = verified;
+  if (!Number.isSafeInteger(session.iat) || !Number.isSafeInteger(session.exp) || session.iat > now || session.exp <= now) return null;
+  const ownerKey = createHmac('sha256', resolveSessionSecret()).update(JSON.stringify({
+    purpose: 'quick-task-recovery-v1', token,
+    operator: process.env.COM_MOON_OPERATOR_USERNAME?.trim(),
+    credentialVersion: process.env.COM_MOON_OPERATOR_PASSWORD_HASH?.trim(), workspaceId,
+  })).digest('hex');
+  return { ownerKey, workspaceId, expiresAt: session.exp };
+}
+
+export function taskRecoveryAssertion(req, input, workspaceId) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
+  const present = Object.hasOwn(input, 'recoveryOwner') || Object.hasOwn(input, 'expectedWorkspaceId');
+  if (!present) return true; // Existing authenticated callers keep their contract.
+  const context = operatorRecoveryContext(req, workspaceId);
+  return Boolean(context && input.expectedWorkspaceId === workspaceId &&
+    typeof input.recoveryOwner === 'string' && /^[a-f0-9]{64}$/.test(input.recoveryOwner) &&
+    safeEquals(context.ownerKey, input.recoveryOwner));
 }
 
 function isProductionRuntime() {

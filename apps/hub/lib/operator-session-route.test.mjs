@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { NextRequest } from "next/server.js";
 
 import { POST } from "../app/api/operator/session/route.js";
+import { operatorLoginTtl, verifyOperatorSessionToken } from "./operator-session.js";
 
 const originalEnv = { ...process.env };
 const password = "correct horse battery staple";
@@ -38,6 +39,19 @@ test("username and password create a signed browser session", async () => {
   assert.equal(response.status, 200);
   assert.equal((await response.json()).status, "authenticated");
   assert.match(response.headers.get("set-cookie") || "", /com_moon_operator_session=.*HttpOnly/);
+});
+
+test("remembered login aligns the signed expiry and persistent cookie at 30 days", async () => {
+  for (const [rememberMe, seconds] of [[true, 30 * 86400], [false, 12 * 3600]]) {
+    const response = await login({ username: "moonlight", password, rememberMe });
+    const cookie = response.cookies.get("com_moon_operator_session");
+    const verified = verifyOperatorSessionToken(cookie.value);
+    assert.equal(verified.ok, true);
+    assert.equal((verified.session.exp - verified.session.iat) / 1000, seconds);
+    assert.match(response.headers.get("set-cookie"), new RegExp(`Max-Age=${seconds};`));
+    assert.equal(verifyOperatorSessionToken(cookie.value, { now: verified.session.exp }).reason, "expired");
+  }
+  for (const rememberMe of [undefined, "true", 1, {}, null]) assert.equal(operatorLoginTtl(rememberMe), 12 * 3600);
 });
 
 test("wrong username or password and the old Hub secret get the same generic rejection", async () => {

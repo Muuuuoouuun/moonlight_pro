@@ -3,26 +3,73 @@ import SwiftUI
 struct CouncilCompanionContent: View {
     @ObservedObject var model: AppModel
     let openConnection: () -> Void
+    var durableMeetings = false
+    private var store: OfficeChatStore { durableMeetings ? model.office : model.chat }
     @FocusState private var focused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if durableMeetings { meetingControls }
             conversationControls
             conversation
             composer
             footer
         }
         .foregroundStyle(Palette.glassInk)
-        .onAppear { model.markCouncilRepliesRead() }
-        .onChange(of: model.chat.conversationKey) { _, _ in model.markCouncilRepliesRead() }
-        .onChange(of: model.chat.scope) { _, _ in model.markCouncilRepliesRead() }
+        .onAppear {
+            if durableMeetings { Task { await store.loadMeetings() } }
+            else { model.markCouncilRepliesRead() }
+        }
+        .onChange(of: store.conversationKey) { _, _ in model.markCouncilRepliesRead() }
+        .onChange(of: store.scope) { _, _ in
+            if durableMeetings { Task { await store.loadMeetings() } }
+            else { model.markCouncilRepliesRead() }
+        }
+    }
+
+    private var canSendMeeting: Bool {
+        store.hasConnection && !store.isSending && !store.isLoadingMeetings && !store.meetingNeedsReload
+            && store.meeting?.state != "closed" && store.draft.utf16.count <= 6000
+            && !store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var meetingControls: some View {
+        HStack(spacing: 8) {
+            Menu {
+                if store.meetings.isEmpty {
+                    switch store.meetingListState {
+                    case .ready: Text("저장된 회의가 없어요")
+                    case .loading: Text("회의 목록 불러오는 중")
+                    case .error: Text("회의 목록을 확인하지 못했어요")
+                    case .preview: Text("회의 저장소 연결이 필요해요")
+                    case .idle: Text("회의 목록을 새로고침해 주세요")
+                    }
+                }
+                ForEach(store.meetings) { meeting in
+                    Button(String(meeting.title.prefix(30))) { Task { await store.resumeMeeting(meeting.meetingId) } }
+                        .help(meeting.title)
+                }
+                Divider()
+                Button("목록 새로고침") { Task { await store.loadMeetings() } }
+            } label: {
+                Label(store.meeting?.title ?? "저장된 회의", systemImage: "clock.arrow.circlepath")
+                    .lineLimit(1).font(.system(size: 12, weight: .medium))
+            }
+            .menuStyle(.borderlessButton)
+            .disabled(store.isSending || store.isLoadingMeetings)
+            Spacer(minLength: 0)
+            Button("새 회의") { store.startNewMeeting(); focused = true }
+                .font(.system(size: 11.5)).buttonStyle(GlassQuietStyle())
+                .disabled(store.isSending)
+        }
+        .modifier(GlassReadability(inset: 8))
     }
 
     private var conversationControls: some View {
         HStack(spacing: 10) {
             Menu {
-                Picker("담당 Office", selection: Binding(get: { model.chat.agent },
-                                                        set: { _ = model.chat.selectAgent($0) })) {
+                Picker("담당 Office", selection: Binding(get: { store.agent },
+                                                        set: { _ = store.selectAgent($0) })) {
                     ForEach(OfficeAgent.allCases) { agent in
                         Text("\(agent.title) · \(agent.role)").tag(agent)
                     }
@@ -30,31 +77,31 @@ struct CouncilCompanionContent: View {
             } label: {
                 HStack(spacing: 6) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.chat.agent.title).font(.system(size: 13, weight: .semibold))
-                        Text(model.chat.reviewers.isEmpty ? model.chat.agent.role : "회의실 · " + ([model.chat.agent] + model.chat.reviewers).map(\.title).joined(separator: "·")).font(.system(size: 10.5))
+                        Text(store.agent.title).font(.system(size: 13, weight: .semibold))
+                        Text(store.reviewers.isEmpty ? store.agent.role : "회의실 · " + ([store.agent] + store.reviewers).map(\.title).joined(separator: "·")).font(.system(size: 10.5))
                             .foregroundStyle(Palette.glassInkMuted)
                     }
                     Image(systemName: "chevron.down").font(.system(size: 10.5))
                 }
             }
-            .disabled(model.chat.isSending)
-            .help(model.chat.isSending ? "담당자를 바꾸려면 먼저 기다림을 중단해 주세요." : "질문을 받을 담당 Office를 선택해요.")
-            .accessibilityLabel("담당 Office: \(model.chat.agent.title), \(model.chat.agent.role)")
+            .disabled(store.isSending || (durableMeetings && store.meeting != nil))
+            .help(durableMeetings && store.meeting != nil ? "저장된 회의의 담당자는 Hub에서 바꿀 수 있어요." : store.isSending ? "담당자를 바꾸려면 먼저 기다림을 중단해 주세요." : "질문을 받을 담당 Office를 선택해요.")
+            .accessibilityLabel("담당 Office: \(store.agent.title), \(store.agent.role)")
             Spacer(minLength: 0)
             Menu {
-                Picker("업무 범위", selection: Binding(get: { model.chat.scope },
-                                                      set: { model.chat.scope = $0 })) {
-                    ForEach(OfficeChatScope.allCases) { scope in
+                Picker("업무 범위", selection: Binding(get: { store.scope },
+                                                      set: { store.scope = $0 })) {
+                    ForEach(OfficeChatScope.allCases.filter { !durableMeetings || $0 != .all }) { scope in
                         Text(scope.title).tag(scope)
                     }
                 }
             } label: {
-                Label(model.chat.scope.title, systemImage: "line.3.horizontal.decrease")
+                Label(store.scope.title, systemImage: "line.3.horizontal.decrease")
                     .font(.system(size: 11.5))
             }
-            .disabled(model.chat.isSending)
-            .help(model.chat.isSending ? "업무 범위를 바꾸려면 먼저 기다림을 중단해 주세요." : "대화할 업무 범위를 선택해요.")
-            .accessibilityLabel("업무 범위: \(model.chat.scope.title)")
+            .disabled(store.isSending || (durableMeetings && store.meeting != nil))
+            .help(durableMeetings && store.meeting != nil ? "다른 범위의 회의는 새 회의를 누른 뒤 선택해 주세요." : store.isSending ? "업무 범위를 바꾸려면 먼저 기다림을 중단해 주세요." : "대화할 업무 범위를 선택해요.")
+            .accessibilityLabel("업무 범위: \(store.scope.title)")
             moreMenu
         }
         .menuStyle(.borderlessButton)
@@ -67,14 +114,15 @@ struct CouncilCompanionContent: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    if let source = model.chat.topicSource { topicSource(source) }
-                    if model.chat.turns.isEmpty && !model.chat.isSending {
+                    if durableMeetings && store.isLoadingMeetings { ProgressView("회의 불러오는 중").font(.system(size: 12)) }
+                    if let source = store.topicSource { topicSource(source) }
+                    if store.turns.isEmpty && !store.isSending && !store.isLoadingMeetings {
                         emptyConversation
                     }
-                    ForEach(model.chat.turns) { turn in
+                    ForEach(store.turns) { turn in
                         turnContent(turn)
                     }
-                    if let message = model.chat.pendingMessage {
+                    if let message = store.pendingMessage {
                         VStack(alignment: .leading, spacing: 9) {
                             question(message)
                             HStack(spacing: 8) {
@@ -86,10 +134,10 @@ struct CouncilCompanionContent: View {
                             .accessibilityElement(children: .combine)
                         }
                     }
-                    if let message = model.chat.errorMessage {
+                    if let message = store.errorMessage {
                         feedback(message, symbol: "exclamationmark.bubble")
                     }
-                    if let message = model.council.handoffMessage {
+                    if !durableMeetings, let message = model.council.handoffMessage {
                         feedback(message, symbol: "arrow.up.right")
                     }
                     Color.clear.frame(height: 1).id("conversation-end")
@@ -97,13 +145,13 @@ struct CouncilCompanionContent: View {
                 .padding(2)
             }
             .frame(maxWidth: .infinity, minHeight: 100, maxHeight: .infinity)
-            .onChange(of: model.chat.turns.last?.id) { _, _ in
+            .onChange(of: store.turns.last?.id) { _, _ in
                 proxy.scrollTo("conversation-end", anchor: .bottom)
             }
-            .onChange(of: model.chat.isSending) { _, _ in
+            .onChange(of: store.isSending) { _, _ in
                 proxy.scrollTo("conversation-end", anchor: .bottom)
             }
-            .onChange(of: model.chat.errorMessage) { _, _ in
+            .onChange(of: store.errorMessage) { _, _ in
                 proxy.scrollTo("conversation-end", anchor: .bottom)
             }
         }
@@ -111,19 +159,20 @@ struct CouncilCompanionContent: View {
 
     private var emptyConversation: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("담당 Office에 바로 물어보세요")
+            Text(durableMeetings ? (store.meeting == nil ? "새 회의를 시작하세요" : store.meeting!.title) : "담당 Office에 바로 물어보세요")
                 .font(.system(size: 14, weight: .medium))
-            Text(model.chat.agent.responsibility)
+            if durableMeetings { Text("회의는 Hub에 저장돼요. 여기서 이어서 질문할 수 있어요.").font(.system(size: 12)).foregroundStyle(Palette.glassInkMuted) }
+            Text(store.agent.responsibility)
                 .font(.system(size: 12)).foregroundStyle(Palette.glassInkMuted)
-            if model.chat.draft.isEmpty {
-                ForEach(model.chat.agent.starters, id: \.self) { starter in
-                    Button(starter) { model.chat.draft = starter; focused = true }
+            if store.draft.isEmpty {
+                ForEach(store.agent.starters, id: \.self) { starter in
+                    Button(starter) { store.draft = starter; focused = true }
                         .buttonStyle(.plain).font(.system(size: 11.5))
                         .multilineTextAlignment(.leading).foregroundStyle(Palette.glassInkMuted)
                         .help("질문으로 가져오기 · 보내기를 눌러야 실행해요")
                 }
             }
-            if !model.chat.hasConnection {
+            if !store.hasConnection {
                 Text("질문을 보내려면 Hub 연결이 필요해요. 초안은 앱 실행 중에만 유지돼요.")
                     .font(.system(size: 11.5)).foregroundStyle(Palette.glassInkMuted)
                 Button("Hub 연결", action: openConnection)
@@ -140,8 +189,8 @@ struct CouncilCompanionContent: View {
         VStack(alignment: .leading, spacing: 9) {
             question(turn.message)
             if let council = turn.reply.council {
-                OfficeDiscussionContent(discussion: council.discussion, isSending: model.chat.isSending) { speechIndex in
-                    _ = model.chat.continueDiscussion(turnID: turn.id, speechIndex: speechIndex); focused = true
+                OfficeDiscussionContent(discussion: council.discussion, isSending: store.isSending) { speechIndex in
+                    _ = store.continueDiscussion(turnID: turn.id, speechIndex: speechIndex); focused = true
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -173,11 +222,11 @@ struct CouncilCompanionContent: View {
                                 Text(turn.reply.contextNote)
                             }
                             if !turn.reply.contextSource.isEmpty {
-                                Text(turn.reply.contextSource == "provided"
+                                Text(durableMeetings ? "참고한 문맥: 저장된 회의와 연결한 자료" : turn.reply.contextSource == "provided"
                                      ? "참고한 문맥: 입력한 내용과 최근 대화"
                                      : "참고한 문맥을 확인하지 못했어요.")
                             }
-                            if !turn.reply.logPersisted {
+                            if !durableMeetings && !turn.reply.logPersisted {
                                 Text("이 답변의 Hub 기록 저장은 확인되지 않았어요.")
                             }
                         }
@@ -217,24 +266,24 @@ struct CouncilCompanionContent: View {
             HStack {
                 Text("질문 · \(sourceLabel)")
                 Spacer(minLength: 0)
-                Text("\(model.chat.draft.utf16.count.formatted()) / 6,000")
+                Text("\(store.draft.utf16.count.formatted()) / 6,000")
                     .monospacedDigit()
             }
             .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkMuted)
             .modifier(GlassReadability(radius: 8, inset: 3))
-            if let label = model.chat.followUpLabel {
+            if let label = store.followUpLabel {
                 Text(label).font(.system(size: 10.5)).foregroundStyle(Palette.glassInkMuted)
                     .lineLimit(2).help(label)
             }
             ZStack(alignment: .topLeading) {
-                if model.chat.draft.isEmpty {
+                if store.draft.isEmpty {
                     Text("담당자에게 물어볼 내용을 적어보세요.")
                         .foregroundStyle(Palette.glassInkFaint)
                         .padding(.leading, 5).padding(.top, 1)
                         .allowsHitTesting(false)
                 }
-                TextEditor(text: Binding(get: { model.chat.draft },
-                                         set: { model.chat.draft = $0 }))
+                TextEditor(text: Binding(get: { store.draft },
+                                         set: { store.draft = $0 }))
                     .scrollContentBackground(.hidden)
                     .focused($focused)
                     .accessibilityLabel("담당 Office에게 질문")
@@ -248,59 +297,66 @@ struct CouncilCompanionContent: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            Text(model.chat.draft.utf16.count > 6000
+            Text(store.draft.utf16.count > 6000
                  ? "질문은 6,000자 이내로 적어 주세요."
-                 : "앱 실행 중 보관 · 최근 대화 일부 전달")
+                 : durableMeetings ? (store.meeting?.state == "closed" ? "닫힌 회의 · Hub에서 열기" : "회의는 Hub에 저장 · 초안은 앱 실행 중 유지") : "앱 실행 중 보관 · 최근 대화 일부 전달")
                 .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(GlassReadability(radius: 8, inset: 4))
             Spacer(minLength: 0)
-            if model.chat.isSending {
-                Button("기다림 중단", action: model.chat.cancelWaiting)
+            if store.isSending {
+                Button("기다림 중단", action: store.cancelWaiting)
                     .buttonStyle(GlassActionStyle())
-                    .help("기다림을 중단하고 입력을 보관해요. 다시 보내면 새 요청이에요.")
+                    .help(durableMeetings ? "입력을 보관하고, 회의를 다시 불러와 저장된 결과를 확인해요." : "기다림을 중단하고 입력을 보관해요. 다시 보내면 새 요청이에요.")
+            } else if durableMeetings && store.meetingNeedsReload {
+                Button("저장 결과 확인") { Task { await store.reloadMeeting() } }
+                    .buttonStyle(GlassActionStyle())
+                    .disabled(store.isLoadingMeetings)
             } else {
-                Button(action: model.sendCouncilMessage) {
+                Button(action: { if durableMeetings { store.sendDraft() } else { model.sendCouncilMessage() } }) {
                     Label("질문 보내기", systemImage: "arrow.up")
                 }
                 .buttonStyle(GlassActionStyle())
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(!model.canSendCouncil)
+                .disabled(durableMeetings ? !canSendMeeting : !model.canSendCouncil)
             }
         }
     }
 
     private var moreMenu: some View {
         Menu {
+            if !durableMeetings {
             Menu("함께 볼 관점 · 주관 포함 2~3명") {
-                Text("주관 · " + model.chat.agent.title)
-                ForEach(OfficeAgent.allCases.filter { $0 != model.chat.agent }) { agent in
+                Text("주관 · " + store.agent.title)
+                ForEach(OfficeAgent.allCases.filter { $0 != store.agent }) { agent in
                     Toggle("\(agent.title) · \(agent.role)", isOn: Binding(
-                        get: { model.chat.reviewers.contains(agent) },
-                        set: { _ in _ = model.chat.toggleReviewer(agent) }))
-                        .disabled(!model.chat.reviewers.contains(agent) && model.chat.reviewers.count >= 2)
+                        get: { store.reviewers.contains(agent) },
+                        set: { _ in _ = store.toggleReviewer(agent) }))
+                        .disabled(!store.reviewers.contains(agent) && store.reviewers.count >= 2)
                 }
-                if !model.chat.reviewers.isEmpty {
-                    Button("주관에게만 묻기") { _ = model.chat.continueWithAgent(model.chat.agent) }
+                if !store.reviewers.isEmpty {
+                    Button("주관에게만 묻기") { _ = store.continueWithAgent(store.agent) }
                 }
-            }.disabled(model.chat.isSending)
+            }.disabled(store.isSending)
             Button("일반 대화로 돌아가기") {
-                _ = model.chat.selectTopic("general", scope: model.chat.scope, owner: model.selectedCharacter.officeAgent)
-            }.disabled(model.chat.isSending)
+                _ = store.selectTopic("general", scope: store.scope, owner: model.selectedCharacter.officeAgent)
+            }.disabled(store.isSending)
             Divider()
+            }
             Button {
-                model.chat.source = .text
+                store.source = .text
+                if durableMeetings, store.meeting == nil { store.sourceTaskID = nil }
                 focused = true
             } label: { Label("직접 입력", systemImage: "text.cursor") }
             Button {
-                model.prepareCouncilFromMemo()
+                if durableMeetings { model.prepareOfficeFromMemo() } else { model.prepareCouncilFromMemo() }
                 focused = true
             } label: { Label("현재 메모 불러오기", systemImage: "square.and.pencil") }
-            .disabled(model.chat.isSending || model.memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(store.isSending || model.memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Menu {
                 ForEach(model.displayedTasks) { task in
                     Button {
-                        model.prepareCouncilFromTask(task)
+                        if durableMeetings { model.prepareOfficeFromTask(task) } else { model.prepareCouncilFromTask(task) }
                         focused = true
                     } label: {
                         Text(task.title.count > 30 ? String(task.title.prefix(30)) + "…" : task.title)
@@ -308,12 +364,19 @@ struct CouncilCompanionContent: View {
                     .help(task.title)
                 }
             } label: { Label("할 일 불러오기", systemImage: "checklist") }
-            .disabled(model.chat.isSending || model.displayedTasks.isEmpty)
+            .disabled(store.isSending || model.displayedTasks.isEmpty)
             Divider()
-            Button("브랜드 Council에서 검토", action: model.openChatInCouncil)
-                .disabled(!model.canOpenChatInCouncil)
-            Button("현재 대화 비우기", action: model.chat.clearConversation)
-                .disabled(model.chat.isSending || model.chat.turns.isEmpty)
+            if durableMeetings {
+                Button("같은 회의를 Hub에서 열기", action: model.openOfficeMeetingInHub)
+                    .disabled(store.meeting == nil)
+                Button("회의 다시 불러오기") { Task { await store.reloadMeeting() } }
+                    .disabled(store.isSending || store.isLoadingMeetings)
+            } else {
+                Button("브랜드 Council에서 검토", action: model.openChatInCouncil)
+                    .disabled(!model.canOpenChatInCouncil)
+                Button("현재 대화 비우기", action: store.clearConversation)
+                    .disabled(store.isSending || store.turns.isEmpty)
+            }
             Button("Hub 연결 설정", action: openConnection)
         } label: {
             Image(systemName: "ellipsis").frame(width: 24, height: 28)
@@ -324,8 +387,9 @@ struct CouncilCompanionContent: View {
     }
 
     private var sourceLabel: String {
-        if model.chat.topicSource?.isNoticeSummary == true { return "알림 요약" }
-        switch model.chat.source {
+        if durableMeetings, store.meeting?.sourceTask != nil || store.sourceTaskID != nil { return "할 일 · 복사본" }
+        if store.topicSource?.isNoticeSummary == true { return "알림 요약" }
+        switch store.source {
         case .text: return "직접 입력"
         case .memo: return "현재 메모"
         case .task: return "할 일"
@@ -340,7 +404,7 @@ struct CouncilCompanionContent: View {
                 Text("내용: " + source.detail)
                 if let date = source.date { Text("관련 시각: " + date.formatted(date: .abbreviated, time: .shortened)) }
                 if let path = source.path {
-                    Text("Hub 원문: " + model.chat.conversationKey.origin + path)
+                    Text("Hub 원문: " + store.conversationKey.origin + path)
                     Button("Hub 원문 열기", action: model.openTopicOriginal).buttonStyle(.plain)
                 }
                 Text("참고 자료는 길이에 따라 일부만 전달해요. 전체 복사본은 앱 실행 중 이 대화에 남아요.")

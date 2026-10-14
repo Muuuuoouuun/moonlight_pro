@@ -4,13 +4,13 @@ import React from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   emptyStudioDraft, draftFromDetail, studioFingerprint, studioMirrorKey,
-  studioErrorMessage, isDurableStudioSave,
+  studioErrorMessage, isDurableStudioSave, hasStudioContent,
 } from '@/lib/content-workflow-client';
 import { manualPublicationFields, publicationIsVerified } from '@/lib/content-workflow';
 import { refreshContentLedger } from '../use-content-ledger';
 import { createStudioSaveQueue, isDefinitiveStudioRejection } from '@/lib/content-studio-save-queue';
 import { readStudioMirror, readStudioDocumentMirror, writeStudioMirror } from '@/lib/content-studio-storage';
-import { resolveStudioBrandId, studioDocumentQuery } from '@/lib/content-studio-routing';
+import { resolveStudioBrandId, resolveStudioCampaignContext, studioDocumentQuery } from '@/lib/content-studio-routing';
 import { postStudio } from './content-studio-api';
 
 export { postStudio };
@@ -24,17 +24,18 @@ async function getDetail(contentId) {
 const copyAsNew = (draft) => ({
   ...draft, contentId: null, variantId: null, itemUpdatedAt: null, variantUpdatedAt: null, status: 'draft', sourceRefs: [],
 });
-const routeIdentity = (scope, item, variant, fresh, draft, brand) => [scope, item || '', variant || '', fresh || '', draft || '', item ? '' : brand || ''].join('|');
+const routeIdentity = (scope, item, variant, fresh, draft, brand, campaign) => JSON.stringify([scope, item || '', variant || '', fresh || '', draft || '', item ? '' : brand || '', campaign ?? null]);
 const emptyHistory = () => ({ revisions: [], nextCursor: null, loading: false, error: '' });
 const busyState = { busy: false, pendingSave: null, pendingMutation: null };
 
 export function useContentStudio(workspace) {
   const params = useSearchParams(), pathname = usePathname();
-  const scope = workspace || 'all';
   const itemParam = params.get('item'), variantParam = params.get('variant'), newParam = params.get('new'), brandParam = params.get('brand'), draftParam = params.get('draft');
+  const campaignParam = params.get('campaign'), scopeParam = params.get('scope');
+  const scope = workspace || scopeParam || 'all';
   const [state, setState] = React.useState(() => ({
     draft: emptyStudioDraft(), dirty: false, ready: false, loadError: '', saveState: 'idle', saveMessage: '',
-    localState: 'idle', localSavedAt: null, recovery: null, detail: null, history: emptyHistory(), editTick: 0, ...busyState,
+    localState: 'idle', localSavedAt: null, recovery: null, detail: null, campaignContext: null, history: emptyHistory(), editTick: 0, ...busyState,
   }));
   const stateRef = React.useRef(state), epoch = React.useRef(0), queueRef = React.useRef(null);
   const historyRequest = React.useRef(0);
@@ -44,12 +45,12 @@ export function useContentStudio(workspace) {
     const next = typeof patch === 'function' ? patch(stateRef.current) : { ...stateRef.current, ...patch };
     stateRef.current = next; setState(next);
   }, []);
-  const routeKey = routeIdentity(scope, itemParam, variantParam, newParam, draftParam, brandParam);
+  const routeKey = routeIdentity(scope, itemParam, variantParam, newParam, draftParam, brandParam, campaignParam);
   const writeUrl = React.useCallback((draft) => {
-    const query = studioDocumentQuery(draft, draftKey.current);
-    loadedRoute.current = routeIdentity(scope, draft.contentId, draft.variantId, draft.contentId ? '' : 'draft', draft.contentId ? '' : draftKey.current, draft.brandId);
+    const query = studioDocumentQuery(draft, draftKey.current, { scope: scopeParam, campaignId: campaignParam });
+    loadedRoute.current = routeIdentity(scope, draft.contentId, draft.variantId, draft.contentId ? '' : 'draft', draft.contentId ? '' : draftKey.current, draft.brandId, campaignParam);
     window.history.replaceState(null, '', pathname + '?' + query);
-  }, [pathname, scope]);
+  }, [pathname, scope, scopeParam, campaignParam]);
   const mirror = React.useCallback((next, dirty, receiptPatch = {}, options = {}) => {
     const key = studioMirrorKey({ ...next, draftKey: draftKey.current });
     const documentEpoch = epoch.current;
@@ -94,12 +95,22 @@ export function useContentStudio(workspace) {
     const documentEpoch = ++epoch.current;
     draftKey.current = draftParam || crypto.randomUUID();
     const current = () => epoch.current === documentEpoch;
-    update({ draft: emptyStudioDraft(), ready: false, loadError: '', recovery: null, detail: null, dirty: false,
+    update({ draft: emptyStudioDraft(), ready: false, loadError: '', recovery: null, detail: null, campaignContext: null, dirty: false,
       saveState: 'idle', saveMessage: '', history: emptyHistory(), localState: 'idle', localSavedAt: null, ...busyState });
     // A bare new=draft is intentional creation. Give it a stable address before
     // any typing, persistence or reload can happen.
     if (!itemParam && newParam && !draftParam) writeUrl(emptyStudioDraft(brandParam || ''));
     async function initialize() {
+      if (campaignParam !== null) {
+        try {
+          const campaignContext = await resolveStudioCampaignContext(campaignParam, { scope });
+          if (!current()) return;
+          if (brandParam && brandParam.toLowerCase() !== campaignContext.brandId) throw new Error('캠페인과 주소의 브랜드가 다릅니다. 원래 캠페인에서 다시 열어주세요.');
+          update({ campaignContext, draft: emptyStudioDraft(campaignContext.brandId || ''),
+            loadError: '캠페인 연결 저장을 아직 지원하지 않습니다. 캠페인에 귀속된 초안은 저장할 수 없습니다.', ready: false });
+        } catch (error) { if (current()) update({ loadError: error.message, ready: false }); }
+        return;
+      }
       let contentId = itemParam, variantId = variantParam, local = null;
       try {
         if (contentId || draftParam) {
@@ -174,15 +185,16 @@ export function useContentStudio(workspace) {
       if (!unavailable) writeUrl(draft);
     }
     initialize();
-  }, [routeKey, scope, itemParam, variantParam, newParam, draftParam, brandParam, resetQueue, update, writeUrl]);
+  }, [routeKey, scope, itemParam, variantParam, newParam, draftParam, brandParam, campaignParam, resetQueue, update, writeUrl]);
   React.useEffect(() => () => { epoch.current += 1; loadedRoute.current = null; }, []);
 
   const edit = React.useCallback((patch) => {
     const current = stateRef.current;
     if (!current.ready || current.recovery || current.busy || current.pendingMutation) return;
     const draft = typeof patch === 'function' ? patch(current.draft) : { ...current.draft, ...patch };
-    update({ draft, dirty: true, editTick: current.editTick + 1, saveState: 'editing', saveMessage: '' });
-    mirror(draft, true).catch(() => {});
+    const dirty = Boolean(current.pendingSave || draft.contentId || hasStudioContent(draft));
+    update({ draft, dirty, editTick: current.editTick + 1, saveState: dirty ? 'editing' : 'idle', saveMessage: '' });
+    mirror(draft, dirty).catch(() => {});
   }, [mirror, update]);
   const save = React.useCallback(async (checkpoint = false) => {
     if (!stateRef.current.ready || stateRef.current.recovery || stateRef.current.pendingMutation) return null;
@@ -234,6 +246,7 @@ export function useContentStudio(workspace) {
   };
   // 새 초안을 열었으면 true. 현재 글의 저장이 확인되지 않으면 열지 않고 false — 호출처가 이유를 알린다.
   const newDraft = async () => {
+    if (campaignParam !== null) return false;
     const state = stateRef.current;
     if ((!state.ready && !state.loadError) || state.busy || state.recovery || state.pendingMutation) return false;
     const documentEpoch = epoch.current, brand = state.draft.brandId;
@@ -373,6 +386,6 @@ export function useContentStudio(workspace) {
       return { ok: false, message: current() ? error.message : '' };
     } finally { if (current()) update({ busy: false }); }
   };
-  return { ...state, edit, save, recordPublication, switchVariant, newDraft, refreshHistory, compareLatest, recover, mutate, retryLoad,
+  return { ...state, scope, campaignRequested: campaignParam !== null, edit, save, recordPublication, switchVariant, newDraft, refreshHistory, compareLatest, recover, mutate, retryLoad,
     retryMutation: () => stateRef.current.pendingMutation && mutate(stateRef.current.pendingMutation.command), getDraft: () => stateRef.current.draft };
 }

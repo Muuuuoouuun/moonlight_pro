@@ -135,7 +135,7 @@ export function officeBreakdownResult(proposal) {
 
 // Operator override: the explicit choice beats the kind default (deep design §5 순서).
 export function withOfficePacketOwner(breakdown, key, ownerId) {
-  check(OFFICE_IDS.includes(ownerId), '등록되지 않은 Office 담당입니다.');
+  check(OFFICE_IDS.includes(ownerId), '등록되지 않은 오피스 담당입니다.');
   check(breakdown.packets.some(packet => packet.key === key), '없는 업무 조각입니다.');
   return { ...breakdown, packets: breakdown.packets.map(packet => packet.key !== key ? packet : { ...packet, ownerId, ownerSource: 'operator', reviewerIds: packet.reviewerIds.filter(id => id !== ownerId) }) };
 }

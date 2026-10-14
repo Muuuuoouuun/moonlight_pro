@@ -1,7 +1,8 @@
-import { bootstrapReadinessSql, loadEnv, deriveProjectRef, runSql } from './apply-migrations.mjs';
+import { bootstrapReadinessSql, envSources, loadEnv, deriveProjectRef, validateTargetRef, runSql } from './apply-migrations.mjs';
 import { readinessSql, summarizeReadiness } from './database-readiness.mjs';
-const env = loadEnv(), ref = deriveProjectRef(env), token = (env.SUPABASE_ACCESS_TOKEN || '').trim();
+const sources = envSources(), env = loadEnv(sources), ref = deriveProjectRef(env), token = (env.SUPABASE_ACCESS_TOKEN || '').trim();
 if (!ref || !token) throw Error('SUPABASE_ACCESS_TOKEN and the configured Supabase project are required');
+validateTargetRef(sources, ref);
 const response = await runSql(ref, token, readinessSql());
 if (!response.ok) throw Error('Database readiness request failed: HTTP ' + response.status);
 const features = summarizeReadiness(JSON.parse(response.body));

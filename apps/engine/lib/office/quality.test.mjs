@@ -106,7 +106,7 @@ test('council requests bounded role statements first and rejects incomplete role
   });
   assert.equal(calls.length, request.participants.length);
   for (const input of calls) {
-    assert.deepEqual(input.responseJsonSchema.required, ['sourceIndexes', 'corrections', 'position', 'evidence', 'objection', 'revisionCondition', 'changed', 'replyTo', 'changeReason']);
+    assert.deepEqual(input.responseJsonSchema.required, ['sourceIndexes', 'corrections', 'position', 'evidence', 'objection', 'revisionCondition', 'peerReviews', 'changed', 'replyTo', 'changeReason']);
     assert.equal(input.responseJsonSchema.properties.evidence.maxItems, 2);
     assert.equal(input.responseJsonSchema.properties.ownerId, undefined);
     assert.equal(JSON.parse(input.prompt).phase, 'position');

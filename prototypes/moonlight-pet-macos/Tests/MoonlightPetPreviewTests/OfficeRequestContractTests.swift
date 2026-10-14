@@ -31,6 +31,7 @@ private actor RequestContractTransport: HubTransporting {
     func login(username: String, password: String) async throws {}
     func logout() async throws {}
     func clearSession() async {}
+    func disconnect() async {}
 }
 
 func requestRow(id: UUID = UUID(), stamp: String = "2026-10-03T00:00:00.000Z", scope: String = "personal", state: String = "generated") -> [String: Any] {

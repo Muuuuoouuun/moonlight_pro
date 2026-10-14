@@ -1,4 +1,5 @@
 "use client";
+import { studioWithoutCampaignHref } from '@/lib/content-studio-routing';
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
@@ -244,7 +245,7 @@ export function ContentStudio({ workspace, ledger }) {
           {loud ? <TruthBadge state={studio.loadError || studio.saveState !== 'local' ? 'error' : 'preview'} label={loud} /> : quiet && <span className="studio-muted studio-small">{quiet}</span>}
         </span>
         {studio.dirty && ['local', 'error'].includes(studio.saveState) && <Button size="xs" onClick={() => studio.save()} disabled={disabled}>저장 재시도</Button>}
-        <Button variant="ghost" onClick={startNew} disabled={(!studio.ready && !studio.loadError) || studio.busy || !!studio.recovery || !!studio.pendingMutation} icon="plus">새 글 <Kbd>N</Kbd></Button>
+        <Button variant="ghost" onClick={startNew} disabled={studio.campaignRequested || (!studio.ready && !studio.loadError) || studio.busy || !!studio.recovery || !!studio.pendingMutation} icon="plus">새 글 <Kbd>N</Kbd></Button>
         <Button variant="ghost" icon="more" onClick={() => setDrawer('more')} disabled={!studio.ready}>더보기</Button>
       </div>
     </header>
@@ -257,7 +258,9 @@ export function ContentStudio({ workspace, ledger }) {
     {notice && <div className="studio-feedback" role="status"><p>{notice}</p><div className="studio-actions">
       {notice === PUBLISHED_NOTICE && <><Button size="xs" variant="outline" icon="plus" onClick={startNew}>새 글</Button><Button size="xs" variant="outline" onClick={() => router.push('/dashboard/content/queue')}>다음 소재 고르기</Button></>}
       <Button size="xs" onClick={() => setNotice('')}>닫기</Button></div></div>}
-    {studio.loadError ? <Card className="studio-stack"><p role="alert">{studio.loadError}</p><Button variant="outline" onClick={studio.retryLoad}>다시 불러오기</Button></Card> :
+    {studio.loadError ? <Card className="studio-stack"><p role="alert">{studio.loadError}</p><Button variant="outline" onClick={studio.retryLoad}>다시 불러오기</Button>
+      {studio.campaignRequested && <Button variant="ghost" onClick={() => router.push(studioWithoutCampaignHref(studio.campaignContext, studio.scope))}>캠페인 없이 새 글</Button>}
+    </Card> :
       /* 로딩은 들어올 레이아웃(메모 + 본문 편집기)을 예고한다 — DESIGN §11. */
       !studio.ready ? <Card className="studio-stack"><Skeleton lines={2} height={16} width={['34%', '78%']} gap={10} label="메모 불러오는 중" /><Skeleton lines={4} height={18} width={['100%', '100%', '100%', '62%']} gap={10} label="본문 불러오는 중" /></Card> :
       <>

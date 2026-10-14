@@ -34,6 +34,7 @@ const {
 } = require('./widget-window');
 const { buildAppMenuTemplate, buildDockMenuTemplate, loginItemMenuItem } = require('./menu-template');
 const { installPetRuntime } = require('./pet-runtime');
+const { startHubSessionBridge } = require('./hub-session-bridge');
 
 const IS_MAC = process.platform === 'darwin';
 
@@ -145,6 +146,7 @@ function createWindow() {
     backgroundColor: BACKGROUND,
     icon: iconPath(),
     webPreferences: {
+      session: session.defaultSession,
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -174,6 +176,14 @@ function createWindow() {
     win.hide();
   });
   guardNavigation(win.webContents);
+  const resumeWidget = () => {
+    if (!widgetResumeAfterLogin || !isSameOrigin(win.webContents.getURL(), currentHubUrl())
+      || isLoginUrl(win.webContents.getURL(), currentHubUrl())) return;
+    widgetResumeAfterLogin = false;
+    showWidget();
+  };
+  win.webContents.on('did-finish-load', resumeWidget);
+  win.webContents.on('did-navigate-in-page', resumeWidget);
 }
 
 function showWindow() {
@@ -283,6 +293,8 @@ let widgetState = null; // { x, y, pinned } — widget-state.json
 let widgetHeight = WIDGET_HEIGHT;
 let widgetPainted = false;
 let widgetShowAfterLoad = false;
+let widgetResumeAfterLogin = false;
+let widgetNeedsReload = false;
 
 function loadWidgetState() {
   if (!widgetState) widgetState = normalizeWidgetState(readJson(userFile('widget-state.json'), {}));
@@ -408,6 +420,7 @@ function createWidget() {
     backgroundColor: BACKGROUND,
     icon: iconPath(),
     webPreferences: {
+      session: session.defaultSession,
       preload: path.join(__dirname, 'widget-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -456,6 +469,7 @@ function createWidget() {
     if (!target) return;
     if (event) event.preventDefault();
     hideWidget();
+    widgetResumeAfterLogin = true;
     openMainUrl(target);
   };
   contents.on('will-navigate', toLogin);
@@ -478,11 +492,12 @@ function showWidget() {
   const hubUrl = currentHubUrl();
   if (!widgetAlive()) createWidget();
   const contents = widget.webContents;
-  if (widgetPainted && !contents.isLoading() && isWidgetPage(contents.getURL(), hubUrl)) {
+  if (!widgetNeedsReload && widgetPainted && !contents.isLoading() && isWidgetPage(contents.getURL(), hubUrl)) {
     revealWidget();
     return;
   }
   widgetShowAfterLoad = true;
+  widgetNeedsReload = false;
   contents.loadURL(widgetUrl(hubUrl)).catch(() => {});
 }
 
@@ -708,7 +723,7 @@ async function waitFor(check, label, ms = 30000) {
 function startLoggedOutHub() {
   const http = require('node:http');
   const server = http.createServer((req, res) => {
-    if (req.url.startsWith('/widget')) {
+    if (req.url.startsWith('/widget') && !req.headers.cookie?.includes('com_moon_operator_session=smoke-login')) {
       res.writeHead(307, { Location: '/login?next=%2Fwidget' });
       res.end();
       return;
@@ -809,6 +824,15 @@ async function runWidgetSmoke() {
   check(!isLoginUrl(widget.webContents.getURL(), hubUrlOverride), 'widget never renders login');
   check(!new URL(win.webContents.getURL()).searchParams.has('next'), 'main login drops next=/widget');
   console.log(`smoke:widget-login ok main=${win.webContents.getURL()} widget=${widget.webContents.getURL() || '(blank)'}`);
+  // 같은 세션에 로그인하면 로그인 때문에 숨겨진 위젯이 다시 연결된다.
+  check(win.webContents.session === widget.webContents.session, 'main and widget share session');
+  await session.defaultSession.cookies.set({ url: hubUrlOverride, name: 'com_moon_operator_session',
+    value: 'smoke-login', path: '/', httpOnly: true, expirationDate: Date.now() / 1000 + 3600 });
+  await session.defaultSession.cookies.flushStore();
+  await win.loadURL(dashboardUrl(hubUrlOverride));
+  await waitFor(widgetVisible, 'widget resumes after login');
+  check(isWidgetPage(widget.webContents.getURL(), hubUrlOverride), 'resumed widget is on the same Hub');
+  console.log('smoke:widget-session-shared-and-resumed ok');
   server.close();
 
   clearTimeout(giveUp);
@@ -1006,6 +1030,22 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((contents, _permission, callback, details) => {
       callback(isSameOrigin(details.requestingUrl || contents.getURL(), currentHubUrl()));
     });
+    if (!SMOKE && !SMOKE_MAC) {
+      let notifySession;
+      session.defaultSession.cookies.on('changed', (_event, cookie) => {
+        if (cookie.name !== 'com_moon_operator_session') return;
+        widgetNeedsReload = true;
+        clearTimeout(notifySession);
+        notifySession = setTimeout(() => {
+          session.defaultSession.cookies.flushStore().catch(() => {});
+          pet?.sessionChanged?.();
+        }, 100);
+      });
+      if (USE_NATIVE_PET) {
+        startHubSessionBridge({ session: session.defaultSession, getHubUrl: currentHubUrl })
+          .catch(() => console.warn('Mac 위젯 세션 연결을 시작하지 못했습니다.'));
+      }
+    }
     if (IS_MAC) {
       app.setAboutPanelOptions({ applicationName: 'Moonlight', applicationVersion: app.getVersion(), copyright: 'Moonlight' });
       // 개발 실행(electron .)의 Dock 아이콘은 Electron 기본이다 — 패키징한 앱은 번들 아이콘을 쓴다.

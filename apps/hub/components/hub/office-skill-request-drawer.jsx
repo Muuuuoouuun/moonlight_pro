@@ -37,11 +37,11 @@ function SkillRequestRow({ item }) {
 }
 
 // Presentational so every read state can be rendered and checked without a network.
-export function OfficeSkillRequestHistory({ state, onRefresh }) {
+export function OfficeSkillRequestHistory({ state, onRefresh, title = '이 할 일의 요청 기록' }) {
   const titleId = React.useId();
   const loading = state.status === 'loading';
   return <section className={styles.history} aria-labelledby={titleId} aria-busy={loading}>
-    <div className={styles.historyHead}><strong id={titleId}>이 할 일의 요청 기록</strong>
+    <div className={styles.historyHead}><strong id={titleId}>{title}</strong>
       <Button variant="ghost" size="xs" disabled={loading} onClick={onRefresh}>다시 확인</Button></div>
     {loading ? <Skeleton lines={2} label="요청 기록 확인 중" /> : null}
     {state.status === 'preview' ? <p className={styles.hint}><TruthBadge state="preview" /> 요청 기록은 저장 연결 후 표시됩니다.</p> : null}
@@ -55,7 +55,7 @@ export function OfficeSkillRequestHistory({ state, onRefresh }) {
 }
 
 // Reads once when the drawer opens and again only when the operator asks. No polling.
-function useOfficeSkillRequests(taskId) {
+function useOfficeSkillRequests(taskId, meetingId) {
   const [state, setState] = React.useState({ status: 'loading', items: [] });
   const readRef = React.useRef(0);
   const controllerRef = React.useRef(null);
@@ -66,10 +66,10 @@ function useOfficeSkillRequests(taskId) {
     const controller = new AbortController();
     controllerRef.current = controller;
     setState({ status: 'loading', items: [] });
-    loadOfficeSkillRequests(taskId, { signal: controller.signal }).then(next => {
+    loadOfficeSkillRequests(taskId, { signal: controller.signal, meetingId }).then(next => {
       if (readId === readRef.current && !controller.signal.aborted) setState(next);
     });
-  }, [taskId]);
+  }, [taskId, meetingId]);
   React.useEffect(() => {
     load();
     return () => { readRef.current += 1; controllerRef.current?.abort(); };
@@ -77,8 +77,8 @@ function useOfficeSkillRequests(taskId) {
   return [state, load];
 }
 
-export function OfficeSkillRequestDrawer({ agenda, officeScope, result, onClose }) {
-  const initial = React.useMemo(() => officeSkillRequestDraft({ agenda, officeScope, result }), [agenda, officeScope, result]);
+export function OfficeSkillRequestDrawer({ agenda, officeScope, result, meetingId, officeTurnId, onClose }) {
+  const initial = React.useMemo(() => officeSkillRequestDraft({ agenda, officeScope, result, meetingId, officeTurnId }), [agenda, officeScope, result, meetingId, officeTurnId]);
   const [requestId, setRequestId] = React.useState(() => crypto.randomUUID());
   const [instruction, setInstruction] = React.useState(initial?.instruction || '');
   const [expectedEvidence, setExpectedEvidence] = React.useState('');
@@ -86,8 +86,9 @@ export function OfficeSkillRequestDrawer({ agenda, officeScope, result, onClose 
   const [saved, setSaved] = React.useState(null);
   const [failure, setFailure] = React.useState(null);
   const [copied, setCopied] = React.useState(null);
-  const [history, reloadHistory] = useOfficeSkillRequests(initial?.taskId || null);
-  const input = initial && { requestId, taskId: initial.taskId, scope: initial.scope, instruction, expectedEvidence };
+  const [history, reloadHistory] = useOfficeSkillRequests(initial?.taskId || null, initial?.meetingId);
+  const input = initial && { requestId, taskId: initial.taskId, scope: initial.scope, instruction, expectedEvidence,
+    ...(initial.meetingId !== undefined || initial.officeTurnId !== undefined ? { meetingId: initial.meetingId, officeTurnId: initial.officeTurnId } : {}) };
   const invalid = input ? validateOfficeSkillRequest(input) : null;
   function edit(setter, value) {
     setter(value);
@@ -123,6 +124,6 @@ export function OfficeSkillRequestDrawer({ agenda, officeScope, result, onClose 
           {copied !== null ? <span role={copied ? 'status' : 'alert'}>{copied ? '복사했습니다.' : '복사하지 못했습니다. 내용을 선택해 복사해 주세요.'}</span> : null}
         </div> : <div className={styles.actions}><Button variant="primary" type="submit" disabled={busy || Boolean(invalid)}>{busy ? '저장 중…' : '요청서 저장'}</Button></div>}
       </form>
-      <OfficeSkillRequestHistory state={history} onRefresh={reloadHistory} /></>}
+      <OfficeSkillRequestHistory state={history} onRefresh={reloadHistory} title={meetingId ? '이 회의의 요청 기록' : undefined} /></>}
   </Drawer>;
 }

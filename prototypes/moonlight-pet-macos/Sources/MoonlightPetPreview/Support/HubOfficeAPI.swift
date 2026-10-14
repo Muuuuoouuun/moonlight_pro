@@ -99,3 +99,64 @@ private struct OfficeChatResponse: Decodable {
         businessWrites = try container.decode(Bool.self, forKey: .businessWrites)
     }
 }
+
+protocol HubOfficeMeetingServing: HubOfficeServing {
+    func officeMeetings(scope: OfficeChatScope) async throws -> [OfficeMeeting]
+    func officeMeeting(id: UUID) async throws -> OfficeMeetingDetail
+    func createOfficeMeeting(id: UUID, title: String, scope: OfficeChatScope, owner: OfficeAgent, sourceTaskID: UUID?) async throws -> OfficeMeetingDetail
+    func sendOfficeMeeting(id: UUID, requestID: UUID, revision: Int, message: String) async throws -> OfficeMeetingDetail
+}
+
+extension HubAPI: HubOfficeMeetingServing {
+    func officeMeetings(scope: OfficeChatScope) async throws -> [OfficeMeeting] {
+        guard scope != .all else { throw OfficeChatError.invalidInput }
+        let response = try await transport.request(path: "/api/hub/office/meetings?scope=\(scope.rawValue)&limit=20", method: "GET", body: nil)
+        try officeMeetingStatus(response, expected: ["ready"])
+        struct Page: Decodable { let meetings: [OfficeMeeting] }
+        let page = try JSONDecoder().decode(Page.self, from: response.data)
+        guard page.meetings.allSatisfy({ $0.scope == scope && $0.revision >= 0 && ["open", "closed"].contains($0.state) }) else { throw OfficeChatError.invalidResponse }
+        return page.meetings
+    }
+    func officeMeeting(id: UUID) async throws -> OfficeMeetingDetail {
+        let response = try await transport.request(path: meetingPath(id), method: "GET", body: nil)
+        return try meetingDetail(response, id: id, expected: ["ready"])
+    }
+    func createOfficeMeeting(id: UUID, title: String, scope: OfficeChatScope, owner: OfficeAgent, sourceTaskID: UUID?) async throws -> OfficeMeetingDetail {
+        guard scope != .all, OfficeChatCommand.validText(title, limit: 200) else { throw OfficeChatError.invalidInput }
+        var body: [String: Any] = ["meetingId": id.uuidString.lowercased(), "title": title, "scope": scope.rawValue,
+                                   "ownerId": owner.rawValue, "reviewers": [String](), "mode": "chat"]
+        if let sourceTaskID { body["sourceTaskId"] = sourceTaskID.uuidString.lowercased() }
+        let response = try await transport.request(path: "/api/hub/office/meetings", method: "POST", body: JSONSerialization.data(withJSONObject: body))
+        let detail = try meetingDetail(response, id: id, expected: ["ready"])
+        guard detail.meeting.scope == scope, detail.meeting.ownerId == owner else { throw OfficeChatError.invalidResponse }
+        return detail
+    }
+    func sendOfficeMeeting(id: UUID, requestID: UUID, revision: Int, message: String) async throws -> OfficeMeetingDetail {
+        guard revision >= 0, OfficeChatCommand.validText(message, limit: 6000) else { throw OfficeChatError.invalidInput }
+        let body: [String: Any] = ["requestId": requestID.uuidString.lowercased(), "expectedRevision": revision, "message": message, "mode": "chat", "includeProjects": false]
+        let response = try await transport.request(path: meetingPath(id) + "/turns", method: "POST", body: JSONSerialization.data(withJSONObject: body))
+        return try meetingDetail(response, id: id, expected: ["generated"])
+    }
+    private func meetingPath(_ id: UUID) -> String { "/api/hub/office/meetings/" + id.uuidString.lowercased() }
+    private func officeMeetingStatus(_ response: HubResponse, expected: [String]) throws {
+        if response.isPreview { throw OfficeChatError.preview }
+        if ["running", "unknown"].contains(response.status ?? "") { throw OfficeChatError.unconfirmed }
+        guard expected.contains(response.status ?? ""), response.source != "error" else { throw OfficeChatError.invalidResponse }
+    }
+    private func meetingDetail(_ response: HubResponse, id: UUID, expected: [String]) throws -> OfficeMeetingDetail {
+        try officeMeetingStatus(response, expected: expected)
+        let detail = try JSONDecoder().decode(OfficeMeetingDetail.self, from: response.data)
+        guard detail.persisted, detail.meeting.meetingId == id, detail.meeting.scope != .all, detail.meeting.revision >= 0,
+              ["open", "closed"].contains(detail.meeting.state),
+              Set(detail.turns.map(\.id)).count == detail.turns.count,
+              detail.turns.allSatisfy({ round in
+                  guard ["running", "generated", "error", "unknown"].contains(round.state), round.roundNumber > 0 else { return false }
+                  if round.state != "generated" { return true }
+                  guard let result = round.result else { return false }
+                  return result.scope == detail.meeting.scope && result.ownerId == round.request.ownerId && result.mode == round.request.mode
+                      && OfficeChatCommand.validText(result.answer, limit: 20_000)
+                      && OfficeChatCommand.validText(result.nextAction, limit: 6000)
+              }) else { throw OfficeChatError.invalidResponse }
+        return detail
+    }
+}
