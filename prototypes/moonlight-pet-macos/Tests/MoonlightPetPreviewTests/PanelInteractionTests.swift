@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 @main
 enum PanelInteractionTests {
@@ -27,6 +29,35 @@ enum PanelInteractionTests {
         let above = PanelDisplay(id: 4, frame: CGRect(x: 0, y: 1080, width: 1600, height: 900),
                                  visibleFrame: CGRect(x: 0, y: 1080, width: 1600, height: 870))
         let screens = [landscape, portrait, left, above]
+        // Both the idle icon and its panel must stay on the selected edge through
+        // narrow/wide mode changes and displays with negative/global coordinates.
+        for display in screens {
+            let visible = display.visibleFrame
+            for edge in PanelEdge.allCases {
+                let icon = PanelGeometry.edgeAligned(CGRect(x: visible.midX, y: visible.midY, width: 56, height: 56),
+                                                     edge: edge, in: visible)
+                check(edge == .left ? icon.minX == visible.minX + 8 : icon.maxX == visible.maxX - 8,
+                      "Enabling alignment must immediately attach the idle icon")
+                for perched in [true, false] {
+                    var previous = CGRect(x: visible.midX, y: visible.maxY - 600, width: 336, height: 558)
+                    for size in [CGSize(width: 336, height: 558), CGSize(width: 520, height: 440), CGSize(width: 336, height: 538)] {
+                        let resized = PanelGeometry.resizedKeepingTopRight(previous, size: size, in: visible)
+                        let aligned = PanelGeometry.edgeAligned(resized, edge: edge,
+                            outsidePet: perched ? nil : icon.size, in: visible)
+                        let pet = PanelGeometry.pet(size: icon.size, companion: aligned, perched: perched, edge: edge, in: visible)
+                        check(visible.insetBy(dx: 8, dy: 8).contains(aligned) && visible.insetBy(dx: 8, dy: 8).contains(pet),
+                              "Alignment must keep the icon and panel reachable")
+                        check(edge == .left ? pet.minX == visible.minX + 8 : pet.maxX == visible.maxX - 8,
+                              "The icon must stay on the chosen outside edge after a mode switch")
+                        check(aligned.maxY == previous.maxY, "A mode switch must retain the panel's top")
+                        check(perched || !aligned.intersects(pet), "Quick-panel icon must not overlap the content")
+                        check(PanelGeometry.edgeAligned(aligned, edge: edge, outsidePet: perched ? nil : icon.size, in: visible) == aligned,
+                              "Repeated alignment must not drift")
+                        previous = aligned
+                    }
+                }
+            }
+        }
         for (point, id) in [(CGPoint(x: 100, y: 400), UInt32(1)), (CGPoint(x: 2050, y: -100), 2),
                             (CGPoint(x: -900, y: 300), 3), (CGPoint(x: 400, y: 1500), 4)] {
             check(PanelGeometry.display(at: point, in: screens)?.id == id, "Incorrect destination screen")
@@ -51,6 +82,18 @@ enum PanelInteractionTests {
 
         let small = PanelDisplay(id: 5, frame: CGRect(x: 0, y: 0, width: 320, height: 240),
                                  visibleFrame: CGRect(x: 0, y: 24, width: 320, height: 216))
+        for edge in PanelEdge.allCases {
+            for perched in [true, false] {
+                let frame = PanelGeometry.edgeAligned(CGRect(x: -100, y: -100, width: 520, height: 1300),
+                    edge: edge, outsidePet: perched ? nil : CGSize(width: 56, height: 56), in: small.visibleFrame)
+                let icon = PanelGeometry.pet(size: CGSize(width: 56, height: 56), companion: frame,
+                                             perched: perched, edge: edge, in: small.visibleFrame)
+                check(small.visibleFrame.insetBy(dx: 8, dy: 8).contains(frame)
+                      && small.visibleFrame.insetBy(dx: 8, dy: 8).contains(icon),
+                      "A narrow display must fit oversized aligned panels and icons")
+                check(perched || !frame.intersects(icon), "A narrow display must reserve the separate icon's space")
+            }
+        }
         for display in screens + [small] {
             for size in [CGSize(width: 336, height: 504), CGSize(width: 520, height: 386),
                          CGSize(width: 460, height: 580), CGSize(width: 336, height: 1300)] {

@@ -22,7 +22,7 @@ final class HubStore: ObservableObject {
     @Published private(set) var taskReady = false
     @Published private(set) var calendarReady = false
 
-    var canWriteTasks: Bool { !isEnabled || (taskReady && !needsLogin && !isConnecting && !isSavingTask) }
+    var canWriteTasks: Bool { !isEnabled || (taskReady && !needsLogin && (!isConnecting || api != nil) && !isSavingTask) }
     var canSaveMemo: Bool { isEnabled && (taskReady || calendarReady) && !needsLogin && !isConnecting && !isSavingMemo }
     var connectionLabel: String {
         if !isEnabled { return "이 Mac에 저장" }
@@ -66,7 +66,7 @@ final class HubStore: ObservableObject {
     }
 
     @discardableResult
-    func connect(baseURL: String, username: String = "", password: String = "") async -> String? {
+    func connect(baseURL: String, username: String = "", password: String = "", forceReconnect: Bool = false) async -> String? {
         let normalizedURL: URL
         do {
             guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else { throw HubTransportError.rejectedURL }
@@ -74,7 +74,7 @@ final class HubStore: ObservableObject {
         } catch { record(error); return nil }
         // Connection checks reuse the private cookie jar and active conversations.
         // The form retains a username after login but deliberately clears its password.
-        if isEnabled, api != nil, connectedOrigin == normalizedURL.absoluteString, password.isEmpty {
+        if !forceReconnect, isEnabled, api != nil, connectedOrigin == normalizedURL.absoluteString, password.isEmpty {
             errorMessage = nil
             await refresh()
             return connectedOrigin
@@ -171,45 +171,52 @@ final class HubStore: ObservableObject {
         var calendar = Calendar.current; calendar.firstWeekday = 2
         let start = calendar.dateInterval(of: .weekOfYear, for: selectedDate)!.start
         let end = calendar.date(byAdding: .day, value: 7, to: start)!
-        async let taskResult = Self.result { try await service.tasks() }
-        async let eventResult = Self.result { try await service.calendar(from: start, to: end) }
-        let (taskResponse, eventResponse) = await (taskResult, eventResult)
-        guard ticket == generation, isEnabled else { return }
-        if version == taskVersion && !beganDuringTaskWrite && !isSavingTask {
-            switch taskResponse {
-            case .success(let page):
-                tasks = page.tasks.filter { $0.status != "cancelled" }.sorted { !$0.isDone && $1.isDone }
-                taskReady = true
-                taskMessage = page.partial ? "일부 할 일만 불러왔어요. 전체 목록은 Hub에서 확인해 주세요." : nil
-            case .failure(let error):
-                taskReady = false; taskMessage = friendly(error)
-                if isAuthenticationError(error) {
-                    requireLogin()
-                    errorMessage = friendly(error)
+        await withTaskGroup(of: RefreshResult.self) { group in
+            group.addTask { .tasks(await Self.result { try await service.tasks() }) }
+            group.addTask { .calendar(await Self.result { try await service.calendar(from: start, to: end) }) }
+            var tasksSucceeded = false
+            var calendarSucceeded = false
+            for await result in group {
+                guard ticket == generation, isEnabled else { group.cancelAll(); return }
+                switch result {
+                case .tasks(let response):
+                    if case .success = response { tasksSucceeded = true }
+                    guard version == taskVersion, !beganDuringTaskWrite, !isSavingTask else { continue }
+                    switch response {
+                    case .success(let page):
+                        tasks = page.tasks.filter { $0.status != "cancelled" }.sorted { !$0.isDone && $1.isDone }
+                        taskReady = true
+                        taskMessage = page.partial ? "일부 할 일만 불러왔어요. 전체 목록은 Hub에서 확인해 주세요." : nil
+                    case .failure(let error):
+                        taskReady = false; taskMessage = friendly(error)
+                        if isAuthenticationError(error) { requireLogin(); errorMessage = friendly(error) }
+                    }
+                case .calendar(let response):
+                    if case .success = response { calendarSucceeded = true }
+                    let selectedWeek = calendar.dateInterval(of: .weekOfYear, for: selectedDate)!.start
+                    guard selectedWeek == start else { refreshRequested = true; continue }
+                    switch response {
+                    case .success(let page):
+                        events = page.events; loadedCalendarWeek = start; calendarReady = true
+                        calendarMessage = page.partial ? "일부 일정만 불러왔어요. Hub에서 연결 상태를 확인해 주세요." : nil
+                    case .failure(let error):
+                        calendarReady = false; calendarMessage = friendly(error)
+                        if isAuthenticationError(error) { requireLogin(); errorMessage = friendly(error) }
+                    }
                 }
+                if taskReady || calendarReady { lastSyncedAt = Date() }
+            }
+            // A read begun before a rejected write cannot confirm the current session.
+            if authentication == authenticationVersion, tasksSucceeded, calendarSucceeded {
+                needsLogin = false
+                if wasNeedingLogin { errorMessage = nil }
             }
         }
-        let selectedWeek = calendar.dateInterval(of: .weekOfYear, for: selectedDate)!.start
-        if selectedWeek != start { refreshRequested = true }
-        else { switch eventResponse {
-        case .success(let page):
-            events = page.events; loadedCalendarWeek = start; calendarReady = true
-            calendarMessage = page.partial ? "일부 일정만 불러왔어요. Hub에서 연결 상태를 확인해 주세요." : nil
-        case .failure(let error):
-            calendarReady = false; calendarMessage = friendly(error)
-            if isAuthenticationError(error) {
-                requireLogin()
-                errorMessage = friendly(error)
-            }
-        }
-        }
-        if taskReady || calendarReady { lastSyncedAt = Date() }
-        // A read begun before a rejected write cannot confirm the current session.
-        if authentication == authenticationVersion,
-           case .success = taskResponse, case .success = eventResponse {
-            needsLogin = false
-            if wasNeedingLogin { errorMessage = nil }
-        }
+    }
+
+    private enum RefreshResult: Sendable {
+        case tasks(Result<HubTaskPage, Error>)
+        case calendar(Result<HubCalendarPage, Error>)
     }
 
     /// Returns only the confirmed snapshot, so the caller never clears newer input.

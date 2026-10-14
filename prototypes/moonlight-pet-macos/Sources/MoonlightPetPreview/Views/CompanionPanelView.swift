@@ -130,6 +130,12 @@ struct CompanionPanelView: View {
                 withAnimation(PetMotion.panel) { showsAddress.toggle() }
             }
             Divider()
+            Toggle("사이드 자동 정렬", isOn: $model.autoAlignsToEdge)
+            Picker("붙일 사이드", selection: $model.alignmentEdge) {
+                ForEach(PanelEdge.allCases) { edge in Text(edge.title).tag(edge) }
+            }
+            .disabled(!model.autoAlignsToEdge)
+            Divider()
             Toggle("배경 굴절 실험", isOn: $model.usesDesktopRefraction)
             if model.usesDesktopRefraction {
                 Text(model.desktopRefractionStatus)

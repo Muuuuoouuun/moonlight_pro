@@ -11,10 +11,10 @@ struct TaskCaptureContent: View {
     private var readMessage: String? {
         guard model.hub.isEnabled else { return nil }
         if let message = model.hub.errorMessage { return message }
-        if model.hub.needsLogin { return "Hub 로그인이 필요해요. 입력한 할 일은 그대로 보관합니다." }
+        if model.hub.needsLogin { return "Hub 앱에서 로그인하면 자동으로 연결돼요. 입력한 할 일은 그대로 보관합니다." }
         return model.hub.taskMessage
     }
-    private var isLoading: Bool { model.hub.isEnabled && (model.hub.isConnecting || model.hub.isRefreshing) }
+    private var isLoading: Bool { model.hub.isEnabled && !model.hub.taskReady && !model.hub.needsLogin && (model.hub.isConnecting || model.hub.isRefreshing) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {

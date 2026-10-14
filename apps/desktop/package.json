@@ -38,6 +38,7 @@
       "widget-preload.js",
       "menu-template.js",
       "pet-runtime.js",
+      "native-session-bridge.js",
       "pet/**",
       "!pet/native/**",
       "!pet/**/*.test.js",

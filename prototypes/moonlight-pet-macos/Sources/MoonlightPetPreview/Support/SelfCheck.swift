@@ -101,6 +101,15 @@ enum SelfCheck {
             return false
         }
         defaults.removeObject(forKey: "petPreview.hubURL")
+        guard !model.autoAlignsToEdge else { return false }
+        model.alignmentEdge = .left
+        model.autoAlignsToEdge = true
+        let restoredAlignment = AppModel(defaults: defaults)
+        guard restoredAlignment.autoAlignsToEdge, restoredAlignment.alignmentEdge == .left else {
+            fputs("Side alignment preference must survive restart\n", stderr)
+            return false
+        }
+        model.autoAlignsToEdge = false
         guard model.selectedCharacter == .silver else {
             fputs("Default character check failed\n", stderr)
             return false
@@ -318,6 +327,29 @@ enum SelfCheck {
             fputs("An outgoing animation changed the reopened pet widget\n", stderr); return false
         }
         print("PASS: companion window exclusivity and shared memo/task widget (5)")
+        for edge in PanelEdge.allCases {
+            model.alignmentEdge = edge
+            model.autoAlignsToEdge = true
+            for mode in [QuickMode.memo, .tasks] {
+                coordinator.showWidget(mode: mode)
+                let settle = Date().addingTimeInterval(PetMotion.panelDuration + 0.1)
+                while Date() < settle { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+                guard let visible = widget.screen?.visibleFrame,
+                      widget.frame == PanelGeometry.edgeAligned(widget.frame, edge: edge, in: visible),
+                      (widget.contentView as? GlassPanel)?.ornamentEdge == edge,
+                      !windows.contains(where: { $0.contentView is PetClickView && $0.isVisible }) else {
+                    fputs("Aligned widget/ornament must retain its side across mode changes without a floating duplicate icon\n", stderr)
+                    return false
+                }
+            }
+        }
+        let alignedFrame = widget.frame
+        model.autoAlignsToEdge = false
+        guard widget.frame == alignedFrame else {
+            fputs("Turning alignment off must preserve the current window position\n", stderr)
+            return false
+        }
+        print("PASS: immediate side alignment, mode changes, ornament side, disable (5)")
         return true
     }
 
