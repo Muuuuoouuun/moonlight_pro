@@ -1,4 +1,78 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
+
+struct HubSharedSession: Sendable, Equatable {
+    let origin: URL
+    let cookie: String?
+}
+
+/// The descriptor contains a short-lived local capability, never a Hub cookie.
+/// Reads are coalesced so tasks/calendar/activity share one local round trip.
+actor NativeHubSessionBridge {
+    static let shared = NativeHubSessionBridge()
+    private var inFlight: Task<HubSharedSession?, Never>?
+    private var cached: HubSharedSession?
+    private var checkedAt = Date.distantPast
+    private let descriptorURL: URL
+
+    init(descriptorURL: URL? = nil) {
+        self.descriptorURL = descriptorURL ?? FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/MoonlightNativeBridge/connection.json")
+    }
+
+    func read() async -> HubSharedSession? {
+        if let inFlight { return await inFlight.value }
+        if Date().timeIntervalSince(checkedAt) < 1 { return cached }
+        let descriptor = descriptorURL
+        let task = Task { await Self.load(descriptor: descriptor) }
+        inFlight = task
+        let result = await task.value
+        cached = result; checkedAt = Date(); inFlight = nil
+        return result
+    }
+
+    private static func load(descriptor: URL) async -> HubSharedSession? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: descriptor.path),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
+              let permissions = attributes[.posixPermissions] as? NSNumber, permissions.intValue & 0o077 == 0,
+              (attributes[.size] as? NSNumber)?.intValue ?? 2049 <= 2048,
+              let data = try? Data(contentsOf: descriptor), data.count <= 2048,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let address = object["url"] as? String, let token = object["token"] as? String,
+              token.count == 64, token.allSatisfy({ $0.isHexDigit }),
+              let components = URLComponents(string: address), components.scheme == "http",
+              components.host == "127.0.0.1", let port = components.port, (1...65535).contains(port),
+              components.path == "/session", components.query == nil, components.fragment == nil,
+              components.user == nil, components.password == nil, let url = components.url else { return nil }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 1
+        configuration.timeoutIntervalForResource = 1
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        configuration.urlCache = nil
+        let session = URLSession(configuration: configuration, delegate: HubSessionDelegate(), delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        var request = URLRequest(url: url, timeoutInterval: 1)
+        request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        guard let (body, response) = try? await session.data(for: request),
+              let http = response as? HTTPURLResponse, http.statusCode == 200, http.url == url,
+              body.count <= 8192, let payload = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let origin = payload["origin"] as? String, let originURL = URL(string: origin),
+              let validated = try? HubTransport.validatedBaseURL(originURL) else { return nil }
+        if payload["cookie"] is NSNull { return HubSharedSession(origin: validated, cookie: nil) }
+        guard let cookie = payload["cookie"] as? String, !cookie.isEmpty, cookie.utf8.count <= 4096,
+              !cookie.contains(where: { $0.isWhitespace || $0 == ";" || $0 == "," }) else { return nil }
+        return HubSharedSession(origin: validated, cookie: cookie)
+    }
+}
 
 struct HubResponse: Sendable {
     let data: Data
@@ -52,10 +126,13 @@ actor HubTransport: HubTransporting {
     private let session: URLSession
     private let officeChatSession: URLSession
     private let cookies: HTTPCookieStorage
+    private let sharedSession: @Sendable () async -> HubSharedSession?
 
-    init(baseURL: URL, configuration: URLSessionConfiguration = .ephemeral) throws {
+    init(baseURL: URL, configuration: URLSessionConfiguration = .ephemeral,
+         sharedSession: @escaping @Sendable () async -> HubSharedSession? = { await NativeHubSessionBridge.shared.read() }) throws {
         let validated = try Self.validatedBaseURL(baseURL)
         self.baseURL = validated
+        self.sharedSession = sharedSession
         self.origin = validated.absoluteString
 
         // Start fresh even when the caller injects a test protocol. A supplied
@@ -102,6 +179,16 @@ actor HubTransport: HubTransporting {
         let url = try requestURL(path)
         let method = method.uppercased()
         guard ["GET", "POST", "PATCH", "DELETE"].contains(method) else { throw HubTransportError.rejectedURL }
+        if !(path.hasPrefix("/api/operator/session") && method != "GET"), let shared = await sharedSession(),
+           shared.origin == baseURL {
+            for cookie in cookies.cookies ?? [] where cookie.name == "com_moon_operator_session" {
+                cookies.deleteCookie(cookie)
+            }
+            guard let value = shared.cookie else { throw HubTransportError.unauthorized }
+            let header = "com_moon_operator_session=\(value); Path=/; HttpOnly" + (baseURL.scheme == "https" ? "; Secure" : "")
+            cookies.setCookies(HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": header], for: baseURL),
+                               for: baseURL, mainDocumentURL: baseURL)
+        }
         let selectedSession = sessionForRequest(path: path, method: method)
         var request = URLRequest(url: url, timeoutInterval: selectedSession.configuration.timeoutIntervalForRequest)
         request.httpMethod = method
@@ -225,10 +312,14 @@ private final class HubSessionDelegate: NSObject, URLSessionTaskDelegate {
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        #if canImport(Darwin)
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
             completionHandler(.performDefaultHandling, nil)
         } else {
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
+        #else
+        completionHandler(.cancelAuthenticationChallenge, nil)
+        #endif
     }
 }

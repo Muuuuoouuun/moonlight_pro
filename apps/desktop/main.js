@@ -34,6 +34,8 @@ const {
 } = require('./widget-window');
 const { buildAppMenuTemplate, buildDockMenuTemplate, loginItemMenuItem } = require('./menu-template');
 const { installPetRuntime } = require('./pet-runtime');
+const { startNativeSessionBridge } = require('./native-session-bridge');
+let nativeSessionBridge;
 
 const IS_MAC = process.platform === 'darwin';
 
@@ -980,7 +982,10 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', showWindow);
-  app.on('before-quit', () => { quitting = true; });
+  app.on('before-quit', () => {
+    quitting = true;
+    nativeSessionBridge?.close().catch(() => {});
+  });
   app.on('will-quit', () => globalShortcut.unregisterAll());
   // macOS는 창을 다 닫아도(허브 창은 숨김) 메뉴 막대·펫이 계속 산다.
   app.on('window-all-closed', () => { if (!IS_MAC) app.quit(); });
@@ -995,7 +1000,7 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     if (SMOKE_PET) {
       // 펫 창만 띄운다 — 메인 창·트레이·전역 단축키는 만들지 않는다.
       // --smoke-pet-activate: 패널에 실제 포커스를 주고 blur 접기까지 본다(운영자 화면의 포커스를 옮긴다).
@@ -1037,6 +1042,13 @@ if (!app.requestSingleInstanceLock()) {
       if (!SMOKE_MAC) {
         for (const [accelerator, action] of [[QUICK_CAPTURE_ACCELERATOR, quickCapture], [WIDGET_ACCELERATOR, toggleWidget]]) {
           if (!globalShortcut.register(accelerator, action)) console.warn(`shortcut ${accelerator} is taken by another app`);
+        }
+      }
+      if (IS_MAC && !SMOKE_MAC) {
+        try {
+          nativeSessionBridge = await startNativeSessionBridge({ session: session.defaultSession, getHubUrl: currentHubUrl });
+        } catch {
+          console.warn('pet:native session sharing unavailable');
         }
       }
       pet = installPetRuntime({

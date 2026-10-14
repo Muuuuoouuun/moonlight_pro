@@ -1,5 +1,10 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if canImport(Network)
 import Network
+#endif
 
 private final class TransportURLProtocol: URLProtocol {
     static var handler: ((URLRequest, TransportURLProtocol) throws -> Void)?
@@ -24,6 +29,36 @@ struct HubTransportTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TransportURLProtocol.self]
         return try HubTransport(baseURL: URL(string: address)!, configuration: configuration)
+    }
+
+    func testSharedLoginRotationLogoutAndOriginIsolation() async throws {
+        let origin = URL(string: "https://hub.example.test")!
+        let state = SharedSessionState(HubSharedSession(origin: origin, cookie: "first-session"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let client = try HubTransport(baseURL: origin, configuration: configuration, sharedSession: { await state.read() })
+        var requests = 0
+        var expectedCookie: String? = "com_moon_operator_session=first-session"
+        TransportURLProtocol.handler = { request, protocolInstance in
+            requests += 1
+            expectEqual(request.httpMethod, "GET") // Never ask for another password.
+            expectEqual(request.value(forHTTPHeaderField: "Cookie"), expectedCookie)
+            protocolInstance.respond(json: "{\"status\":\"authenticated\",\"configured\":true}")
+        }
+        let status = try await client.sessionStatus()
+        expectTrue(status.isAuthenticated)
+        _ = try await client.request(path: "/api/hub/tasks")
+        await state.set(HubSharedSession(origin: origin, cookie: "rotated-session"))
+        expectedCookie = "com_moon_operator_session=rotated-session"
+        _ = try await client.request(path: "/api/hub/tasks")
+        await state.set(HubSharedSession(origin: origin, cookie: nil))
+        do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("Hub logout must clear the native session") }
+        catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        expectEqual(requests, 3) // Known logout performs no remote read/write.
+        await state.set(HubSharedSession(origin: URL(string: "https://other.example.test")!, cookie: "other-session"))
+        expectedCookie = nil
+        _ = try await client.request(path: "/api/hub/tasks")
+        expectEqual(requests, 4)
     }
 
     func testOnlyHTTPSAndExactHTTPLoopbackOriginsAreAccepted() throws {
@@ -225,6 +260,7 @@ struct HubTransportTests {
     }
 
     func testRedirectDelegateRefusesToReplayLoginToAnotherOrigin() async throws {
+        #if canImport(Network)
         // Foundation traps when custom URLProtocol emits redirect callbacks on
         // this CLT runtime. Local listeners exercise the real URLSession delegate.
         let destination = try RedirectProbeServer(response: "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
@@ -242,6 +278,9 @@ struct HubTransportTests {
         catch { expectEqual(error as? HubTransportError, .redirectRejected) }
         expectEqual(source.requestCount, 2)
         expectEqual(destination.requestCount, 0)
+        #else
+        print("SKIP: Darwin Network redirect listener (macOS required)")
+        #endif
     }
 
     func testMalformedAndUnauthenticatedSuccessEnvelopesAreRejected() async throws {
@@ -270,6 +309,14 @@ struct HubTransportTests {
     }
 }
 
+private actor SharedSessionState {
+    private var value: HubSharedSession?
+    init(_ value: HubSharedSession?) { self.value = value }
+    func read() -> HubSharedSession? { value }
+    func set(_ value: HubSharedSession?) { self.value = value }
+}
+
+#if canImport(Network)
 private final class RedirectProbeServer: @unchecked Sendable {
     private let listener: NWListener
     private let response: Data
@@ -315,6 +362,8 @@ private final class RedirectProbeServer: @unchecked Sendable {
     func stop() { listener.cancel() }
 }
 
+#endif
+
 private final class TestFailures: @unchecked Sendable {
     private let lock = NSLock()
     private var messages = [String]()
@@ -349,6 +398,7 @@ private struct HubTransportTestRunner {
     static func main() async {
         let tests = HubTransportTests()
         let cases: [(String, () async throws -> Void)] = [
+            ("shared login rotation/logout/origin isolation", tests.testSharedLoginRotationLogoutAndOriginIsolation),
             ("origin validation", { try tests.testOnlyHTTPSAndExactHTTPLoopbackOriginsAreAccepted() }),
             ("write headers", tests.testRequestCarriesOriginOnlyForWritesAndNeverServerCredentials),
             ("exact Office chat timeout budget", tests.testOnlyExactOfficeChatPOSTReceivesLongerTimeouts),

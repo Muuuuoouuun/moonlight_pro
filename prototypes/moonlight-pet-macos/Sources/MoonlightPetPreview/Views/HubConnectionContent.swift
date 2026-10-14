@@ -30,6 +30,16 @@ struct HubConnectionContent: View {
                 }
                 .modifier(GlassReadability(radius: 10, inset: 8))
 
+                if model.hubApplicationURL != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Hub 앱에 로그인하면 이 펫도 자동으로 연결돼요. 아래 로그인은 펫만 사용할 때 필요해요.")
+                            .font(.system(size: 11.5)).fixedSize(horizontal: false, vertical: true)
+                        Button("Hub 앱 열기", action: model.openHubApplication)
+                            .buttonStyle(GlassActionStyle())
+                    }
+                    .modifier(GlassReadability(radius: 10, inset: 8))
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("운영자 아이디")
                     TextField("아이디", text: $username)
@@ -86,6 +96,10 @@ struct HubConnectionContent: View {
             focusedField = .username
         }
         .onDisappear { password = "" }
+        .onChange(of: model.hub.connectionLabel) { _, _ in
+            if !model.hub.isConnecting && !model.hub.needsLogin && !isSubmitting
+                && (model.hub.taskReady || model.hub.calendarReady) { done() }
+        }
     }
 
     private var addressSettings: some View {

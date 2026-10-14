@@ -343,7 +343,7 @@ npm run app:mac:build    # dist/Moonlight-<버전>-arm64.dmg · .zip · mac-arm6
 - Mac의 일반 실행은 `pet-runtime.js`에서 SwiftUI 펫만 연다. `Moonlight.app` 안에 Electron 펫 창·조회 루프·펫 단축키를 추가로 만들지 않는다. Windows는 기존 `pet/main/pet-main.js`를 사용한다.
 - 기존 `~/Applications/MoonlightPetPreview.app` → `/Applications/MoonlightPetPreview.app` → 앱 번들에 포함된 펫 → 개발 빌드 순서로 찾는다. 별도 설치본이 있으면 그 업데이트·설정을 그대로 사용한다. `open -g`와 네이티브 앱의 번들 ID 중복 검사로 실행 중인 펫을 재사용한다. 앱을 못 찾거나 실행에 실패하면 오류를 기록하고 Electron 펫으로 바꾸지 않는다.
 - 세부 기능·캐릭터·모니터 이동은 네이티브 펫과 ☾ 메뉴에서 조작한다. Hub 앱을 종료해도 펫은 유지한다. Hub 설정·자동 실행 설정은 앱 메뉴 **Moonlight**에 남는다.
-- 네이티브 펫의 초안·위치·Hub 주소는 기존 `app.moonlight.pet-preview` UserDefaults를 그대로 사용한다. Hub 셸의 쿠키·허브 주소 설정과는 별개이며, 펫의 더보기 → **Hub 연결 설정**에서 관리한다. 로컬 기록을 자동 이관하거나 덮어쓰지 않는다.
+- 네이티브 펫의 초안·위치는 기존 `app.moonlight.pet-preview` UserDefaults를 그대로 사용한다. Hub 앱과 펫을 함께 업데이트하면 실행 중인 Hub 앱의 주소·운영자 세션을 공유해 별도 로그인 없이 연결한다(2026-10-14). 로그인·로그아웃·주소 변경은 약 3초 안에 반영한다. 펫의 직접 로그인은 Hub 앱 없이 사용하는 경우의 경로다. 로컬 기록을 자동 이관하거나 덮어쓰지 않는다. 세부 연결·검증은 [Mac 원본 README](../../prototypes/moonlight-pet-macos/README.md)의 **Hub 앱 자동 연결**을 따른다.
 - 유리·시스템 글꼴·패널 조작·모니터 이동·단축키는 [Mac 원본 README](../../prototypes/moonlight-pet-macos/README.md)가 정본이다.
 - 2026-10-01 입력 통합: 셸은 `open -g -a <펫 앱> moonlight-pet://memo|tasks`로 같은 네이티브 앱에 화면 선택만 전달한다. 실행 중/첫 실행 모두 지원하며 URL로 업무 저장·초안 교체는 하지 않는다. 별도 펫 설치본을 쓰는 Mac은 `prototypes/moonlight-pet-macos/script/build_and_run.sh --install`로 펫도 함께 갱신한다. `--smoke-pet`은 Electron 이식본 비교 검사로 남는다.
 - 2026-09-30 검증: 데스크톱 345개 테스트, Mac 패키징·설치본 deep/strict 서명 검사, 포함된 네이티브 펫 자체 점검 통과. 네이티브 먼저 → Hub 열기, Hub만 열어 자동 기동, 포함된 펫을 중복 실행하는 세 경우 모두 실제 창 목록에서 네이티브 펫/패널 1개·Electron 펫 창 0개를 확인했다.

@@ -157,6 +157,8 @@ final class AppModel: ObservableObject {
     private var hubObserver: AnyCancellable?
     private var connectionStarted = false
     private var refreshLoop: Task<Void, Never>?
+    private var sharedSessionMonitor: Task<Void, Never>?
+    private var sharedConnectionTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private var focusClock: FocusClock?
     private var timer: Timer?
@@ -197,7 +199,7 @@ final class AppModel: ObservableObject {
         return memoDraft.isEmpty ? "이 Mac에 자동 저장" : "Mac에 자동 저장됨"
     }
 
-    deinit { refreshLoop?.cancel(); timer?.invalidate() }
+    deinit { refreshLoop?.cancel(); sharedSessionMonitor?.cancel(); sharedConnectionTask?.cancel(); timer?.invalidate() }
 
     func startHubConnection() {
         guard !connectionStarted else { return }
@@ -222,7 +224,32 @@ final class AppModel: ObservableObject {
             }
         }
         guard hub.isEnabled else { activity.configure(service: nil, origin: nil); return }
-        Task { await hub.connect(baseURL: hubBaseURL) }
+        sharedSessionMonitor = Task { [weak self] in
+            var previous = await NativeHubSessionBridge.shared.read()
+            if let previous { self?.hubBaseURL = previous.origin.absoluteString }
+            self?.connectSharedHub(forceReconnect: false)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                guard self != nil else { return }
+                let current = await NativeHubSessionBridge.shared.read()
+                guard let current, current != previous else { continue }
+                previous = current
+                guard let self, self.hub.isEnabled else { continue }
+                self.hubBaseURL = current.origin.absoluteString
+                // A login/logout invalidates reads started under the old session.
+                // Do not wait behind a slow calendar response to apply logout.
+                self.connectSharedHub(forceReconnect: true)
+            }
+        }
+    }
+
+    private func connectSharedHub(forceReconnect: Bool) {
+        sharedConnectionTask?.cancel()
+        let address = hubBaseURL
+        sharedConnectionTask = Task { [weak self] in
+            guard let self else { return }
+            await self.hub.connect(baseURL: address, forceReconnect: forceReconnect)
+        }
     }
 
     func saveMemoToHub() { Task { await captureMemo() } }
@@ -271,7 +298,11 @@ final class AppModel: ObservableObject {
         refreshLoop = Task { [weak self] in
             while !Task.isCancelled {
                 guard self != nil else { return }
-                await self?.hub.refresh()
+                // Opening a freshly loaded panel should not immediately repeat
+                // its startup reads. Authentication changes use the local monitor.
+                if let self, self.hub.lastSyncedAt.map({ Date().timeIntervalSince($0) >= 30 }) ?? true {
+                    await self.hub.refresh()
+                }
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
             }
         }
@@ -458,6 +489,15 @@ final class AppModel: ObservableObject {
               let validated = try? HubTransport.validatedBaseURL(url) else { return }
         hubBaseURL = validated.absoluteString
         defaults.set(hubBaseURL, forKey: "petPreview.hubURL")
+    }
+
+    var hubApplicationURL: URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "app.moonlight.hub")
+    }
+
+    func openHubApplication() {
+        guard let url = hubApplicationURL else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
     }
 
     func openHub(_ mode: QuickMode) {

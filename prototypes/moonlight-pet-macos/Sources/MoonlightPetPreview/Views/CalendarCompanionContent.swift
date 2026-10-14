@@ -16,7 +16,7 @@ struct CalendarCompanionContent: View {
         if model.hub.needsLogin { return "Hub에 로그인하면 일정을 불러올 수 있어요." }
         return model.hub.calendarMessage
     }
-    private var isLoading: Bool { model.hub.isEnabled && (model.hub.isConnecting || model.hub.isRefreshing) }
+    private var isLoading: Bool { model.hub.isEnabled && !model.hub.calendarReady && !model.hub.needsLogin && (model.hub.isConnecting || model.hub.isRefreshing) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {

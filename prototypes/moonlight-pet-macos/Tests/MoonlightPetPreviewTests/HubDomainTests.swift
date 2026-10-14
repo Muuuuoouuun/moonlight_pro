@@ -8,6 +8,8 @@ private func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
 private actor ControlledHub: HubServing {
     var rejectsLogin = false
     func rejectLogin(_ value: Bool) { rejectsLogin = value }
+    var rejectsReads = false
+    func rejectReads(_ value: Bool) { rejectsReads = value }
     var rejectsWrites = false
     func rejectWrites(_ value: Bool) { rejectsWrites = value }
     var failsRead = false
@@ -47,6 +49,7 @@ private actor ControlledHub: HubServing {
         if rejectsLogin { throw HubTransportError.unauthorized }
     }
     func tasks() async throws -> HubTaskPage {
+        if rejectsReads { throw HubTransportError.unauthorized }
         if holdRead { startedRead = true; await withCheckedContinuation { releaseRead = $0 } }
         if failsRead { throw HubTransportError.offline }
         return HubTaskPage(tasks: [row] + (confirmedTask.map { [$0] } ?? []), partial: partial)
@@ -58,6 +61,7 @@ private actor ControlledHub: HubServing {
     }
     func release() { holdRead = false; releaseRead?.resume(); releaseRead = nil }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage {
+        if rejectsReads { throw HubTransportError.unauthorized }
         if holdCalendar { startedCalendar = true; await withCheckedContinuation { releaseCalendar = $0 } }
         return HubCalendarPage(events: [], partial: partial)
     }
@@ -98,6 +102,8 @@ struct HubDomainTests {
     @MainActor static func main() async {
         do {
             try modelChecks()
+            try await sharedSessionReplacementChecks()
+            try await progressiveLoadingChecks()
             try await loginChecks()
             try await connectionRecoveryChecks()
             try await sessionExpiryChecks()
@@ -142,6 +148,56 @@ struct HubDomainTests {
                       "A fresh successful read must allow recovery after authentication")
         }
         print("PASS: Session expiry ordering checks (8)")
+    }
+
+    @MainActor static func sharedSessionReplacementChecks() async throws {
+        let suite = "pet-shared-session-replacement-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let previous = ControlledHub()
+        let current = ControlledHub()
+        await previous.configure(hold: true)
+        await current.rejectReads(true)
+        var clients = 0
+        let store = HubStore(defaults: defaults, makeAPI: { _ in
+            clients += 1
+            return clients == 1 ? previous : current
+        })
+        let oldRead = Task { await store.connect(baseURL: "https://shared.test") }
+        while !(await previous.startedRead) { await Task.yield() }
+        _ = await store.connect(baseURL: "https://shared.test", forceReconnect: true)
+        let appliedLogout = store.needsLogin && !store.taskReady
+        await previous.release()
+        _ = await oldRead.value
+        try check(appliedLogout, "Hub logout must apply without waiting for an old read")
+        try check(store.needsLogin && !store.taskReady, "Late results from a previous session must not restore access")
+        await current.rejectReads(false)
+        _ = await store.connect(baseURL: "https://shared.test", forceReconnect: true)
+        try check(store.taskReady && !store.needsLogin, "Hub re-login must recover the native connection")
+        print("PASS: Shared session replacement, logout ordering and re-login (3)")
+    }
+
+    @MainActor static func progressiveLoadingChecks() async throws {
+        for slowCalendar in [true, false] {
+            let suite = "pet-progressive-read-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let api = ControlledHub()
+            if slowCalendar { await api.holdWritesAndCalendar() }
+            else { await api.configure(hold: true) }
+            let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+            let loading = Task { await store.connect(baseURL: "https://progress.test") }
+            let deadline = Date().addingTimeInterval(2)
+            while !(slowCalendar ? store.taskReady : store.calendarReady) && Date() < deadline { await Task.yield() }
+            let readyBeforeOtherRead = slowCalendar ? store.taskReady && !store.calendarReady : store.calendarReady && !store.taskReady
+            let canUseTasks = !slowCalendar || store.canWriteTasks
+            if slowCalendar { await api.releaseEvents() } else { await api.release() }
+            _ = await loading.value
+            try check(readyBeforeOtherRead, "A fast read must render without waiting for the other surface")
+            try check(canUseTasks, "A slow calendar must not block task input after connection")
+            try check(store.taskReady && store.calendarReady, "Both snapshots must remain available when loading finishes")
+        }
+        print("PASS: Progressive loading and slow-source isolation (6)")
     }
 
     @MainActor static func loginChecks() async throws {
