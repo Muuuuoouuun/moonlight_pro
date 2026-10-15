@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server.js";
 
+import { areEquivalentLoopbackOrigins } from "@/lib/hub-write-guard";
 import {
   OPERATOR_SESSION_COOKIE,
   createOperatorSessionToken,
   hasOperatorLoginCredentials,
   hasOperatorSessionSecret,
   operatorLoginCredentialsMatch,
+  operatorLoginTtl,
   operatorSessionCookieOptions,
   verifyOperatorSessionRequest,
+  operatorRecoveryContext,
 } from "@/lib/operator-session";
+import { resolveDefaultWorkspaceId } from '@/lib/server-write';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Each scrypt verification needs ~128 MiB. Bound active work per process; do not queue
+// untrusted login attempts or let them allocate one expensive verification each.
+const MAX_CONCURRENT_LOGIN_VERIFICATIONS = 2;
+let loginVerificationsInFlight = 0;
 
 async function readJson(req) {
   const maxBytes = 4096;
@@ -49,7 +58,8 @@ export async function GET(req) {
     status: session.ok ? "authenticated" : "anonymous",
     reason: session.reason,
     configured: hasOperatorSessionSecret() && hasOperatorLoginCredentials(),
-  });
+    recovery: session.ok ? operatorRecoveryContext(req, resolveDefaultWorkspaceId()) : null,
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function POST(req) {
@@ -62,7 +72,11 @@ export async function POST(req) {
   } catch {
     browserOrigin = null;
   }
-  if (browserOrigin !== requestOrigin) {
+  // NextRequest normalizes 127.0.0.1 to localhost; accept that alias only in development.
+  const equivalentDevelopmentLoopback = process.env.NODE_ENV !== "production" &&
+    process.env.VERCEL_ENV !== "production" &&
+    areEquivalentLoopbackOrigins(browserOrigin, requestOrigin);
+  if (browserOrigin !== requestOrigin && !equivalentDevelopmentLoopback) {
     return NextResponse.json({ status: "forbidden", error: "same-origin-required" }, { status: 403 });
   }
 
@@ -89,14 +103,30 @@ export async function POST(req) {
     return NextResponse.json({ status: "not-configured", error: "operator-login-not-configured" }, { status: 503 });
   }
 
-  if (!await operatorLoginCredentialsMatch(body.username, body.password)) {
+  if (loginVerificationsInFlight >= MAX_CONCURRENT_LOGIN_VERIFICATIONS) {
+    return NextResponse.json(
+      { status: "busy", error: "Login is busy. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": "1" } },
+    );
+  }
+
+  loginVerificationsInFlight += 1;
+  let credentialsMatch;
+  try {
+    credentialsMatch = await operatorLoginCredentialsMatch(body.username, body.password);
+  } finally {
+    loginVerificationsInFlight -= 1;
+  }
+
+  if (!credentialsMatch) {
     return NextResponse.json(
       { status: "unauthorized", error: "invalid-operator-credentials" },
       { status: 401 },
     );
   }
 
-  const token = createOperatorSessionToken({ subject: "operator" });
+  const ttlSeconds = operatorLoginTtl(body.rememberMe);
+  const token = createOperatorSessionToken({ subject: "operator", ttlSeconds });
   if (!token) {
     return NextResponse.json(
       { status: "not-configured", error: "Operator session secret is not configured." },
@@ -105,6 +135,6 @@ export async function POST(req) {
   }
 
   const response = NextResponse.json({ status: "authenticated" });
-  response.cookies.set(OPERATOR_SESSION_COOKIE, token, operatorSessionCookieOptions());
+  response.cookies.set(OPERATOR_SESSION_COOKIE, token, operatorSessionCookieOptions({ maxAge: ttlSeconds }));
   return response;
 }

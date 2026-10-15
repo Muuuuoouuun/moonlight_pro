@@ -12,6 +12,7 @@ import { resolveOAuthStateSecret } from "@/lib/integration-readiness";
 export const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
+const GOOGLE_OAUTH_STATE_MAX_AGE_MS = 15 * 60 * 1000;
 
 export function resolveGoogleOAuthConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
@@ -28,8 +29,7 @@ export function hasOAuthStateSecret() {
   return Boolean(resolveOAuthStateSecret());
 }
 
-function signStatePayload(payload) {
-  const secret = resolveOAuthStateSecret();
+function signStatePayload(payload, secret = resolveOAuthStateSecret()) {
 
   if (!secret) {
     return "";
@@ -45,31 +45,33 @@ function safeEquals(a, b) {
   return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
 }
 
-export function encodeState(value) {
+export function encodeState(value, { secret = resolveOAuthStateSecret() } = {}) {
   const payload = Buffer.from(
     JSON.stringify({ ...value, iat: Date.now() }),
     "utf8",
   ).toString("base64url");
-  const signature = signStatePayload(payload);
+  const signature = signStatePayload(payload, secret);
 
   return signature ? `${payload}.${signature}` : payload;
 }
 
-export function decodeState(value) {
-  if (!value) {
-    return {};
+export function decodeState(value, { secret = resolveOAuthStateSecret(), now = Date.now() } = {}) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) {
+    return { invalid: true };
   }
 
   try {
-    const raw = String(value);
-    const [payload, signature] = raw.split(".");
-    const expected = signStatePayload(payload);
+    const [payload, signature] = value.split(".");
+    const expected = signStatePayload(payload, secret);
+    if (!expected || !safeEquals(expected, signature)) return { invalid: true };
 
-    if (!expected || !signature || !safeEquals(expected, signature)) {
+    const body = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!body || typeof body !== "object" || Array.isArray(body) ||
+        !Number.isSafeInteger(body.iat) || body.iat <= 0 || body.iat > now ||
+        now - body.iat > GOOGLE_OAUTH_STATE_MAX_AGE_MS) {
       return { invalid: true };
     }
-
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return body;
   } catch {
     return { invalid: true };
   }
@@ -77,12 +79,17 @@ export function decodeState(value) {
 
 export function sanitizeReturnPath(value, fallback) {
   const path = typeof value === "string" ? value.trim() : "";
-
-  if (!path || !path.startsWith("/") || path.startsWith("//")) {
+  if (!path || !path.startsWith("/") || path.startsWith("//") ||
+      path.includes("\\") || /[\u0000-\u001f\u007f]/.test(value)) {
     return fallback;
   }
 
-  return path;
+  try {
+    const base = new URL("https://oauth-return.invalid");
+    return new URL(path, base).origin === base.origin ? path : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function buildGoogleAuthUrl({ scopes, redirectUri, state, prompt = "consent", loginHint = "" }) {

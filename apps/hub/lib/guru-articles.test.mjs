@@ -18,6 +18,7 @@ test('all reviewed cards have private authored Markdown articles', async () => {
     assert.ok(result.markdown.length >= 1200, `${card.id}: article needs substantive explanation`);
     assert.ok((result.markdown.match(/^## /gm) || []).length >= 4, `${card.id}: article needs distinct reading sections`);
     assert.doesNotMatch(result.markdown, /https?:\/\/|<\/?[a-z][^>]*>/i, card.id);
+    assert.doesNotMatch(result.markdown, /\*\*|!\[|\[[^\]]+\]\(/, `${card.id}: unsupported inline Markdown would render literally`);
   }
 });
 

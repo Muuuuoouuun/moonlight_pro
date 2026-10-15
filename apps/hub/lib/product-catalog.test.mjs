@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { normalizeProductCommand } from "../../engine/lib/product-command.ts";
 
 import {
   formToProductInput,
@@ -99,7 +100,7 @@ test("form round-trips product details", () => {
 });
 
 test("pricing reads as one short phrase", () => {
-  assert.equal(formatPricing({ model: "monthly", amount: 29000 }), "월 구독 29,000원");
+  assert.equal(formatPricing({ model: "monthly", amount: 29000 }), "월 구독 2만 9,000원");
   assert.equal(formatPricing({ model: "undecided" }), "가격 미정");
   assert.equal(formatPricing({ model: "per_use", amount: null }), "건당 금액 미정");
 });
@@ -108,6 +109,26 @@ test("list order puts money-near stages first and retired ones last", async () =
   const { productStageOrder } = await import("./product-catalog.js");
   const sorted = ["idea", "sunset", "growth", "mvp", "maintain", "launch", "validation"].sort((a, b) => productStageOrder(a) - productStageOrder(b));
   assert.deepEqual(sorted, ["growth", "launch", "mvp", "validation", "idea", "maintain", "sunset"]);
+});
+
+test("portfolio order is ops → stage → name, stable across edits", async () => {
+  const { orderProducts } = await import("./product-catalog.js");
+  const list = [
+    { name: "시나리오 허브", opsStatus: "paused", stage: "idea" },
+    { name: "OMR 메이커", opsStatus: "dev", stage: "mvp" },
+    { name: "HWP 메이커", opsStatus: "dev", stage: "mvp" },
+    { name: "옛 제품", opsStatus: "ended", stage: "sunset" },
+    { name: "EDB 메이커", opsStatus: "dev", stage: "mvp" },
+    { name: "탐색 후보", opsStatus: "dev", stage: "idea" },
+    { name: "운영 제품", opsStatus: "live", stage: "growth" },
+    { name: "AIs", opsStatus: "paused", stage: "idea" },
+  ];
+  assert.deepEqual(orderProducts(list).map((p) => p.name),
+    ["운영 제품", "EDB 메이커", "HWP 메이커", "OMR 메이커", "탐색 후보", "시나리오 허브", "AIs", "옛 제품"],
+    "한국어 정렬: 같은 칸에서는 한글 이름이 영문 이름보다 앞");
+  assert.deepEqual(orderProducts(list.slice().reverse()).map((p) => p.name), orderProducts(list).map((p) => p.name),
+    "입력(서버) 순서가 바뀌어도 결과가 같다");
+  assert.equal(list[0].name, "시나리오 허브", "원본 배열은 건드리지 않는다");
 });
 
 test("checklist runs plan → features → dev → launch → operate and counts only actionable items", () => {
@@ -173,11 +194,11 @@ test("month numbers keep unknown as null and portfolio sums only what is known",
   const b = { id: "b", name: "B", opsStatus: "dev", metrics: [{ month: "2026-09", activeUsers: null, revenue: null, cost: 15000 }] };
   const c = { id: "c", name: "C", opsStatus: "paused", metrics: [] };
   assert.deepEqual(monthNumbers(a, "2026-09"), { month: "2026-09", activeUsers: 18, revenue: 190000, cost: 68000, net: 122000, known: true });
-  assert.equal(monthNumbers(b, "2026-09").net, -15000);
+  assert.equal(monthNumbers(b, "2026-09").net, null);
   assert.equal(monthNumbers(c, "2026-09").net, null);
   const inquiries = [{ status: "new" }, { status: "new", productId: "a" }, { status: "waiting", productId: "a" }, { status: "closed" }];
   const s = portfolioSummary([a, b, c], inquiries, "2026-09");
-  assert.deepEqual([s.byOps.live, s.users, s.usersMissing, s.net, s.openInquiries, s.newInquiries, s.unassignedInquiries], [1, 18, 2, 107000, 3, 2, 1]);
+  assert.deepEqual([s.byOps.live, s.users, s.usersMissing, s.net, s.openInquiries, s.newInquiries, s.unassignedInquiries], [1, 18, 2, 122000, 3, 2, 1]);
   const attention = portfolioAttention([{ ...a, projects: [{ id: "x", name: "키 교체", status: "active", dueAt: "2026-09-20" }] }], inquiries, { today: "2026-09-25" });
   assert.deepEqual(attention.map((i) => i.text), ["기한 지남 · 키 교체", "새 문의 2건 · 제품 미정 1건"]);
   assert.equal(previousMonth("2026-01"), "2025-12");
@@ -191,4 +212,137 @@ test("next step reads broken → urgent work → operator note → nearest work 
   assert.equal(productNextStep({ details: { nextAction: "결제 테스트" }, projects: [{ id: "b", name: "요금제", status: "draft", dueAt: "2026-09-28" }] }, { today }), "결제 테스트");
   assert.equal(productNextStep({ projects: [{ id: "b", name: "요금제", status: "draft", dueAt: "2026-09-28" }] }, { today }), "요금제");
   assert.equal(productNextStep({ name: "A", summary: "B", stage: "idea", details: {} }, { today }), "검증으로 올리려면 해결하는 문제가 필요해요");
+});
+
+test("work made from an inquiry attaches the inquiry's lead; plain ＋ 일 and deal-only inquiries send no entityRef", async () => {
+  const { inquiryCustomer, inquiryWorkSeed, productErrorText, workCreateBody, workDrawerSubtitle, workEntityRef } = await import("./product-catalog.js");
+  const LEAD = "33333333-3333-4333-8333-33333333AAAA";
+  const DEAL = "44444444-4444-4444-8444-444444444444";
+  const owner = { id: "prod-1", orgScope: "personal" };
+  const draft = { title: "  채점 결과 내보내기 ", workType: "contact", areaId: "area-1", dueAt: "", recurrence: "weekly" };
+
+  // 문의 → seed: 리드가 있을 때만 고객을 싣는다(소문자 정규화, 이름 없으면 중립 라벨).
+  const seed = inquiryWorkSeed({ id: "q1", subject: "엑셀로 받고 싶어요", leadId: LEAD, dealId: DEAL, contactName: "김민정" }, "contact");
+  assert.deepEqual(seed, { title: "엑셀로 받고 싶어요", workType: "contact", inquiryId: "q1", customer: { type: "lead", id: LEAD.toLowerCase(), label: "김민정" } });
+  assert.equal(inquiryCustomer({ leadId: LEAD, contactName: " " }).label, null, "이름이 없으면 자리표시 이름을 만들지 않는다");
+  assert.equal(inquiryWorkSeed({ id: "q2", subject: "거래만", leadId: null, dealId: DEAL }, "feature").customer, undefined, "거래에서 고객을 추측하지 않는다");
+  assert.equal(inquiryCustomer({ leadId: "lead-1" }), null, "정식 uuid가 아닌 값은 버린다");
+
+  // 쓰기 몸체: 고객이 있으면 entityRef, 없으면 키 자체가 없다.
+  const withCustomer = workCreateBody(owner, draft, seed, "w1");
+  assert.deepEqual(withCustomer, {
+    id: "w1", title: "채점 결과 내보내기", areaId: "area-1", orgScope: "personal", status: "active", priority: "medium",
+    productId: "prod-1", workType: "contact", entityRef: { type: "lead", id: LEAD.toLowerCase() }, source: "hub-products",
+  }, "보수가 아니면 반복을 싣지 않는다");
+  assert.equal("entityRef" in workCreateBody(owner, draft, undefined, "w2"), false, "＋ 일(seed 없음)");
+  assert.equal("entityRef" in workCreateBody(owner, draft, { title: "t", workType: "feature", inquiryId: "q2" }, "w3"), false, "고객 없는 문의");
+  assert.equal("entityRef" in workCreateBody(owner, draft, { inquiryId: "q3", customer: { type: "lead", id: "not-a-uuid" } }, "w4"), false);
+  assert.equal("entityRef" in workCreateBody(owner, draft, { inquiryId: "q4", customer: { type: "deal", id: DEAL } }, "w5"), false, "거래는 고객이 아니다");
+  assert.deepEqual(workEntityRef({ customer: { type: "account", id: DEAL } }), { type: "customer_account", id: DEAL });
+  assert.equal(workCreateBody(owner, { ...draft, workType: "maintenance", dueAt: "2026-10-01" }, null, "w6").recurrence, "weekly");
+
+  // 드로어 안내 한 줄 — 고객이 붙을 때만 고객을 말한다. 조사는 늘 "고객" 뒤라 자유 입력 이름의 받침을 따지지 않는다.
+  assert.equal(workDrawerSubtitle(seed), "문의에서 만드는 일 — 만들면 문의와 고객(김민정)이 이 일에 붙어요.");
+  assert.equal(workDrawerSubtitle(inquiryWorkSeed({ id: "q5", leadId: LEAD, contactName: "ABC학원 (원장)" }, "contact")), "문의에서 만드는 일 — 만들면 문의와 고객(ABC학원 (원장))이 이 일에 붙어요.");
+  assert.equal(workDrawerSubtitle(inquiryWorkSeed({ id: "q6", leadId: LEAD, contactName: "" }, "contact")), "문의에서 만드는 일 — 만들면 문의와 고객이 이 일에 붙어요.", "이름 없는 리드는 이름 없이");
+  assert.equal(workDrawerSubtitle({ inquiryId: "q2", title: "t" }), "문의에서 만드는 일 — 만들면 문의가 이 일에 붙어요.");
+  assert.equal(workDrawerSubtitle(undefined), "프로젝트 탭의 프로젝트로 만들어지고 이 제품에 붙어요.");
+
+  // 고객(리드)이 지워졌으면 Engine이 invalid-reference로 거절한다 — 저장 실패 문구로 보인다.
+  assert.match(productErrorText("invalid-reference"), /고객 기록을 찾지 못했어요/);
+  assert.match(productErrorText("invalid-entity-ref"), /고객 연결 값/);
+});
+
+test("saveWork: a failed inquiry link keeps the created work id, and the retry links only — never a second customer-linked project", async () => {
+  const { saveWork } = await import("./product-catalog.js");
+  const LEAD = "33333333-3333-4333-8333-33333333aaaa";
+  const product = { id: "prod-1", orgScope: "personal" };
+  const draft = { title: "엑셀 내보내기", workType: "contact", areaId: "area-1", dueAt: "", recurrence: "" };
+  const seed = { title: "엑셀", workType: "contact", inquiryId: "q1", customer: { type: "lead", id: LEAD, label: "김민정" } };
+  const calls = [];
+  const writes = (links) => ({
+    createWork: async (body) => { calls.push(["create", body.id, body.entityRef?.id || null]); return { ok: true, status: "saved", entity: { id: `saved-${body.id}` } }; },
+    linkInquiry: async (...args) => { calls.push(["link", ...args]); return links.shift(); },
+  });
+
+  // 1) 일은 만들어졌고 문의 붙이기가 실패 → 실패로 돌려주되 만든 일 id를 남긴다.
+  const first = await saveWork(writes([{ ok: false, message: "네트워크 오류로 저장하지 못했어요." }]), { product, draft, seed, id: "w1" });
+  assert.deepEqual(first, { ok: false, createdId: "saved-w1", message: "일은 만들었지만 문의를 붙이지 못했어요: 네트워크 오류로 저장하지 못했어요. 다시 누르면 문의만 붙여요." });
+  // 2) 다시 누르면 그 일에 문의만 붙인다 — createWork를 다시 부르지 않는다.
+  const retry = await saveWork(writes([{ ok: true, status: "saved" }]), { product, draft, seed, id: "w2", createdId: first.createdId });
+  assert.deepEqual(retry, { ok: true, createdId: "saved-w1" });
+  assert.deepEqual(calls, [["create", "w1", LEAD], ["link", "q1", "prod-1", "saved-w1"], ["link", "q1", "prod-1", "saved-w1"]]);
+
+  // 만들기 자체가 실패하면 만든 일이 없다(고객을 빼고 다시 만들지 않는다).
+  calls.length = 0;
+  const rejected = await saveWork({ createWork: async (body) => { calls.push(["create", body.entityRef?.id]); return { ok: false, message: "업무 분야나 고객 기록을 찾지 못했어요." }; }, linkInquiry: async () => { throw new Error("must not link"); } }, { product, draft, seed, id: "w3" });
+  assert.deepEqual(rejected, { ok: false, createdId: null, message: "업무 분야나 고객 기록을 찾지 못했어요." });
+  assert.deepEqual(calls, [["create", LEAD]]);
+
+  // 문의 없는 ＋ 일은 붙이기가 없다. 서버 id가 없으면 만든 id를 쓴다.
+  const plain = await saveWork({ createWork: async () => ({ ok: true, status: "saved", entity: null }), linkInquiry: async () => { throw new Error("must not link"); } }, { product, draft, seed: undefined, id: "w4" });
+  assert.deepEqual(plain, { ok: true, createdId: "w4" });
+});
+
+test("focus cap rejection names the products holding the three slots", async () => {
+  const { productErrorText } = await import("./product-catalog.js");
+  const text = productErrorText("focus-cap-reached", { limit: 3, focus: [{ name: "가" }, { name: "나" }, { name: "다" }] });
+  assert.match(text, /동시에 3개까지/);
+  assert.match(text, /가 · 나 · 다/);
+  assert.match(text, /유지·종료로 내린 뒤/);
+  assert.doesNotMatch(productErrorText("focus-cap-reached"), /지금:/, "이름을 모르면 목록을 지어내지 않는다");
+});
+
+test('monthly profit stays unknown until both fields are present; explicit zero is measured', async () => {
+  const { monthNumbers, portfolioSummary } = await import('./product-catalog.js');
+  const product = (values, opsStatus = 'live') => ({ opsStatus, metrics: [{ month: '2026-10', ...values }] });
+  for (const values of [{ revenue: 100, cost: null }, { revenue: null, cost: 100 }, {}]) {
+    assert.equal(monthNumbers(product(values), '2026-10').net, null);
+  }
+  assert.equal(monthNumbers(product({ revenue: 0, cost: 0 }), '2026-10').net, 0);
+  const summary = portfolioSummary([product({ revenue: 100, cost: 20 }), product({ revenue: 200, cost: null }), product({ revenue: null, cost: 500 })], [], '2026-10');
+  assert.deepEqual([summary.revenue, summary.cost, summary.net, summary.moneyKnown, summary.moneyMissing], [100, 20, 80, 1, 2]);
+  assert.equal(portfolioSummary([product({ revenue: null, cost: 500 })], [], '2026-10').net, null);
+  assert.equal(portfolioSummary([product({ revenue: 0, cost: 0 })], [], '2026-10').net, 0);
+});
+
+test('weekly user summary excludes ended products from both known values and missing counts', async () => {
+  const { portfolioSummary } = await import('./product-catalog.js');
+  const product = (opsStatus, activeUsers) => ({ opsStatus, metrics: [{ month: '2026-10', activeUsers }] });
+  const ended = portfolioSummary([product('ended', 10)], [], '2026-10');
+  assert.equal(ended.usersMissing, 0);
+  assert.equal(ended.users, null);
+  const mixed = portfolioSummary([product('ended', 10), product('live', 0), product('paused', null)], [], '2026-10');
+  assert.equal(mixed.users, 0);
+  assert.equal(mixed.usersMissing, 1);
+  const missing = portfolioSummary([product('live', null), product('ended', null)], [], '2026-10');
+  assert.equal(missing.users, null);
+  assert.equal(missing.usersMissing, 1);
+});
+
+test('monthly parser preserves null and zero and rejects characters, signs, decimals and malformed grouping', async () => {
+  const { parseMonthInput } = await import('./product-catalog.js');
+  assert.deepEqual(parseMonthInput({ activeUsers: '', revenue: ' 0 ', cost: '1,200' }), { ok: true, values: { activeUsers: null, revenue: 0, cost: 1200 } });
+  for (const field of ['activeUsers', 'revenue', 'cost']) {
+    for (const value of ['-500', '+500', '1.5', 'abc', '1,2', '1e3', '1 000', '9007199254740992']) {
+      const result = parseMonthInput({ [field]: value });
+      assert.equal(result.ok, false, `${field}: ${value}`);
+      assert.match(result.message, /정수|이하/);
+    }
+  }
+});
+
+test('monthly parser accepted boundaries satisfy the actual Engine record_month contract', async () => {
+  const { parseMonthInput } = await import('./product-catalog.js');
+  const input = { action: 'record_month', productId: '22222222-2222-4222-8222-222222222222', month: '2026-10' };
+  const context = { workspaceId: '11111111-1111-4111-8111-111111111111', now: '2026-10-05T00:00:00Z' };
+  for (const draft of [{}, { activeUsers: '0', revenue: '0', cost: '0' }, { activeUsers: '100,000,000', revenue: '100,000,000,000', cost: '100,000,000,000' }]) {
+    const parsed = parseMonthInput(draft);
+    assert.equal(parsed.ok, true);
+    assert.equal(normalizeProductCommand({ ...input, ...parsed.values }, context).ok, true);
+  }
+  for (const [field, value] of [['activeUsers', '100000001'], ['revenue', '100000000001'], ['cost', '100000000001']]) {
+    assert.equal(parseMonthInput({ [field]: value }).ok, false, field);
+    assert.equal(normalizeProductCommand({ ...input, [field]: value }, context).ok, false);
+  }
 });

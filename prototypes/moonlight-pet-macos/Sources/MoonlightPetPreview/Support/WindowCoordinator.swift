@@ -12,10 +12,11 @@ final class KeyPanel: NSPanel {
 final class PetClickView: NSView {
     private let model: AppModel
     private let interaction = PetInteraction()
-    var onClick: (() -> Void)?
+    var onClick: ((NSEvent) -> Void)?
+    var onClickCancelled: (() -> Void)?
     var onNotifications: (() -> Void)?
     var onDoubleClick: (() -> Void)?
-    var onMoved: (() -> Void)?
+    var onMove: ((PanelMove) -> Void)?
     var onDragBegan: (() -> Void)?
     var onDragEnded: (() -> Void)?
     private var drag = ScreenDragTracker()
@@ -44,10 +45,27 @@ final class PetClickView: NSView {
     override func mouseExited(with event: NSEvent) { interaction.isHovered = false }
 
     override func rightMouseDown(with event: NSEvent) {
+        onClickCancelled?()
         let menu = NSMenu(title: "펫 캐릭터")
         let notices = NSMenuItem(title: "알림 보기", action: #selector(openNotifications), keyEquivalent: "")
         notices.target = self
         menu.addItem(notices)
+        let alignment = NSMenuItem(title: "사이드 자동 정렬", action: #selector(toggleAlignment), keyEquivalent: "")
+        alignment.target = self
+        alignment.state = model.autoAlignsToEdge ? .on : .off
+        menu.addItem(alignment)
+        for edge in PanelEdge.allCases {
+            let item = NSMenuItem(title: "\(edge.title) 사이드에 붙이기", action: #selector(selectEdge(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = edge.rawValue
+            item.state = model.autoAlignsToEdge && model.alignmentEdge == edge ? .on : .off
+            menu.addItem(item)
+        }
+        if NSScreen.screens.count > 1 {
+            let move = NSMenuItem(title: "다음 모니터로 이동", action: #selector(moveToNextDisplay), keyEquivalent: "")
+            move.target = self
+            menu.addItem(move)
+        }
         menu.addItem(.separator())
         for character in PetCharacter.allCases {
             let item = NSMenuItem(title: character.title, action: #selector(selectCharacter(_:)), keyEquivalent: "")
@@ -64,6 +82,13 @@ final class PetClickView: NSView {
     }
 
     @objc private func openNotifications() { onNotifications?() }
+    @objc private func moveToNextDisplay() { onMove?(.nextDisplay) }
+    @objc private func toggleAlignment() { model.autoAlignsToEdge.toggle() }
+    @objc private func selectEdge(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String, let edge = PanelEdge(rawValue: value) else { return }
+        model.alignmentEdge = edge
+        model.autoAlignsToEdge = true
+    }
 
     @objc private func selectCharacter(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
@@ -79,6 +104,7 @@ final class PetClickView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if drag.isDragging { onMove?(.finish(pointer: window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)) }
         defer {
             onDragEnded?()
             drag.end()
@@ -86,22 +112,20 @@ final class PetClickView: NSView {
             interaction.isDragging = false
         }
         if !drag.isDragging && bounds.contains(convert(event.locationInWindow, from: nil)) {
-            if event.clickCount == 1 { onClick?() }
-            else if event.clickCount == 2 { onDoubleClick?() }
+            if event.clickCount == 1 {
+                onClick?(event)
+            } else if event.clickCount == 2 { onDoubleClick?() }
         }
     }
 
     override func mouseDragged(with event: NSEvent) {
         let wasDragging = drag.isDragging
-        guard let window, let offset = drag.translation(to: window.convertPoint(toScreen: event.locationInWindow)) else { return }
+        let pointer = window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
+        guard let offset = drag.translation(to: pointer) else { return }
         if !wasDragging { onDragBegan?() }
         interaction.isPressed = false
         interaction.isDragging = true
-        var frame = window.frame
-        frame.origin.y += offset
-        let visible = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? frame
-        window.setFrameOrigin(PanelGeometry.fitted(frame, in: visible).origin)
-        onMoved?()
+        onMove?(.drag(delta: offset, pointer: pointer))
     }
 }
 
@@ -113,6 +137,10 @@ final class ShieldWindow: NSWindow {
 @MainActor
 final class WindowCoordinator: NSObject {
     private let model: AppModel
+    private let defaults: UserDefaults
+    private var savedPlacement: SavedPetPlacement?
+    private var companionAnchor: CompanionAnchor?
+    private static let placementKey = "petPreview.placement.v1"
     private let petWindow: KeyPanel
     private let previewWindow: KeyPanel
     private let barWindow: KeyPanel
@@ -128,9 +156,15 @@ final class WindowCoordinator: NSObject {
     private var hotKeyHandler: EventHandlerRef?
     private var desiredVisibility: [ObjectIdentifier: Bool] = [:]
     private var transitionRevisions: [ObjectIdentifier: Int] = [:]
+    private var openingPetClick: (time: TimeInterval, point: NSPoint)?
+    private var isDraggingWindow = false
 
-    init(model: AppModel) {
+    init(model: AppModel, defaults: UserDefaults = .standard) {
         self.model = model
+        self.defaults = defaults
+        savedPlacement = defaults.data(forKey: Self.placementKey)
+            .flatMap { try? JSONDecoder().decode(SavedPetPlacement.self, from: $0) }
+        companionAnchor = savedPlacement?.companionAnchor
         petWindow = Self.panel(size: NSSize(width: 56, height: 56))
         previewWindow = Self.panel(size: NSSize(width: 326, height: 130))
         barWindow = Self.panel(size: Self.barSize(for: model.mode))
@@ -138,18 +172,27 @@ final class WindowCoordinator: NSObject {
         super.init()
 
         let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size), model: model)
-        petClickView.onClick = { [weak self] in self?.toggleBar() }
+        petClickView.onClick = { [weak self] event in
+            guard let self else { return }
+            self.openingPetClick = (event.timestamp, self.petWindow.convertPoint(toScreen: event.locationInWindow))
+            self.toggleBar()
+        }
         petClickView.onNotifications = { [weak self] in self?.openMode(.notifications) }
-        petClickView.onDoubleClick = { [weak self] in self?.showWidget() }
+        petClickView.onClickCancelled = { [weak self] in self?.openingPetClick = nil }
+        petClickView.onDoubleClick = { [weak self] in
+            self?.openingPetClick = nil
+            self?.showWidget()
+        }
         petClickView.onDragBegan = { [weak self] in
             guard let self else { return }
+            self.openingPetClick = nil
             for panel in [self.previewWindow, self.barWindow, self.widgetWindow] where self.isRequestedVisible(panel) {
                 PetGlassDrag.begin(in: panel)
             }
         }
-        petClickView.onMoved = { [weak self] in
+        petClickView.onMove = { [weak self] movement in
             guard let self else { return }
-            self.placeTransientWindows()
+            self.move(self.petWindow, movement)
             for panel in [self.previewWindow, self.barWindow, self.widgetWindow] where self.isRequestedVisible(panel) {
                 PetGlassDrag.update(in: panel)
             }
@@ -173,19 +216,33 @@ final class WindowCoordinator: NSObject {
                 guard let self else { return }
                 self.showWidget(mode: self.model.mode)
             },
-            moveVertically: { [weak self] offset in self?.moveBarVertically(by: offset) }
+            move: { [weak self] movement in
+                guard let self else { return }
+                self.openingPetClick = nil
+                self.move(self.barWindow, movement)
+            }
         ), cornerRadius: CompanionLayout.glassRadius,
-           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.dismissBar() })),
-           model: model, protectsText: true)
+           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.dismissBar() },
+                move: { [weak self] movement in
+                    guard let self else { return }
+                    self.openingPetClick = nil
+                    self.move(self.barWindow, movement)
+                }, clickEvent: { [weak self] event in self?.clickQuickPet(with: event) })),
+           model: model, protectsText: true, captureSurface: .quick)
         widgetWindow.contentView = GlassPanel.host(CompactWidgetView(
             model: model,
             collapse: { [weak self] in self?.collapseWidget() },
             modeChanged: { [weak self] in self?.resizeWidget() },
-            moveVertically: { [weak self] offset in self?.moveWidgetVertically(by: offset) },
+            move: { [weak self] movement in
+                guard let self else { return }; self.move(self.widgetWindow, movement)
+            },
             startFocus: { [weak self] in self?.startFocus() }
         ), cornerRadius: CompanionLayout.glassRadius,
-           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })),
-           model: model, protectsText: true)
+           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() },
+                move: { [weak self] movement in
+                    guard let self else { return }; self.move(self.widgetWindow, movement)
+                })),
+           model: model, protectsText: true, captureSurface: .widget)
 
         model.onOpenMode = { [weak self] mode in self?.openMode(mode) }
         model.activity.onBanner = { [weak self] notice in self?.presentNotice(notice) ?? false }
@@ -195,8 +252,13 @@ final class WindowCoordinator: NSObject {
             self.dismiss(self.previewWindow)
         }
         model.onFocusFinished = { [weak self] in self?.endFocus() }
+        model.onAlignmentChanged = { [weak self] in self?.applyAutomaticAlignment() }
         placePetInitially()
+        if model.autoAlignsToEdge {
+            petWindow.setFrame(alignedFrame(petWindow.frame, for: petWindow, in: visibleFrame(for: petWindow)), display: false)
+        }
         placeTransientWindows()
+        if savedPlacement == nil { savePlacement() }
         registerHotKey()
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -205,14 +267,8 @@ final class WindowCoordinator: NSObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+                self.restorePlacement()
                 if self.model.isFocused { self.rebuildShields() }
-                else {
-                    let visible = self.petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame
-                    if let visible {
-                        self.petWindow.setFrameOrigin(PanelGeometry.fitted(self.petWindow.frame, in: visible).origin)
-                    }
-                    self.placeTransientWindows()
-                }
             }
         }
         resignObserver = NotificationCenter.default.addObserver(
@@ -363,12 +419,33 @@ final class WindowCoordinator: NSObject {
         if isRequestedVisible(widgetWindow) { collapseWidget() }
         dismiss(previewWindow)
         placeTransientWindows()
+        if model.mode == .memo {
+            alignPet(to: barWindow.frame, companion: barWindow, in: visibleFrame(for: barWindow))
+            savePlacement()
+        }
         present(barWindow)
         model.quickOpenRevision += 1
         NSApp.activate(ignoringOtherApps: true)
     }
 
     private func dismissBar() { dismiss(barWindow) }
+
+    // A memo replaces the idle pet with its perched hit target on the first
+    // click. Preserve the second click across that host change without holding
+    // the first click for the system's double-click interval.
+    private func clickQuickPet(with event: NSEvent) {
+        let first = openingPetClick
+        openingPetClick = nil
+        let point = barWindow.convertPoint(toScreen: event.locationInWindow)
+        if model.mode == .memo, isRequestedVisible(barWindow), let first,
+           event.timestamp >= first.time,
+           event.timestamp - first.time <= NSEvent.doubleClickInterval,
+           hypot(point.x - first.point.x, point.y - first.point.y) <= 8 {
+            showWidget()
+        } else {
+            dismissBar()
+        }
+    }
 
     func showWidget(mode: QuickMode = .tasks) {
         interactionLog.info("show dedicated widget")
@@ -387,6 +464,8 @@ final class WindowCoordinator: NSObject {
         model.compactMode = mode
         widgetWindow.setContentSize(Self.widgetSize(for: mode))
         placeWidget()
+        alignPet(to: widgetWindow.frame, companion: widgetWindow, in: visibleFrame(for: widgetWindow))
+        savePlacement()
         petWindow.orderOut(nil)
         present(widgetWindow)
         NSApp.activate(ignoringOtherApps: true)
@@ -414,6 +493,12 @@ final class WindowCoordinator: NSObject {
     }
 
     private func present(_ window: KeyPanel, activate: Bool = true) {
+        // Utility surfaces share one workflow. Finish any outgoing fade before
+        // showing its replacement, including a panel already marked dismissed.
+        for other in [previewWindow, barWindow, widgetWindow]
+            where other !== window && (other.isVisible || isRequestedVisible(other)) {
+            hideNow(other)
+        }
         if window === barWindow { model.activeCompanion = .quick }
         else if window === widgetWindow { model.activeCompanion = .widget }
         advanceRevision(for: window)
@@ -500,6 +585,10 @@ final class WindowCoordinator: NSObject {
     }
 
     private func placePetInitially() {
+        if let frame = savedPlacement?.restored(size: petWindow.frame.size, displays: displays) {
+            petWindow.setFrameOrigin(frame.origin)
+            return
+        }
         guard let visible = NSScreen.main?.visibleFrame else { return }
         petWindow.setFrameOrigin(NSPoint(
             x: visible.maxX - petWindow.frame.width - 8,
@@ -509,31 +598,36 @@ final class WindowCoordinator: NSObject {
 
     private func placeTransientWindows() {
         (barWindow.contentView as? GlassPanel)?.showsOrnament = model.mode == .memo
+        updateOrnamentEdges()
         let pet = petWindow.frame
-        let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? pet
+        let visible = visibleFrame(for: petWindow)
         for window in [previewWindow, barWindow] {
             let size = window === barWindow ? Self.barSize(for: model.mode) : NSSize(width: 326, height: 130)
-            let frame = NSRect(x: pet.minX - size.width - 10, y: pet.midY - size.height / 2,
-                               width: size.width, height: size.height)
-            window.setFrame(PanelGeometry.fitted(frame, in: visible), display: true)
+            let frame = PanelGeometry.companion(size: size, pet: pet,
+                perched: window === barWindow && model.mode == .memo,
+                anchor: window === barWindow ? companionAnchor : nil, in: visible)
+            window.setFrame(alignedFrame(frame, for: window, in: visible), display: true)
         }
         placeWidget()
     }
 
     private func placeWidget() {
+        updateOrnamentEdges()
         let pet = petWindow.frame
-        let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? pet
-        let size = widgetWindow.frame.size
-        let frame = NSRect(x: pet.maxX - size.width, y: pet.maxY - size.height,
-                           width: size.width, height: size.height)
-        widgetWindow.setFrame(PanelGeometry.fitted(frame, in: visible), display: true)
+        let visible = visibleFrame(for: petWindow)
+        let size = Self.widgetSize(for: model.compactMode)
+        let frame = PanelGeometry.companion(size: size, pet: pet, perched: true, in: visible)
+        widgetWindow.setFrame(alignedFrame(frame, for: widgetWindow, in: visible), display: true)
     }
 
     private func resizeWidget() {
+        updateOrnamentEdges()
         let size = Self.widgetSize(for: model.compactMode)
-        let visible = widgetWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? widgetWindow.frame
-        let frame = PanelGeometry.resizedKeepingTopRight(widgetWindow.frame, size: size, in: visible)
-        alignPet(to: frame, in: visible)
+        let visible = visibleFrame(for: widgetWindow)
+        let frame = alignedFrame(PanelGeometry.resizedKeepingTopRight(widgetWindow.frame, size: size, in: visible),
+                                 for: widgetWindow, in: visible)
+        alignPet(to: frame, companion: widgetWindow, in: visible)
+        savePlacement()
         if PetMotion.reduceMotion { widgetWindow.setFrame(frame, display: true) }
         else {
             NSAnimationContext.runAnimationGroup { context in
@@ -544,19 +638,117 @@ final class WindowCoordinator: NSObject {
         }
     }
 
-    private func moveWidgetVertically(by offset: CGFloat) {
-        let visible = widgetWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? widgetWindow.frame
-        var frame = widgetWindow.frame
-        frame.origin.y += offset
-        frame = PanelGeometry.fitted(frame, in: visible)
-        widgetWindow.setFrame(frame, display: true)
-        alignPet(to: frame, in: visible)
+    private var displays: [PanelDisplay] {
+        NSScreen.screens.compactMap { screen in
+            guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
+            return PanelDisplay(id: id.uint32Value, frame: screen.frame, visibleFrame: screen.visibleFrame)
+        }
     }
 
-    private func alignPet(to frame: NSRect, in visible: NSRect) {
-        var pet = petWindow.frame
-        pet.origin.y = frame.maxY - pet.height
-        petWindow.setFrameOrigin(PanelGeometry.fitted(pet, in: visible).origin)
+    private func visibleFrame(for window: NSWindow) -> CGRect {
+        PanelGeometry.display(for: window.frame, in: displays)?.visibleFrame
+            ?? NSScreen.main?.visibleFrame ?? window.frame
+    }
+
+    /// All three surfaces use global pointer coordinates. Clamp only on release,
+    /// so the old screen's edge cannot swallow motion toward another screen.
+    private func move(_ window: KeyPanel, _ movement: PanelMove) {
+        let frame: CGRect
+        let destination: PanelDisplay?
+        let finished: Bool
+        switch movement {
+        case let .drag(delta, pointer):
+            frame = window.frame.offsetBy(dx: delta.x, dy: delta.y)
+            destination = PanelGeometry.display(at: pointer, in: displays)
+            finished = false
+        case let .finish(pointer):
+            frame = window.frame
+            destination = PanelGeometry.display(at: pointer, in: displays)
+            finished = true
+        case let .nudge(delta):
+            frame = window.frame.offsetBy(dx: delta.x, dy: delta.y)
+            let leadingEdge = CGPoint(x: delta.x < 0 ? frame.minX : delta.x > 0 ? frame.maxX : frame.midX,
+                                      y: delta.y < 0 ? frame.minY : delta.y > 0 ? frame.maxY : frame.midY)
+            destination = PanelGeometry.display(at: leadingEdge, in: displays)
+            finished = true
+        case .nextDisplay:
+            let screens = displays
+            guard screens.count > 1,
+                  let current = PanelGeometry.display(for: window.frame, in: screens),
+                  let index = screens.firstIndex(where: { $0.id == current.id }) else { return }
+            let next = screens[(index + 1) % screens.count]
+            destination = next
+            frame = SavedPetPlacement(frame: window.frame, display: current)
+                .restored(size: window.frame.size, displays: [next]) ?? window.frame
+            finished = true
+        }
+        guard let destination else { return }
+        isDraggingWindow = !finished
+        let visible = destination.visibleFrame
+        let placed = finished ? alignedFrame(PanelGeometry.fitted(frame, in: visible), for: window, in: visible) : frame
+        window.setFrame(placed, display: true)
+        if window === petWindow {
+            // Avoid resizing hidden glass/Metal surfaces for every pointer event.
+            if finished || isRequestedVisible(barWindow) || isRequestedVisible(previewWindow) {
+                placeTransientWindows()
+            }
+        } else {
+            alignPet(to: placed, companion: window, in: visible)
+        }
+        if finished { savePlacement(userMoved: true) }
+    }
+
+    private func alignPet(to frame: NSRect, companion: KeyPanel, in visible: NSRect) {
+        let perched = companion === widgetWindow || (companion === barWindow && model.mode == .memo)
+        let pet = PanelGeometry.pet(size: petWindow.frame.size, companion: frame,
+            perched: perched, edge: model.autoAlignsToEdge ? model.alignmentEdge : nil, in: visible)
+        companionAnchor = perched ? nil : CompanionAnchor(companion: frame, pet: pet)
+        petWindow.setFrameOrigin(pet.origin)
+    }
+
+    private func savePlacement(userMoved: Bool = false) {
+        // Opening/resizing on a temporary fallback monitor is not an explicit
+        // move away from the disconnected preferred display.
+        if !userMoved, let savedPlacement, !displays.contains(where: { $0.id == savedPlacement.displayID }) { return }
+        guard let display = PanelGeometry.display(for: petWindow.frame, in: displays) else { return }
+        let placement = SavedPetPlacement(frame: petWindow.frame, display: display, companionAnchor: companionAnchor)
+        guard let data = try? JSONEncoder().encode(placement) else { return }
+        savedPlacement = placement
+        defaults.set(data, forKey: Self.placementKey)
+    }
+
+    private func restorePlacement() {
+        companionAnchor = savedPlacement?.companionAnchor
+        placePetInitially()
+        placeTransientWindows()
+        applyAutomaticAlignment()
+    }
+
+    private func alignedFrame(_ frame: CGRect, for window: KeyPanel, in visible: CGRect) -> CGRect {
+        guard model.autoAlignsToEdge, !isDraggingWindow else { return frame }
+        let separatePet = window === previewWindow || (window === barWindow && model.mode != .memo)
+        return PanelGeometry.edgeAligned(frame, edge: model.alignmentEdge,
+                                         outsidePet: separatePet ? petWindow.frame.size : nil, in: visible)
+    }
+
+    private func updateOrnamentEdges() {
+        let edge = model.autoAlignsToEdge ? model.alignmentEdge : .right
+        for window in [barWindow, widgetWindow] {
+            (window.contentView as? GlassPanel)?.ornamentEdge = edge
+        }
+    }
+
+    private func applyAutomaticAlignment() {
+        updateOrnamentEdges()
+        guard model.autoAlignsToEdge, !model.isFocused else { return }
+        let window = [widgetWindow, barWindow, previewWindow].first(where: { isRequestedVisible($0) }) ?? petWindow
+        let visible = visibleFrame(for: window)
+        let frame = alignedFrame(window.frame, for: window, in: visible)
+        window.setFrame(frame, display: true)
+        if window !== petWindow { alignPet(to: frame, companion: window, in: visible) }
+        else { companionAnchor = nil }
+        placeTransientWindows()
+        savePlacement()
     }
 
     private static func widgetSize(for mode: CompactMode) -> NSSize {
@@ -566,8 +758,18 @@ final class WindowCoordinator: NSObject {
     private func resizeBar() {
         syncCompanionPet()
         let size = Self.barSize(for: model.mode)
-        let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? barWindow.frame
-        let frame = PanelGeometry.resizedKeepingTopRight(barWindow.frame, size: size, in: visible)
+        guard isRequestedVisible(barWindow) else {
+            // A hidden bar may still be on the previous monitor after moving a
+            // pinned widget. It must inherit the pet's current anchor, not own it.
+            barWindow.setContentSize(size)
+            placeTransientWindows()
+            return
+        }
+        let visible = visibleFrame(for: barWindow)
+        let frame = alignedFrame(PanelGeometry.resizedKeepingTopRight(barWindow.frame, size: size, in: visible),
+                                 for: barWindow, in: visible)
+        alignPet(to: frame, companion: barWindow, in: visible)
+        savePlacement()
         guard frame != barWindow.frame else { return }
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             barWindow.setFrame(frame, display: true)
@@ -586,20 +788,17 @@ final class WindowCoordinator: NSObject {
 
     private func syncCompanionPet() {
         (barWindow.contentView as? GlassPanel)?.showsOrnament = model.mode == .memo
+        updateOrnamentEdges()
         guard !model.isFocused else { return }
         let perched = isRequestedVisible(widgetWindow)
             || (isRequestedVisible(barWindow) && model.mode == .memo)
         if perched { petWindow.orderOut(nil) }
-        else { petWindow.orderFrontRegardless() }
-    }
-
-    private func moveBarVertically(by offset: CGFloat) {
-        let visible = barWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? barWindow.frame
-        let previous = barWindow.frame
-        let frame = PanelGeometry.fitted(previous.offsetBy(dx: 0, dy: offset), in: visible)
-        barWindow.setFrame(frame, display: true)
-        let pet = petWindow.frame.offsetBy(dx: 0, dy: frame.minY - previous.minY)
-        petWindow.setFrameOrigin(PanelGeometry.fitted(pet, in: visible).origin)
+        else {
+            if model.autoAlignsToEdge && !isRequestedVisible(barWindow) && !isRequestedVisible(previewWindow) {
+                petWindow.setFrame(alignedFrame(petWindow.frame, for: petWindow, in: visibleFrame(for: petWindow)), display: true)
+            }
+            petWindow.orderFrontRegardless()
+        }
     }
 
     private func startFocus() {

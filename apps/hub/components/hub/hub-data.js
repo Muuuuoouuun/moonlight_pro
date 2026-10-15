@@ -1,6 +1,7 @@
 // Navigation metadata only. Operational records come from live ledgers; when a
 // ledger is unavailable the Hub renders an explicit preview/empty state.
 import { normalizeScope } from './hub-nav.js';
+import { FEATURE_GATES } from '../../lib/feature-gates.js';
 
 export function navPathForScope(item, scope) {
   if (!item.scopeAware || !item.path) return item.path;
@@ -13,6 +14,7 @@ export function navPathForScope(item, scope) {
 export const NAV_TREE = [
   { key: 'discovery', label: '기회 탐색', icon: 'search', path: 'dashboard/discovery', keywords: ['기회', '탐색', '신규 사업', '발굴', '검증', '아이디어'] },
   { key: 'home', label: '홈', icon: 'moon', path: 'dashboard/home', keywords: ['홈', 'home', '첫 화면', '트리아지', 'triage', '시간표'] },
+  { key: 'reports', label: '보고서', icon: 'brief', path: 'dashboard/reports', keywords: ['리포트', 'reports', '주간', '평가', 'QA', '리서치', '판단'] },
   { key: 'daily-brief', label: '오늘', icon: 'brief', path: 'dashboard/daily-brief', keywords: ['오늘', 'today', 'daily brief', '브리핑', '브리프'] },
   { key: 'overview', label: '현황', icon: 'signal', path: 'dashboard/overview', keywords: ['overview', '현황', '차트', '시각', '통계', 'chart', 'stats', '정리'] },
   { key: 'goals', label: 'OKR·KPI · 현황', icon: 'signal', scopeAware: true, path: 'dashboard/overview?view=goals&scope=all', keywords: ['목표', '성과', 'OKR', 'KPI', '지표', '측정', '핵심 결과'] },
@@ -51,7 +53,7 @@ export const NAV_TREE = [
   {
     key: 'agents', label: 'Agents', icon: 'agents', secondary: true,
     children: [
-      { key: 'office-council', label: 'Office', icon: 'agents', path: 'dashboard/agents/office-council', keywords: ['office', '오피스', '이브이', 'eevee', '비서', 'AI', '에이전트', '관점 비교', '초안'] },
+      { key: 'office-council', label: '오피스', icon: 'agents', path: 'dashboard/agents/office-council', keywords: ['office', '오피스', '이브이', 'eevee', '비서', 'AI', '에이전트', '관점 비교', '초안'] },
       { key: 'orders', label: '작업·실행', icon: 'orders', path: 'dashboard/agents/orders', keywords: ['orders', 'codex', '코드 작업', '작업 지시'] },
       { key: 'chat', label: '코칭·대화', icon: 'chat', path: 'dashboard/agents/chat', keywords: ['chat', 'guru', '코칭'] },
       { key: 'council', label: '브랜드 자문', icon: 'council', path: 'dashboard/agents/council', keywords: ['council', '브랜드'] },
@@ -61,10 +63,10 @@ export const NAV_TREE = [
     key: 'work', label: 'Work', icon: 'work', secondary: true,
     children: [
       { key: 'projects', label: 'Projects', icon: 'projects', path: 'dashboard/work/projects', keywords: ['프로젝트', '기획', 'pms'] },
-      { key: 'product-catalog', label: '제품', icon: 'projects', path: 'dashboard/work/projects?view=products', keywords: ['제품', 'product', '포트폴리오', '수익형', 'GitHub', '제품 문의'] },
+      { key: 'product-catalog', label: '제품', icon: 'projects', path: 'dashboard/products', keywords: ['제품', 'product', '포트폴리오', '수익형', 'GitHub', '제품 문의'] },
       { key: 'calendar', label: 'Calendar', icon: 'calendar', path: 'dashboard/work/calendar', keywords: ['캘린더', '일정'] },
       { key: 'rhythm', label: 'Rhythm', icon: 'rhythm', path: 'dashboard/work/rhythm', keywords: ['리듬', '루틴'] },
-      { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions', keywords: ['결정', '의사결정'] },
+      { key: 'decisions', label: FEATURE_GATES.decisionJournal ? '결정 일지' : 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions', keywords: ['결정', '의사결정', 'decisions', '결정 일지'] },
       { key: 'roadmap', label: 'Roadmap', icon: 'roadmap', path: 'dashboard/work/roadmap', keywords: ['로드맵'] },
     ],
   },
@@ -80,7 +82,8 @@ export const NAV_TREE = [
       { key: 'customers', label: '고객', icon: 'accounts', path: 'dashboard/revenue/customers', keywords: ['고객 DB', 'customers', '고객', 'crm', '통합', '고객 찾기'] },
       { key: 'deals', label: '거래', icon: 'deals', path: 'dashboard/revenue/deals', keywords: ['Deals', '딜', '파이프라인', '영업', '입금', '예상 입금'] },
       { key: 'inquiries', label: '문의', icon: 'inbox', path: 'dashboard/revenue/inquiries', keywords: ['문의 내역', '문의', '메일', '랜딩페이지', 'inquiry', 'webhook', '지원', '제휴'] },
-      { key: 'cashflow', label: '개인 현금 흐름', icon: 'revenue', path: 'dashboard/revenue/overview?scope=personal', keywords: ['현금 흐름', '캐시플로', 'cashflow', '30일', '개인 매출', '로드맵'] },
+      { key: 'cashflow', label: '개인 현금 흐름', icon: 'revenue', path: 'dashboard/revenue/cashflow?scope=personal', keywords: ['현금 흐름', '캐시플로', 'cashflow', '구독', '고정비', '회사 청구', '금융'] },
+      { key: 'personal-forecast', label: '개인 매출 전망', icon: 'revenue', path: 'dashboard/revenue/overview?scope=personal', keywords: ['30일', '개인 매출', '로드맵', '예상 입금'] },
       { key: 'overview', label: '개요', icon: 'revenue', path: 'dashboard/revenue/overview', keywords: ['revenue overview', '매출 개요', '영업', '영업·매출'] },
       { key: 'heatmap', label: '매출 히트맵', icon: 'globe', path: 'dashboard/revenue/heatmap', keywords: ['heatmap', '히트맵', '지역', '지도', 'map'] },
       { key: 'leads', label: 'Leads', icon: 'leads', path: 'dashboard/revenue/leads', keywords: ['리드', '영업'] },
@@ -93,8 +96,10 @@ export const NAV_TREE = [
     children: [
       { key: 'performance', label: '성과', icon: 'signal', path: 'dashboard/content/performance', keywords: ['content', '요약', '이번 주', '월별', '발행량', '조회수', '공유', '답글', 'analytics'] },
       { key: 'news', label: '뉴스 탐색', icon: 'globe', path: 'dashboard/content/news', keywords: ['content', '리서치', 'Brave', '정치', '교육', 'AI', '테크', '뉴스'] },
+      { key: 'research', label: '리서치함', icon: 'inbox', path: 'dashboard/content/research', keywords: ['리서치', '근거', '검토', '브랜드', '원고'] },
       { key: 'queue', label: '소재·제작', icon: 'queue', path: 'dashboard/content/queue', keywords: ['queue', 'content', '콘텐츠', '발행 큐'] },
       { key: 'studio', label: '원고 작성', icon: 'studio', path: 'dashboard/content/studio', keywords: ['studio', 'content', '스튜디오', '작성'] },
+      { key: 'publish', label: '발행', icon: 'calendar', path: 'dashboard/content/publish', keywords: ['예약', '놓침', '발행 기록', '로그', '캘린더', '올릴 차례'] },
       { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns', keywords: ['content'] },
     ],
   },
@@ -126,7 +131,6 @@ export const LEGACY_REDIRECTS = {
   'dashboard/work/releases': { to: 'dashboard/evolution', label: 'Evolution · Log' },
   'dashboard/work/pms': { to: 'dashboard/work/projects', label: 'Projects' },
   'dashboard/content/assets': { to: 'dashboard/content/studio', label: 'Studio' },
-  'dashboard/content/publish': { to: 'dashboard/content/queue', label: 'Queue' },
   'dashboard/automations/integrations': { to: 'dashboard/settings', label: 'Settings · Integrations' },
   'dashboard/operations': { to: 'dashboard/daily-brief', label: 'Daily Brief' },
   'dashboard/pms': { to: 'dashboard/work/projects', label: 'Projects' },
@@ -142,5 +146,5 @@ export const LEGACY_REDIRECTS = {
   'dashboard/projects': { to: 'dashboard/work/projects', label: 'Projects' },
   'dashboard/classin/intake': { to: 'dashboard/classin/revenue', label: '결제·리드' },
   'dashboard/classin/followups': { to: 'dashboard/revenue/followups', label: '오늘 연락' },
-  'dashboard/agents/office': { to: 'dashboard/agents/office-council', label: 'Office' },
+  'dashboard/agents/office': { to: 'dashboard/agents/office-council', label: '오피스' },
 };

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { contentQueueScope, contentQueueTabs, studioVariantMode, manualPublicationFields, publicationIsVerified } from "./content-workflow.js";
-import { createContentLedgerCache } from "./content-ledger-cache.js";
+import { createContentLedgerCache, EMPTY_CONTENT_LEDGER } from "./content-ledger-cache.js";
 
-const response = (items, source = "supabase") => ({ ok: true, json: async () => ({ source, items, status: source === "supabase" ? "live" : "preview" }) });
+const response = (items, source = "supabase") => ({ ok: true, json: async () => ({ ...EMPTY_CONTENT_LEDGER, source, items, status: source === "supabase" ? "live" : "preview" }) });
 
 test("manual publication validates empty and future dates before any write", () => {
   const now = Date.parse("2026-09-14T12:00:00Z");
@@ -46,7 +46,9 @@ test("concurrent readers deduplicate and a post-write invalidation ignores older
   const cache = createContentLedgerCache(() => new Promise((resolve) => resolvers.push(resolve)));
   const original = cache.refresh();
   assert.equal(cache.refresh(), original);
+  await Promise.resolve();
   const afterWrite = cache.invalidate();
+  await Promise.resolve();
   assert.equal(resolvers.length, 2);
   resolvers[1](response([{ id: "new" }]));
   await afterWrite;

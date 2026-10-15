@@ -9,6 +9,8 @@
   "exports": {
     ".": "./index.ts",
     "./card-news": "./card-news/index.ts",
-    "./editorial-criteria": "./editorial-criteria.ts"
+    "./editorial-criteria": "./editorial-criteria.ts",
+    "./format-prompts": "./format-prompts.ts",
+    "./reels-script": "./reels-script.ts"
   }
 }

@@ -1,4 +1,4 @@
-export const MEMO_SEARCH_DEFAULTS = Object.freeze({ q: '', dateFrom: '', dateTo: '', kind: '', contextType: '', contextId: '', used: 'all' });
+export const MEMO_SEARCH_DEFAULTS = Object.freeze({ q: '', dateFrom: '', dateTo: '', kind: '', noteScope: '', contextType: '', contextId: '', used: 'all' });
 export const MEMO_CHANGED_EVENT = 'moonlight:memos-saved';
 const path = '/dashboard/work/memos';
 export function filtersFromParams(params) {

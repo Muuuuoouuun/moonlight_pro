@@ -1,8 +1,10 @@
 "use client";
-// 프로젝트 탭 > 제품 — 제품 운영실 B안 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0).
+// 제품 탭(사이드바 `제품`, `dashboard/products`) — 제품 운영실 B안 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0).
+// 2026-09-30 운영자 "별도 탭 ㄱㄱ"로 프로젝트 탭의 한 보기(`?view=products`)에서 독립 탭으로 옮겼다(제품 렌즈 §14.2).
 // URL이 화면을 고른다: 기본은 포트폴리오, `?product=<id>`는 그 제품의 흐름 페이지, `?pview=inbox`는 문의함
-// (`&inquiry=<id>`로 한 건 선택). 카드 편집(EditDrawer)과 설정(저장소·GitHub·단계, ProductDetailDrawer)은
-// 여기서 여는 드로어다. 동시 진행 상한은 운영자 미정이라 막거나 경고하지 않는다(§12-5).
+// (`&inquiry=<id>`로 한 건 선택), `?new=product`는 새 제품 드로어를 한 번 연다. 카드 편집(EditDrawer)과
+// 설정(저장소·GitHub·단계, ProductDetailDrawer)은 여기서 여는 드로어다. 동시 진행 상한(MVP·출시·성장 3개,
+// 2026-09-30 확정 §12-5)은 Engine이 거절하고 여기는 그 이유를 그대로 보여 준다.
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -50,7 +52,7 @@ export function productFormFields({ creating }) {
   ];
 }
 
-export function ProjectProductsView({ onOpenProject }) {
+export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -60,18 +62,36 @@ export function ProjectProductsView({ onOpenProject }) {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(null); // { creating, product, record }
   const [syncing, setSyncing] = React.useState(false);
+  const mountedRef = React.useRef(false);
+  const loadRef = React.useRef(null);
+  const createAttemptRef = React.useRef(null);
 
-  const load = React.useCallback(async (signal) => {
-    const [products, status] = await Promise.all([readProducts(signal), readGitHubStatus(signal)]);
-    if (signal?.aborted) return;
-    setLedger({ ...EMPTY_LEDGER, ...products });
-    setGithub(status);
+  const load = React.useCallback(async () => {
+    if (!mountedRef.current) return;
+    loadRef.current?.abort();
+    const controller = new AbortController();
+    loadRef.current = controller;
+    const { signal } = controller;
+    const current = () => !signal.aborted && loadRef.current === controller;
+    // GitHub 지연이 제품 표시·저장 후 재조회를 붙잡지 않는다. 각 결과는 최신 조회만 반영한다.
+    readGitHubStatus(signal).then((status) => {
+      if (current()) setGithub(status);
+    }).catch(() => { if (current()) setGithub({ state: "error" }); });
+    try {
+      const products = await readProducts(signal);
+      if (current()) setLedger({ ...EMPTY_LEDGER, ...products });
+    } catch {
+      if (current()) setLedger({ ...EMPTY_LEDGER, status: "error" });
+    }
   }, []);
 
   React.useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal).catch(() => {});
-    return () => controller.abort();
+    mountedRef.current = true;
+    load();
+    return () => {
+      mountedRef.current = false;
+      loadRef.current?.abort();
+    };
   }, [load]);
 
   // 화면 고르기 — URL이 정본(뒤로 가기·새로고침·공유가 그대로 된다).
@@ -97,6 +117,7 @@ export function ProjectProductsView({ onOpenProject }) {
 
   const openCreate = React.useCallback(() => {
     setSettingsOpen(false);
+    createAttemptRef.current = null;
     // EditDrawer는 값이 있는 선택 칸이 하나라도 있으면 묶음을 펼친다 — 기본 가격 모델도
     // "값"으로 읽히므로 새 제품은 비워 두고(formToProductInput이 기본값으로 채운다) 접힌 채 시작한다.
     setEditing({ creating: true, product: null, record: { ...productToForm(null), id: null, pricingModel: "" } });
@@ -104,6 +125,19 @@ export function ProjectProductsView({ onOpenProject }) {
   const canCreate = ledger.status !== "loading" && ledger.status !== "preview" && ledger.error !== "products-table-missing";
   // 포트폴리오의 N = 제품 등록. 제품 페이지는 자기 N(＋ 일)을 가진다.
   usePageCreateHotkey(openCreate, { enabled: canCreate && !productId && !inboxOpen && !editing });
+  // 탑바 새로 만들기 딥링크 — 기록 로드 뒤 한 번 열고 쿼리를 지운다(DESIGN §8.1 딥링크).
+  const createdFromQueryRef = React.useRef(false);
+  const wantsCreate = searchParams.get("new") === "product";
+  React.useEffect(() => {
+    if (!wantsCreate) {
+      createdFromQueryRef.current = false;
+      return;
+    }
+    if (!canCreate || createdFromQueryRef.current) return;
+    createdFromQueryRef.current = true;
+    openCreate();
+    navigate({ new: null });
+  }, [wantsCreate, canCreate, openCreate, navigate]);
 
   const openEdit = React.useCallback((product) => {
     setEditing({ creating: false, product, record: productToForm(product) });
@@ -111,16 +145,51 @@ export function ProjectProductsView({ onOpenProject }) {
 
   const saveEditing = React.useCallback(async () => {
     if (!editing) return { ok: false, status: "error" };
-    const input = formToProductInput(editing.record, editing.product, { newId });
+    const pending = editing.creating ? createAttemptRef.current : null;
+    const input = pending?.body || formToProductInput(editing.record, editing.product, { newId });
     if (!input.name) return { ok: false, status: "error", message: "이름을 적어 주세요." };
     if (!input.summary) return { ok: false, status: "error", message: "한 줄 설명을 적어 주세요." };
+    // 결과 유실 후 수동 재시도는 항목 ID까지 같은 명령이다. Engine duplicate는 details를 비교하지 않는다.
+    const attempt = editing.creating ? pending || {
+      body: { id: newId(), orgScope: editing.record.orgScope, ...input },
+      form: JSON.stringify(editing.record),
+    } : null;
+    if (attempt) createAttemptRef.current = attempt;
     const outcome = editing.creating
-      ? await createProduct({ id: newId(), orgScope: editing.record.orgScope, ...input })
+      ? await createProduct(attempt.body)
       : await updateProduct({ id: editing.product.id, expectedUpdatedAt: editing.product.updatedAt, ...input });
+    if (!mountedRef.current) return outcome;
+    if (attempt && !outcome.ok) {
+      // 뒤의 재시도가 401·preview로 거절돼도 앞선 미확정 요청의 저장 여부는 달라지지 않는다.
+      if (outcome.unknownOutcome) attempt.unknownOutcome = true;
+      else if (!attempt.unknownOutcome) createAttemptRef.current = null;
+    }
     if (outcome.ok) {
+      if (attempt && attempt.form !== JSON.stringify(editing.record)) {
+        const entity = outcome.entity;
+        if (entity?.id !== attempt.body.id || !entity.updated_at) {
+          return { ok: false, status: "error", message: "이전 등록 결과를 확인하지 못했어요. 입력을 유지한 채 다시 시도해 주세요." };
+        }
+        createAttemptRef.current = null;
+        const scopeChanged = editing.record.orgScope !== entity.org_scope;
+        setEditing({
+          creating: false,
+          product: { ...entity, orgScope: entity.org_scope, updatedAt: entity.updated_at },
+          // EditDrawer의 record identity를 유지해야 미저장 입력·피드백이 초기화되지 않는다.
+          record: { ...editing.record, orgScope: entity.org_scope },
+        });
+        await load();
+        return {
+          ok: false, status: "error",
+          message: scopeChanged
+            ? `처음 전송한 소속(${ORG_SCOPE_LABEL[entity.org_scope] || entity.org_scope})으로 등록을 확인했어요. 소속은 바꿀 수 없어요. 나머지 변경은 카드 저장을 눌러 반영해 주세요.`
+            : "처음 전송한 제품 등록을 확인했어요. 변경한 입력은 그대로예요. 카드 저장을 눌러 반영해 주세요.",
+        };
+      }
+      if (attempt) createAttemptRef.current = null;
       toast.success(editing.creating ? `제품 ‘${input.name}’을 등록했어요.` : `‘${input.name}’ 카드를 저장했어요.`);
       await load();
-      if (editing.creating && outcome.entity?.id) openProduct(outcome.entity.id);
+      if (mountedRef.current && editing.creating && outcome.entity?.id) openProduct(outcome.entity.id);
     }
     return outcome;
   }, [editing, load, openProduct, toast]);
@@ -128,6 +197,7 @@ export function ProjectProductsView({ onOpenProject }) {
   const syncGitHub = React.useCallback(async () => {
     setSyncing(true);
     const result = await runGitHubSync();
+    if (!mountedRef.current) return;
     setSyncing(false);
     if (result.tone === "danger") toast.error(result.message);
     else toast(result.message);
@@ -171,7 +241,7 @@ export function ProjectProductsView({ onOpenProject }) {
         onBack={openPortfolio}
         onOpenProject={onOpenProject}
         onOpenInquiry={(id) => openInbox(id)}
-        onOpenBoard={() => router.push(`${pathname}?view=board&taskProduct=${encodeURIComponent(current.id)}`)}
+        onOpenBoard={() => onOpenBoard?.(current.id)}
         onOpenSettings={() => setSettingsOpen(true)}
         onEditCard={() => openEdit(current)}
         onChanged={() => load()}
@@ -207,6 +277,7 @@ export function ProjectProductsView({ onOpenProject }) {
   const newInquiries = (ledger.inquiries || []).filter((inquiry) => inquiry.status === "new").length;
   return (
     <div className={styles.room}>
+      {!productId && heading}
       {!productId && (
         <div className={styles.bar}>
           <SegmentedControl label="제품 화면" value={inboxOpen ? "inbox" : "portfolio"} onChange={(key) => (key === "inbox" ? openInbox() : openPortfolio())}

@@ -1,0 +1,536 @@
+{
+  "baseCommit": "944fac9e862b764adb010b629173a629466e83c0",
+  "roleCardVersion": "2026-09-23.v25-grounding-regression-fix",
+  "officeContractVersion": "2026-09-22.v3",
+  "configuredModel": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview"
+  },
+  "bundleHash": "3a12b29ecbe0bc8a4392122e1e93c095a8adccf718ffa3fc627a924022fab42c",
+  "suiteHash": "0ea30f8955c6cbe3a46d05d804c12c5dc7936e54c432ecc1f5d6025a7640f6bb",
+  "identicalRecoveryRuntime": true,
+  "full": {
+    "runId": "4eff1410-4b1c-4f49-8038-e1e2f1ca35eb",
+    "fingerprint": "1f84de06ed04d53ae258a7343ef9210c034074f755d7c2b844fae5b673e27bd2",
+    "datasetStatus": "development",
+    "summary": {
+      "planned": 39,
+      "recorded": 39,
+      "generated": 36,
+      "generationFailed": 2,
+      "preview": 0,
+      "blocked": 1,
+      "unevaluated": 0
+    },
+    "runtimeIntegrity": "verified",
+    "runtimeCoverage": {
+      "version": 1,
+      "resultCount": 39,
+      "verifiedResultCount": 39,
+      "legacyCheckCount": 0
+    },
+    "providerCalls": 128,
+    "providerResultOk": {
+      "true": 126,
+      "false": 2
+    },
+    "requestedModels": {
+      "gemini-3-flash-preview": 128
+    },
+    "actualModelVersions": {
+      "gemini-3-flash-preview": 126,
+      "unknown": 2
+    },
+    "finishReasons": {
+      "STOP": 126,
+      "unknown": 2
+    },
+    "providerFailureCategories": {
+      "timeout": 1,
+      "provider-unavailable": 1,
+      "none": 126
+    },
+    "generatedLatencyMs": {
+      "minimum": 11672,
+      "median": 18422.5,
+      "maximum": 47224
+    },
+    "failures": [
+      {
+        "id": "offer-balanced/update",
+        "status": "error",
+        "errorCode": "timeout",
+        "elapsedMs": 48008,
+        "diagnostics": [
+          {
+            "phase": "synthesis",
+            "category": "deadline",
+            "ownerId": "flareon"
+          }
+        ],
+        "calls": [
+          {
+            "id": 1,
+            "elapsedMs": 6132,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 7584,
+                "candidatesTokenCount": 346,
+                "totalTokenCount": 7930
+              },
+              "promptFeedback": null,
+              "outputHash": "9b3d1ed10783e876f420af35faca3ffe7d0b6d620c500b7fdab56e494c462d69"
+            }
+          },
+          {
+            "id": 2,
+            "elapsedMs": 17838,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 7991,
+                "candidatesTokenCount": 338,
+                "totalTokenCount": 8329
+              },
+              "promptFeedback": null,
+              "outputHash": "387972dbd0b239f814dc4e1e6ae868b6b3b4b8f01292e203f59f490bb9a0938e"
+            }
+          },
+          {
+            "id": 3,
+            "elapsedMs": 4900,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 7893,
+                "candidatesTokenCount": 344,
+                "totalTokenCount": 8237
+              },
+              "promptFeedback": null,
+              "outputHash": "7c92c70226b8f289ac5f869b68cf0d144a8e1b7a6a9f16888912dd4f87ce9cad"
+            }
+          },
+          {
+            "id": 4,
+            "elapsedMs": 16173,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 8679,
+                "candidatesTokenCount": 344,
+                "totalTokenCount": 9023
+              },
+              "promptFeedback": null,
+              "outputHash": "25968cae796c2e63100b1f09ebce753fd3ff8ffe9e2e9e85a811d805fc7c8188"
+            }
+          },
+          {
+            "id": 5,
+            "elapsedMs": 5517,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 9086,
+                "candidatesTokenCount": 450,
+                "totalTokenCount": 9536
+              },
+              "promptFeedback": null,
+              "outputHash": "78b72a22e98862b306a875d6484e070e56538c7a8cb335b4d02aba6ad19cfae8"
+            }
+          },
+          {
+            "id": 6,
+            "elapsedMs": 20396,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 8988,
+                "candidatesTokenCount": 471,
+                "totalTokenCount": 9459
+              },
+              "promptFeedback": null,
+              "outputHash": "e1fd8847fae098455eac7fb3ac9b584f0ba262fc1e4b5b071097cc1550afcd8c"
+            }
+          },
+          {
+            "id": 7,
+            "elapsedMs": 9766,
+            "result": {
+              "ok": false,
+              "model": "gemini-3-flash-preview",
+              "reason": "timeout",
+              "failureCategory": "timeout",
+              "httpStatus": null,
+              "modelVersion": null,
+              "finishReason": null,
+              "usageMetadata": null,
+              "promptFeedback": null,
+              "outputHash": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+            }
+          }
+        ]
+      },
+      {
+        "id": "offer-balanced/close",
+        "status": "blocked",
+        "errorCode": "dependency_not_generated",
+        "dependency": "offer-balanced/update",
+        "elapsedMs": 0
+      },
+      {
+        "id": "delivery-urgent/initial",
+        "status": "error",
+        "errorCode": "http-503",
+        "elapsedMs": 12543,
+        "diagnostics": [
+          {
+            "phase": "synthesis",
+            "category": "provider",
+            "ownerId": "eevee"
+          }
+        ],
+        "calls": [
+          {
+            "id": 1,
+            "elapsedMs": 8427,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 6171,
+                "candidatesTokenCount": 287,
+                "totalTokenCount": 6458
+              },
+              "promptFeedback": null,
+              "outputHash": "5b97b78394017dec0f301553aa275d63a03c47b24e73e1bd911cafce342bf0d6"
+            }
+          },
+          {
+            "id": 2,
+            "elapsedMs": 3548,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 6075,
+                "candidatesTokenCount": 377,
+                "totalTokenCount": 6452
+              },
+              "promptFeedback": null,
+              "outputHash": "a77fc0befecf11dcd086b699da59a0fee815d0237b0d5007245fdeea6c5f3e52"
+            }
+          },
+          {
+            "id": 3,
+            "elapsedMs": 5778,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 6411,
+                "candidatesTokenCount": 391,
+                "totalTokenCount": 6802
+              },
+              "promptFeedback": null,
+              "outputHash": "28e391420441044ccf2d3b118fdf29fb3897f69111a001d4542b203b4e0026ef"
+            }
+          },
+          {
+            "id": 4,
+            "elapsedMs": 4110,
+            "result": {
+              "ok": false,
+              "model": "gemini-3-flash-preview",
+              "reason": "http-503",
+              "failureCategory": "provider-unavailable",
+              "httpStatus": 503,
+              "modelVersion": null,
+              "finishReason": null,
+              "usageMetadata": null,
+              "promptFeedback": null,
+              "outputHash": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+            }
+          }
+        ]
+      }
+    ],
+    "startedAt": "2026-09-29T14:54:56.503Z",
+    "completedAt": "2026-09-29T15:01:42.987Z"
+  },
+  "recovery": {
+    "runId": "ef3856a2-dfc9-422b-bc52-bb4467cddf5e",
+    "fingerprint": "289953ff7d036a45a17a1639aa712a20655f64b63fd77ae12663ebd52c45d805",
+    "datasetStatus": "development",
+    "summary": {
+      "planned": 4,
+      "recorded": 4,
+      "generated": 2,
+      "generationFailed": 1,
+      "preview": 0,
+      "blocked": 1,
+      "unevaluated": 0
+    },
+    "runtimeIntegrity": "verified",
+    "runtimeCoverage": {
+      "version": 1,
+      "resultCount": 4,
+      "verifiedResultCount": 4,
+      "legacyCheckCount": 0
+    },
+    "providerCalls": 18,
+    "providerResultOk": {
+      "true": 17,
+      "false": 1
+    },
+    "requestedModels": {
+      "gemini-3-flash-preview": 18
+    },
+    "actualModelVersions": {
+      "gemini-3-flash-preview": 17,
+      "unknown": 1
+    },
+    "finishReasons": {
+      "STOP": 17,
+      "unknown": 1
+    },
+    "providerFailureCategories": {
+      "timeout": 1,
+      "none": 17
+    },
+    "generatedLatencyMs": {
+      "minimum": 20434,
+      "median": 21029,
+      "maximum": 21624
+    },
+    "failures": [
+      {
+        "id": "offer-balanced/update",
+        "status": "error",
+        "errorCode": "timeout",
+        "elapsedMs": 48008,
+        "diagnostics": [
+          {
+            "phase": "synthesis",
+            "category": "deadline",
+            "ownerId": "flareon"
+          }
+        ],
+        "calls": [
+          {
+            "id": 1,
+            "elapsedMs": 4640,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 7653,
+                "candidatesTokenCount": 328,
+                "totalTokenCount": 7981
+              },
+              "promptFeedback": null,
+              "outputHash": "b9a9f248940fa8145bc397d6dd3e1068953bf20b64d036367ed1bdbcfaabc059"
+            }
+          },
+          {
+            "id": 2,
+            "elapsedMs": 28791,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 8060,
+                "candidatesTokenCount": 321,
+                "totalTokenCount": 8381
+              },
+              "promptFeedback": null,
+              "outputHash": "5c6e848bdd4c0b041c028ec47da5567092326af881db07c025d624e19582d346"
+            }
+          },
+          {
+            "id": 3,
+            "elapsedMs": 4507,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 7962,
+                "candidatesTokenCount": 335,
+                "totalTokenCount": 8297
+              },
+              "promptFeedback": null,
+              "outputHash": "fda26e4125d5289e06cf43bb58883fe5cb3c27bfc260bfee15085aed23f89f49"
+            }
+          },
+          {
+            "id": 4,
+            "elapsedMs": 4998,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 8706,
+                "candidatesTokenCount": 460,
+                "totalTokenCount": 9166
+              },
+              "promptFeedback": null,
+              "outputHash": "5ff6668d1fdd8a8812e341ba3e25558883998a8005cb3dd3a79294d6948ccfac"
+            }
+          },
+          {
+            "id": 5,
+            "elapsedMs": 5174,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 9113,
+                "candidatesTokenCount": 348,
+                "totalTokenCount": 9461
+              },
+              "promptFeedback": null,
+              "outputHash": "4dd8516c2b5b8311565e2e9dc4a35b66e3a141926dd05a0f8da01aa559003e57"
+            }
+          },
+          {
+            "id": 6,
+            "elapsedMs": 11998,
+            "result": {
+              "ok": true,
+              "model": "gemini-3-flash-preview",
+              "reason": "ok",
+              "failureCategory": null,
+              "httpStatus": 200,
+              "modelVersion": "gemini-3-flash-preview",
+              "finishReason": "STOP",
+              "usageMetadata": {
+                "promptTokenCount": 9015,
+                "candidatesTokenCount": 386,
+                "totalTokenCount": 9401
+              },
+              "promptFeedback": null,
+              "outputHash": "43b8abf03bccd94e6a19362a28a3d8a504823f1d61505f2304ac3c0bd4afa2c3"
+            }
+          },
+          {
+            "id": 7,
+            "elapsedMs": 7208,
+            "result": {
+              "ok": false,
+              "model": "gemini-3-flash-preview",
+              "reason": "timeout",
+              "failureCategory": "timeout",
+              "httpStatus": null,
+              "modelVersion": null,
+              "finishReason": null,
+              "usageMetadata": null,
+              "promptFeedback": null,
+              "outputHash": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+            }
+          }
+        ]
+      },
+      {
+        "id": "offer-balanced/close",
+        "status": "blocked",
+        "errorCode": "dependency_not_generated",
+        "dependency": "offer-balanced/update",
+        "elapsedMs": 0
+      }
+    ],
+    "startedAt": "2026-09-29T15:02:23.611Z",
+    "completedAt": "2026-09-29T15:03:53.720Z"
+  },
+  "validation": {
+    "evaluationHarness": {
+      "command": "node --import ./scripts/register-hub-alias.mjs --test scripts/office-quality.test.mjs apps/engine/lib/office/quality.test.mjs",
+      "tests": 37,
+      "passed": 37,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "limits": [
+    "Known development/regression scenarios, not a new hidden holdout.",
+    "Configured Gemini model differs from prior scope-v1 gemini-3.5-flash; score differences are not isolated prompt effects.",
+    "Recovery run is separate and not merged into original coverage or fingerprint.",
+    "Synthetic data only; no business DB read/write or external messages.",
+    "One generation per case plus one bounded recovery of failed scenarios; not a statistical reliability estimate."
+  ]
+}

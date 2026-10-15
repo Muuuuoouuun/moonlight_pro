@@ -7,7 +7,7 @@ import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import "../../components/hub/hub-tokens.css";
-import { Button, Card, Input, TextAreaField } from "../../components/hub/hub-primitives";
+import { Button, Card, Checkbox, Input, TextAreaField } from "../../components/hub/hub-primitives";
 
 import {
   COUNCIL_HANDOFF_DRAFT_LIMIT, consumeCouncilDesktopHandoff, createCouncilDraftState,
@@ -28,6 +28,7 @@ function LoginForm() {
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [passwordVisible, setPasswordVisible] = React.useState(false);
+  const [rememberMe, setRememberMe] = React.useState(true);
   const [state, setState] = React.useState({ status: "idle", message: "" });
   const inputRef = React.useRef(null);
   const passwordRef = React.useRef(null);
@@ -59,7 +60,7 @@ function LoginForm() {
     return () => window.removeEventListener('hashchange', receive);
   }, [next, updateHandoff]);
 
-  function continueToDestination() {
+  const continueToDestination = React.useCallback(() => {
     const current = handoffRef.current;
     // A second handoff can arrive while login is in flight. Keep both until reviewed.
     if (current.pending.length) {
@@ -77,7 +78,20 @@ function LoginForm() {
     const target = new URL(next, window.location.origin);
     router.replace(councilTarget || (target.origin === window.location.origin
       ? `${target.pathname}${target.search}${target.hash}` : '/dashboard'));
-  }
+  }, [next, router, updateHandoff]);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/operator/session", { cache: "no-store", signal: controller.signal })
+      .then(async response => response.ok ? response.json() : null)
+      .then(data => {
+        if (!controller.signal.aborted && data?.configured && data.status === "authenticated") {
+          setState({ status: "ok", message: "이동합니다…" });
+          continueToDestination();
+        }
+      }).catch(() => {});
+    return () => controller.abort();
+  }, [continueToDestination]);
 
   React.useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -91,7 +105,7 @@ function LoginForm() {
       const response = await fetch("/api/operator/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "login", username: username.trim(), password }),
+        body: JSON.stringify({ action: "login", username: username.trim(), password, rememberMe }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.ok && data.status === "authenticated") {
@@ -99,6 +113,11 @@ function LoginForm() {
         setPassword("");
         // Only an exact Council destination receives the in-memory draft. No advisor runs here.
         continueToDestination();
+        return;
+      }
+      if (response.status === 429 && data.status === "busy") {
+        // Capacity is temporary, not a rejected password. Keep input for a manual retry.
+        setState({ status: "busy", message: "로그인 요청이 많습니다. 잠시 후 다시 시도하세요." });
         return;
       }
       setPassword("");
@@ -124,6 +143,12 @@ function LoginForm() {
         <p style={{ margin: "6px 0 20px", fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>
           아이디와 비밀번호로 로그인하세요.
         </p>
+
+        {params.get('recoveryCleanup') === 'failed' && (
+          <p role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--danger)', margin: '0 0 16px', overflowWrap: 'anywhere' }}>
+            로그아웃했습니다. 브라우저 복구 입력을 정리하지 못했습니다. 민감한 입력이 남아 있을 수 있으니 이 탭의 사이트 저장 공간을 확인하세요.
+          </p>
+        )}
 
         {(handoff.draft || handoff.error || handoff.pending.length > 0 || handoffNeedsEdit) && (
           <div style={{ marginBottom: 16 }}>
@@ -190,6 +215,10 @@ function LoginForm() {
             </Button>}
             style={{ width: "100%" }}
           />
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 12, color: "var(--fg-muted)", cursor: "pointer" }}>
+            <Checkbox label="자동 로그인 · 30일 유지" checked={rememberMe} onChange={setRememberMe} disabled={state.status === "saving" || state.status === "ready"} />
+            <span aria-hidden="true">자동 로그인 · 30일 유지</span>
+          </label>
           <Button
             type="submit"
             variant="primary"

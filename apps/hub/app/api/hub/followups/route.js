@@ -1,3 +1,5 @@
+import { resolveDefaultWorkspaceId } from '@/lib/server-write';
+import { taskRecoveryAssertion } from '@/lib/operator-session';
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
@@ -54,6 +56,7 @@ export async function POST(req) {
 
   const parsed = await readHubWriteJson(req);
   if (parsed.error) return parsed.error;
+  if (!taskRecoveryAssertion(req, parsed.data, resolveDefaultWorkspaceId())) return NextResponse.json({ status: 'conflict', error: 'check-write-owner-changed' }, { status: 409 });
 
   const action = typeof parsed.data?.action === "string" ? parsed.data.action : "";
   if (action === "reschedule" || action === "annotate-activity") {

@@ -1,0 +1,91 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Content-Spec.dc.html": {
+      "h": 2300,
+      "is_interactive": true,
+      "title": "리포트 내용 구성",
+      "w": 1440,
+      "x": 4560,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "리포트 허브 (주차·장르·추이)",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Map.dc.html": {
+      "h": 960,
+      "is_interactive": true,
+      "title": "필요한 리포트 종류 지도",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "Report-Company.dc.html": {
+      "expand": "fill",
+      "h": 3720,
+      "title": "회사 주간 요약",
+      "w": 1280,
+      "x": 1360,
+      "y": 1800
+    },
+    "Report-Content.dc.html": {
+      "expand": "fill",
+      "h": 3740,
+      "title": "콘텐츠 성과 리포트",
+      "w": 1280,
+      "x": 2720,
+      "y": 1800
+    },
+    "Report-Personal.dc.html": {
+      "expand": "fill",
+      "h": 4200,
+      "title": "개인 주간 회고",
+      "w": 1280,
+      "x": 0,
+      "y": 1800
+    },
+    "Template.dc.html": {
+      "h": 1500,
+      "is_interactive": true,
+      "title": "리포트 템플릿 초안",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-29T09:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "n1": {
+      "kind": "title1",
+      "maxW": 4000,
+      "text": "개별 리포트 (1차 후보 + 콘텐츠)",
+      "w": 240,
+      "x": 0,
+      "y": 1500
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Template.dc.html",
+    "Map.dc.html",
+    "Report-Personal.dc.html",
+    "Report-Company.dc.html",
+    "Report-Content.dc.html",
+    "Content-Spec.dc.html"
+  ],
+  "pages": [],
+  "title": "Moonlight 리포트 허브 목업"
+}

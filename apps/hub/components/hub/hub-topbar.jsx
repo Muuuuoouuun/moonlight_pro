@@ -4,14 +4,16 @@ import React from "react";
 import { Iconed } from "./hub-icons";
 import { IconButton, Button } from "./hub-primitives";
 import { DailyReviewTopButton } from "./daily-review-cue";
+import { FEATURE_GATES } from "@/lib/feature-gates";
 import { pageOwnsTabs, topNavigationForRoute } from "./hub-nav";
 import { InquiryBell } from './inquiry-notifications';
+import { formatHubClock } from './hub-clock';
 
 const LABELS = {
   'dashboard': 'Moonlight',
   'daily-brief': 'Daily Brief',
   'classin': '클래스인', 'brand': '브랜드', 'pipeline': '업무·파이프라인', 'segments': '세그먼트',
-  'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
+  'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': FEATURE_GATES.decisionJournal ? '결정 일지' : 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
   'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': '오늘 연락',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs',
@@ -25,6 +27,7 @@ const LABELS = {
 
 export function TopBar({ path, view, scope, onNavigate, theme, themePreference, onTheme, onSidebarOpen, onNew, onQuickCapture, navOpen, menuButtonRef, inquiryNotifications, onOfficeOpen }) {
   const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
+  const [clock, setClock] = React.useState(null);
   const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
   const navigation = topNavigationForRoute(path, scope, view);
@@ -36,11 +39,12 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
     || LABELS[segments[segments.length - 1]]
     || segments[segments.length - 1];
   const sectionLabel = (navigation.activeTab || navigation.routeLabel) ? navigation.anchor?.label : 'Moonlight';
-  const now = new Date();
-  const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
-  const m = now.getMonth() + 1, d = now.getDate();
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
+  React.useEffect(() => {
+    const updateClock = () => setClock(formatHubClock(new Date()));
+    updateClock();
+    const interval = setInterval(updateClock, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   React.useEffect(() => {
     if (!deferredMenuOpen) return;
@@ -95,18 +99,18 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
 
         <div style={{ flex: 1 }} />
 
-        <div className="hub-topbar__meta" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 10px',
+        <div className="hub-topbar__meta" title="한국 시각 (KST)" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 10px',
           background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
           borderRadius: 999, fontSize: 11.5, color: 'var(--fg-muted)',
         }}>
           <Iconed name="clock" size={12} style={{ color: 'var(--moon-300)' }} />
-          <span className="mono" style={{ color: 'var(--fg)' }}>{weekday} · {m}/{d} · {hh}:{mm}</span>
+          <span className="mono" aria-busy={!clock} style={{ color: 'var(--fg)' }}>{clock || '— · —/— · —:—'}</span>
         </div>
 
         {/* 하루 리뷰 — 어느 화면에서든 오늘 기록 열기(2026-09-23 지속 루프 설계 §12) */}
         <DailyReviewTopButton className="hub-topbar__secondary" />
-        {/* Office (⌘J) — 2026-09-23 운영자 확정 */}
-        <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="Office (⌘J)" onClick={onOfficeOpen} />
+        {/* 오피스 (⌘J) — 2026-09-23 운영자 확정 */}
+        <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="오피스 (⌘J)" onClick={onOfficeOpen} />
         {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(오늘 연락, 영업·매출 첫 탭)가 그 자리를 갖는다. */}
         <IconButton className="hub-topbar__secondary" icon="signal" tooltip="오늘 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
         <IconButton
@@ -118,7 +122,9 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
         />
         <InquiryBell className="hub-topbar__secondary" state={inquiryNotifications} onNavigate={onNavigate} />
         <Button variant="ghost" size="sm" title="빠른 입력 · C" onClick={onQuickCapture}>빠른 입력</Button>
-        {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>}
+        {/* 전역 생성은 primary가 아니다 — 화면마다 자기 생성 버튼(연락 기록·거래·브랜드…)이 primary라
+            탑바까지 primary면 한 화면에 검은 버튼이 둘 선다(§5.2 "전역·페이지 생성 버튼 경쟁 금지"). */}
+        {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="outline" size="sm" icon="plus" onClick={onNew}>New</Button>}
       </div>
 
       {navigation.tabs.length > 0 && !pageOwnsTabs(path) && (
@@ -216,7 +222,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-muted)'; }}
                     >
                       <span>{dt.label}</span>
-                      <span style={{ fontSize: 10, color: 'var(--fg-faint)' }}>준비 중</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>준비 중</span>
                     </button>
                   ))}
                 </div>

@@ -15,7 +15,8 @@ import {
   resolveOAuthStateSecret,
 } from "@/lib/integration-readiness";
 import { extractGoogleCalendarAccountIdentity } from "@/lib/google-calendar-identity";
-import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { createHash } from "crypto";
+import { decodeState, encodeState, sanitizeReturnPath } from "./google-oauth.js";
 
 const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
 const GOOGLE_CALENDAR_SYNC_SOURCE = "google_calendar";
@@ -92,64 +93,8 @@ export function hasGoogleCalendarOAuthStateSecret() {
   return Boolean(resolveOAuthStateSecret());
 }
 
-function signStatePayload(payload) {
-  const secret = resolveOAuthStateSecret();
-
-  if (!secret) {
-    return "";
-  }
-
-  return createHmac("sha256", secret).update(payload).digest("base64url");
-}
-
-function safeEquals(a, b) {
-  const aBuffer = Buffer.from(String(a || ""));
-  const bBuffer = Buffer.from(String(b || ""));
-
-  return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
-}
-
-function encodeState(value) {
-  const payload = Buffer.from(
-    JSON.stringify({
-      ...value,
-      iat: Date.now(),
-    }),
-    "utf8",
-  ).toString("base64url");
-  const signature = signStatePayload(payload);
-
-  return signature ? `${payload}.${signature}` : payload;
-}
-
 export function decodeGoogleCalendarState(value) {
-  if (!value) {
-    return {};
-  }
-
-  try {
-    const raw = String(value);
-    const [payload, signature] = raw.split(".");
-    const expected = signStatePayload(payload);
-
-    if (!expected || !signature || !safeEquals(expected, signature)) {
-      return { invalid: true };
-    }
-
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-  } catch {
-    return { invalid: true };
-  }
-}
-
-function sanitizeReturnPath(value, fallback) {
-  const path = typeof value === "string" ? value.trim() : "";
-
-  if (!path || !path.startsWith("/") || path.startsWith("//")) {
-    return fallback;
-  }
-
-  return path;
+  return decodeState(value);
 }
 
 export function resolveGoogleCalendarRedirectUri(origin) {
@@ -600,8 +545,51 @@ export async function createOrUpdateGoogleCalendarEvent({
   };
 }
 
+// 잡아 둔 일 취소(확인할 것 스펙 §4.7) — OAuth로 연결된 캘린더(유일한 쓰기 대상)에서 일정 하나를 지운다.
+// 이미 지워진 일정(404·410)은 지운 것으로 본다 — 같은 취소를 다시 눌러도 실패로 보이지 않게.
+export async function deleteGoogleCalendarEvent({
+  workspaceId = resolveDefaultWorkspaceId(),
+  calendarId,
+  eventId,
+}) {
+  if (!eventId) return { ok: false, reason: "missing-event-id" };
+  const access = await ensureGoogleCalendarAccess({ workspaceId, calendarId });
+  if (!access.ok) return { ok: false, reason: access.reason, connection: access.connection };
+
+  const endpoint = `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodeURIComponent(access.calendarId)}/events/${encodeURIComponent(eventId)}`;
+  const response = await fetch(endpoint, {
+    method: "DELETE",
+    signal: AbortSignal.timeout(8000),
+    headers: { authorization: `Bearer ${access.accessToken}` },
+    cache: "no-store",
+  });
+  if (!response.ok && response.status !== 404 && response.status !== 410) {
+    const detail = await response.text().catch(() => "");
+    return { ok: false, reason: detail || `google-delete-${response.status}`, connection: access.connection };
+  }
+
+  await recordGoogleCalendarSync({
+    workspaceId,
+    connectionId: access.connection?.id || null,
+    status: "success",
+    payload: { provider: GOOGLE_CALENDAR_SYNC_SOURCE, action: "delete", eventId, calendarId: access.calendarId },
+  });
+  return { ok: true, reason: response.ok ? "deleted" : "already-gone", connection: access.connection };
+}
+
 function combinedCalendarItemSortKey(item) {
   return item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00` : "");
+}
+
+function calendarTransportIdentity(event) {
+  const uid = event.iCalUID?.trim();
+  if (!uid) return null;
+  const original = event.originalStartTime;
+  if (!original) return event.recurringEventId ? null : JSON.stringify([uid]);
+  if (original.date) return JSON.stringify([uid, "date", original.date]);
+  // Compare instants, not the OAuth offset and iCal UTC spellings of the same slot.
+  const instant = Date.parse(original.dateTime);
+  return Number.isFinite(instant) ? JSON.stringify([uid, "instant", instant]) : null;
 }
 
 // The one calendar read every consumer (Calendar tab, Daily Brief, Attention ledger)
@@ -632,10 +620,27 @@ export async function readCombinedGoogleCalendarEvents({
     outcomeKey: event.id ? createHash("sha256").update(JSON.stringify([source, event.id])).digest("hex") : null,
   });
   const oauthSource = oauthResult.source === "ical" ? "ical:default" : `oauth:${oauthResult.calendarId || calendarId || "primary"}`;
-  const items = [
-    ...(oauthResult.ok ? oauthResult.items.map(event => withOutcomeKey(event, oauthSource)) : []),
-    ...mergedResult.items.map(event => withOutcomeKey(event, `ical:${event.source}`)),
-  ].sort(
+  const items = oauthResult.ok ? oauthResult.items.map(event => withOutcomeKey(event, oauthSource)) : [];
+  const connectedEvents = new Map();
+  for (const item of items) {
+    const identity = calendarTransportIdentity(item);
+    if (identity) connectedEvents.set(identity, item);
+  }
+  for (const event of mergedResult.items) {
+    const connected = connectedEvents.get(calendarTransportIdentity(event));
+    if (connected) {
+      // The same calendar may be connected by OAuth (or default iCal) and a feed.
+      // Keep the connected event's write ID/outcome, with the feed's category label.
+      if (typeof connected.source !== "string") {
+        connected.source = event.source;
+        connected.sourceLabel = event.sourceLabel;
+      }
+    } else {
+      // Separate feed histories stay namespaced when no connected copy is present.
+      items.push(withOutcomeKey(event, `ical:${event.source}`));
+    }
+  }
+  items.sort(
     (a, b) => combinedCalendarItemSortKey(a).localeCompare(combinedCalendarItemSortKey(b)),
   );
 

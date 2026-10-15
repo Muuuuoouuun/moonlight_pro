@@ -6,10 +6,11 @@
 (function (root, factory) {
   const C = typeof require === 'function' ? require('../../shared/contract.js') : root.PetContract;
   const E = typeof require === 'function' ? require('./envelope-view.js') : root.PetModel.envelope;
-  const api = factory(C, E);
+  const Plat = typeof require === 'function' ? require('./platform.js') : root.PetModel.platform;
+  const api = factory(C, E, Plat);
   if (typeof module === 'object' && module && module.exports) module.exports = api;
   else (root.PetModel = root.PetModel || {}).memo = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (C, E) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (C, E, Plat) {
   const MAX_BODY = C.LIMITS.memoBody;
   const CAPTURED_MAX = 20;
 
@@ -90,10 +91,12 @@
     return 'Hub에 저장';
   }
 
-  function statusLabel({ saving, draft, savedBody }) {
-    if (saving) return '이 PC에 보관 · Hub 저장 중…';
-    if (savedBody != null && savedBody === draft && draft) return 'Hub에 저장됨 · 이 PC에 보관';
-    return draft ? '이 PC에 자동 저장됨' : '이 PC에 자동 저장';
+  function statusLabel({ saving, draft, savedBody, platform }) {
+    let text;
+    if (saving) text = '이 PC에 보관 · Hub 저장 중…';
+    else if (savedBody != null && savedBody === draft && draft) text = 'Hub에 저장됨 · 이 PC에 보관';
+    else text = draft ? '이 PC에 자동 저장됨' : '이 PC에 자동 저장';
+    return Plat.localize(text, platform); // mac 은 '이 Mac'
   }
 
   // 빈 입력창에서도 보류 중인 저장은 확인할 수 있다. 캡처 충돌이면 대상 없는 저장은 막힌다(새 항목으로만).

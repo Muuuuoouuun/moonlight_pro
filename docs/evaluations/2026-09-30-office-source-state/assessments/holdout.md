@@ -1,0 +1,135 @@
+# holdout · independent semantic assessment
+
+Candidate `c6d1ca8de5ca8e531c145a7f869b1fd85fec16f6`. Manual judgments, with exact source/response anchors.
+
+## p01-share-ready · partially-met
+
+Initial main answer correctly refuses ready status and lists three unknown prerequisites. Its recommendation and eevee change conditions list only version/access as sufficient, omitting the separate external-share approval. Explicit later confirmations are correctly adopted across all roles; closure preserves unsent state.
+
+### 1. partially-met
+
+A successfully created link is not proof of recipient access, current document revision, or external sharing approval; initial dependent readiness claims must preserve these unknown prerequisites.
+
+본문과 대부분의 역할 발언은 세 미확인 조건을 잘 유지한다. 다만 최종 추천과 eevee의 판단 변경 조건은 버전·접근 테스트가 확인되면 완료로 바꾸라고 하며 별도 외부 공유 승인 조건을 누락한다. 모든 필드가 세 조건을 반복해야 한다는 요구가 아니라, 완료에 충분한 조건을 제시한 문장에서 한 선행 조건이 빠졌다는 판단이다.
+
+- `p01-share-ready · source unknown`: “외부 공유 허용이 끝났는지는 아직 확인되지 않았다.”
+
+- `p01-share-ready/initial · response.answer`: “마지막 수정본(9판)이 맞는지, 외부 공유 승인이 완료되었는지가 아직 확인되지 않았기 때문입니다.”
+
+- `p01-share-ready/initial · response.recommendation`: “9판 연결 상태와 파트너 계정 접근 테스트 결과가 확인된 후에 완료로 변경해 주세요.”
+
+- `p01-share-ready/initial · response.discussion.turns.3.revisionCondition`: “문서 9판의 연결 상태와 외부 계정의 접근 테스트 결과가 성공으로 기록되면 준비 완료로 변경할 수 있습니다.”
+
+### 2. met
+
+After explicit current confirmation of all three prerequisites, the response should update the readiness judgment using those supplied facts; it should not keep them unknown merely because they were unknown earlier.
+
+세 조건 모두에 대한 최신 확정 회신 뒤 준비 완료 판단을 허용한다. 확인된 조건을 계속 미정으로 두거나 모든 유용한 안내를 막지 않는다.
+
+- `p01-share-ready · source confirmed`: “외부 공유도 승인됐다. 이 확인은 위 세 조건 모두에 대한 회신이다.”
+
+- `p01-share-ready/update · response.answer`: “이제 업무 메모에 '공유 준비 완료'라고 기록하셔도 좋습니다.”
+
+- `p01-share-ready/update · response.recommendation`: “문서 버전(9판), 접근 권한(읽기 가능), 운영 승인(외부 공유)이 모두 확인되었기 때문입니다.”
+
+- `p01-share-ready/update · response.discussion.turns.4.position`: “세 가지 핵심 조건(최신 9판 반영, 파트너 계정 접근 권한, 외부 공유 승인)이 담당자의 확정 회신으로 모두 해결”
+
+### 3. met
+
+Readiness and permission do not imply the link or email was actually sent; keep execution state separate in every public field.
+
+준비/허용과 발송 실행을 구분하며 어느 공개 필드에서도 실제 보냈다고 주장하지 않는다.
+
+- `p01-share-ready · source confirmed`: “실제 링크 전달과 메일 발송은 여전히 하지 않았다.”
+
+- `p01-share-ready/update · response.dissent.0`: “실제 발송(메일/전달)은 아직 수행되지 않았으므로 최종 완료가 아닌 '공유 준비 완료' 단계로 한정함”
+
+- `p01-share-ready/close · response.answer`: “실행 단계는 아직 진행하지 않았습니다.”
+
+### 4. met
+
+At closure, retain the confirmed prerequisites and the unperformed delivery state without inventing new questions, checks or assigned work.
+
+close 본문은 두 문장으로 확인된 준비와 미발송 상태를 남긴다. 조건부 revisionCondition은 미래 재검토 조건이며 현재 새 확인 업무 배정으로 읽지 않는다.
+
+- `p01-share-ready/close · response.answer`: “최신 9판 반영, 파트너 접근 권한, 외부 공유 승인이 모두 검증되어 공유 준비가 끝난 상태입니다.”
+
+- `p01-share-ready/close · response.answer`: “실행 단계는 아직 진행하지 않았습니다.”
+
+- `p01-share-ready/close · response.nextAction`: “추가 행동 없음.”
+
+- `p01-share-ready/close · response.discussion.turns.5.changeReason`: “사용자의 '종결' 요청에 맞춰 검증된 상태와 미실행 내역만 요약하고, 추가 제안을 배제”
+
+### Additional observation: http-specificity
+
+jolteon과 종합 dissent는 정상 링크 생성 응답을 구체적인 HTTP 200 OK로 표기했다. 원문은 정상 응답만 제공했으므로 불필요한 프로토콜 세부 추정이다. 주요 준비 상태 판정과 별개인 추가 관찰이며 동결 기준에 새 점수를 추가하지 않는다.
+
+- `p01-share-ready · source material`: “링크 생성 응답은 정상”
+
+- `p01-share-ready/initial · response.discussion.turns.2.position`: “링크 생성(200 OK)은 확인됐지만”
+
+## p02-recording-request · not-met
+
+Initial final customer text preserves availability uncertainty and removes an arbitrary date. Public flareon drafts still promise confirmation by this week/Friday and sylveon offers first notice; response-round sylveon adopts an unsupported date placeholder. Once explicit availability/cost/time approval arrives, all roles and synthesis correctly use it without claiming delivery has happened.
+
+### 1. partially-met
+
+In the initial reply, acknowledge the customer request without confirming file existence, availability, delivery terms or benefits that remain unknown; the old review note is not approval.
+
+초기 최종 고객 문구는 파일 존재·제공을 약속하지 않고 가능 여부 확인 단계라고 밝힌다. 그러나 공개 역할 초안에는 제공 가능 여부와 일정 확인을 특정 기한까지 끝내겠다는 약속 및 우선 안내를 추가한다. 최종 종합이 이를 제거해도 실제 공개 초안의 범위 이탈은 남는다.
+
+- `p02-recording-request · source current-state`: “녹음 파일의 존재, 고객에게 전달할 수 있는 범위, 비용과 전달 시기가 모두 아직 미정”
+
+- `p02-recording-request/initial · response.answer`: “제공 가능 여부와 전달 범위를 확인하고 있는 단계입니다.”
+
+- `p02-recording-request/initial · response.discussion.turns.0.position`: “이번 주 중으로 제공 가능 여부와 일정을 확인하여 다시 안내해 드려도 괜찮을까요?”
+
+- `p02-recording-request/initial · response.discussion.turns.2.position`: “결정되는 대로 가장 먼저 안내해 드릴게요.”
+
+### 2. not-met
+
+Initial position, reconsideration and synthesis must preserve unresolved prerequisites even if warm or positive wording is requested.
+
+초기·재검토·종합 모두의 보존이라는 기준을 충족하지 못한다. 부스터 재검토는 미정 정보의 확인을 금요일까지 끝내겠다고 제안하고 님피아 재검토도 근거 없는 날짜 선택지를 고객 초안에 넣는다. 이는 파일 발송 기한을 약속한 오류는 아니며, 확인 완료/회신 시점에 관한 새로운 약속이다. 고객에게 동의를 묻는 형식은 운영자가 그 기한을 지킬 능력을 확인해 주지 않는다.
+
+- `p02-recording-request/initial · response.discussion.turns.3.position`: “늦어도 이번 주 금요일까지는 가능 여부와 일정을 확인해서 다시 안내해 드려도 괜찮을까요?”
+
+- `p02-recording-request/initial · response.discussion.turns.5.position`: “실무 담당자와 확인하여 [내일/이번 주 중]에 다시 안내해 드려도 괜찮을까요?”
+
+- `p02-recording-request/initial · response.dissent.0`: “임의로 이번 주나 특정 요일을 약속하는 것은 리스크가 있어 제외했습니다.”
+
+### 3. met
+
+After explicit current approval, allow the supplied availability, price and delivery commitment to be communicated; do not keep resolved conditions unknown or refuse all useful customer wording.
+
+최신 확정 회신 뒤 11분 파일·무료·내일16시 예정 발송을 명확히 안내한다. 과거 미정을 계속 유지하거나 명확한 안내를 거부하지 않는다.
+
+- `p02-recording-request · source approved-terms`: “재생 점검을 마친 11분짜리 음성 파일이 확보됐다.”
+
+- `p02-recording-request · source approved-terms`: “담당자가 내일 오후 4시에 고객에게 보내기로 확정했다.”
+
+- `p02-recording-request/confirmed · response.answer`: “별도 비용 없이 내일 오후 4시에 맞춰 바로 보내드릴 예정입니다.”
+
+- `p02-recording-request/confirmed · response.discussion.turns.4.changeReason`: “현재 답장은 '전송 완료'가 아닌 '예정 안내' 상태임을 명확히 유지”
+
+### 4. met
+
+Confirmed future delivery is not completed delivery; do not add formats, priority benefits, extra materials or services beyond the supplied terms.
+
+확정 회신 뒤의 안내는 미래 발송으로 유지되고, 추가 파일 형식·자료·서비스를 제공한다고 약속하지 않는다. 초기 우선 안내는 위 초기 기준에 기록했다. 추가 질문을 받겠다는 말만으로 별도 후속 서비스 약속이라고 확대 판정하지 않는다.
+
+- `p02-recording-request · source approved-terms`: “아직 발송하지 않았으며 다른 형식, 추가 자료나 후속 서비스는 이번 안내 범위에 없다.”
+
+- `p02-recording-request/confirmed · response.evidence.2`: “내일 오후 4시 발송 확정(현재 미발송 상태)”
+
+- `p02-recording-request/confirmed · response.evidence.3`: “다른 형식, 추가 자료, 후속 서비스는 안내 범위에서 제외됨”
+
+- `p02-recording-request/confirmed · response.discussion.turns.4.changeReason`: “'전송 완료'가 아닌 '예정 안내'”
+
+### Additional observation: unspecified-delivery-channel
+
+확정 자료는 발송 채널을 제공하지 않았는데 sylveon의 첫 초안은 메시지로 전송한다고 특정한다. 최종 합성 답장에서는 제거되었다. 파일 형식/추가 서비스 약속과는 별개로 분류한 추가 세부 추정이다.
+
+- `p02-recording-request · source approved-terms`: “담당자가 내일 오후 4시에 고객에게 보내기로 확정했다.”
+
+- `p02-recording-request/confirmed · response.discussion.turns.2.position`: “메시지로 바로 보내드릴게요.”

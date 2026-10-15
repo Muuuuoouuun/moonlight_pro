@@ -4,6 +4,9 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState, SelectField } from "../hub-primitives";
 import { SOCIAL_BRAND_OPTIONS, socialBrandTarget, socialBrandUrl } from "./social-brand-target";
+import { AiUsageSection } from "./ai-usage-section";
+import { YouTubeConnections } from "./youtube-connections";
+import { resetQuickTasks } from '@/lib/quick-task-recovery';
 
 const EVOLUTION_EVENTS = [];
 
@@ -64,6 +67,12 @@ function buildMetaThreadsIntegration(status) {
   const brandHandle = status?.brandHandle || '';
   const profileHandle = status?.connection?.profileHandle || `@${brandHandle}`;
   const expiresAt = formatShortDate(status?.connection?.expiresAt);
+
+  if (['reauthorization-required', 'refresh-required', 'expiry-unknown'].includes(status?.status)) {
+    const labels = { 'reauthorization-required': '재승인 필요', 'refresh-required': '갱신 필요', 'expiry-unknown': '만료일 미확인' };
+    return { n: 'Meta Threads', s: labels[status.status], t: 'neutral', i: 'globe', provider: 'meta_threads',
+      detail: `${profileHandle} · ${expiresAt || '만료일 확인 필요'} · 자동 갱신 없음`, action: 'Reconnect' };
+  }
 
   if (status?.status === 'unselected') {
     return { n: 'Meta Threads', s: '브랜드 선택', t: 'neutral', i: 'globe', provider: 'meta_threads', detail: '연결할 브랜드를 먼저 선택하세요.', action: 'Connect', disabled: true };
@@ -127,6 +136,12 @@ function buildInstagramIntegration(status) {
   const profileHandle = status?.connection?.profileHandle || `@${brandHandle}`;
   const expiresAt = formatShortDate(status?.connection?.expiresAt);
   const accountType = status?.connection?.accountType;
+
+  if (['reauthorization-required', 'refresh-required', 'expiry-unknown'].includes(status?.status)) {
+    const labels = { 'reauthorization-required': '재승인 필요', 'refresh-required': '갱신 필요', 'expiry-unknown': '만료일 미확인' };
+    return { n: 'Instagram API', s: labels[status.status], t: 'neutral', i: 'globe', provider: 'instagram_api',
+      detail: `${profileHandle} · ${expiresAt || '만료일 확인 필요'} · 자동 갱신 없음`, action: 'Reconnect' };
+  }
 
   if (status?.status === 'unselected') {
     return { n: 'Instagram API', s: '브랜드 선택', t: 'neutral', i: 'globe', provider: 'instagram_api', detail: '연결할 브랜드를 먼저 선택하세요.', action: 'Connect', disabled: true };
@@ -394,7 +409,7 @@ function CopyRow({ value, mono }) {
         color: copied ? 'var(--fg)' : 'var(--fg-muted)',
         border: '1px solid var(--line)', borderRadius: 4,
         fontSize: 11, fontFamily: 'var(--font-sans)',
-        transition: 'background .15s, color .15s',
+        transition: 'background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub)',
       }}>
         <Iconed name={copied ? 'check' : 'copy'} size={11} />
         {copied ? 'Copied' : 'Copy'}
@@ -484,7 +499,7 @@ function KeyRow({ item, last, kind }) {
           background: copied ? 'var(--moon-300)' : 'var(--surface-2)',
           color: copied ? 'var(--bg)' : 'var(--fg-muted)',
           border: '1px solid var(--line-soft)', borderRadius: 6,
-          fontSize: 11, transition: 'background .15s, color .15s',
+          fontSize: 11, transition: 'background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub)',
         }}>
           <Iconed name={copied ? 'check' : 'copy'} size={11} />
           {copied ? 'Copied' : 'Copy'}
@@ -519,16 +534,26 @@ export function Settings({ onNavigate }) {
     if (logoutBusy) return;
     setLogoutBusy(true);
     setLogoutError('');
+    let cleanupWarning = '';
     try {
+      // Invalidate pending requests before the cookie changes. Storage failures
+      // must not prevent server logout, or claim capture text was removed.
+      try { resetQuickTasks(); }
+      catch {
+        cleanupWarning = '브라우저 복구 입력을 정리하지 못했습니다.';
+        setLogoutError(`${cleanupWarning} 서버 로그아웃을 진행합니다.`);
+      }
       const response = await fetch('/api/operator/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'logout' }),
       });
       if (!response.ok) throw new Error('로그아웃하지 못했습니다. 다시 시도해 주세요.');
-      window.location.replace('/login');
+      // Carry only a fixed warning flag; no capture text, owner or task ID.
+      window.location.replace(cleanupWarning ? '/login?recoveryCleanup=failed' : '/login');
     } catch (error) {
-      setLogoutError(error instanceof Error ? error.message : '로그아웃하지 못했습니다.');
+      const message = error instanceof Error ? error.message : '로그아웃하지 못했습니다.';
+      setLogoutError(cleanupWarning ? `${message} ${cleanupWarning}` : message);
       setLogoutBusy(false);
     }
   };
@@ -578,6 +603,10 @@ export function Settings({ onNavigate }) {
     setInstagramStatus({ ...EMPTY_INSTAGRAM_STATUS, ...pending });
 
     async function loadSocialStatus(path, emptyStatus, setter) {
+      if (!path) {
+        setter({ ...emptyStatus, ...pending, status: 'unsupported' });
+        return;
+      }
       try {
         const response = await fetch(path, { cache: 'no-store' });
         const data = await response.json().catch(() => null);
@@ -600,19 +629,19 @@ export function Settings({ onNavigate }) {
   const integrationRows = React.useMemo(() => {
     const metaRow = buildMetaThreadsIntegration(metaThreadsStatus);
     const instagramRow = buildInstagramIntegration(instagramStatus);
-    return [instagramRow, metaRow];
+    return [...(instagramStatus.status === 'unsupported' ? [] : [instagramRow]), metaRow];
   }, [instagramStatus, metaThreadsStatus]);
   const connectMetaThreads = () => {
     if (!selectedSocialBrand || metaThreadsStatus.brandKey !== selectedSocialBrand.brandKey ||
       metaThreadsStatus.brandHandle !== selectedSocialBrand.brandHandle || !metaThreadsStatus.configured ||
-      !['ready', 'connected'].includes(metaThreadsStatus.status)) return;
+      !['ready', 'connected', 'reauthorization-required', 'refresh-required', 'expiry-unknown'].includes(metaThreadsStatus.status)) return;
     const url = socialBrandUrl('connect', 'meta_threads', selectedSocialBrand.brandKey);
     if (url) window.location.href = url;
   };
   const connectInstagram = () => {
     if (!selectedSocialBrand || instagramStatus.brandKey !== selectedSocialBrand.brandKey ||
       instagramStatus.brandHandle !== selectedSocialBrand.brandHandle || !instagramStatus.configured ||
-      !['ready', 'connected'].includes(instagramStatus.status)) return;
+      !['ready', 'connected', 'reauthorization-required', 'refresh-required', 'expiry-unknown'].includes(instagramStatus.status)) return;
     const url = socialBrandUrl('connect', 'instagram_api', selectedSocialBrand.brandKey);
     if (url) window.location.href = url;
   };
@@ -701,6 +730,8 @@ export function Settings({ onNavigate }) {
         </Card>
       </div>
 
+      <AiUsageSection />
+
       <div>
         <SectionTitle>Integrations</SectionTitle>
         <div style={{ maxWidth: 360, marginBottom: 12 }}>
@@ -739,6 +770,7 @@ export function Settings({ onNavigate }) {
               </Button>
             </div>
           ))}
+          <YouTubeConnections />
         </Card>
         {socialSetupRows.length > 0 && (
           <div style={{ marginTop: 10 }}>

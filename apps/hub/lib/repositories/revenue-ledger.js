@@ -16,6 +16,7 @@ import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
 import { normalizeGenreLabels } from "../sales-os/customer-labels.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 import { normalizeRevenueTargets } from "../revenue-target.js";
+import { formatWon } from "../won-format.js";
 
 const LEAD_STAGE_LABEL = {
   new: "New",
@@ -54,16 +55,24 @@ function resolveDealStage(row) {
 
 // 서버(UTC) 실행 — 운영자 시간대 고정 없이는 배포 환경에서 라벨이 -9시간 밀린다.
 const TIME_ZONE = "Asia/Seoul";
+// 행마다 생성하지 않고 시간대·표시 형식이 고정된 포매터를 재사용한다.
+const SHORT_DATE_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: TIME_ZONE,
+  month: "numeric",
+  day: "numeric",
+});
+const TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 function formatShortDate(value) {
   if (!value) return "미정";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "미정";
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: TIME_ZONE,
-    month: "numeric",
-    day: "numeric",
-  }).format(date);
+  return SHORT_DATE_FORMAT.format(date);
 }
 
 function formatRelative(value) {
@@ -85,21 +94,14 @@ function formatRelativeShort(value) {
   if (Number.isNaN(date.getTime())) return "—";
   const diffDays = Math.round((Date.now() - date.getTime()) / 86400000);
   if (diffDays <= 0) {
-    return new Intl.DateTimeFormat("ko-KR", {
-      timeZone: TIME_ZONE,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(date);
+    return TIME_FORMAT.format(date);
   }
   return `${diffDays}d`;
 }
 
+// 리드 value는 편집 필드로 돌아가 parseMoneyLabel로 다시 저장된다 — 반올림하지 않는 정확한 표기를 쓴다.
 function formatMoneyLabel(amount) {
-  const n = toNumber(amount, 0);
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${(n / 1000).toFixed(0)}K`;
-  return `₩${n}`;
+  return formatWon(toNumber(amount, 0));
 }
 
 function ageDays(value) {

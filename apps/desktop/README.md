@@ -1,6 +1,6 @@
-# Moonlight 데스크톱 (Windows)
+# Moonlight 데스크톱 (Windows·macOS)
 
-Moonlight 허브를 Windows 앱 창으로 여는 Electron 셸이다. 허브 화면은 그대로 원격 주소에서 불러오고,
+Moonlight 허브를 Windows·macOS 앱 창으로 여는 Electron 셸이다(같은 코드, `process.platform === 'darwin'`에서만 갈라진다 — 아래 [macOS](#macos)). 허브 화면은 그대로 원격 주소에서 불러오고,
 앱은 창·트레이·빠른 입력 단축키만 더한다. 허브 코드를 복사하지 않으므로 허브를 배포하면 앱도 바로 최신이다.
 
 ## 허브 주소 정하기
@@ -8,7 +8,7 @@ Moonlight 허브를 Windows 앱 창으로 여는 Electron 셸이다. 허브 화�
 주소는 코드에 박지 않는다. 앱은 아래 순서로 찾는다.
 
 1. 사용자 설정 `%APPDATA%\Moonlight\settings.json`의 `hubUrl` — 첫 실행 화면이나 메뉴 **허브 주소 바꾸기**에서 저장한 값
-2. 앱 기본값 `apps/desktop/app.config.json`의 `hubUrl` — 저장소에는 빈 값(`""`)으로 둔다. 배포 주소가 정해지면 여기에 넣고 다시 빌드하면 첫 실행 화면 없이 바로 열린다
+2. 앱 기본값 `apps/desktop/app.config.json`의 `hubUrl` — 현재 운영 Hub는 `https://moonlight-pro-hub.vercel.app`이다. 저장한 주소가 없으면 이 배포 주소를 연다
 3. 둘 다 없으면 첫 실행 화면(주소 입력 하나, 저장 버튼)
 
 받는 주소는 `https://…` 전부와 개발용 `http://localhost`·`http://127.0.0.1`뿐이다. 경로는 버리고 origin만 저장하며,
@@ -52,7 +52,7 @@ keydown 이벤트를 페이지에 보낸다. 로그인 화면에 있을 때는 �
 - **로그아웃 상태**: 세션이 없거나 끝나 허브가 `/login?next=%2Fwidget`으로 보내면 위젯은 로그인 폼을 그리지 않는다 —
   위젯을 숨기고 메인 창에서 로그인 화면을 연다. 이때 `next`가 위젯 화면을 가리키면 지운다(`mainLoginUrl`,
   `widget-window.js`) — 그대로 두면 로그인 뒤 380px 위젯 페이지가 큰 메인 창에 뜬다. 그래서 메인 창은 `/login` →
-  `/dashboard`로 간다(위젯이 아닌 `next`와 다른 쿼리는 남긴다). 로그인한 뒤 다시 Ctrl+Shift+M을 누르면 위젯이 뜬다.
+  `/dashboard`로 간다(위젯이 아닌 `next`와 다른 쿼리는 남긴다). 로그인하면 숨겨진 위젯도 같은 세션으로 다시 열린다.
 - **허브 주소가 없을 때**: 위젯 대신 메인 창에 허브 주소 설정 화면을 연다.
 - **허브를 열지 못할 때**: 메인 창과 같이 설정 화면에서 실패한 주소와 원인을 보여 준다.
 - **주소 정책**: 메인 창과 같다. 다른 origin 링크는 시스템 브라우저로, 같은 origin의 새 창 요청은 메인 창에서 연다.
@@ -71,10 +71,10 @@ keydown 이벤트를 페이지에 보낸다. 로그인 화면에 있을 때는 �
 
 ## 펫
 
-화면 오른쪽 가장자리에 사는 작은 캐릭터(Office 담당자 9명 중 하나)와 그 옆에 뜨는 유리 패널이다. 할 일·메모·일정·Office·Council·
+화면 가장자리(기본 오른쪽, 왼쪽으로 바꿀 수 있다)에 사는 작은 캐릭터(Office 담당자 9명 중 하나)와 그 옆에 뜨는 유리 패널이다. 할 일·메모·일정·Office·Council·
 집중·알림 일곱 가지를 허브 창을 열지 않고 바로 쓰고, 새 문의·곧 시작할 일정은 짧은 말풍선으로 알린다. macOS 프로토타입
 (`prototypes/moonlight-pet-macos`)의 승인 스펙을 같은 Electron 앱 안에 옮긴 것이다.
-허브 창·위젯과 따로 떠 있고, 앱을 켜면 화면 오른쪽 가장자리에 대기 얼굴이 뜬다. 셸 코드는 `pet/main/`, 세 계층이 함께
+허브 창·위젯과 따로 떠 있고, 앱을 켜면 마지막 자리(처음에는 주 모니터 오른쪽 가장자리)에 대기 얼굴이 뜬다. 셸 코드는 `pet/main/`, 세 계층이 함께
 쓰는 값(모드·크기·캐릭터 9종·유리 값·채널 이름)은 `pet/shared/contract.js` 하나다. 기준 결정은 2026-09-26 운영자 결정
 (재질 = Windows 11 Acrylic 실제 블러, 로그인 = 메인 창 세션 공유, 집중 = 타이머 화면만)이다.
 
@@ -82,15 +82,20 @@ keydown 이벤트를 페이지에 보낸다. 로그인 화면에 있을 때는 �
 
 | 창 | 크기·자리 | 성질 |
 | --- | --- | --- |
-| 펫 | 56×56, 작업 영역 오른쪽에서 8px·아래쪽 1/3 | 투명, 포커스를 받지 않음(클릭은 받음). 세로로만 끌 수 있고 자리는 `pet.position`에 저장 |
-| 빠른 패널 | `contract.glassSize(mode)`(할 일 320×488 …), 펫 왼쪽 10px·펫 세로 중심 | Acrylic 유리. 밖을 누르거나 다른 앱으로 가면 접힌다 |
-| 지속 위젯 | 같은 유리 창을 계속 띄운 것. 유리 + 위 54px 띠의 오른쪽 위 = 펫의 오른쪽 위 | 펫은 숨는다. 모드·높이가 바뀌어도 오른쪽 위를 고정 |
-| 걸친 캐릭터 | 72×72, 유리 오른쪽에서 20px 안쪽, 유리 위로 54px(18px 겹침) | 패널이 소유한 투명 창. 위젯과 빠른 메모에서만 보이고 패널과 같이 움직인다 |
-| 짧은 메시지 | 326×130, 펫 왼쪽 | Acrylic, `showInactive`로만 뜬다(포커스를 빼앗지 않음). 8초 보이고 다음 것은 1초 뒤. 패널·집중 화면이 열려 있으면 기다린다 |
+| 펫 | 56×56, 작업 영역 가장자리(기본 오른쪽, 왼쪽 가능)에서 8px·처음엔 아래쪽 1/3 | 투명, 포커스를 받지 않음(클릭은 받음). 자유롭게 끌고 놓으면 가까운 가장자리로 붙는다. 자리는 `pet.position`에 저장 |
+| 빠른 패널 | `contract.glassSize(mode)`(할 일 320×488 …), 펫의 화면 가운데 쪽 10px(오른쪽 가장자리면 왼쪽)·펫 세로 중심 | Acrylic 유리. 밖을 누르거나 다른 앱으로 가면 접힌다 |
+| 지속 위젯 | 같은 유리 창을 계속 띄운 것. 유리 + 위 54px 띠의 바깥쪽 위 모서리 = 펫의 바깥쪽 위 모서리(오른쪽 가장자리면 오른쪽 위, 왼쪽이면 왼쪽 위) | 펫은 숨는다. 모드·높이가 바뀌어도 그 모서리를 고정 |
+| 걸친 캐릭터 | 72×72, 유리 바깥쪽(가장자리 쪽)에서 20px 안쪽, 유리 위로 54px(18px 겹침) | 패널이 소유한 투명 창. 위젯과 빠른 메모에서만 보이고 패널과 같이 움직인다 |
+| 짧은 메시지 | 326×130, 펫의 화면 가운데 쪽 | Acrylic, `showInactive`로만 뜬다(포커스를 빼앗지 않음). 실제로 뜬 뒤 8초 보이고 다음 것은 1초 뒤. 패널·집중 화면이 열려 있거나 펫을 숨겼으면 기다린다 |
 | 집중 화면 | 화면마다 하나, 그 화면 전체 | 불투명. 주 화면에만 타이머·진행선·중지. 앱 전환은 막지 않는다 |
 
-모두 항상 위(`floating`, 집중 화면은 `screen-saver`)이고 작업 표시줄에 나오지 않는다. 모니터를 빼거나 해상도가 바뀌면
-펫은 가장 가까운 화면의 오른쪽 가장자리로 다시 맞춰진다. 창 배치 규칙은 `pet-geometry.js`(순수 함수)에 있다.
+모두 항상 위(`floating`, 집중 화면은 `screen-saver`)이고 작업 표시줄에 나오지 않는다. 왼쪽 가장자리에서는 오른쪽 숫자를 그대로
+거울로 놓는다(`state.side`로 렌더러에도 알린다). 창 배치 규칙은 `pet-geometry.js`(순수 함수)에 있다.
+
+**자리 저장·모니터.** `pet.position`은 `{ displayId, side, ratio, x, y }`다 — 모니터, 가장자리, 작업 영역 안 세로 비율(0 = 위 끝, 1 = 아래 끝),
+마지막 좌표. 예전 모양 `{ x, y }`도 읽는다(오른쪽). 다른 모니터로 옮기면 같은 가장자리·같은 세로 비율에 선다(높이가 다른 화면이어도
+같은 높이감). 모니터를 빼면 가장 가까운 모니터의 같은 가장자리로 가되 저장하지 않아서, 그 모니터를 다시 꽂으면 원래 자리로 돌아간다.
+해상도가 바뀌어도 비율로 다시 선다. 숨김은 `pet.hidden`(메인 전용)에 둔다.
 메모의 유리 높이는 Mac 크기(띠 54px 포함, `MEMO_ALREADY_HAS_STRIP`)에서 띠를 뺀 504×370이다 — 걸친 캐릭터는 별도 창이라서다.
 
 **Acrylic + DWM.** 유리 창(빠른 패널·위젯·짧은 메시지)은 `backgroundMaterial: 'acrylic'`, `frame:false`, `transparent:false`,
@@ -115,11 +120,17 @@ P/Invoke로 부른다(`pet-dwm.js`, `-EncodedCommand`, 숫자 HWND만). 실패�
 | 모드 | 펫 창 안에서 **Ctrl+1~7** = 할 일·메모·일정·Office·Council·집중·알림 |
 | 저장·주 동작 | **Ctrl+S** 메모 저장 · **Ctrl+Enter** 그 화면의 주 동작(할 일 = 적어 둔 할 일 추가, 메모 = 저장, Council = 질문 보내기, 집중 = 시작, 알림·Office = Hub 열기) |
 | 캐릭터 바꾸기 | 펫 오른쪽 클릭 → 알림 보기 + 9종(20px 얼굴, 지금 캐릭터에 체크). 기본은 글레이시아, 선택은 저장되어 다음 실행에 바로 그 얼굴로 뜬다 |
-| 펫·패널 옮기기 | 끌기(세로만, 3px 넘게 움직여야 끌기). 누르는 동안과 끄는 동안만 캐릭터색 워시. 포인터를 잃으면(창이 사라짐·15초 신호 없음) 클릭으로 치지 않고 워시를 끈다 |
+| 펫 옮기기 | 펫 끌기 — 가로·세로 자유롭게, 다른 모니터로도(3px 넘게 움직여야 끌기). 놓으면 펫 가운데가 있는 화면의 가까운 가장자리(왼쪽·오른쪽)로 붙고 세로는 그 작업 영역 안. 포인터를 잃어도 같은 규칙으로 붙인다 |
+| 패널 옮기기 | 패널 손잡이·걸친 캐릭터 끌기(세로만). 누르는 동안과 끄는 동안만 캐릭터색 워시. 포인터를 잃으면(창이 사라짐·15초 신호 없음) 클릭으로 치지 않고 워시를 끈다 |
+| 가장자리·모니터 | 펫 오른쪽 클릭·트레이 **왼쪽 가장자리로** / **오른쪽 가장자리로**, **모니터로 옮기기** → `주 모니터 (1920×1080)`·`모니터 2 (…)`(모니터가 둘 이상일 때, 지금 모니터에 체크). 위젯이 떠 있었으면 새 자리에서 다시 연다 |
+| 숨기기·보이기 | 펫 오른쪽 클릭·트레이 **펫 숨기기**(펫·패널·말풍선을 내리고 알림은 기다린다, 끄고 켜도 유지) → 트레이 **펫 보이기**. **Ctrl+Alt+M**(맥 ⌃⌥M)·트레이의 빠른 기능·위젯·짧은 메시지는 펫을 다시 보이며 연다 |
+| 위치 초기화 | 펫 오른쪽 클릭·트레이 **펫 위치 초기화** → 주 모니터 오른쪽 가장자리·아래쪽 1/3(숨겨 두었으면 다시 보인다) |
+| 로그인 시 자동 실행 | 트레이(맥은 앱 메뉴 **Moonlight**에도) 체크 항목 — `app.setLoginItemSettings`. 패키징한 앱에서만 보인다(개발 실행은 Electron 자체를 올리게 되고, 스모크는 로그인 항목을 건드리지 않는다) |
 | 집중 중지 | 중지 버튼 → 확인, 또는 **Esc를 1.3초** 누르고 있으면 확인이 뜬다. 확인이 떠 있을 때 **Esc**·계속 집중은 확인만 닫는다 |
 
 기존 **Ctrl+Shift+M** 빠른 입력 위젯(380×200)과 **Ctrl+Shift+Space**는 그대로다. 트레이 메뉴에는 펫 항목 여섯 개(펫 빠른 기능·할 일 위젯
-열기·짧은 메시지 보기·알림 보기·Council 안건 준비·Hub 열기)가 위젯 항목 아래에 붙는다.
+열기·짧은 메시지 보기·알림 보기·Council 안건 준비·Hub 열기)와 자리 항목(모니터로 옮기기·왼쪽/오른쪽 가장자리로·펫 위치 초기화·
+펫 숨기기/보이기)이 위젯 항목 아래에 붙는다. 자리·숨김·모니터 목록이 바뀌면 트레이 메뉴를 다시 만든다(`onMenusChanged`).
 
 ### 모드
 
@@ -144,9 +155,14 @@ P/Invoke로 부른다(`pet-dwm.js`, `-EncodedCommand`, 숫자 HWND만). 실패�
 일정이 이미 시작했거나 말풍선을 껐으면 건너뛴다. 알림 목록이 열려 있으면 새 알림이 바로 목록에 들어온다. 말풍선의 ✕는 그 말풍선만 내린다(읽음 아님, 알림 목록에 남는다). 내용 보기는 읽음으로 하고 목적지를 연다 — 일정 알림은 일정
 모드를 그 날이 든 주·그 날 선택으로, 답변 알림은 Council 을 그 담당·범위 대화로 연다. 트레이 **짧은 메시지 보기**가 마지막 알림을
 다시 띄울 때도 같은 허브 목록 재확인을 거치고, 그사이 읽음·숨김·시작한 일정이 됐으면 기본 인사를 띄운다.
-펫의 숫자 배지는 이 PC 목록의 미확인 수다(99개 넘으면 99+).
+펫의 숫자 배지는 이 PC 목록의 미확인 수다(99개 넘으면 99+). 잠자기·화면 잠금 동안은 60초 확인을 멈추고, 깨어나거나 잠금을 풀면
+곧바로 한 번 확인한 뒤 다시 60초마다 돈다(`powerMonitor` — 확인이 돌고 있었을 때만). 말풍선 페이지를 불러오지 못하면 빈 말풍선을 띄우지 않는다.
 
 ### Hub 연결 — 메인 창 세션 공유
+
+자동 로그인 선택 시 30일 동안 세션을 유지한다(해제하면 12시간). Mac 네이티브 위젯도 셸의 세션을 공유하며,
+Mac 펫의 기존 자동 로그인 정보는 키체인에 Hub 주소별로 보관한다(2026-10-05 계약).
+구조·범위·검증은 [자동 로그인과 위젯 세션 연결](../../docs/superpowers/specs/2026-10-07-automatic-login-and-widget-session.md)을 따른다.
 
 펫에는 로그인 폼이 없다. 허브 호출은 메인 프로세스(`pet/main/pet-hub.js` → `pet-hub-client.js`)가 메인 창과 같은 기본 세션의
 쿠키(`com_moon_operator_session`)를 실어 보내고, GET이 아닌 요청에는 `Origin: <허브 origin>`을 붙여 허브 쓰기 가드를 통과한다.
@@ -188,7 +204,8 @@ Alt+Tab은 막지 않는다. 시작하면 패널·말풍선을 접고 펫을 숨
 
 펫 창은 포인터 신호만 보낸다 — `pointerdown`에 `pet:press {pressed:true}` + `pet:drag {phase:'begin', screenY}`, `pointermove`에
 `pet:drag {phase:'move'}`, `pointerup`에 `pet:drag {phase:'end'}` + `pet:press {pressed:false}`, 포인터를 잃으면 `pet:drag {phase:'cancel'}`.
-한 번·두 번 클릭 판정과 3px 끌기 문턱, 화면 맞춤은 메인이 한다. 오른쪽 클릭은 `pet:context-menu`. 말풍선이 보낸 `pet:collapse`는
+한 번·두 번 클릭 판정과 3px 끌기 문턱, 화면 맞춤은 메인이 한다. 펫 끌기는 가로도 쓴다 — `screenX`를 함께 보내면 그 값을,
+없으면 메인이 커서 위치로 채운다. 오른쪽 클릭은 `pet:context-menu`. 말풍선이 보낸 `pet:collapse`는
 말풍선만 내린다. `pet:focus-state {dismissConfirm:true}`는 중지 확인을 거두고, 지금 눌린 Esc 를 뗄 때까지 잠근다.
 `pet:set-mode`는 `{mode}` 외에 목적지를 받는다(채널 이름은 그대로, payload 만 넓혔다) — `{mode:'calendar', date:'YYYY-MM-DD'}`(ISO 날짜시각이면
 이 PC 날짜로)는 그 날이 든 주·그 날 선택, `{mode:'council', ownerId, scope?}`(scope 없으면 `all`)는 그 담당·범위 대화. 셸은 이를
@@ -214,7 +231,9 @@ dist\win-unpacked\Moonlight.exe --smoke-pet --smoke-out=pet.png --user-data-dir=
 
 펫·빠른 패널(할 일)·위젯과 걸친 캐릭터·메모·짧은 메시지·집중 화면을 차례로 실제 화면에 띄워 크기·자리(계약 값), 클릭 모델,
 세로 끌기와 저장, 다리(허용 채널·거절·Node 없음), DWM 두 속성, Esc 1.3초를 확인하고 실제 화면 영역을 `pet.png`·`-widget`·
-`-memo`·`-bubble`·`-focus`로 남긴 뒤 `smoke:pet ok`(실패하면 종료 코드 1). 운영자 포커스를 빼앗지 않도록 패널은 비활성으로
+`-memo`·`-bubble`·`-focus`로 남긴다. 이어서 자리 기능 — 왼쪽 가장자리 거울(빠른 패널·위젯·걸친 캐릭터, `-left-quick`·`-left-widget`),
+다른 모니터로 옮기기와 끌어서 돌아오기(모니터가 둘 이상일 때), 가운데 선을 넘는 끌기 → 반대 가장자리, 숨기기 → 빠른 기능으로 다시
+보이기, 위치 초기화 — 를 재고 `smoke:pet-side ok`, 마지막에 `smoke:pet ok`(실패하면 종료 코드 1). 운영자 포커스를 빼앗지 않도록 패널은 비활성으로
 띄운다. 화면이 잠겨 있으면 캡처가 검게 나온다(`smoke:warn session locked`). 허브 모델은 기본 경로(`pet-hub.js`)로 싣되 주소를
 비워 두므로 허브 채널은 `not-configured`(`hub-url-missing`)다 — 패키지 안의 허브 모듈이 실제로 읽히는지만 본다. 허브까지 이은
 흐름은 `pet-integration.test.js`(허브 계약을 흉내 내는 프로세스 안 fetch 대역, 포트를 열지 않는다)와 설계 문서 §6의 E2E 기록을 본다.
@@ -224,9 +243,15 @@ dist\win-unpacked\Moonlight.exe --smoke-pet --smoke-out=pet.png --user-data-dir=
 - 집중 화면은 앱 전환·웹사이트를 막지 않는다(운영자 결정).
 - 창 등장·퇴장의 창 단위 페이드는 없다 — 레이어드 창 불투명도는 Acrylic을 끄므로 움직임은 페이지 CSS가 맡는다.
 - 투명도 줄이기 감지는 Electron `nativeTheme.prefersReducedTransparency`에 기댄다. Windows ‘투명 효과’ 스위치를 따로 읽지 않는다.
-- 펫 오른쪽 클릭 메뉴는 Windows 기본 메뉴다 — 체크와 20px 얼굴이 함께 있는 항목에서 얼굴이 체크 자리를 대신할 수 있다.
+- (Windows) 펫 오른쪽 클릭 메뉴는 Windows 기본 메뉴다 — 체크와 20px 얼굴이 함께 있는 항목에서 얼굴이 체크 자리를 대신할 수 있다.
 - 말풍선에서 연 일정·답변 알림은 해당 모드를 열 뿐 날짜·대화를 고르지 않는다(알림 모드 안에서 열면 고른다).
-- 가상 데스크톱 전체에 띄우는 API가 없어 펫은 지금 데스크톱에만 뜬다.
+- (Windows) 가상 데스크톱 전체에 띄우는 API가 없어 펫은 지금 데스크톱에만 뜬다. macOS는 모든 Space에 뜬다.
+- 펫 페이지는 끌기 신호에 `screenY`만 보낸다 — 가로 위치는 메인이 커서 위치(`screen.getCursorScreenPoint`)로 채운다. 끄는 동안의
+  캐릭터 축소 표시(`.dragging`)도 세로 3px 기준이라 가로로만 끌면 켜지지 않는다.
+- 패널 손잡이·걸친 캐릭터 끌기는 세로만이다. 다른 모니터·가장자리로 옮기려면 펫을 끌거나 메뉴를 쓴다.
+- (macOS) 숨긴 패널을 옮기고 곧바로 띄우면 AppKit 이 걸친 캐릭터(패널의 자식 창)를 옛 자리에 둔다 — 셸이 띄운 뒤와 밀려난 것을
+  볼 때 60ms 뒤 1pt 비켰다가 제자리에 놓아 되돌린다. 그 사이 약 0.1~0.3초 옛 자리에 보일 수 있다.
+- 로그인 시 자동 실행으로 켜지면 허브 창도 함께 뜬다(숨긴 채 시작하는 옵션은 아직 없다).
 
 ## 개발·빌드
 
@@ -291,7 +316,56 @@ npx electron . --smoke-widget --smoke-hub=http://127.0.0.1:3141 --smoke-theme=da
 `--smoke-theme`은 `light`·`dark`(생략하면 자동). 저장이 연결된 허브에서는 메모가 실제로 한 건 남으므로, Supabase를
 연결하지 않은 개발 서버에서 돌린다 — 그러면 preview 영수증("저장하지 않았습니다")만 찍힌다.
 
-## 코드 서명 없음
+## macOS
+
+macOS(Apple Silicon)와 Windows는 별도 플랫폼 계약으로 취급한다(2026-09-29 운영자 지시). 업무 API는 공유하되 재질·글꼴·창·조작은 각 OS 기준으로 구현한다. Mac은 `prototypes/moonlight-pet-macos`의 승인 원본, Windows는 Acrylic 이식 스펙이 기준이다.
+
+**셸**
+- 메뉴 막대: 첫 메뉴 **Moonlight**(정보·설정…(허브 주소, ⌘,)·빠른 입력·위젯·서비스·숨기기·종료 ⌘Q) + **편집**(실행 취소·오려두기·복사·붙여넣기·모두 선택 역할 — 이 메뉴가 없으면 허브·펫 입력 칸에서 ⌘C/⌘V/⌘A가 동작하지 않는다) + **보기**(뒤로 ⌘[ · 앞으로 ⌘]) + **윈도우**. 메뉴 모양은 `menu-template.js`(순수 함수, `menu-template.test.js`)가 플랫폼별로 만든다.
+- 메뉴 막대 아이콘은 네이티브 펫의 **☾ 하나**다. Hub 셸은 별도 트레이를 만들지 않으며, 앱 메뉴와 Dock 오른쪽 클릭 메뉴는 그대로 제공한다. Dock 메뉴는 열기·빠른 입력·할 일 위젯 열기다.
+- 창을 닫아도 앱은 메뉴 막대·펫과 함께 남는다(`window-all-closed`에서 끝내지 않음). Dock 아이콘을 누르면 허브 창을 다시 띄운다(`activate`). 전체 화면 창은 전체 화면을 푼 뒤 숨겨 빈 Space를 남기지 않는다.
+- 빠른 입력 **⌘⇧Space**는 네이티브 펫의 **메모**, **⌘⇧M**은 같은 펫의 **할 일 위젯**을 연다. 앱·Dock 메뉴도 같은 경로다. 이미 고정 위젯이 열려 있으면 그 창의 내용만 전환한다. Mac 일반 실행에서는 Hub 빠른 입력 팝업이나 별도 `/widget` 창을 추가로 열지 않는다. 펫의 **⌃⌥M** 빠른 기능은 그대로다.
+- 앱 메뉴 **Moonlight**에 **로그인 시 자동 실행**(패키징한 앱만). 미디어 키·Now Playing 가로채기 끄기(`HardwareMediaKeyHandling`·`MediaSessionService`)는 맥에서만 건다.
+- 설정·세션 폴더: `~/Library/Application Support/Moonlight`(`settings.json`·`window-state.json`·`widget-state.json`·`pet-store.json`). `electron .` 개발 실행도 `--user-data-dir`를 주지 않으면 설치본과 같은 폴더를 쓴다.
+
+**빌드·설치**
+
+```bash
+npm run app:mac:dev      # 개발 실행
+npm run app:mac:build    # dist/Moonlight-<버전>-arm64.dmg · .zip · mac-arm64/Moonlight.app
+```
+
+- 네이티브 빌드: Mac 개발 실행·패키징은 `scripts/build-mac-pet.mjs`로 SwiftUI 펫을 `--build-only` 빌드한다. 실행 중인 펫은 종료하지 않는다. 패키징 시 `Resources/native/MoonlightPetPreview.app`에 같은 앱을 포함한다. macOS 26+ SDK가 포함된 Xcode Command Line Tools가 필요하다. Electron 유리 연결부는 비교 스모크용으로 함께 빌드하며 `npm --workspace @com-moon/desktop run build:mac-glass`로 따로 빌드할 수 있다.
+- 아이콘: `npm --workspace @com-moon/desktop run icons:generate`가 `build/icon.icns`(sips + iconutil)·`icon-dock.png`·`trayTemplate*.png`도 만든다. 맥 자산은 `sharp`가 필요하다(루트에 허브 의존성으로 설치돼 있다 — 없으면 경고만 남기고 건너뛴다).
+- 서명: Developer ID가 없어 애드혹 서명(`identity: "-"`, `hardenedRuntime: false`)이다. `codesign --verify --deep --strict`는 통과하고 `spctl`은 거절한다. 직접 빌드해 `/Applications`로 복사한 앱은 바로 열린다. 브라우저로 받은 dmg·zip은 격리 속성이 붙으므로 처음 한 번 오른쪽 클릭 → **열기**(또는 `xattr -dr com.apple.quarantine /Applications/Moonlight.app`).
+- 처음 실행할 때 키체인이 "Moonlight Safe Storage" 접근을 물으면 **항상 허용** — 로그인 쿠키 암호화 키다. 비밀번호를 넣을 필요는 없다.
+- 설치본 교체: 앱을 종료(⌘Q)한 뒤 `dist/mac-arm64/Moonlight.app`을 `/Applications`에 덮어쓴다.
+- `electronLanguages: ["ko","en"]`로 언어 리소스를 줄였다(약 48MB). x64·universal은 빌드하지 않는다.
+- 스모크: `--smoke-test`·`--smoke-widget`는 비교 검사로 남는다. `--smoke-mac`은 앱·Dock 메뉴와 활성화, 셸 트레이가 없다는 것, 메모·할 일 호출이 네이티브 런처로 전달되고 Hub 창·Electron 위젯을 열지 않는 것을 격리 검사한다. 실제 펫은 실행하지 않는다.
+
+**펫 실행 통합 (2026-09-30)**
+- Mac의 일반 실행은 `pet-runtime.js`에서 SwiftUI 펫만 연다. `Moonlight.app` 안에 Electron 펫 창·조회 루프·펫 단축키를 추가로 만들지 않는다. Windows는 기존 `pet/main/pet-main.js`를 사용한다.
+- 기존 `~/Applications/MoonlightPetPreview.app` → `/Applications/MoonlightPetPreview.app` → 앱 번들에 포함된 펫 → 개발 빌드 순서로 찾는다. 별도 설치본이 있으면 그 업데이트·설정을 그대로 사용한다. `open -g`와 네이티브 앱의 번들 ID 중복 검사로 실행 중인 펫을 재사용한다. 앱을 못 찾거나 실행에 실패하면 오류를 기록하고 Electron 펫으로 바꾸지 않는다.
+- 세부 기능·캐릭터·모니터 이동은 네이티브 펫과 ☾ 메뉴에서 조작한다. Hub 앱을 종료해도 펫은 유지한다. Hub 설정·자동 실행 설정은 앱 메뉴 **Moonlight**에 남는다.
+- 네이티브 펫의 초안·위치는 기존 `app.moonlight.pet-preview` UserDefaults를 그대로 사용한다. Hub 앱과 펫을 함께 업데이트하면 실행 중인 Hub 앱의 주소·운영자 세션을 공유해 별도 로그인 없이 연결한다(2026-10-14). 로그인·로그아웃·주소 변경은 약 3초 안에 반영한다. 펫의 직접 로그인은 Hub 앱 없이 사용하는 경우의 경로다. 로컬 기록을 자동 이관하거나 덮어쓰지 않는다. 세부 연결·검증은 [Mac 원본 README](../../prototypes/moonlight-pet-macos/README.md)의 **Hub 앱 자동 연결**을 따른다.
+- 유리·시스템 글꼴·패널 조작·모니터 이동·단축키는 [Mac 원본 README](../../prototypes/moonlight-pet-macos/README.md)가 정본이다.
+- 2026-10-01 입력 통합: 셸은 `open -g -a <펫 앱> moonlight-pet://memo|tasks`로 같은 네이티브 앱에 화면 선택만 전달한다. 실행 중/첫 실행 모두 지원하며 URL로 업무 저장·초안 교체는 하지 않는다. 별도 펫 설치본을 쓰는 Mac은 `prototypes/moonlight-pet-macos/script/build_and_run.sh --install`로 펫도 함께 갱신한다. `--smoke-pet`은 Electron 이식본 비교 검사로 남는다.
+- 2026-09-30 검증: 데스크톱 345개 테스트, Mac 패키징·설치본 deep/strict 서명 검사, 포함된 네이티브 펫 자체 점검 통과. 네이티브 먼저 → Hub 열기, Hub만 열어 자동 기동, 포함된 펫을 중복 실행하는 세 경우 모두 실제 창 목록에서 네이티브 펫/패널 1개·Electron 펫 창 0개를 확인했다.
+
+- 2026-10-01 검증: 데스크톱 346개 테스트, SwiftPM 빌드·네이티브 자체 점검, `--smoke-mac`의 트레이 없음·메모/할 일 위임·Hub 숨김 유지 검사 통과. Hub와 별도 네이티브 설치본을 교체하고 deep/strict 서명을 확인했다. 실제 앱 메뉴로 메모 → 할 일 위젯 → 메모를 열었을 때 같은 위젯이 전환되는 것을 확인했다.
+
+### Electron Mac 이식본 비교 검사 (일반 실행과 별도)
+
+```bash
+npm --workspace @com-moon/desktop test
+npm --workspace @com-moon/desktop run build:mac-glass
+npx electron apps/desktop --smoke-pet --smoke-native-glass --smoke-out=/tmp/moonlight-pet.png --user-data-dir=/tmp/moonlight-pet-check
+```
+
+`--smoke-native-glass`는 HUD로 조용히 대체되면 실패한다. 네이티브 부착·26pt 반경·CSS 베일 제거와 기존 창/모니터/입력 계약을 검사한다. Windows 실기 검증은 Windows에서 별도로 수행하며 Mac 스모크 통과로 대체하지 않는다.
+
+
+## 코드 서명 없음 (Windows)
 
 이 빌드는 코드 서명을 하지 않는다. 처음 실행하면 Windows SmartScreen이 "Windows의 PC 보호" 창을 띄운다 —
 **추가 정보 → 실행**을 눌러야 한다. 인증서를 붙이려면 electron-builder의 `win.signtoolOptions`/`CSC_LINK`를 설정한다

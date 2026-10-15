@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
-export const CODEX_CLI_PROVIDER_VERSION = 'office-codex-cli-eval-v2';
+export const CODEX_CLI_PROVIDER_VERSION = 'office-codex-cli-eval-v3';
 export const CODEX_CLI_DEFAULT_MODEL = 'codex-cli-default';
 const execFileAsync = promisify(execFile);
 const MAX_CAPTURE_BYTES = 4 * 1024 * 1024;
@@ -55,10 +55,11 @@ function usageFrom(raw) {
   };
 }
 
-// No model selection, API transport or product defaults are changed. The second
-// argument is a process seam for offline boundary tests, not a provider retry path.
-export async function createCodexCliProvider({ command = 'codex', argv = [], timeoutMs = 45_000 } = {}, { spawnImpl = spawn, execFileImpl = execFileAsync, killImpl = process.kill.bind(process) } = {}) {
-  if (process.platform === 'win32' || typeof command !== 'string' || !command || command.includes('\0') || !Array.isArray(argv) || argv.some(arg => typeof arg !== 'string' || arg.includes('\0')) || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 45_000) throw new Error('invalid-codex-provider-options');
+// Model selection is evaluation-only and fixed for the provider lifetime. The
+// second argument is an offline process seam, not a provider retry path.
+export async function createCodexCliProvider({ command = 'codex', argv = [], timeoutMs = 45_000, model = CODEX_CLI_DEFAULT_MODEL } = {}, { spawnImpl = spawn, execFileImpl = execFileAsync, killImpl = process.kill.bind(process) } = {}) {
+  if (process.platform === 'win32' || typeof command !== 'string' || !command || command.includes('\0') || !Array.isArray(argv) || argv.some(arg => typeof arg !== 'string' || arg.includes('\0')) || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 45_000 || typeof model !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(model)) throw new Error('invalid-codex-provider-options');
+  const explicitModel = model !== CODEX_CLI_DEFAULT_MODEL;
   const env = cliEnvironment();
   let cliVersion;
   try {
@@ -66,12 +67,12 @@ export async function createCodexCliProvider({ command = 'codex', argv = [], tim
     const version = await execFileImpl(command, [...argv, '--version'], options);
     cliVersion = /^codex-cli (\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?)\s*$/.exec(version.stdout)?.[1];
     const help = await execFileImpl(command, [...argv, 'exec', '--help'], options);
-    if (!cliVersion || REQUIRED_FLAGS.some(flag => !help.stdout.includes(flag))) throw new Error('unsupported-codex-cli');
+    if (!cliVersion || REQUIRED_FLAGS.some(flag => !help.stdout.includes(flag)) || explicitModel && !help.stdout.includes('--model')) throw new Error('unsupported-codex-cli');
   } catch { throw new Error('codex-cli-preflight-failed'); }
   const provenance = Object.freeze({
     adapterVersion: CODEX_CLI_PROVIDER_VERSION, transport: 'saved-login-codex-cli', cliVersion,
     commandName: basename(command), commandPrefixHash: hash(JSON.stringify(argv)), platform: process.platform, arch: process.arch, nodeVersion: process.version,
-    modelRequested: 'CLI default (user config not loaded)', modelVersion: null,
+    modelRequested: explicitModel ? model : 'CLI default (user config not loaded)', modelVersion: null,
     instructionTransport: 'developer_instructions', userPromptTransport: 'stdin-verbatim', outputSchemaTransport: 'unmodified-json-file',
     requiredFlags: [...REQUIRED_FLAGS], config: [...CONFIG], emptyWorkingDirectory: true, detachedProcessGroup: true,
     timeoutMs, terminateGraceMs: TERMINATE_GRACE_MS, adapterRetries: 0, cliInternalRetries: 'uncontrolled-built-in-provider',
@@ -90,10 +91,10 @@ export async function createCodexCliProvider({ command = 'codex', argv = [], tim
     const result = (reason, text = '', usageMetadata = null, modelVersion = null) => {
       metadata.elapsedMs = Math.round(performance.now() - started);
       return { ok: reason === null, status: null, reason: reason || 'ok', failureCategory: reason === null ? null : ['timeout', 'aborted', 'invalid-json', 'invalid-request', 'empty-output', 'incomplete-output'].includes(reason) ? reason : 'provider-error',
-        text: reason === null ? text : '', model: CODEX_CLI_DEFAULT_MODEL, modelVersion, finishReason: null, usageMetadata, promptFeedback: null, adapterMetadata: metadata };
+        text: reason === null ? text : '', model, modelVersion, finishReason: null, usageMetadata, promptFeedback: null, adapterMetadata: metadata };
     };
     if (!record(input) || typeof input.prompt !== 'string' || input.systemInstruction !== undefined && typeof input.systemInstruction !== 'string' || !record(input.responseJsonSchema)
-      || input.model !== undefined && input.model !== CODEX_CLI_DEFAULT_MODEL || input.media?.length || input.thinkingLevel !== undefined && !['low', 'high'].includes(input.thinkingLevel)
+      || input.model !== undefined && input.model !== model || input.media?.length || input.thinkingLevel !== undefined && !['low', 'high'].includes(input.thinkingLevel)
       || input.maxOutputTokens !== undefined && (!count(input.maxOutputTokens) || input.maxOutputTokens === 0)) return result('invalid-request');
     if (input.signal?.aborted) return result(input.signal.reason?.name === 'TimeoutError' ? 'timeout' : 'aborted');
     let directory;
@@ -109,6 +110,7 @@ export async function createCodexCliProvider({ command = 'codex', argv = [], tim
       metadata.systemInstructionHash = hash(input.systemInstruction || '');
       metadata.responseSchemaHash = hash(schemaText);
       const args = [...argv, 'exec', '--ignore-user-config', '--ephemeral', '--sandbox', 'read-only', '--skip-git-repo-check', '--cd', workingDirectory,
+        ...(explicitModel ? ['--model', model] : []),
         ...CONFIG.flatMap(setting => ['--config', setting]), '--config', `developer_instructions=${JSON.stringify(input.systemInstruction || '')}`,
         ...(input.thinkingLevel ? ['--config', `model_reasoning_effort=${JSON.stringify(input.thinkingLevel)}`] : []), '--output-schema', schemaPath, '--json', '-'];
       if (signal.aborted) return result(input.signal?.aborted && input.signal.reason?.name !== 'TimeoutError' ? 'aborted' : 'timeout');

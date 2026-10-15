@@ -14,6 +14,7 @@ function createBubbleQueue(options) {
   const maxQueued = options.maxQueued || 20;
   const queue = [];
   let current = null;
+  let presentSeq = 0; // 띄울 때·내릴 때마다 올린다 — 늦게 끝난 show 결과가 새 차례의 타이머를 켜지 않게
   let showTimer = null;
   let gapTimer = null;
   let last = null;
@@ -38,19 +39,38 @@ function createBubbleQueue(options) {
     return false;
   }
 
+  // options.show 가 false 면 못 띄웠다(말풍선 페이지를 불러오지 못함) — 빈 말풍선 대신 이 차례를 거둔다.
+  // Promise 면(창이 아직 페이지를 불러오는 중) 실제로 뜬 뒤부터 showMs 를 잰다. 그 밖(undefined·true)은 곧바로.
   function present(notice) {
     current = notice || null;
     if (notice) last = notice;
-    options.show(current);
+    const seq = ++presentSeq;
     if (showTimer !== null) clear(showTimer);
-    showTimer = set(() => {
-      showTimer = null;
-      dismiss();
-    }, showMs);
+    showTimer = null;
+    const arm = () => {
+      if (seq !== presentSeq) return;
+      showTimer = set(() => {
+        showTimer = null;
+        dismiss();
+      }, showMs);
+    };
+    const failed = () => {
+      if (seq === presentSeq) dismiss({ gap: false });
+    };
+    let shown;
+    try {
+      shown = options.show(current);
+    } catch {
+      shown = false;
+    }
+    if (shown && typeof shown.then === 'function') shown.then((ok) => (ok === false ? failed() : arm()), failed);
+    else if (shown === false) failed();
+    else arm();
   }
 
   // 보이던 메시지를 내린다. 다음 메시지는 1초 뒤에.
   function dismiss({ gap = true } = {}) {
+    presentSeq += 1;
     if (showTimer !== null) clear(showTimer);
     showTimer = null;
     const was = current !== null || options.isVisible?.();

@@ -3,5 +3,5 @@ import { createOfficeWorkflowEngineHandler } from '../../../../lib/office/workfl
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 export const POST = createOfficeWorkflowEngineHandler(validateSharedWebhookRequest);

@@ -96,12 +96,12 @@ export function ContextMentorRail({ domain = 'sales', contextKey, onGuidanceAsk,
       type="button"
       className="context-mentor-rail__trigger"
       onClick={openRail}
-      aria-label={`${contextLabel || domainLabel} Guru 관점 열기`}
+      aria-label={`${contextLabel || domainLabel} 멘토 관점 열기`}
       aria-haspopup="dialog"
       aria-expanded={open}
     >
       <span aria-hidden="true"><Iconed name="sparkle" size={19} /></span>
-      <span className="context-mentor-rail__mark mono">GURU</span>
+      <span className="context-mentor-rail__mark mono">멘토</span>
       <span className="context-mentor-rail__label">관점 열기</span>
       <span className="context-mentor-rail__arrow" aria-hidden="true"><Iconed name="chevronL" size={16} /></span>
     </button>

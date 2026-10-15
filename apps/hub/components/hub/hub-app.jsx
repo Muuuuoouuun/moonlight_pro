@@ -16,13 +16,10 @@ import { SidebarResizer } from "./sidebar-resizer";
 import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
-import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
-import { GuidanceQuestionDrawer } from "./guidance-question-drawer";
-import { GlobalQuickCapture } from "./quick-capture";
+import { savedSharedCaptureTarget, snapshotSharedCaptureQuery } from "@/lib/shared-capture-navigation";
 import { OfficeSessionProvider } from "./office-session-provider";
-import { OfficeWorkflowSessionProvider } from "./office-workflow-panel";
-import { ShortcutOverlay } from "./crm-shortcut-overlay";
+import { OfficeWorkflowSessionProvider } from "./office-workflow-sessions";
 import { CelebrationCanvas } from "./celebration-fx";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
@@ -73,6 +70,31 @@ function PageChunkFallback() {
 // from SSRing these pages, and every page carries its own loading/empty state.
 const lazyPage = (loader) => dynamic(loader, { loading: PageChunkFallback, ssr: false });
 
+// 열 때만 쓰는 셸 패널(⌘K 팔레트·빠른 입력·Guru 질문 창·단축키 안내)은 첫 화면 번들에서 뺀다.
+// 처음 열리는 순간 또는 브라우저가 한가해진 뒤(useShellOverlaysReady) 받아 두므로, 첫 그림은 가볍고
+// 여는 순간은 대개 이미 받아 둔 뒤다. 한번 마운트한 패널은 계속 마운트해 초안·대화를 잃지 않는다.
+const lazyOverlay = (loader) => dynamic(loader, { ssr: false });
+const CommandPalette = lazyOverlay(() => import("./hub-command-palette").then(m => m.CommandPalette));
+const GuidanceQuestionDrawer = lazyOverlay(() => import("./guidance-question-drawer").then(m => m.GuidanceQuestionDrawer));
+const GlobalQuickCapture = lazyOverlay(() => import("./quick-capture").then(m => m.GlobalQuickCapture));
+const ShortcutOverlay = lazyOverlay(() => import("./crm-shortcut-overlay").then(m => m.ShortcutOverlay));
+
+function useShellOverlaysReady() {
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => {
+    // 터치 기기와 데이터 절약·느린 회선에서는 미리 받지 않는다 — 터치에는 ⌘K·C 같은 단축키가 없고,
+    // 데이터·배터리를 아끼는 편이 낫다. 거기서는 각 패널이 처음 열릴 때 받는다(위 조건부 마운트).
+    if (window.matchMedia?.("(hover: none) and (pointer: coarse)").matches || prefersOnDemandLoading()) return undefined;
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(() => setReady(true), { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(() => setReady(true), 1500);
+    return () => window.clearTimeout(id);
+  }, []);
+  return ready;
+}
+
 const Home = lazyPage(() => import("./pages/home").then(m => m.Home));
 const DailyBrief = lazyPage(() => import("./pages/daily-brief").then(m => m.DailyBrief));
 const Overview = lazyPage(() => import("./pages/overview").then(m => m.Overview));
@@ -86,13 +108,18 @@ const Memos = lazyPage(() => import("./pages/memos").then(m => m.Memos));
 const Discovery = lazyPage(() => import("./pages/discovery").then(m => m.Discovery));
 const DailyReview = lazyPage(() => import("./pages/daily-review").then(m => m.DailyReview));
 const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
+const Products = lazyPage(() => import("./pages/products").then(m => m.Products));
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
 const ContentPerformance = lazyPage(() => import("./pages/content-performance").then(m => m.ContentPerformance));
 const ContentNews = lazyPage(() => import("./pages/content-news").then(m => m.ContentNews));
+const Reports = lazyPage(() => import("./pages/reports").then(m => m.Reports));
+const ResearchInbox = lazyPage(() => import("./pages/research-inbox").then(m => m.ResearchInbox));
+const ContentPublishLog = lazyPage(() => import("./pages/content-publish-log").then(m => m.ContentPublishLog));
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
 const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
+const Finance = lazyPage(() => import("./pages/finance").then(m => m.Finance));
 const RevenueOverview = lazyPage(() => import("./pages/revenue").then(m => m.RevenueOverview));
 const Leads = lazyPage(() => import("./pages/revenue").then(m => m.Leads));
 const Inquiries = lazyPage(() => import('./pages/inquiries').then(m => m.Inquiries));
@@ -110,6 +137,7 @@ const Runs = lazyPage(() => import("./pages/automations").then(m => m.Runs));
 const Flows = lazyPage(() => import("./pages/automations").then(m => m.Flows));
 const SheetsSync = lazyPage(() => import("./pages/sheets-sync").then(m => m.SheetsSync));
 const OfficeCouncil = lazyPage(() => import("./pages/office-council").then(m => m.OfficeCouncil));
+const OfficeRequest = lazyPage(() => import("./pages/office-request").then(m => m.OfficeRequest));
 const AgentsChat = lazyPage(() => import("./pages/agents").then(m => m.AgentsChat));
 const MentorShelf = lazyPage(() => import("./pages/mentor-shelf").then(m => m.MentorShelf));
 const AgentsCouncil = lazyPage(() => import("./pages/agents").then(m => m.AgentsCouncil));
@@ -120,18 +148,27 @@ const Settings = lazyPage(() => import("./pages/evolution-settings").then(m => m
 // Idle prefetch — the flip side of code splitting is a chunk fetch (and the
 // "불러오는 중…" flash) on first navigation to a page. After the current page
 // settles, warm the daily-loop pages during browser idle time so those
-// navigations render instantly. Everything else (agents, automations,
-// settings, …) stays strictly on-demand to keep the prefetch budget small.
-// import() dedupes against dynamic()'s loader, so this fills the same module
-// cache the router reads from; failures are harmless (navigation just
+// navigations render instantly. The list follows the sidebar anchors' landing
+// screens (hub-nav.js) — 영업·매출 lands on 오늘 연락 (followups.jsx) since
+// 2026-09-24, not on revenue.jsx. Everything else (tabs below an anchor, agents,
+// automations, settings, …) stays strictly on-demand to keep the prefetch budget
+// small. import() dedupes against dynamic()'s loader, so this fills the same
+// module cache the router reads from; failures are harmless (navigation just
 // re-fetches).
 const PREFETCH_PAGES = [
   () => import("./pages/daily-brief"),
+  () => import("./pages/home"),
   () => import("./pages/my-work"),
-  () => import("./pages/revenue"),
+  () => import("./pages/followups"),
   () => import("./pages/projects"),
   () => import("./pages/overview"),
 ];
+
+// Data-saver or a slow link: fetch code only when the operator asks for it.
+function prefersOnDemandLoading() {
+  const connection = typeof navigator === "undefined" ? null : navigator.connection;
+  return Boolean(connection?.saveData) || /(^|-)2g$|^3g$/.test(connection?.effectiveType || "");
+}
 
 const MOBILE_NAV_QUERY = '(max-width: 900px)';
 
@@ -151,6 +188,7 @@ function useMobileViewport() {
 
 function useIdlePagePrefetch() {
   React.useEffect(() => {
+    if (prefersOnDemandLoading()) return undefined;
     let cancelled = false;
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
     const cancelIdle = window.cancelIdleCallback || clearTimeout;
@@ -211,6 +249,7 @@ function LegacyPlaceholder({ path, onNavigate }) {
 
 const PAGE_MAP = {
   'dashboard/home': (n, _inquiries, _scope, ask) => <Home onNavigate={n} onGuidanceAsk={ask} />,
+  'dashboard/reports': (n) => <Reports onNavigate={n} />,
   'dashboard/daily-brief': (n, inquiries, _scope, ask) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} onGuidanceAsk={ask} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
@@ -219,6 +258,7 @@ const PAGE_MAP = {
   'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
+  'dashboard/products': (n) => <Products onNavigate={n} />,
   'dashboard/work/decisions': (n, _inquiries, scope) => <Decisions onNavigate={n} scope={scope} />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
@@ -227,11 +267,14 @@ const PAGE_MAP = {
   'dashboard/brands/log': (n) => <BrandContentLog onNavigate={n} />,
   'dashboard/content/performance': () => <ContentPerformance />,
   'dashboard/content/news': () => <ContentNews />,
+  'dashboard/content/research': () => <ResearchInbox />,
+  'dashboard/content/publish': () => <ContentPublishLog />,
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': (n, _inquiries, _scope, ask) => <Queue onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/content/campaigns': () => <Campaigns />,
   // 영업·매출 탭은 오늘 연락·고객·거래·문의 넷이다(2026-09-24). 개요·히트맵·Leads·Accounts·Cases는
   // 탭에서 내려왔지만 라우트는 그대로 남아 ⌘K·북마크·딥링크로 열린다(hub-nav.js REVENUE_ROUTE_TABS).
+  'dashboard/revenue/cashflow': (n) => <Finance onNavigate={n} />,
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
   'dashboard/revenue/customers': (n, _inquiries, _scope, ask) => <Customers onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
@@ -248,6 +291,7 @@ const PAGE_MAP = {
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
   'dashboard/agents/office-council': (n, notifications, scope, ask) => <OfficeCouncil scope={scope} onGuidanceAsk={ask} onNavigate={n} />,
+  'dashboard/agents/office-request': (n, _inquiries, _scope, _ask, query) => <OfficeRequest requestId={query?.get('request')} onNavigate={n} />,
   'dashboard/agents/chat': (n, _inquiries, _scope, ask, query) => <MentorShelf onNavigate={n} onGuidanceAsk={ask} requestedCardId={query?.get('card')} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
@@ -313,8 +357,10 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
+  const overlaysReady = useShellOverlaysReady();
   const [initialCaptureRaw, setInitialCaptureRaw] = React.useState("");
   const handledShareRef = React.useRef(false);
+  const sharedCaptureQueryRef = React.useRef(null);
 
   React.useEffect(() => {
     if (handledShareRef.current) return;
@@ -324,10 +370,12 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const combined = [shareTitle, shareText, shareUrl].map((s) => s.trim()).filter(Boolean).join("\n");
     if (combined) {
       handledShareRef.current = true;
+      sharedCaptureQueryRef.current = snapshotSharedCaptureQuery(searchParams);
       setInitialCaptureRaw(combined);
       setCaptureOpenRequest((v) => v + 1);
     }
   }, [searchParams]);
+  const sharedCaptureQuery = sharedCaptureQueryRef.current;
 
   const [guidanceQuestion, setGuidanceQuestion] = React.useState(null);
   const rootRef = React.useRef(null);
@@ -488,7 +536,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
-    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true }).slice(1);
+    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', kpi: goalView(searchParams) === 'kpi', create: true }).slice(1);
+    if (p === 'dashboard/reports') { const params = new URLSearchParams(searchParams.toString()); params.set('new', 'report'); return `dashboard/reports?${params}`; }
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/customers?new=customer';
@@ -497,9 +546,10 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/revenue/accounts')) return 'dashboard/revenue/accounts?new=account';
     if (p.startsWith('dashboard/revenue/cases')) return 'dashboard/revenue/cases?new=case';
     if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
+    if (p.startsWith('dashboard/products')) return 'dashboard/products?new=product';
     if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
-    if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true, base: GOAL_WORK_BASE }).slice(1);
+    if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', kpi: goalView(searchParams) === 'kpi', create: true, base: GOAL_WORK_BASE }).slice(1);
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
   }, [queryScope, searchParams]);
@@ -650,11 +700,21 @@ export function HubApp({ memoDraftContext = "preview" }) {
             </main>
           </div>
         </div>
-      <GuidanceQuestionDrawer key={`${guidanceQuestion?.card?.id || 'free'}:${guidanceQuestion?.context?.ref || ''}`} card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />
-      <GlobalQuickCapture openRequest={captureOpenRequest} initialRaw={initialCaptureRaw} onNavigate={navigate} />
+      {(overlaysReady || guidanceQuestion) && <GuidanceQuestionDrawer key={`${guidanceQuestion?.card?.id || 'free'}:${guidanceQuestion?.context?.ref || ''}`} card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />}
+      {(overlaysReady || captureOpenRequest > 0 || Boolean(initialCaptureRaw)) && <GlobalQuickCapture
+        openRequest={captureOpenRequest}
+        initialRaw={initialCaptureRaw}
+        onInitialRawConsumed={(raw) => setInitialCaptureRaw((current) => current === raw ? "" : current)}
+        onSharedDraftSaved={() => {
+          const target = savedSharedCaptureTarget(window.location.href, sharedCaptureQuery);
+          if (sharedCaptureQueryRef.current === sharedCaptureQuery) sharedCaptureQueryRef.current = null;
+          if (target) router.replace(target, { scroll: false });
+        }}
+        onNavigate={navigate}
+      />}
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open || Boolean(guidanceQuestion)} openRequest={memoOpenRequest} onNavigate={navigate} />
-      <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
-      <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {(overlaysReady || paletteOpen) && <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />}
+      {(overlaysReady || helpOpen) && <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />}
         <CelebrationCanvas />
           </DailyReviewProvider>
           </OfficeWorkflowSessionProvider>

@@ -142,7 +142,24 @@ function widgetToggleAction({ hubUrl, visible }) {
   return visible ? 'hide' : 'show';
 }
 
+// 플랫폼별 위젯 창 옵션. macOS는 비활성 패널(type:'panel')이라 위젯을 열어도 앱이 활성화되지 않고
+// 큰 허브 창이 앞으로 나오지 않는다. 처음 클릭이 포커스만 잡고 사라지지 않게 acceptFirstMouse를 켠다.
+// skipTaskbar는 Windows 전용이라 mac에서는 무해하지만 그대로 둔다.
+function widgetPlatformOptions(platform) {
+  return platform === 'darwin' ? { type: 'panel', acceptFirstMouse: true } : {};
+}
+
+// macOS에서 위젯이 전체 화면 앱 위·모든 데스크톱에 뜨게 하는 setVisibleOnAllWorkspaces 인자.
+// skipTransformProcessType: 기본값은 Dock 아이콘을 잠깐 숨기고 창을 깜빡이게 하는 프로세스 변환을 한다.
+function widgetWorkspaceOptions(platform) {
+  return platform === 'darwin'
+    ? { visible: true, options: { visibleOnFullScreen: true, skipTransformProcessType: true } }
+    : null;
+}
+
 module.exports = {
+  widgetPlatformOptions,
+  widgetWorkspaceOptions,
   WIDGET_WIDTH,
   WIDGET_HEIGHT,
   WIDGET_MIN_HEIGHT,

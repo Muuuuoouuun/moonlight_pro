@@ -1,4 +1,5 @@
 import { getInquiriesLedger } from './inquiries-ledger.js';
+import { formatWonShort } from '../won-format.js';
 
 // Cross-lane attention read model — the TODOS.md P1 "Today Actions" contract, assembled
 // per request from the existing ledgers (deep-design premise 3: no new universal table).
@@ -31,6 +32,18 @@ import { isFocusedOn, summarizeFocusDay } from "../task-today.js";
 
 const TIME_ZONE = "Asia/Seoul";
 const DAY_MS = 86400000;
+// 행마다 생성하지 않고 시간대·표시 형식이 고정된 포매터를 재사용한다.
+const SHORT_DATE_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: TIME_ZONE,
+  month: "numeric",
+  day: "numeric",
+});
+const TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 // KST 날짜 경계는 kst-day.js가 정본 — 고객 연락 큐도 같은 함수를 쓴다(사본 금지).
 const dateKey = kstDayKey;
@@ -40,30 +53,19 @@ function shortDate(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: TIME_ZONE,
-    month: "numeric",
-    day: "numeric",
-  }).format(date);
+  return SHORT_DATE_FORMAT.format(date);
 }
 
 function timeLabel(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
+  return TIME_FORMAT.format(date);
 }
 
 function moneyLabel(amount) {
   const n = Number(amount) || 0;
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
-  return n > 0 ? `₩${n}` : "";
+  return n > 0 ? formatWonShort(n) : "";
 }
 
 function mapTaskItems(todos, projects, todayKey, weekEndKey) {

@@ -1,0 +1,12 @@
+/* Existing document structure, with the surrounding Office/report body typography. */
+.office-artifact { min-width: 0; max-width: 100%; font: inherit; font-size: 13px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.office-artifact.source-md { font: inherit; font-size: 13px; line-height: 1.8; white-space: normal; }
+.office-artifact.source-md p { margin: 12px 0; white-space: pre-wrap; }
+.office-artifact .source-md__heading { font-size: inherit; line-height: inherit; margin: 18px 0 8px; }
+.office-artifact.source-md > :first-child { margin-top: 0; }
+.office-artifact.source-md ul, .office-artifact.source-md ol { margin: 8px 0 12px; padding-left: 1.4em; }
+.office-artifact .source-md__table-wrap { max-width: 100%; overflow-x: auto; }
+.office-artifact .source-md__table { border-collapse: collapse; width: 100%; font: inherit; }
+.office-artifact .source-md__table th, .office-artifact .source-md__table td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+.office-artifact .source-md__code { max-width: 100%; overflow-x: auto; white-space: pre; font-family: var(--font-mono); }
+.office-artifact .source-md__link { color: var(--fg); text-decoration: underline; }

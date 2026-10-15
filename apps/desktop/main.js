@@ -13,6 +13,7 @@ if (process.argv.includes('--smoke-pet')) {
 }
 const fs = require('node:fs');
 const path = require('node:path');
+const { fileURLToPath } = require('node:url');
 const { normalizeHubUrl, resolveHubUrl, isSameOrigin, dashboardUrl, isExternalOpenable } = require('./hub-url');
 const {
   WIDGET_WIDTH,
@@ -28,7 +29,16 @@ const {
   clampIntoWorkArea,
   resolveWidgetPosition,
   widgetToggleAction,
+  widgetPlatformOptions,
+  widgetWorkspaceOptions,
 } = require('./widget-window');
+const { buildAppMenuTemplate, buildDockMenuTemplate, loginItemMenuItem } = require('./menu-template');
+const { installPetRuntime } = require('./pet-runtime');
+const { startHubSessionBridge } = require('./hub-session-bridge');
+const { startNativeSessionBridge } = require('./native-session-bridge');
+let nativeSessionBridge;
+
+const IS_MAC = process.platform === 'darwin';
 
 const BACKGROUND = '#141C27';
 const QUICK_CAPTURE_ACCELERATOR = 'CommandOrControl+Shift+Space';
@@ -52,6 +62,13 @@ const SMOKE_THEME = argValue('smoke-theme'); // light | dark — 찍기 전에 �
 // GPU 합성을 끄지 않는다 — Acrylic 블러는 실제 합성 경로에서만 보인다.
 const SMOKE_PET = argValue('smoke-pet') !== null;
 const SMOKE_PET_PAGE = argValue('smoke-pet-page'); // 펫 페이지 폴더(pet.html·panel.html…) 또는 파일 하나
+// --smoke-mac: 앱·Dock 메뉴, 중복 트레이 없음, 네이티브 입력 위임을 격리 검사한다.
+// 실제 창을 띄우고 포커스를 옮기므로 운영자 화면에서는 짧게만 돌린다(전역 단축키는 등록하지 않는다).
+const SMOKE_MAC = IS_MAC && argValue('smoke-mac') !== null;
+// Native Mac pet owns the status item and every desktop capture surface.
+// Explicit Electron widget/pet comparison smokes retain their isolated paths.
+const USE_NATIVE_PET = IS_MAC && !SMOKE && !SMOKE_PET;
+const smokeNativeActions = [];
 const userDataDir = argValue('user-data-dir');
 if (userDataDir) {
   app.setPath('userData', path.resolve(userDataDir));
@@ -62,9 +79,14 @@ if (userDataDir) {
 // 스모크 캡처는 GPU 합성 없이도 찍혀야 한다(CI·원격 세션에서 UnknownVizError 방지).
 if (SMOKE) {
   app.disableHardwareAcceleration();
-  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 }
+// 같은 스위치를 두 번 넣으면 뒤엣것이 앞엣것을 덮으므로 한 번에 모은다.
+// macOS: 허브는 미디어를 재생하지 않는다 — Chromium이 미디어 키·재생 중 컨트롤(Now Playing)을 가로채지 않게 끈다.
+// Windows 는 예전 그대로(스모크의 가림 계산 끄기만).
+const disabledFeatures = IS_MAC ? ['HardwareMediaKeyHandling', 'MediaSessionService'] : [];
+if (SMOKE) disabledFeatures.push('CalculateNativeWinOcclusion');
+if (disabledFeatures.length) app.commandLine.appendSwitch('disable-features', disabledFeatures.join(','));
 
 // ── 저장 파일 ─────────────────────────────────────────────────────────────
 const userFile = (name) => path.join(app.getPath('userData'), name);
@@ -95,7 +117,9 @@ function iconPath() {
 
 // ── 창 ────────────────────────────────────────────────────────────────────
 let win = null;
+let mainReady = false; // Dock 클릭(activate)이 창을 되살려도 되는 시점(스모크·펫 스모크는 제외)
 let tray = null;
+let hideAfterFullScreen = false; // 전체 화면을 푼 뒤 숨기기를 기다리는 중(닫기를 거듭 눌러도 한 번만)
 let pet = null; // Moonlight 펫(pet/main/pet-main.js) — 트레이 항목과 허브 주소 변경을 받는다
 let quitting = false;
 
@@ -124,6 +148,7 @@ function createWindow() {
     backgroundColor: BACKGROUND,
     icon: iconPath(),
     webPreferences: {
+      session: session.defaultSession,
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -137,21 +162,53 @@ function createWindow() {
     saveBounds();
     if (quitting || SMOKE) return;
     event.preventDefault();
+    // macOS 전체 화면 창을 그대로 숨기면 빈 Space가 남는다 — 전체 화면을 먼저 풀고 숨긴다.
+    // 닫기를 거듭 눌러도 숨기기 대기는 하나만 건다.
+    if (IS_MAC && win.isFullScreen()) {
+      if (!hideAfterFullScreen) {
+        hideAfterFullScreen = true;
+        win.once('leave-full-screen', () => {
+          hideAfterFullScreen = false;
+          win.hide();
+        });
+      }
+      win.setFullScreen(false);
+      return;
+    }
     win.hide();
   });
   guardNavigation(win.webContents);
+  const resumeWidget = () => {
+    if (!widgetResumeAfterLogin || !isSameOrigin(win.webContents.getURL(), currentHubUrl())
+      || isLoginUrl(win.webContents.getURL(), currentHubUrl())) return;
+    widgetResumeAfterLogin = false;
+    showWidget();
+  };
+  win.webContents.on('did-finish-load', resumeWidget);
+  win.webContents.on('did-navigate-in-page', resumeWidget);
 }
 
 function showWindow() {
-  if (!win) return;
+  if (!win || win.isDestroyed()) return;
+  // macOS: ⌘H로 앱이 숨겨져 있으면 win.show()만으로는 나오지 않는다 — 앱부터 보이게 한다.
+  if (IS_MAC && app.isHidden()) app.show();
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+  // 트레이·단축키에서 불렀을 때 다른 앱이 앞이면 창이 뒤에 깔린다 — 앞으로 가져온다(스모크는 포커스를 뺏지 않는다).
+  if (IS_MAC && !SMOKE) app.focus({ steal: true });
 }
 
 // ── 주소 정책: 허브 origin과 설정 화면만 앱 안에서, 나머지는 시스템 브라우저 ──
 function isInApp(url) {
-  if (url.startsWith('file:')) return decodeURIComponent(new URL(url).pathname).replace(/^\//, '').replace(/\//g, path.sep).toLowerCase() === SETTINGS_PAGE.toLowerCase();
+  if (url.startsWith('file:')) {
+    // fileURLToPath는 플랫폼 경로(Windows C:\…, macOS /Users/…)로 바꾼다 — 예전의 선행 `/` 제거는 macOS 경로를 깨뜨렸다.
+    try {
+      return fileURLToPath(url).toLowerCase() === SETTINGS_PAGE.toLowerCase();
+    } catch {
+      return false;
+    }
+  }
   return isSameOrigin(url, currentHubUrl());
 }
 
@@ -219,6 +276,7 @@ const OPEN_CAPTURE_SCRIPT = `new Promise((resolve) => {
 })`;
 
 async function quickCapture() {
+  if (USE_NATIVE_PET) return pet?.quickCapture();
   const hubUrl = currentHubUrl();
   if (!hubUrl) return showSettings();
   showWindow();
@@ -237,6 +295,8 @@ let widgetState = null; // { x, y, pinned } — widget-state.json
 let widgetHeight = WIDGET_HEIGHT;
 let widgetPainted = false;
 let widgetShowAfterLoad = false;
+let widgetResumeAfterLogin = false;
+let widgetNeedsReload = false;
 
 function loadWidgetState() {
   if (!widgetState) widgetState = normalizeWidgetState(readJson(userFile('widget-state.json'), {}));
@@ -311,9 +371,23 @@ function revealWidget() {
     widget.showInactive();
     return;
   }
-  widget.show();
+  // macOS: 위젯은 펫 패널과 같은 비활성 패널(type 'panel')이다 — show()는 앱을 활성화해 허브 창까지 올리므로
+  // showInactive 로 띄운 뒤 focus()로 키 창만 잡는다(pet-main revealPanel 과 같은 길). Windows 는 예전 그대로 show().
+  if (IS_MAC) widget.showInactive();
+  else widget.show();
   widget.focus();
   widget.webContents.focus(); // 페이지가 입력 칸에 autofocus할 수 있게
+  // macOS 비활성 패널은 앱이 뒤에 있을 때 첫 focus()가 키 창을 못 잡는 경우가 있다(스모크 실측) — 150ms·300ms 에 다시 건다.
+  // app.focus()는 쓰지 않는다: 앱을 활성화하면 뒤에 있는 허브 창이 같이 앞으로 나온다.
+  if (IS_MAC) {
+    const retry = (left) => setTimeout(() => {
+      if (!widgetVisible() || widget.isFocused()) return;
+      widget.focus();
+      widget.webContents.focus();
+      if (left > 1 && !widget.isFocused()) retry(left - 1);
+    }, 150);
+    retry(2);
+  }
 }
 
 function hideWidget() {
@@ -336,6 +410,7 @@ function createWidget() {
     height: widgetHeight,
     frame: false,
     roundedCorners: true,
+    ...widgetPlatformOptions(process.platform), // macOS: 비활성 패널 — 위젯을 열어도 허브 창이 앞으로 나오지 않는다
     alwaysOnTop: pinned,
     skipTaskbar: true,
     resizable: false,
@@ -347,6 +422,7 @@ function createWidget() {
     backgroundColor: BACKGROUND,
     icon: iconPath(),
     webPreferences: {
+      session: session.defaultSession,
       preload: path.join(__dirname, 'widget-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -355,6 +431,8 @@ function createWidget() {
     },
   });
   if (pinned) widget.setAlwaysOnTop(true, 'floating');
+  const workspace = widgetWorkspaceOptions(process.platform);
+  if (workspace) widget.setVisibleOnAllWorkspaces(workspace.visible, workspace.options); // 전체 화면 앱 위·모든 데스크톱
   placeWidget();
 
   widget.once('ready-to-show', () => {
@@ -393,6 +471,7 @@ function createWidget() {
     if (!target) return;
     if (event) event.preventDefault();
     hideWidget();
+    widgetResumeAfterLogin = true;
     openMainUrl(target);
   };
   contents.on('will-navigate', toLogin);
@@ -415,15 +494,17 @@ function showWidget() {
   const hubUrl = currentHubUrl();
   if (!widgetAlive()) createWidget();
   const contents = widget.webContents;
-  if (widgetPainted && !contents.isLoading() && isWidgetPage(contents.getURL(), hubUrl)) {
+  if (!widgetNeedsReload && widgetPainted && !contents.isLoading() && isWidgetPage(contents.getURL(), hubUrl)) {
     revealWidget();
     return;
   }
   widgetShowAfterLoad = true;
+  widgetNeedsReload = false;
   contents.loadURL(widgetUrl(hubUrl)).catch(() => {});
 }
 
 function toggleWidget() {
+  if (USE_NATIVE_PET) return pet?.showWidget();
   const action = widgetToggleAction({ hubUrl: currentHubUrl(), visible: widgetVisible() });
   if (action === 'settings') return showSettings();
   if (action === 'hide') return hideWidget();
@@ -439,60 +520,77 @@ function quit() {
 // 위젯 항목은 지금 상태(떠 있음/숨김)를 이름으로 보여 주므로 위젯이 뜨고 숨을 때마다 다시 만든다.
 function widgetMenuItem() {
   return {
-    label: widgetVisible() ? '위젯 숨기기' : '위젯 열기',
+    label: USE_NATIVE_PET ? '할 일 위젯 열기' : widgetVisible() ? '위젯 숨기기' : '위젯 열기',
     accelerator: WIDGET_ACCELERATOR,
     registerAccelerator: false,
     click: toggleWidget,
   };
 }
 
+// 로그인 시 자동 실행 — 패키징한 앱(macOS·Windows)에서만. 개발 실행(electron .)은 Electron 자체를 로그인 항목에 올리게 되고,
+// 스모크는 운영자 PC 의 로그인 항목을 바꾸면 안 되므로 항목을 아예 만들지 않는다.
+const LOGIN_ITEM_SUPPORTED = app.isPackaged && !SMOKE && !SMOKE_MAC && !SMOKE_PET && (IS_MAC || process.platform === 'win32');
+function openAtLogin() {
+  try {
+    return Boolean(app.getLoginItemSettings().openAtLogin);
+  } catch {
+    return false;
+  }
+}
+function setOpenAtLogin(on) {
+  try {
+    app.setLoginItemSettings({ openAtLogin: Boolean(on) });
+  } catch (error) {
+    console.warn(`login item: ${error && error.message}`);
+  }
+  refreshMenus();
+}
+const loginMenuItem = () => (LOGIN_ITEM_SUPPORTED ? loginItemMenuItem({ checked: openAtLogin(), onToggle: setOpenAtLogin }) : null);
+
 function refreshMenus() {
-  if (!tray || tray.isDestroyed()) return;
-  const appMenu = Menu.buildFromTemplate([
-    {
-      label: 'Moonlight',
-      submenu: [
-        { label: '빠른 입력', accelerator: QUICK_CAPTURE_ACCELERATOR, registerAccelerator: false, click: quickCapture },
-        widgetMenuItem(),
-        { label: '허브 주소 바꾸기', click: () => showSettings() },
-        { type: 'separator' },
-        { label: '종료', accelerator: 'CommandOrControl+Q', click: quit },
-      ],
-    },
-    {
-      label: '보기',
-      submenu: [
-        { label: '새로고침', role: 'reload' },
-        { label: '강력 새로고침', role: 'forceReload' },
-        { type: 'separator' },
-        { label: '뒤로', accelerator: 'Alt+Left', click: () => win.webContents.navigationHistory.goBack() },
-        { label: '앞으로', accelerator: 'Alt+Right', click: () => win.webContents.navigationHistory.goForward() },
-        { type: 'separator' },
-        { label: '실제 크기', role: 'resetZoom' },
-        { label: '확대', role: 'zoomIn' },
-        { label: '축소', role: 'zoomOut' },
-        { type: 'separator' },
-        { label: '전체 화면', role: 'togglefullscreen' },
-        { label: '개발자 도구', role: 'toggleDevTools' },
-      ],
-    },
-  ]);
-  Menu.setApplicationMenu(appMenu);
-  tray.setContextMenu(Menu.buildFromTemplate([
+  const loginItem = loginMenuItem();
+  const actions = {
+    quickCapture,
+    showSettings: () => showSettings(),
+    quit,
+    showWindow,
+    goBack: () => win && !win.isDestroyed() && win.webContents.navigationHistory.goBack(),
+    goForward: () => win && !win.isDestroyed() && win.webContents.navigationHistory.goForward(),
+  };
+  Menu.setApplicationMenu(Menu.buildFromTemplate(buildAppMenuTemplate({
+    platform: process.platform,
+    quickAccelerator: QUICK_CAPTURE_ACCELERATOR,
+    widgetItem: widgetMenuItem(),
+    loginItem: IS_MAC ? loginMenuItem() : null,
+    actions,
+  })));
+  if (IS_MAC && app.dock) {
+    app.dock.setMenu(Menu.buildFromTemplate(buildDockMenuTemplate({
+      quickAccelerator: QUICK_CAPTURE_ACCELERATOR,
+      widgetItem: widgetMenuItem(),
+      actions,
+    })));
+  }
+  if (tray && !tray.isDestroyed()) tray.setContextMenu(Menu.buildFromTemplate([
     { label: '열기', click: showWindow },
     { label: '빠른 입력', accelerator: QUICK_CAPTURE_ACCELERATOR, registerAccelerator: false, click: quickCapture },
     widgetMenuItem(),
     ...(pet ? [{ type: 'separator' }, ...pet.trayItems(), { type: 'separator' }] : []),
     { label: '허브 주소 바꾸기', click: () => showSettings() },
+    ...(loginItem ? [loginItem] : []),
     { type: 'separator' },
     { label: '종료', click: quit },
   ]));
 }
 
 function buildMenus() {
-  tray = new Tray(nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16, quality: 'best' }));
-  tray.setToolTip('Moonlight');
-  tray.on('click', showWindow);
+  // macOS has one menu-bar icon, owned by the native companion. Application
+  // and Dock menus must still be built when the shell has no Tray instance.
+  if (!IS_MAC) {
+    tray = new Tray(nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16, quality: 'best' }));
+    tray.setToolTip('Moonlight');
+    tray.on('click', showWindow);
+  }
   refreshMenus();
 }
 
@@ -513,7 +611,7 @@ function registerIpc() {
     if (!result.ok) return result;
     writeJson(userFile('settings.json'), { ...readSettings(), hubUrl: result.url });
     hideWidget(); // 위젯은 다음에 열 때 새 주소의 /widget을 다시 불러온다(isWidgetPage가 origin을 본다)
-    if (pet) pet.hubUrlChanged();
+    if (pet && pet.hubUrlChanged) pet.hubUrlChanged();
     loadHub();
     return result;
   });
@@ -627,7 +725,7 @@ async function waitFor(check, label, ms = 30000) {
 function startLoggedOutHub() {
   const http = require('node:http');
   const server = http.createServer((req, res) => {
-    if (req.url.startsWith('/widget')) {
+    if (req.url.startsWith('/widget') && !req.headers.cookie?.includes('com_moon_operator_session=smoke-login')) {
       res.writeHead(307, { Location: '/login?next=%2Fwidget' });
       res.end();
       return;
@@ -728,6 +826,15 @@ async function runWidgetSmoke() {
   check(!isLoginUrl(widget.webContents.getURL(), hubUrlOverride), 'widget never renders login');
   check(!new URL(win.webContents.getURL()).searchParams.has('next'), 'main login drops next=/widget');
   console.log(`smoke:widget-login ok main=${win.webContents.getURL()} widget=${widget.webContents.getURL() || '(blank)'}`);
+  // 같은 세션에 로그인하면 로그인 때문에 숨겨진 위젯이 다시 연결된다.
+  check(win.webContents.session === widget.webContents.session, 'main and widget share session');
+  await session.defaultSession.cookies.set({ url: hubUrlOverride, name: 'com_moon_operator_session',
+    value: 'smoke-login', path: '/', httpOnly: true, expirationDate: Date.now() / 1000 + 3600 });
+  await session.defaultSession.cookies.flushStore();
+  await win.loadURL(dashboardUrl(hubUrlOverride));
+  await waitFor(widgetVisible, 'widget resumes after login');
+  check(isWidgetPage(widget.webContents.getURL(), hubUrlOverride), 'resumed widget is on the same Hub');
+  console.log('smoke:widget-session-shared-and-resumed ok');
   server.close();
 
   clearTimeout(giveUp);
@@ -818,6 +925,62 @@ async function runWidgetHubSmoke() {
   app.exit(0);
 }
 
+// ── macOS 스모크: 메뉴·Dock·네이티브 입력 경로 ─────────────────────────────
+async function runMacSmoke() {
+  const giveUp = setTimeout(() => {
+    console.log('smoke:fail timeout');
+    app.exit(1);
+  }, 90000);
+  const check = (ok, label) => {
+    if (!ok) throw new Error(label);
+  };
+  await waitFor(() => win && win.isVisible(), 'main visible', 30000);
+
+  // 1) 앱·Dock 메뉴는 있고, 중복 상태 아이콘은 없다.
+  const menu = Menu.getApplicationMenu();
+  const top = menu.items.map((item) => item.label);
+  const editRoles = menu.items.find((item) => item.label === '편집').submenu.items.map((item) => item.role);
+  console.log(`smoke:mac-menu ${JSON.stringify(top)} edit=${editRoles.filter(Boolean).join(',')}`);
+  check(top[0] === 'Moonlight' && top.includes('편집') && top.includes('윈도우'), 'menu order');
+  for (const role of ['undo', 'redo', 'cut', 'copy', 'paste', 'selectall']) check(editRoles.includes(role), `edit role ${role}`);
+  const back = menu.items.find((item) => item.label === '보기').submenu.items.find((item) => item.label === '뒤로');
+  check(back.accelerator === 'Command+[', 'back accelerator');
+  check(tray === null, 'native pet owns the only menu-bar icon');
+  check(Boolean(app.dock && app.dock.getMenu()), 'dock menu');
+
+  // 2) ⌘H로 앱이 숨겨진 뒤 Dock 클릭(activate) → 허브 창이 돌아온다.
+  app.hide();
+  await sleep(500);
+  check(app.isHidden() && !win.isVisible(), 'app hidden');
+  app.emit('activate');
+  await sleep(800);
+  check(!app.isHidden() && win.isVisible(), 'activate shows main window');
+  console.log('smoke:mac-activate ok');
+
+  // 3) 메뉴·Dock·단축키가 쓰는 같은 콜백을 실행한다. 허브 창과 Electron
+  // 위젯을 띄우지 않고, 기존 네이티브 펫에 원하는 화면만 전달해야 한다.
+  await pet.ready;
+  smokeNativeActions.length = 0;
+  win.close();
+  await sleep(300);
+  check(!win.isVisible() && !win.isDestroyed(), 'close hides');
+  const appItems = menu.items[0].submenu.items;
+  await appItems.find((item) => item.label === '빠른 입력').click();
+  await app.dock.getMenu().items.find((item) => item.label === '할 일 위젯 열기').click();
+  app.hide();
+  await waitFor(() => app.isHidden(), 'app hidden before native capture', 5000);
+  await quickCapture();
+  await toggleWidget();
+  check(JSON.stringify(smokeNativeActions) === JSON.stringify(['memo', 'tasks', 'memo', 'tasks']), 'native action routing');
+  check(app.isHidden() && !win.isVisible(), 'capture does not reveal the hub');
+  check(!widgetAlive(), 'no duplicate Electron capture widget');
+  console.log('smoke:mac-native-capture ok (memo/tasks, hidden hub, no shell tray/widget)');
+
+  clearTimeout(giveUp);
+  console.log('smoke:mac ok');
+  app.exit(0);
+}
+
 // ── Moonlight 펫 ─────────────────────────────────────────────────────────
 // 화면 가장자리의 작은 캐릭터와 Acrylic 빠른 패널(pet/main). 허브 호출은 메인 창과 같은 기본 세션 쿠키를 쓴다.
 // 펫을 띄우지 못해도 허브 창·위젯은 그대로 동작해야 하므로 실패는 경고만 남긴다.
@@ -829,6 +992,8 @@ function installPet() {
       openMainUrl,
       showSettings: () => showSettings(),
       openExternal,
+      // 펫 자리·숨김·모니터 목록이 바뀌면 트레이 메뉴의 펫 묶음(체크 표시·펫 보이기/숨기기)을 다시 만든다.
+      onMenusChanged: () => refreshMenus(),
     });
   } catch (error) {
     console.warn(`pet: ${error && error.message}`);
@@ -841,11 +1006,25 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', showWindow);
-  app.on('before-quit', () => { quitting = true; });
+  app.on('before-quit', () => {
+    quitting = true;
+    nativeSessionBridge?.close().catch(() => {});
+  });
   app.on('will-quit', () => globalShortcut.unregisterAll());
-  app.on('window-all-closed', () => app.quit());
+  // macOS는 창을 다 닫아도(허브 창은 숨김) 메뉴 막대·펫이 계속 산다.
+  app.on('window-all-closed', () => { if (!IS_MAC) app.quit(); });
+  // Dock 아이콘 클릭·앱 재실행: 숨겨진 허브 창을 되살리고, 없으면 다시 만든다.
+  app.on('activate', () => {
+    if (!mainReady) return;
+    if (!win || win.isDestroyed()) {
+      createWindow();
+      loadHub();
+    } else {
+      showWindow();
+    }
+  });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     if (SMOKE_PET) {
       // 펫 창만 띄운다 — 메인 창·트레이·전역 단축키는 만들지 않는다.
       // --smoke-pet-activate: 패널에 실제 포커스를 주고 blur 접기까지 본다(운영자 화면의 포커스를 옮긴다).
@@ -856,6 +1035,30 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((contents, _permission, callback, details) => {
       callback(isSameOrigin(details.requestingUrl || contents.getURL(), currentHubUrl()));
     });
+    if (!SMOKE && !SMOKE_MAC) {
+      let notifySession;
+      session.defaultSession.cookies.on('changed', (_event, cookie) => {
+        if (cookie.name !== 'com_moon_operator_session') return;
+        widgetNeedsReload = true;
+        clearTimeout(notifySession);
+        notifySession = setTimeout(() => {
+          session.defaultSession.cookies.flushStore().catch(() => {});
+          pet?.sessionChanged?.();
+        }, 100);
+      });
+      if (USE_NATIVE_PET) {
+        startHubSessionBridge({ session: session.defaultSession, getHubUrl: currentHubUrl })
+          .catch(() => console.warn('Mac 위젯 세션 연결을 시작하지 못했습니다.'));
+      }
+    }
+    if (IS_MAC) {
+      app.setAboutPanelOptions({ applicationName: 'Moonlight', applicationVersion: app.getVersion(), copyright: 'Moonlight' });
+      // 개발 실행(electron .)의 Dock 아이콘은 Electron 기본이다 — 패키징한 앱은 번들 아이콘을 쓴다.
+      if (!app.isPackaged && app.dock) {
+        const dockIcon = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon-dock.png'));
+        if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
+      }
+    }
     registerIpc();
     createWindow();
     buildMenus();
@@ -873,11 +1076,38 @@ if (!app.requestSingleInstanceLock()) {
     } else if (SMOKE) {
       runSmoke();
     } else {
-      for (const [accelerator, action] of [[QUICK_CAPTURE_ACCELERATOR, quickCapture], [WIDGET_ACCELERATOR, toggleWidget]]) {
-        if (!globalShortcut.register(accelerator, action)) console.warn(`shortcut ${accelerator} is taken by another app`);
+      // 허브 요청을 먼저 띄운다 — 펫 설치(창 여러 개 생성)가 첫 화면 로드를 늦추지 않게.
+      mainReady = true;
+      loadHub();
+      if (!SMOKE_MAC) {
+        for (const [accelerator, action] of [[QUICK_CAPTURE_ACCELERATOR, quickCapture], [WIDGET_ACCELERATOR, toggleWidget]]) {
+          if (!globalShortcut.register(accelerator, action)) console.warn(`shortcut ${accelerator} is taken by another app`);
+        }
       }
-      pet = installPet();
+      if (IS_MAC && !SMOKE_MAC) {
+        try {
+          nativeSessionBridge = await startNativeSessionBridge({ session: session.defaultSession, getHubUrl: currentHubUrl });
+        } catch {
+          console.warn('pet:native session sharing unavailable');
+        }
+      }
+      pet = installPetRuntime({
+        installElectron: installPet,
+        // Exercise the same shell routing without touching the user's pet.
+        ...(SMOKE_MAC ? { launchNative: async (action) => { smokeNativeActions.push(action); } } : {}),
+        onError: (message) => {
+          console.warn(message);
+          if (IS_MAC) dialog.showErrorBox('Moonlight 펫을 열 수 없습니다', message);
+        },
+      });
       refreshMenus();
+      if (SMOKE_MAC) {
+        runMacSmoke().catch((error) => {
+          console.log(`smoke:fail ${error.message}`);
+          app.exit(1);
+        });
+      }
+      return;
     }
     loadHub();
   });

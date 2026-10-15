@@ -12,6 +12,7 @@ import { recordActivity } from "../repositories/crm-activities.js";
 import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
 import { normalizeGenreLabels } from "./customer-labels.js";
+import { parseWon } from "../won-format.js";
 import { promiseColumns, promiseMetaPatch } from "./customer-promise.js";
 import { normalizePayments, normalizePlanBaseline } from "../deal-payments.js";
 import { normalizeRecurring } from "../deal-recurring.js";
@@ -42,23 +43,10 @@ const STAGE_KEY_TO_DB = {
   lost: "lost",
 };
 
-// "₩1.2M" / "₩900K" / "₩0" / "—" / 1200000 → number. Tolerates raw numbers and commas.
+// "120만원" / "1억 2,000만" / "2천만" / "—" / 1200000 → number, and legacy "₩1.2M" / "₩900K"
+// labels still stored in old drafts. Unreadable input is 0, as before.
 export function parseMoneyLabel(value) {
-  if (typeof value === "number") return Number.isFinite(value) ? Math.round(value) : 0;
-  const raw = String(value ?? "").trim();
-  if (!raw || raw === "—") return 0;
-  const cleaned = raw.replace(/[₩,\s]/g, "");
-  const match = /^(-?\d*\.?\d+)([mMkK]?)$/.exec(cleaned);
-  if (!match) {
-    const n = Number(cleaned);
-    return Number.isFinite(n) ? Math.round(n) : 0;
-  }
-  let n = Number(match[1]);
-  if (!Number.isFinite(n)) return 0;
-  const unit = match[2].toLowerCase();
-  if (unit === "m") n *= 1_000_000;
-  else if (unit === "k") n *= 1_000;
-  return Math.round(n);
+  return parseWon(value) ?? 0;
 }
 
 function normalizeType(value) {

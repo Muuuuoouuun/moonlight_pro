@@ -7,7 +7,6 @@ import {
   MONEY_WEEKS,
   WEEKS_PER_MONTH,
   buildMoneyModel,
-  formatShortWon,
   isContractedDeal,
   moneyContext,
   paidBetween,
@@ -188,10 +187,4 @@ test("늦은 입금 레일은 예산만큼, j/k 순서는 목록에 보이는 �
 test("거래가 없으면 hasAny가 거짓 — 화면은 빈 상태를 말한다", () => {
   assert.equal(buildMoneyModel([], { now: NOW }).hasAny, false);
   assert.equal(model().hasAny, true);
-});
-
-test("차트 칸 밑 짧은 값", () => {
-  assert.equal(formatShortWon(2400000), "2.4M");
-  assert.equal(formatShortWon(600000), "600K");
-  assert.equal(formatShortWon(500), "500");
 });

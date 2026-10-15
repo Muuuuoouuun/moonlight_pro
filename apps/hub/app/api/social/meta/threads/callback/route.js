@@ -15,6 +15,7 @@ import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence"
 import { consumeSocialOAuthFlow } from "@/lib/social-oauth-flow";
 import { resolveMetaOAuthAppFromState } from "@/lib/meta-oauth-apps";
 import { resolveSocialOAuthReturnUrl } from "@/lib/social-oauth-return";
+import { safeSocialCallbackError } from "@/lib/social-token-health";
 
 export const runtime = "nodejs";
 
@@ -57,7 +58,7 @@ export async function GET(req) {
         action: "oauth_callback",
         brandHandle,
       },
-      errorMessage: error,
+      errorMessage: "threads-oauth-denied",
     });
     target.searchParams.set("metaThreads", "oauth-denied");
     return NextResponse.redirect(target);
@@ -130,8 +131,7 @@ export async function GET(req) {
         action: "oauth_connect",
         brandHandle,
       },
-      errorMessage:
-        callbackError instanceof Error ? callbackError.message : String(callbackError),
+      errorMessage: safeSocialCallbackError(callbackError, "threads"),
     });
     target.searchParams.set("metaThreads", "connect-failed");
     return NextResponse.redirect(target);

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// Focus and text editing do not latch the transient character wash on.
 struct GlassPressState {
@@ -25,14 +28,14 @@ struct ScreenDragTracker {
         isDragging = false
     }
 
-    mutating func translation(to point: CGPoint) -> CGFloat? {
+    mutating func translation(to point: CGPoint) -> CGPoint? {
         guard let previous else { return nil }
         if !isDragging {
             guard hypot(point.x - previous.x, point.y - previous.y) >= 3 else { return nil }
             isDragging = true
         }
         self.previous = point
-        return point.y - previous.y
+        return CGPoint(x: point.x - previous.x, y: point.y - previous.y)
     }
 
     mutating func end() {
@@ -41,7 +44,138 @@ struct ScreenDragTracker {
     }
 }
 
+enum PanelMove {
+    case drag(delta: CGPoint, pointer: CGPoint)
+    case finish(pointer: CGPoint)
+    case nudge(CGPoint)
+    case nextDisplay
+}
+
+enum PanelEdge: String, CaseIterable, Identifiable {
+    case left, right
+    var id: String { rawValue }
+    var title: String { self == .left ? "왼쪽" : "오른쪽" }
+}
+
+struct PanelDisplay: Equatable {
+    let id: UInt32
+    let frame: CGRect
+    let visibleFrame: CGRect
+}
+
+/// A fitted pet can sit on either side of a quick panel, or overlap it when
+/// the screen cannot fit both. Remember that relation instead of guessing it.
+struct CompanionAnchor: Codable, Equatable {
+    enum Side: String, Codable { case left, right }
+    let side: Side
+    let gap: CGFloat
+
+    init(companion: CGRect, pet: CGRect) {
+        side = companion.midX < pet.midX ? .left : .right
+        gap = side == .left ? pet.minX - companion.maxX : companion.minX - pet.maxX
+    }
+}
+
+/// Display-relative coordinates survive resolution/Dock changes. Keep the preferred
+/// display while it is disconnected; only an explicit move changes that preference.
+struct SavedPetPlacement: Codable {
+    let displayID: UInt32
+    let visibleFrame: CGRect
+    let x: CGFloat
+    let y: CGFloat
+    let companionAnchor: CompanionAnchor?
+
+    init(frame: CGRect, display: PanelDisplay, companionAnchor: CompanionAnchor? = nil) {
+        displayID = display.id
+        visibleFrame = display.visibleFrame
+        self.companionAnchor = companionAnchor
+        let safe = visibleFrame.insetBy(dx: 8, dy: 8)
+        x = min(1, max(0, (frame.minX - safe.minX) / max(1, safe.width - frame.width)))
+        y = min(1, max(0, (frame.minY - safe.minY) / max(1, safe.height - frame.height)))
+    }
+
+    func restored(size: CGSize, displays: [PanelDisplay]) -> CGRect? {
+        guard x.isFinite, y.isFinite,
+              let display = displays.first(where: { $0.id == displayID })
+                ?? PanelGeometry.display(at: CGPoint(x: visibleFrame.midX, y: visibleFrame.midY), in: displays) else { return nil }
+        let safe = display.visibleFrame.insetBy(dx: 8, dy: 8)
+        return PanelGeometry.fitted(CGRect(
+            x: safe.minX + x * max(0, safe.width - size.width),
+            y: safe.minY + y * max(0, safe.height - size.height),
+            width: size.width, height: size.height
+        ), in: display.visibleFrame)
+    }
+}
+
 enum PanelGeometry {
+    /// Leave room for the separate idle icon on the outside of a quick panel.
+    /// Perched panels already include their character in the window bounds.
+    static func edgeAligned(_ frame: CGRect, edge: PanelEdge, outsidePet: CGSize? = nil,
+                            in visible: CGRect) -> CGRect {
+        var available = visible
+        if let outsidePet {
+            let reserved = min(outsidePet.width + 10, max(0, visible.width - 17))
+            available.size.width -= reserved
+            if edge == .left { available.origin.x += reserved }
+        }
+        var result = fitted(frame, in: available)
+        result.origin.x = edge == .left ? available.minX + 8 : available.maxX - 8 - result.width
+        return result
+    }
+
+    static func companion(size: CGSize, pet: CGRect, perched: Bool,
+                          anchor: CompanionAnchor? = nil, in visible: CGRect) -> CGRect {
+        if perched {
+            return fitted(CGRect(x: pet.maxX - size.width, y: pet.maxY - size.height,
+                                 width: size.width, height: size.height), in: visible)
+        }
+        let leftRoom = pet.minX - visible.minX
+        let rightRoom = visible.maxX - pet.maxX
+        let x: CGFloat
+        if let anchor, anchor.gap.isFinite {
+            x = anchor.side == .left ? pet.minX - size.width - anchor.gap : pet.maxX + anchor.gap
+        } else {
+            x = leftRoom >= size.width + 10 || leftRoom >= rightRoom
+                ? pet.minX - size.width - 10 : pet.maxX + 10
+        }
+        return fitted(CGRect(x: x, y: pet.midY - size.height / 2,
+                             width: size.width, height: size.height), in: visible)
+    }
+
+    static func pet(size: CGSize, companion: CGRect, perched: Bool, edge: PanelEdge? = nil, in visible: CGRect) -> CGRect {
+        let origin = perched
+            ? CGPoint(x: edge == .left ? companion.minX : companion.maxX - size.width, y: companion.maxY - size.height)
+            : CGPoint(x: edge == .left ? companion.minX - size.width - 10 : edge == .right ? companion.maxX + 10
+                : companion.maxX + size.width + 10 <= visible.maxX - 8
+                ? companion.maxX + 10 : companion.minX - size.width - 10,
+                      y: companion.midY - size.height / 2)
+        return fitted(CGRect(origin: origin, size: size), in: visible)
+    }
+
+    static func display(at point: CGPoint, in displays: [PanelDisplay]) -> PanelDisplay? {
+        displays.first(where: { $0.frame.contains(point) }) ?? displays.min {
+            distance(from: point, to: $0.frame) < distance(from: point, to: $1.frame)
+        }
+    }
+
+    static func display(for frame: CGRect, in displays: [PanelDisplay]) -> PanelDisplay? {
+        let overlapping = displays.max {
+            overlap(frame, $0.frame) < overlap(frame, $1.frame)
+        }
+        if let overlapping, overlap(frame, overlapping.frame) > 0 { return overlapping }
+        return display(at: CGPoint(x: frame.midX, y: frame.midY), in: displays)
+    }
+
+    private static func overlap(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let intersection = a.intersection(b)
+        return intersection.isNull ? 0 : intersection.width * intersection.height
+    }
+
+    private static func distance(from point: CGPoint, to rect: CGRect) -> CGFloat {
+        hypot(max(rect.minX - point.x, 0, point.x - rect.maxX),
+              max(rect.minY - point.y, 0, point.y - rect.maxY))
+    }
+
     static func fitted(_ frame: CGRect, in visible: CGRect) -> CGRect {
         let safe = visible.insetBy(dx: 8, dy: 8)
         var result = frame

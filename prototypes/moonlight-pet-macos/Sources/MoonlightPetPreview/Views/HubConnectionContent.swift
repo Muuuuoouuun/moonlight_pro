@@ -1,13 +1,20 @@
 import SwiftUI
 
-/// Credentials live only in this settings view and the in-flight sign-in request.
+/// Only successfully accepted credentials are saved in the macOS Keychain.
 struct HubConnectionContent: View {
     @ObservedObject var model: AppModel
     let done: () -> Void
     @State private var address = ""
+    @State private var showsAddressSettings = false
     @State private var username = ""
     @State private var password = ""
+    @State private var isSubmitting = false
     private enum Field: Hashable { case address, username, password }
+    private var canSubmit: Bool {
+        !isSubmitting && !model.hub.isConnecting
+            && !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty
+    }
     @FocusState private var focusedField: Field?
 
     var body: some View {
@@ -23,18 +30,16 @@ struct HubConnectionContent: View {
                 }
                 .modifier(GlassReadability(radius: 10, inset: 8))
 
-                VStack(alignment: .leading, spacing: 6) {
-                    fieldLabel("Hub 주소")
-                    TextField("https://…", text: $address)
-                        .textFieldStyle(.plain)
-                        .modifier(GlassGlyphShadow())
-                        .font(.system(size: 13)).padding(12)
-                        .focused($focusedField, equals: .address)
-                        .modifier(GlassInputSurface(focused: focusedField == .address))
-                        .onSubmit { focusedField = .username }
-                        .disabled(model.hub.isConnecting)
-                        .accessibilityLabel("Hub 주소")
+                if model.hubApplicationURL != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Hub 앱에 로그인하면 이 펫도 자동으로 연결돼요. 아래 로그인은 펫만 사용할 때 필요해요.")
+                            .font(.system(size: 11.5)).fixedSize(horizontal: false, vertical: true)
+                        Button("Hub 앱 열기", action: model.openHubApplication)
+                            .buttonStyle(GlassActionStyle())
+                    }
+                    .modifier(GlassReadability(radius: 10, inset: 8))
                 }
+
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("운영자 아이디")
                     TextField("아이디", text: $username)
@@ -44,7 +49,7 @@ struct HubConnectionContent: View {
                         .focused($focusedField, equals: .username)
                         .modifier(GlassInputSurface(focused: focusedField == .username))
                         .onSubmit { focusedField = .password }
-                        .disabled(model.hub.isConnecting)
+                        .disabled(isSubmitting || model.hub.isConnecting)
                         .accessibilityLabel("Hub 운영자 아이디")
                 }
                 VStack(alignment: .leading, spacing: 6) {
@@ -56,9 +61,9 @@ struct HubConnectionContent: View {
                         .focused($focusedField, equals: .password)
                         .modifier(GlassInputSurface(focused: focusedField == .password))
                         .onSubmit(connect)
-                        .disabled(model.hub.isConnecting)
+                        .disabled(isSubmitting || model.hub.isConnecting)
                         .accessibilityLabel("Hub 비밀번호")
-                    Text("비밀번호는 이 Mac에 저장하지 않아요.")
+                    Text("한 번 로그인하면 macOS 키체인으로 자동 로그인해요.")
                         .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkFaint)
                         .modifier(GlassReadability(radius: 8, inset: 5))
                 }
@@ -68,41 +73,67 @@ struct HubConnectionContent: View {
                 } else if model.hub.needsLogin {
                     HubReadNotice(message: "운영자 계정으로 로그인해 주세요.", symbol: "lock")
                 }
-                if let message = model.hub.taskMessage {
-                    HubReadNotice(message: message, symbol: "checklist")
-                }
-                if let message = model.hub.calendarMessage {
-                    HubReadNotice(message: message, symbol: "calendar")
-                }
-
                 HStack(spacing: 10) {
                     Button(action: connect) {
-                        Label(model.hub.isConnecting ? "연결 중…" : model.hub.needsLogin ? "로그인·연결" : "연결 확인",
+                        Label(isSubmitting || model.hub.isConnecting ? "로그인 중…" : "로그인",
                               systemImage: "arrow.triangle.2.circlepath")
                     }
                     .buttonStyle(GlassActionStyle())
-                    .disabled(model.hub.isConnecting || address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!canSubmit)
+                    .keyboardShortcut(.defaultAction)
                     Spacer(minLength: 0)
-                    Button("완료", action: done).buttonStyle(GlassQuietStyle())
+                    Button("취소", action: done).buttonStyle(GlassQuietStyle())
+                        .disabled(isSubmitting || model.hub.isConnecting)
                 }
-                if model.hub.isEnabled {
-                    Button {
-                        password = ""
-                        model.hub.useLocalStorage()
-                    } label: {
-                        Label("이 Mac에만 저장", systemImage: "internaldrive")
-                    }
-                    .buttonStyle(GlassQuietStyle())
-                    .disabled(model.hub.isConnecting || model.hub.isSavingTask || model.hub.isSavingMemo)
-                    .help("기존 Mac 할 일을 표시합니다. Hub 기록은 삭제하지 않습니다.")
-                }
+                addressSettings
             }
             .padding(10)
         }
         .scrollIndicators(.hidden)
         .foregroundStyle(Palette.glassInk)
-        .onAppear { address = model.hubBaseURL }
+        .onAppear {
+            address = model.hubBaseURL
+            focusedField = .username
+        }
         .onDisappear { password = "" }
+        .onChange(of: model.hub.connectionLabel) { _, _ in
+            if !model.hub.isConnecting && !model.hub.needsLogin && !isSubmitting
+                && (model.hub.taskReady || model.hub.calendarReady) { done() }
+        }
+    }
+
+    private var addressSettings: some View {
+        DisclosureGroup("Hub 주소 설정", isExpanded: $showsAddressSettings) {
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("Hub 주소")
+                TextField("https://…", text: $address)
+                    .textFieldStyle(.plain)
+                    .modifier(GlassGlyphShadow())
+                    .font(.system(size: 13)).padding(12)
+                    .focused($focusedField, equals: .address)
+                    .modifier(GlassInputSurface(focused: focusedField == .address))
+                    .autocorrectionDisabled()
+                    .onSubmit { focusedField = .username }
+                    .accessibilityLabel("Hub 주소")
+                Button("운영 Hub 주소 사용") {
+                    address = AppModel.defaultHubURL
+                }
+                .buttonStyle(GlassQuietStyle())
+                Text("변경한 주소는 로그인에 성공하면 저장돼요. 취소하면 기존 주소를 유지해요.")
+                    .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .modifier(GlassReadability(radius: 8, inset: 5))
+                Button("로그아웃 · 자동 로그인 해제") {
+                    Task { await model.hub.signOut() }
+                }
+                .buttonStyle(GlassQuietStyle())
+                .disabled(!model.hub.hasConnection)
+            }
+            .padding(.top, 8)
+        }
+        .font(.system(size: 11.5))
+        .foregroundStyle(Palette.glassInkMuted)
+        .disabled(isSubmitting || model.hub.isConnecting)
     }
 
     private func fieldLabel(_ text: String) -> some View {
@@ -111,15 +142,21 @@ struct HubConnectionContent: View {
     }
 
     private func connect() {
-        guard !model.hub.isConnecting, !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard canSubmit else { return }
         let submittedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let submittedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
         let submittedPassword = password
+        isSubmitting = true
         password = ""
         Task {
-            if let origin = await model.hub.connect(baseURL: submittedAddress,
-                                                    username: submittedUsername, password: submittedPassword) {
-                model.hubBaseURL = origin
+            defer { isSubmitting = false }
+            if await model.hub.signIn(baseURL: submittedAddress,
+                                      username: submittedUsername, password: submittedPassword) {
+                model.hubBaseURL = submittedAddress
+                model.saveHubURL()
+                done()
+            } else {
+                focusedField = .password
             }
         }
     }

@@ -51,6 +51,14 @@ test("an unknown cadence keeps its raw string rather than inventing a label", ()
   assert.equal(cadenceLabel(null), "리듬 미정");
 });
 
+test("moonpm/classmoon/studyseagull's seeded cadences get a label but no invented weekly number", () => {
+  assert.equal(cadenceLabel("archive_and_selective_share"), "아카이브 · 선별 공유");
+  assert.equal(cadenceLabel("priority_1_case_led"), "사례 우선");
+  assert.equal(cadenceLabel("observational_meme"), "관찰형 밈");
+  // 라벨은 깨지지 않아야 하지만, 발행 리듬 숫자는 역할 결정 전까지 unknown으로 남는다.
+  assert.deepEqual(resolveWeeklyGoal({ cadence: "priority_1_case_led" }), { value: null, certainty: "unknown" });
+});
+
 test("identity completeness names what is missing instead of a bare boolean", () => {
   assert.deepEqual(
     identityCompleteness(brand("sinabro")),

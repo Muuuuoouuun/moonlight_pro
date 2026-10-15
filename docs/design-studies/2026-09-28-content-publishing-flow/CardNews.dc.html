@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>인스타 카드뉴스</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+a{color:#5274A8}a:hover{color:#3E5C8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 28px 40px; display: flex; flex-direction: column; gap: 16px; background: #F7F8FA; font-family: 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+    <div><h2 style="margin: 0; font-size: 20px; font-weight: 500;">원고 작성 · 인스타 카드뉴스</h2><div style="font-size: 12px; color: #545C66; margin-top: 4px;">Instagram · class.moon · 원본: 수업 끝 3분의 힘</div></div>
+    <span style="font-size: 12.5px; color: #545C66;">6장 · 4:5</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px;">
+    <div style="aspect-ratio: 4 / 5; border-radius: 10px; background: #1E2228; color: #FFFFFF; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; outline: 2px solid #5274A8; outline-offset: 2px;"><span style="font-size: 11px; opacity: 0.7;">1 · 표지</span><span style="font-size: 15px; font-weight: 600; line-height: 1.35;">복습 안 하는 반, 3분이면 바뀝니다</span></div>
+    <div style="aspect-ratio: 4 / 5; border-radius: 10px; background: #FFFFFF; border: 1px solid #E9ECEF; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; color: #737C86;">2 · 문제</span><span style="font-size: 13px; font-weight: 600; line-height: 1.4;">"어디서부터 봐요?"</span><span style="font-size: 11.5px; color: #545C66; line-height: 1.5;">의지가 아니라 시작점이 없다</span></div>
+    <div style="aspect-ratio: 4 / 5; border-radius: 10px; background: #FFFFFF; border: 1px solid #E9ECEF; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; color: #737C86;">3 · 방법</span><span style="font-size: 13px; font-weight: 600; line-height: 1.4;">마지막 3분은 '다음에 볼 한 줄'</span></div>
+    <div style="aspect-ratio: 4 / 5; border-radius: 10px; background: #FFFFFF; border: 1px solid #E9ECEF; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; color: #737C86;">4 · 예시</span><span style="font-size: 13px; font-weight: 600; line-height: 1.4;">교과서 몇 쪽, 어떤 문제 하나</span></div>
+    <div style="aspect-ratio: 4 / 5; border-radius: 10px; background: #FFFFFF; border: 1px dotted #9AA2AB; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; color: #737C86;">5 · 근거</span><span style="font-size: 12px; color: #737C86; line-height: 1.5;">확인 필요 — 원문에 사례가 없습니다. 실제 반 사례를 메모에 추가하세요.</span></div>
+    <div style="aspect-ratio: 4 / 5; border-radius: 10px; background: #F1F3F6; border: 1px solid #E9ECEF; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 6px;"><span style="font-size: 11px; color: #737C86;">6 · 마무리</span><span style="font-size: 13px; font-weight: 600; line-height: 1.4;">저장해 두고 오늘 수업 끝에</span></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; flex-grow: 1; min-height: 0;">
+    <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+      <span style="font-size: 15px; font-weight: 600;">1장 · 표지</span>
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #545C66;"><span style="display: flex; justify-content: space-between;"><span>제목</span><span style="font-family: 'JetBrains Mono', monospace;">17 / 18</span></span><input value="복습 안 하는 반, 3분이면 바뀝니다" style="height: 40px; border: 1px solid #DCE0E5; border-radius: 6px; padding: 0 12px; font: inherit; font-size: 15px; color: #1E2228;"></label>
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #545C66;"><span style="display: flex; justify-content: space-between;"><span>보조 문구</span><span style="font-family: 'JetBrains Mono', monospace;">0 / 60</span></span><input placeholder="없어도 됩니다" style="height: 40px; border: 1px solid #DCE0E5; border-radius: 6px; padding: 0 12px; font: inherit; font-size: 14px;"></label>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 12px; color: #545C66;">캡션 · 해시태그</span>
+        <div style="border: 1px solid #E9ECEF; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.7; color: #545C66; white-space: pre-line;">수업 끝 3분, '다음에 볼 한 줄'만 같이 정해 보세요. 복습의 시작점이 생깁니다.
+
+#수업운영 #복습 #강사</div>
+      </div>
+      <div style="margin-top: auto; display: flex; gap: 10px; align-items: center; padding-top: 12px; border-top: 1px solid #E9ECEF;">
+        <button type="button" style="height: 36px; padding: 0 16px; border-radius: 6px; border: 1px solid #1E2228; background: #1E2228; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 500;">문구 전체 복사</button>
+        <button type="button" style="height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13px;">캡션만 복사</button>
+        <button type="button" style="height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13px;">디자인용 내보내기</button>
+      </div>
+    </div>
+
+    <aside style="display: flex; flex-direction: column; gap: 14px;">
+      <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px;">
+        <span style="font-size: 15px; font-weight: 600;">카드뉴스 전용 AI</span>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12.5px;">
+          <button type="button" style="height: 40px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit;">표지 문구 5안</button>
+          <button type="button" style="height: 40px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit;">캡션·해시태그</button>
+          <button type="button" style="height: 40px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit;">장 수 조정</button>
+          <button type="button" style="height: 40px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit;">스레드에서 가져오기</button>
+        </div>
+      </section>
+      <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 0; font-size: 13px;">
+        <span style="font-size: 15px; font-weight: 600; padding-bottom: 8px;">검사</span>
+        <div style="display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid #E9ECEF;"><span>장당 한 메시지</span><span style="color: #545C66;">통과</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid #E9ECEF;"><span>제목 18자 이내</span><span style="color: #545C66;">통과</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid #E9ECEF;"><span>근거 있는 장</span><span style="color: #545C66; border-bottom: 1px dotted #9AA2AB;">5장 확인 필요</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid #E9ECEF;"><span>마지막 장 행동 유도</span><span style="color: #545C66;">통과</span></div>
+      </section>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

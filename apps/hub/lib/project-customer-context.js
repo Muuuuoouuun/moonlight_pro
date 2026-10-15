@@ -35,3 +35,31 @@ export function projectMemoContexts(project, customer = null) {
 export function contextMemoKey(contexts = []) {
   return contexts.map(({ type, id }) => `${type}:${id}`).sort().join('|');
 }
+
+// A new context memo keeps one note id per tab and context set, so reopening the same
+// source screen resumes the same draft (the journal writer stores the draft under that id).
+// Every entry point that starts a memo for a context shares this key — the memo drawer and
+// the record window's memo mode continue each other's draft instead of forking it.
+// `identity` is contextMemoKey(contexts).
+export function contextMemoStorageKey(workspaceId, identity) {
+  return `moonlight:context-memo:v1:${workspaceId || 'preview'}:${identity}`;
+}
+
+// Storage may be blocked or full (private windows, quota). The id is then kept for the life of
+// the page, so a remount (mode switch, ESC and back) claims the same id and finds the journal
+// store's in-memory copy of the draft again — otherwise every remount would orphan the text.
+// The journal writer reports the missing recovery copy itself.
+const pageMemoIds = new Map();
+export function claimContextMemoId(storage, key, createId = () => crypto.randomUUID()) {
+  let id = null;
+  try { const stored = storage.getItem(key); if (isCanonicalUuid(stored)) id = stored; } catch { /* writer displays recovery errors */ }
+  id ||= pageMemoIds.get(key) || createId();
+  try { storage.setItem(key, id); pageMemoIds.delete(key); } catch { pageMemoIds.set(key, id); }
+  return id;
+}
+
+// After a confirmed save the next memo for the same context starts from a fresh id.
+export function releaseContextMemoId(storage, key) {
+  pageMemoIds.delete(key);
+  try { storage.removeItem(key); } catch { /* draft store reports failures */ }
+}

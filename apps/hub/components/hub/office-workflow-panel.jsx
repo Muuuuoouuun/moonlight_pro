@@ -3,38 +3,37 @@
 import React from 'react';
 import {OFFICE_ROSTER} from '@com-moon/agent-contracts/office';
 import {Button,CertaintyBadge,CheckboxRow,EditDrawer,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
-import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowReviewers,officeWorkflowGenerationRequest} from './office-workflow-client';
+import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,readOfficeWorkflowSelection,loadOfficeWorkflowOrigin,mergeOfficeWorkflowReceipt,officeWorkflowReviewers,officeWorkflowGenerationRequest} from './office-workflow-client';
 import {OfficeDeliberationControls,OfficeDiscussion} from './office-deliberation-controls';
 import {officeDeliberationForParticipants} from './office-deliberation-client';
 import styles from './office-workflow-panel.module.css';
 import {WEEKLY_MISSING_LABELS} from '@/lib/weekly-report-fields';
+import {OfficeArtifact} from './office-artifact';
+import {OFFICE_CUSTOMER_PREPARATION_VERSION,createOfficeCustomerApproval,officeCustomerApprovalPayload} from '@com-moon/agent-contracts/office-workflow';
+import {CUSTOMER_PREPARATION_MESSAGE,officeCustomerInputKey,officeCustomerGenerationBlock,officeCustomerApprovalCurrent,officeCustomerResult,officeCustomerContextUpdate} from './office-customer-preparation-client.js';
+import {OfficeCustomerContext,OfficeCustomerPreparationReview,OfficeCustomerProgress} from './office-customer-preparation';
+import {OfficeConnectionSourceAction} from './office-connection-source';
+import {useSharedOfficeWorkflowSessions} from './office-workflow-sessions';
 
-const Sessions=React.createContext(null);
-export function OfficeWorkflowSessionProvider({children}) {
-  const [store]=React.useState(createOfficeWorkflowSessions);
-  React.useEffect(()=>{
-    const warn=event=>{if(store.hasDrafts()){event.preventDefault();event.returnValue='';}};
-    window.addEventListener('beforeunload',warn);
-    return ()=>window.removeEventListener('beforeunload',warn);
-  },[store]);
-  return <Sessions.Provider value={store}>{children}</Sessions.Provider>;
-}
+// 셸의 공유 저장소 틀은 office-workflow-sessions.jsx에 있다 — 이 큰 모듈을 셸 번들 밖에 두기 위해서다.
+export {OfficeWorkflowSessionProvider} from './office-workflow-sessions';
 const WORKFLOW_MODES=[{key:'draft',label:'초안'},{key:'council',label:'관점 비교'}];
 const initialMessage={weekly_report:'선택한 7일의 확인된 기록으로 주간 정리를 작성해 주세요. 확인된 활동, 변화와 막힘, 다음 주 남길 행동을 구분하고 미측정 값은 그대로 표시해 주세요.',customer_reply:'선택한 고객의 실제 기록과 약속을 참고해 보낼 답장 초안 한 개와 이번 접촉 목적을 작성해 주세요. 자료에 없는 약속이나 고객 발언을 만들지 마세요.'};
 const missingLabels={...WEEKLY_MISSING_LABELS,'recorded-customer-words-unavailable':'직접 연결된 발언 기록 없음','activities-limited-to-latest-five':'최근 기록 5건만 참고','contacts_recorded':'고객 연락 미측정','tasks_completed':'완료 할 일 미측정','content_published':'발행 미측정','goals':'목표 조회 미완료','deals':'거래 조회 미완료','deal-win-timestamps':'성사일 일부 미확인'};
 
-export function OfficeWorkflowPanel({intent,scope,originRef,title,onTaskCreated,onNavigate}) {
+export function OfficeWorkflowPanel({intent,scope,originRef,title,initialRequestId,onTaskCreated,onNavigate}) {
   const [pickedScope,setPickedScope]=React.useState('');
   const effectiveScope=scope||pickedScope;
   if (!effectiveScope) return <div className={styles.panel}><SelectField label={`${title} · 업무 범위`} value={pickedScope} onChange={event=>setPickedScope(event.target.value)} options={[{value:'',label:'범위 확인 후 선택'},{value:'classin',label:'회사'},{value:'personal',label:'개인'}]} /></div>;
   let key;
   try { key=officeWorkflowKey({intent,scope:effectiveScope,originRef}); }
-  catch { return <p className={styles.note}>업무 대상이나 보고 기간을 확인해야 Office를 사용할 수 있습니다.</p>; }
-  return <WorkflowForOrigin key={key} sessionKey={key} intent={intent} scope={effectiveScope} originRef={originRef} title={title} onTaskCreated={onTaskCreated} onNavigate={onNavigate} />;
+  catch { return <p className={styles.note}>업무 대상이나 보고 기간을 확인해야 오피스를 사용할 수 있습니다.</p>; }
+  const sessionKey=initialRequestId?`${key}:request:${initialRequestId}`:key;
+  return <WorkflowForOrigin key={sessionKey} sessionKey={sessionKey} intent={intent} scope={effectiveScope} originRef={originRef} initialRequestId={initialRequestId} title={intent==='customer_reply'?'고객 대응 준비':title} onTaskCreated={onTaskCreated} onNavigate={onNavigate} />;
 }
 
-function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreated,onNavigate}) {
-  const shared=React.useContext(Sessions);
+function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,initialRequestId,onTaskCreated,onNavigate}) {
+  const shared=useSharedOfficeWorkflowSessions(createOfficeWorkflowSessions);
   const [local]=React.useState(createOfficeWorkflowSessions);
   const store=shared||local;
   const subscribe=React.useCallback(listener=>store.subscribe(listener),[store]);
@@ -51,33 +50,74 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
   const inProgress=state.pending || ['running','unknown'].includes(receipt?.status);
   const application=receipt?.application;
   const hasApplication=Boolean(application?.commandId);
+  const isCustomer=intent==='customer_reply';
+  const customerInputKey=isCustomer?officeCustomerInputKey(input,state,ownerId):null;
+  const customerGenerationBlock=isCustomer?officeCustomerGenerationBlock(state,customerInputKey):'';
+  const customerApproved=officeCustomerApprovalCurrent(state);
+  const cancelCustomer=()=>{
+    const current=store.get(sessionKey);
+    if(current.applicationUnknown||current.receipt?.application?.commandId||(current.pending&&current.operation!=='generate'))return;
+    patch({cancelledRequestId:current.pending?current.request?.requestId:current.receipt?.requestId||current.request?.requestId,customerApproval:null,customerApprovalKey:null,taskFields:null,
+      note:current.pending?'결과 사용을 취소했습니다. 이미 시작한 모델 호출은 계속될 수 있으며 같은 요청의 상태를 확인합니다.':'이 결과의 사용과 초안 승인을 취소했습니다.'});
+  };
+  const approveCustomer=async()=>{
+    const current=store.get(sessionKey),target=current.receipt?.result;
+    if(current.context?.status!=='ready'||current.approvalBusy||current.pending||current.applicationUnknown||current.draft.trim()||current.cancelledRequestId===target?.requestId||current.rejectedRequestId===target?.requestId)return;
+    if(current.ownerId&&current.ownerId!==target?.ownerId){patch({note:'담당이 바뀌었습니다. 변경한 연락 목적을 적고 새 결과를 만들어 주세요.'});return;}
+    patch({approvalBusy:true,note:''});
+    try {
+      const approval=await createOfficeCustomerApproval(target,{sourcesReviewed:current.reviewedSources,questionsReviewed:current.reviewedQuestions,reviewedContextHash:current.context.contextHash});
+      const latest=store.get(sessionKey);
+      if(latest.receipt?.result!==target||latest.cancelledRequestId===target.requestId||latest.rejectedRequestId===target.requestId||latest.context?.contextHash!==current.context.contextHash||latest.draft.trim()||(latest.ownerId&&latest.ownerId!==target.ownerId))return;
+      patch({customerApproval:approval,customerApprovalKey:officeCustomerApprovalPayload(target,{reviewedContextHash:current.context.contextHash})});
+    } catch {patch({note:'승인을 확인하지 못했습니다. 원문과 질문을 다시 확인해 주세요.'});}
+    finally {patch({approvalBusy:false});}
+  };
+  const rejectCustomer=()=>{
+    const current=store.get(sessionKey);
+    if(current.pending||current.applicationUnknown||current.approvalBusy||current.receipt?.application?.commandId)return;
+    patch({rejectedRequestId:current.receipt?.requestId,customerApproval:null,customerApprovalKey:null,reviewedSources:false,reviewedQuestions:false,note:'초안을 반려했습니다. 위 수정할 내용에 바꿀 점을 적고 수정 요청을 보내 주세요.'});
+  };
 
   const inspect=async id=>{
     const inspectToken=crypto.randomUUID();
     patch({inspectToken});
-    const data=await readOfficeWorkflow(`requests/${encodeURIComponent(id)}`);
-    if(store.get(sessionKey).inspectToken!==inspectToken)return;
     const request=store.get(sessionKey).request;
-    if(!validWorkflowReceipt(data,{requestId:id,scope,request:request?.requestId===id?request:undefined})){patch({note:officeWorkflowNote({status:'error'})});return;}
+    const data=await readOfficeWorkflowSelection(id,input,{request:request?.requestId===id?request:undefined});
+    if(store.get(sessionKey).inspectToken!==inspectToken)return;
+    if(data.error==='invalid-workflow-receipt'){patch({note:'이 요청의 범위나 출처를 확인하지 못했습니다. 다시 확인해 주세요.'});return;}
     store.selectReceipt(sessionKey,data);
     return data;
   };
   const load=async()=>{
     const ticket=++loadTicket.current;
-    patch({open:true,loading:true,note:''});
-    const [context,list]=await Promise.all([readOfficeWorkflow(`context?${query}`),readOfficeWorkflow(`requests?${query}`)]);
+    const before=store.get(sessionKey);
+    const selectedRequestId=initialRequestId?(before.receipt?.requestId||before.request?.requestId||initialRequestId):null;
+    const inspectToken=selectedRequestId?crypto.randomUUID():null;
+    const sameSelection=current=>current.inspectToken===inspectToken&&current.receipt?.requestId===before.receipt?.requestId&&current.request?.requestId===before.request?.requestId;
+    patch({open:true,loading:true,note:'',...(selectedRequestId?{inspectToken}:{})});
+    const {context,list,receipt:selected}=await loadOfficeWorkflowOrigin(input,{requestId:selectedRequestId,request:before.request?.requestId===selectedRequestId?before.request:undefined});
     if(ticket!==loadTicket.current)return;
-    patch({loading:false,context,requests:Array.isArray(list.requests)?list.requests:[],nextCursor:list.nextCursor||null,
-      note:context.status==='ready'?officeWorkflowNote(list):officeWorkflowNote(context)});
-    if(!store.get(sessionKey).receipt && !store.get(sessionKey).pending && list.requests?.length) await inspect(list.requests[0].requestId);
+    patch(current=>({loading:false,...(isCustomer?officeCustomerContextUpdate(current,context):{context}),requests:Array.isArray(list.requests)?list.requests:[],nextCursor:list.nextCursor||null,
+      note:selectedRequestId&&!sameSelection(current)?current.note:context.status==='ready'?officeWorkflowNote(list):officeWorkflowNote(context)}));
+    if(selectedRequestId && sameSelection(store.get(sessionKey)) && !store.get(sessionKey).pending) {
+      if(selected?.error==='invalid-workflow-receipt')patch({note:'지정한 요청의 범위나 출처를 확인하지 못했습니다. 다시 확인해 주세요.'});
+      else if(selected)store.selectReceipt(sessionKey,selected);
+    } else if(!initialRequestId && !store.get(sessionKey).receipt && !store.get(sessionKey).pending && list.requests?.length) await inspect(list.requests[0].requestId);
   };
+  React.useEffect(()=>{
+    if(initialRequestId)load();
+    return ()=>{loadTicket.current++;store.update(sessionKey,{inspectToken:null});};
+  },[initialRequestId,sessionKey,store]);
   const generate=async()=>{
     const current=store.get(sessionKey);
     if(current.pending||!current.context?.capabilities?.generate)return;
+    if(isCustomer){const blocked=officeCustomerGenerationBlock(current,officeCustomerInputKey(input,current,ownerId));if(blocked){patch({note:blocked});return;}}
     let request;
-    try {request=officeWorkflowGenerationRequest(input,current,{requestId:crypto.randomUUID(),ownerId,defaultMessage:initialMessage[intent]});}
+    try {request=officeWorkflowGenerationRequest(isCustomer?{...input,customerPreparationVersion:OFFICE_CUSTOMER_PREPARATION_VERSION}:input,isCustomer?{...current,mode:'draft'}:current,{requestId:crypto.randomUUID(),ownerId,defaultMessage:isCustomer?CUSTOMER_PREPARATION_MESSAGE:initialMessage[intent]});}
     catch(error){patch({note:error.message||'참가 관점과 요청 내용을 확인해 주세요.'});return;}
-    patch({request,sentDraft:current.draft,sentExcerpt:current.sourceExcerpt,pending:true,inspectToken:null,note:'',copied:false,applyInput:null,applicationUnknown:false});
+    patch({request,sentDraft:current.draft,sentExcerpt:current.sourceExcerpt,pending:true,operation:'generate',inspectToken:null,note:'',copied:false,applyInput:null,applicationUnknown:false,
+      ...(isCustomer?{lastCustomerInputKey:officeCustomerInputKey(input,current,ownerId),reviewedSources:false,reviewedQuestions:false,customerApproval:null,customerApprovalKey:null,cancelledRequestId:null,rejectedRequestId:null}: {})});
     const data=await sendOfficeWorkflow(request);
     store.accept(sessionKey,request.requestId,data);
     const list=await readOfficeWorkflow(`requests?${query}`);
@@ -89,16 +129,19 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
   };
   const recover=async()=>{
     if(store.get(sessionKey).pending)return;
-    patch({pending:true,inspectToken:null});
+    patch({pending:true,operation:'recover',inspectToken:null});
     const request=store.get(sessionKey).request;
     const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/recover`,{recoveryToken:receipt.recoveryToken},{requestId:receipt.requestId,scope,request:request?.requestId===receipt.requestId?request:undefined});
-    patch(current=>({pending:false,receipt:mergeOfficeWorkflowReceipt(current.receipt,data),note:officeWorkflowNote(data)}));
+    patch(current=>({pending:false,operation:null,receipt:mergeOfficeWorkflowReceipt(current.receipt,data),note:officeWorkflowNote(data)}));
   };
   const openTask=async()=>{
+    const current=store.get(sessionKey);
+    if(current.openingTask || (isCustomer && !officeCustomerApprovalCurrent(current)))return;
     const targetRequestId=receipt?.requestId;
-    patch({note:''});
+    patch({note:'',openingTask:true});
     const projects=await fetch('/api/hub/projects',{cache:'no-store'}).then(res=>res.ok?res.json():null).catch(()=>null);
-    if(store.get(sessionKey).receipt?.requestId!==targetRequestId || store.get(sessionKey).pending)return;
+    patch({openingTask:false});
+    if(store.get(sessionKey).receipt?.requestId!==targetRequestId || store.get(sessionKey).pending || (isCustomer&&!officeCustomerApprovalCurrent(store.get(sessionKey))))return;
     if(!projects || !['live','partial'].includes(projects.status) || projects.source==='error') {patch({note:'프로젝트를 읽지 못했습니다. 기존 할 일 화면에서 대상을 확인해 주세요.'});return;}
     const choices=(projects.projects||[]).filter(project=>project.orgScope===scope);
     if(!choices.length){patch({note:'같은 범위의 프로젝트를 먼저 선택해야 합니다. 프로젝트 없이 등록하려면 기존 할 일 화면을 이용해 주세요.'});return;}
@@ -107,16 +150,17 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
   };
   const apply=async(fields,acknowledge=false)=>{
     if(store.get(sessionKey).pending)return {ok:false,status:'error'};
-    patch({pending:true,inspectToken:null,applyInput:fields||state.applyInput});
-    const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/apply`,{resultRevision:result?.resultRevision||1,...(fields?{fields}: {}),...(acknowledge?{acknowledgeContextChange:true}:{})},{requestId:receipt.requestId,scope});
+    if(isCustomer&&!hasApplication&&!state.applicationUnknown&&!officeCustomerApprovalCurrent(store.get(sessionKey)))return {ok:false,status:'conflict',message:'현재 초안을 다시 검토·승인해 주세요.'};
+    patch({pending:true,operation:'apply',inspectToken:null,applyInput:fields||state.applyInput});
+    const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/apply`,{resultRevision:result?.resultRevision||1,...(fields?{fields}: {}),...(acknowledge?{acknowledgeContextChange:true}:{}),...(isCustomer&&state.customerApproval?{customerApproval:state.customerApproval}:{})},{requestId:receipt.requestId,scope});
     // 2026-09-23 운영자 확정: 생성 뒤 기록이 바뀌었으면 막지 않고 알린다 — 편집 중인 할 일은 그대로 두고 확인만 받는다.
     if(data.error==='office-context-changed'){
       const note=officeWorkflowNote(data);
-      patch({pending:false,applyInput:null,contextChange:data.contextChange||{},acknowledgeChange:false,note});
+      patch({pending:false,operation:null,applyInput:null,contextChange:data.contextChange||{},acknowledgeChange:false,note});
       return {ok:false,status:'conflict',message:note};
     }
     const uncertain=['unknown','running'].includes(data.status);
-    patch({pending:false,receipt:{...receipt,application:data.application||receipt.application,capabilities:data.application?data.capabilities:receipt.capabilities},note:officeWorkflowNote(data),applicationUnknown:uncertain,
+    patch({pending:false,operation:null,receipt:{...receipt,application:data.application||receipt.application,capabilities:data.application?data.capabilities:receipt.capabilities},note:officeWorkflowNote(data),applicationUnknown:uncertain,
       ...(uncertain?{taskFields:null}:{}),...(['saved','conflict','error'].includes(data.status)?{applyInput:null}:{})});
     const saved=data.application?.state==='saved';
     if(saved){window.dispatchEvent(new Event('moonlight:tasks-saved'));onTaskCreated?.();}
@@ -137,15 +181,17 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
       {state.open&&<span className={styles.meta}>{scope==='classin'?'회사':'개인'} · 선택한 업무의 자료</span>}
     </div>
     {state.open&&<div className={styles.stack} onKeyDown={event=>{if(event.key==='Escape'&&!state.taskFields){event.stopPropagation();patch({open:false});trigger.current?.focus();}}}>
-      {state.loading?<Skeleton lines={2} label="Office 자료와 이전 결과 확인 중" />:state.context?.status!=='ready'?<div className={styles.truth} role={state.context?.status==='preview'?'status':'alert'}>
+      {isCustomer&&<OfficeCustomerProgress state={state} />}
+      {state.loading?<Skeleton lines={2} label="오피스 자료와 이전 결과 확인 중" />:state.context?.status!=='ready'?<div className={styles.truth} role={state.context?.status==='preview'?'status':'alert'}>
         {/* DESIGN §5.3: 연결 전·오류는 '비어 있음'(EmptyState)이 아니라 truth 상태 + 원인 + 재시도다. */}
         <TruthBadge state={state.context?.status==='preview'?'preview':'error'} /><p className={styles.note}>{officeWorkflowNote(state.context)||'자료를 확인할 수 없습니다.'}</p><Button size="xs" onClick={load}>다시 확인</Button></div>:null}
       {state.context?.status==='ready'&&<>
         <div className={styles.actions}><TruthBadge state={state.context.missing?.length?'partial':'live'} /><Button size="xs" variant="ghost" onClick={load} disabled={state.pending}>자료·이전 결과 새로고침</Button></div>
         {!!state.context.missing?.length&&<p className={styles.note}>{state.context.missing.map(reason=>missingLabels[reason]||reason).join(' · ')}</p>}
-        <fieldset disabled={inProgress || state.applicationUnknown} className={styles.controls}>
-          <SegmentedControl label={`${title} 응답 방식`} options={WORKFLOW_MODES} value={state.mode} onChange={mode=>patch({mode})} />
-          {state.mode==='council'&&<details className={styles.comparison}>
+        {isCustomer&&<OfficeCustomerContext context={state.context} />}
+        <fieldset disabled={inProgress || state.applicationUnknown || state.loading || state.approvalBusy} className={styles.controls}>
+          {isCustomer?<SelectField label="이번 고객 대응 담당 · 1명" value={ownerId} onChange={event=>patch({ownerId:event.target.value,mode:'draft',reviewedSources:false,reviewedQuestions:false,customerApproval:null,customerApprovalKey:null})} options={OFFICE_ROSTER.map(person=>({value:person.id,label:`${person.name} · ${person.role}`}))} />:<SegmentedControl label={`${title} 응답 방식`} options={WORKFLOW_MODES} value={state.mode} onChange={mode=>patch({mode})} />}
+          {!isCustomer&&state.mode==='council'&&<details className={styles.comparison}>
             <summary>함께 검토하기 · {participants.length}명</summary>
             <div className={styles.controls}>
               <p className={styles.note}>주관은 {ownerName}. 추가 관점을 1~2명 선택하세요. 원문과 이전 결과는 유지됩니다.</p>
@@ -157,7 +203,9 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
         </fieldset>
         <TextAreaField label={result?'수정할 내용':'요청에 덧붙일 내용'} value={state.draft} maxLength={6000} onChange={event=>patch({draft:event.target.value})} placeholder={intent==='weekly_report'?'특히 살펴볼 변화나 막힘이 있다면 적어주세요.':'이번 연락의 목적이나 지켜야 할 약속을 적어주세요.'} rows={3} />
         {result?.artifact?.body?.length>6000&&<TextAreaField label="수정할 이전 결과 부분 · 최대 6,000자" value={state.sourceExcerpt} onChange={event=>patch({sourceExcerpt:event.target.value})} maxLength={6000} rows={4} />}
-        <div className={styles.actions}><Button variant="primary" size="sm" onClick={generate} disabled={inProgress || state.applicationUnknown || receipt?.status==='unsaved' || !state.context.capabilities?.generate || (state.mode==='council'&&participants.length<2)}>{state.pending?'요청 처리 중…':result?'수정 요청 보내기':state.mode==='council'?'관점 비교하기':'초안 만들기'}</Button></div>
+        <div className={styles.actions}><Button variant="primary" size="sm" onClick={generate} disabled={inProgress || state.loading || state.approvalBusy || state.applicationUnknown || receipt?.status==='unsaved' || !state.context.capabilities?.generate || Boolean(customerGenerationBlock) || (!isCustomer&&state.mode==='council'&&participants.length<2)}>{state.pending?'요청 처리 중…':result?'수정 요청 보내기':isCustomer?'고객 대응 묶음 만들기':state.mode==='council'?'관점 비교하기':'초안 만들기'}</Button>
+          {isCustomer&&state.pending&&state.operation==='generate'&&state.cancelledRequestId!==state.request?.requestId&&<Button size="xs" variant="ghost" onClick={cancelCustomer}>이 결과 사용 취소</Button>}</div>
+        {customerGenerationBlock&&<p className={styles.note}>{customerGenerationBlock}</p>}
       </>}
       {!!state.note&&<p role="status" className={styles.note}>{state.note}</p>}
       {['running','unknown','unsaved'].includes(receipt?.status)&&<div className={styles.actions}>
@@ -167,13 +215,16 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
       </div>}
       {result&&<article className={styles.result}>
         <div className={styles.actions}><strong>{result.summary}</strong><TruthBadge state={receipt.persistence?.persisted===true?'live':'partial'} label={receipt.persistence?.persisted===true?'초안 저장됨':'저장 확인 필요'} />{result.sourceCheck === 'untraced' ? <CertaintyBadge state="unknown" label="근거 확인 안 됨" /> : null}</div>
-        <pre className={styles.body}>{result.artifact.body}</pre>
+        <OfficeArtifact artifact={result.artifact} className={styles.body} />
+        {isCustomer&&officeCustomerResult(result)&&<OfficeCustomerPreparationReview state={state} onChange={patch} onApprove={approveCustomer} onCancel={cancelCustomer} onReject={rejectCustomer} />}
+        {isCustomer&&!officeCustomerResult(result)&&<p className={styles.note}>이전 답장 결과입니다. 새 연락 목적이나 수정 내용을 적어 고객 대응 묶음으로 다시 준비해 주세요.</p>}
         <div className={styles.actions}><Button size="xs" onClick={copy}>{state.copied?'복사됨':'복사'}</Button>
-          {result.nextStep && !hasApplication && <Button size="xs" onClick={openTask} disabled={!receipt.capabilities?.applyTask || receipt.persistence?.persisted!==true || state.pending || state.applicationUnknown}>할 일로 연결</Button>}
+          {result.nextStep && !hasApplication && <Button size="xs" onClick={openTask} disabled={!receipt.capabilities?.applyTask || receipt.persistence?.persisted!==true || state.pending || state.applicationUnknown || state.openingTask || (isCustomer&&!customerApproved)}>할 일로 연결</Button>}
         </div>
+        {isCustomer&&<details><summary>더보기</summary><OfficeConnectionSourceAction key={result.requestId} state={state} scope={scope} /></details>}
         <p className={styles.note}>{result.nextStep?`다음 행동 제안: ${result.nextStep.label}`:'추가 행동 없음'}</p>
         {(result.uncertainties?.length>0||result.dissent?.length>0)&&<div className={styles.note}>{[...(result.uncertainties||[]),...(result.dissent||[])].map((line,i)=><p key={i}>{line}</p>)}</div>}
-        {!!result.evidence?.length&&<details><summary>참고한 자료</summary><ul>{result.evidence.map((item,i)=><li key={i}>{item.explanation}</li>)}</ul></details>}
+        {!!result.evidence?.length&&<details><summary>참고한 자료</summary><ul>{result.evidence.map((item,i)=><li key={i}>{item.explanation}{isCustomer&&<p className={styles.meta}>{state.context?.sourceRefs?.find(ref=>ref.id===item.sourceRefId)?.label||'출처 확인 필요'} · <span className="mono">{item.sourceRefId}</span></p>}</li>)}</ul></details>}
         <OfficeDiscussion result={result} request={state.request?.requestId===result.requestId?state.request:undefined} />
       </article>}
       {receipt?.logState==='error'&&<p className={styles.note}>결과는 저장됐지만 활동 로그를 남기지 못했습니다.</p>}
@@ -188,7 +239,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
       </details>}
       <p className={styles.meta}>초안 생성·복사는 실제 연락이나 업무 완료를 기록하지 않습니다.</p>
     </div>}
-    {state.taskFields&&<EditDrawer title="Office 제안을 할 일로 연결" subtitle="같은 범위의 프로젝트에 저장합니다." record={state.taskFields} presentation="compact" onChange={(field,value)=>patch(current=>({taskFields:{...current.taskFields,[field]:value}}))} onClose={()=>patch({taskFields:null})} onSave={saveTask} saveLabel="할 일 등록" fields={[
+    {state.taskFields&&<EditDrawer title="오피스 제안을 할 일로 연결" subtitle="같은 범위의 프로젝트에 저장합니다." record={state.taskFields} presentation="compact" onChange={(field,value)=>patch(current=>({taskFields:{...current.taskFields,[field]:value}}))} onClose={()=>patch({taskFields:null})} onSave={saveTask} saveLabel="할 일 등록" fields={[
       {key:'title',label:'할 일',type:'text',required:true},{key:'projectId',label:'프로젝트',type:'select',options:[{value:'',label:'프로젝트 선택'},...state.projects.map(project=>({value:project.id,label:project.name}))]},
       {key:'dueAt',label:'기한',inputType:'date',optional:true},{key:'nextAction',label:'다음 행동',type:'text',optional:true},{key:'description',label:'상세',type:'textarea',optional:true},
     ]}>{state.contextChange&&<div className={styles.changeNotice} role="status"><p className={styles.note}>{officeWorkflowNote({error:'office-context-changed',contextChange:state.contextChange})}</p>

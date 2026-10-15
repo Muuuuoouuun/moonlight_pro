@@ -4,7 +4,7 @@ import { GoalLinks } from '../goal-links';
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, TruthBadge, SelectField, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, EmptyState, Skeleton, TruthBadge, SelectField, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { GuruGuidanceCard } from '../guru-guidance-card';
@@ -14,7 +14,6 @@ import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { brandInWorkspace, getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
-import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
@@ -27,20 +26,17 @@ import { buildMoneyModel } from "@/lib/deal-money";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
-import { readRevenueCache, writeRevenueCache, clearRevenueCache } from "../revenue-shared-cache";
+import { LeadEnrichmentPanel, SortHead, saveRevenueRecord, useRevenueLedger } from "./revenue-core";
 import { resolveScopeFilter, scopeFilterForQuery } from "@/lib/revenue-scope-filter";
+import { formatWon, formatWonShort, parseWon } from "@/lib/won-format";
 import { BulkBar } from "../crm-bulk-bar";
 import { PersonalRevenueRoadmap } from "./personal-revenue";
 
-// HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
-// revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
-const fmt = v => {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n === 0) return '₩0';
-  if (n >= 1000000) return '₩' + (n / 1000000).toFixed(1) + 'M';
-  if (n >= 1000) return '₩' + Math.round(n / 1000) + 'K';
-  return '₩' + n;
-};
+// 다른 화면이 쓰던 import 경로를 그대로 둔다 — 새 코드는 ./revenue-core에서 직접 가져온다.
+export { LeadEnrichmentPanel, SortHead, saveRevenueRecord, useRevenueLedger };
+
+// 금액 표기는 lib/won-format 하나로 — 만·억 단위(2026-10-06 운영자 확정).
+const fmt = v => formatWonShort(Number(v) || 0);
 
 // 다음 미팅은 방금 만든 직후(서버 왕복 전)에도 그려야 해서 클라이언트에서 포맷한다 —
 // 다른 날짜 필드가 전부 repository에서 포맷돼 오는 것과 다른 이유다.
@@ -90,17 +86,9 @@ function useScopeFilter(searchParams) {
   return [filter, setFilter];
 }
 
-// Parse a display amount ("₩1.2M", "₩900K", "₩0", or a raw number) to a comparable number,
-// so the Leads table can sort by value even though the display model stores a string.
-function parseAmount(v) {
-  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-  const s = String(v || '').replace(/[₩,\s]/g, '');
-  const m = /([0-9.]+)\s*([MmKk]?)/.exec(s);
-  if (!m) return 0;
-  const n = parseFloat(m[1]) || 0;
-  const unit = (m[2] || '').toLowerCase();
-  return unit === 'm' ? n * 1e6 : unit === 'k' ? n * 1e3 : n;
-}
+// Parse a display amount ("120만원", "1억 2,000만원", legacy "₩1.2M", or a raw number) to a
+// comparable number, so the Leads table can sort by value even though the display model stores a string.
+const parseAmount = v => parseWon(v) ?? 0;
 
 // Funnel order so "Stage" sorts by pipeline position, not alphabetically.
 const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 4 };
@@ -208,99 +196,6 @@ function buildRevenueAttention(leads, deals) {
   return items.slice(0, 4);
 }
 
-const EMPTY_REVENUE_LEDGER = {
-  source: 'preview',
-  leads: [],
-  deals: [],
-  stages: [],
-  accounts: [],
-  cases: [],
-  contacts: [],
-  companies: [],
-  // null = 아직 읽지 않음/읽기 실패(§8.1 read 봉투) — 월별 목표 미정({})과 구분해야
-  // 거래 히어로가 "이번 달 목표가 없다"를 "아직 모른다"로 잘못 말하지 않는다.
-  revenueTargets: null,
-  summary: null,
-};
-
-// 모듈 스코프 stale-while-revalidate 캐시 — Leads↔Deals↔Accounts↔Cases↔Customers 탭
-// 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 기록을 다시 받고 스켈레톤을
-// 보였다(re-audit 속도 #3). 캐시는 즉시 서빙하고 항상 배경 재검증하므로 신선도는 1 RTT다.
-// 저장소는 revenue-shared-cache 공유 모듈 — ⌘K 레코드 검색이 같은 스냅샷을 재사용한다.
-
-export function useRevenueLedger() {
-  const servableCache = readRevenueCache();
-  const [ledger, setLedger] = React.useState(servableCache ? servableCache.ledger : EMPTY_REVENUE_LEDGER);
-  const [syncState, setSyncState] = React.useState(servableCache ? servableCache.syncState : 'loading');
-  const [refreshKey, setRefreshKey] = React.useState(0);
-
-  React.useEffect(() => {
-    let active = true;
-    let retryTimer = null;
-    const hasServableCache = Boolean(readRevenueCache());
-    // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
-    // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 error로 표시한다(preview는
-    // "미구성"의 뜻 — 라이브 read 거부를 preview로 라벨하면 0건이 사실처럼 보인다).
-    async function load(attempt = 0) {
-      if (!hasServableCache) setSyncState('loading'); // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증
-      try {
-        const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-        if (!active) return;
-        if (!response.ok || !data || data.status === 'error') {
-          if (attempt === 0) {
-            retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
-          } else if (!hasServableCache) {
-            setSyncState('error');
-          } else {
-            // 캐시를 계속 보여주되 live로 위장하지 않는다 — 재검증 실패는 partial(오래된 데이터).
-            setSyncState('partial');
-          }
-          return;
-        }
-        const nextLedger = {
-          source: data.source === 'supabase' ? 'supabase' : 'preview',
-          leads: Array.isArray(data.leads) ? data.leads : [],
-          deals: Array.isArray(data.deals) ? data.deals : [],
-          stages: Array.isArray(data.stages) ? data.stages : [],
-          accounts: Array.isArray(data.accounts) ? data.accounts : [],
-          cases: Array.isArray(data.cases) ? data.cases : [],
-          contacts: Array.isArray(data.contacts) ? data.contacts : [],
-          companies: Array.isArray(data.companies) ? data.companies : [],
-          // 서버가 워크스페이스 meta를 못 읽었으면 null 그대로 넘어온다 — 여기서 {}로 뭉개지 않는다.
-          revenueTargets: data.revenueTargets && typeof data.revenueTargets === 'object' ? data.revenueTargets : null,
-          summary: data.summary || null,
-        };
-        const nextState = data.source === 'supabase'
-          ? data.status === 'partial' ? 'partial' : 'live'
-          : 'preview';
-        writeRevenueCache({ at: Date.now(), ledger: nextLedger, syncState: nextState });
-        setLedger(nextLedger);
-        setSyncState(nextState);
-      } catch {
-        if (!active) return;
-        if (attempt === 0) {
-          retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
-        } else if (!hasServableCache) {
-          setSyncState('error');
-        } else {
-          setSyncState('partial');
-        }
-      }
-    }
-    load();
-    return () => { active = false; clearTimeout(retryTimer); };
-  }, [refreshKey]);
-
-  const reload = React.useCallback(() => {
-    // 모듈 캐시를 무효화하고 재조회 — 명함 스캔 승격 등 쓰기 직후 목록 갱신용.
-    clearRevenueCache();
-    setRefreshKey((k) => k + 1);
-  }, []);
-
-  return { ledger, syncState, reload };
-}
-
 // 기록 read 실패 공용 빈 상태 — Leads·Deals·Accounts의 wsEmpty 분기가 error에서도
 // "N건 없음 + 생성 CTA"를 그려 read 실패가 빈 워크스페이스로 위장됐다(8차 잔여 M).
 // 생성 유도는 실패 화면에서 금물: 운영자가 이미 있는 레코드를 중복 생성하게 된다.
@@ -316,46 +211,6 @@ function LedgerReadError({ noun, onRetry }) {
       />
     </Card>
   );
-}
-
-// 3단 정렬 헤더(§8.1) — 컴포넌트 안에서 정의하면 렌더마다 함수 identity가 바뀌어
-// React가 헤더 버튼을 매번 unmount/remount한다(re-audit 속도 #5). 모듈 스코프 1개를
-// Leads·Cases·Accounts가 공유한다. 캐럿은 비활성일 때도 폭 예약.
-export function SortHead({ k, sort, onToggle, children, align, className }) {
-  // aria-sort는 columnheader 롤 전용이라 버튼엔 무효 — 동적 aria-label로 현재 방향을 AT에 노출.
-  const dirLabel = sort.key === k ? (sort.dir === 'desc' ? '내림차순' : '오름차순') : '정렬 안 함';
-  return (
-    <button type="button" className={className} onClick={() => onToggle(k)} title={`${children} 기준 정렬`}
-      aria-label={`${children} 기준 정렬 — 현재 ${dirLabel}`}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
-        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
-        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
-        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
-        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-      }}>
-      {children}
-      <span style={{ fontSize: 10.5, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
-    </button>
-  );
-}
-
-// Persist a Revenue drawer edit to the Supabase-backed write route. `kind` is
-// 'lead' | 'deal' | 'case', `op` is 'create' | 'update' | 'delete'. Returns
-// { ok, status, id } — `ok` is true only when the row actually saved; 'preview' means the
-// backend isn't configured (or the DB refused the write) and the optimistic local row stands.
-export async function saveRevenueRecord(kind, op, record) {
-  try {
-    const resp = await fetch(`/api/hub/revenue/${kind}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ op, ...record }),
-    });
-    const data = await resp.json().catch(() => ({}));
-    return { ok: resp.ok && data.status === 'saved', status: data.status || 'error', id: data.id, data };
-  } catch (err) {
-    return { ok: false, status: 'error', error: err instanceof Error ? err.message : String(err) };
-  }
 }
 
 function GuruCoachPanel({ onNavigate }) {
@@ -582,82 +437,6 @@ export function RevenueOverview({ onNavigate }) {
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
 // Leads 그리드는 무변별 컬럼 자동 숨김 때문에 컴포넌트 안 leadsGrid memo로 계산한다(28차).
 
-export function LeadEnrichmentPanel({ lead }) {
-  if (!lead) return null;
-  const summary = buildLeadTagSummary(lead.enrichmentTags || []);
-  const calendar = lead.activityEvidence?.calendar || {};
-  const directTouchCount = ['meeting', 'call', 'infoSession', 'other']
-    .reduce((sum, key) => sum + (Number(calendar[key]) || 0), 0);
-  const rows = [
-    ['과목', summary.subjects],
-    ['지역', summary.regions],
-    ['직접 접점', summary.directActivities],
-    ['접점 소스', summary.activitySources],
-    ['공개 신호', summary.publicSignals],
-    ['프로그램', summary.programs],
-    ['공개 채널', summary.channels],
-  ].filter(([, values]) => values.length > 0);
-  const hasRelationship = Boolean(lead.companyName || lead.contactName || lead.contactEmail || lead.contactPhone);
-  const hasEnrichment = rows.length > 0 || lead.engagementState === 'present' || lead.publicEvidenceCount > 0;
-
-  if (!hasRelationship && !hasEnrichment && !lead.nextAction) return null;
-
-  return (
-    <div style={{ padding: 12, border: '1px solid var(--line-soft)', borderRadius: 'var(--r)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 9 }}>
-      {hasRelationship && (
-        <div style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
-          <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>고객 문맥</span>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: 'var(--fg)' }}>
-              {[lead.companyName, lead.contactName, lead.contactTitle].filter(Boolean).join(' · ')}
-            </div>
-            {(lead.contactPhone || lead.contactEmail) && (
-              <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 3, fontSize: 10.5, color: 'var(--fg-muted)' }}>
-                {lead.contactPhone && <span>{lead.contactPhone}</span>}
-                {lead.contactEmail && <span>{lead.contactEmail}</span>}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {lead.nextAction && (
-        <div style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
-          <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>다음 행동</span>
-          <div style={{ fontSize: 12, color: 'var(--moon-200)', lineHeight: 1.45 }}>
-            {lead.nextAction}
-            {lead.nextActionAt && <span className="mono" style={{ marginLeft: 7, fontSize: 10.5, color: 'var(--fg-muted)' }}>{String(lead.nextActionAt).slice(0, 10)}</span>}
-          </div>
-        </div>
-      )}
-      {hasEnrichment && (
-        <>
-          <Divider />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ flex: 1, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>분류 · 증거</span>
-            <Badge tone="neutral" size="xs">
-              {lead.engagementState === 'present' ? `접점 ${directTouchCount || '확인'}` : '접점 미확인'}
-            </Badge>
-            {lead.publicEvidenceCount > 0 && <Badge tone="neutral" size="xs">공개 근거 {lead.publicEvidenceCount}</Badge>}
-          </div>
-          {rows.map(([label, values]) => (
-            <div key={label} style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
-              <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{label}</span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {values.map(value => <Badge key={value} tone="neutral" size="xs" variant="outline">{value}</Badge>)}
-              </div>
-            </div>
-          ))}
-          {lead.engagementState !== 'present' && (
-            <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
-              확인된 콜·미팅 로그가 없습니다. 공개 설명회·채널 신호는 직접 접점 점수와 분리합니다.
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 export function Leads({ workspace }) {
   const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
@@ -779,7 +558,7 @@ export function Leads({ workspace }) {
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       source: 'Manual',
       stage: 'New',
-      value: '₩0',
+      value: '—',
       last: '방금',
       // Stamped so the default sort cascade (last contact -> added -> orders) still floats a
       // brand-new row to the top instead of sinking it for lacking server timestamps.
@@ -1173,9 +952,9 @@ export function Leads({ workspace }) {
           { key: 'subjects', label: '과목', type: 'chips', labelBadge: labelCertainty('subjects'),
             options: LEAD_SUBJECTS.map(s => ({ value: s.key, label: s.label })) },
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
-          // 딜과 달리 텍스트 입력이 의도: 리드 value는 "₩1.2M" 표시 문자열로 읽혀 오고
-          // parseMoneyLabel이 축약형(₩1.2M · 1.2M · 1200000)을 그대로 받는다.
-          { key: 'value', label: '금액', placeholder: '₩1.2M · 1200000' },
+          // 딜과 달리 텍스트 입력이 의도: 리드 value는 "120만원" 표시 문자열로 읽혀 오고
+          // parseMoneyLabel이 만·억 표기(120만 · 1억 2,000만 · 1200000)와 옛 "₩1.2M"을 그대로 받는다.
+          { key: 'value', label: '금액', placeholder: '120만 · 1200000' },
         ]}
         onChange={(key, val) => setLeadEdits(prev => {
           const patch = { ...prev[editLeadId], [key]: val };
@@ -1230,7 +1009,7 @@ function DealOutreachDrafter({ deal, onApplyNextAction }) {
       const res = await requestPersonaChat({
         personaId: "sales",
         mode: "outreach-draft",
-        draft: `[영업 딜 고객 연락 맥락]\n딜/고객명: ${deal.name || deal.account}\n소속 회사: ${deal.account || "미지정"}\n진행 단계: ${deal.stage || "초기"}\n예상 금액: ${deal.value ? deal.value + "원" : "미정"}\n현재 다음 행동: ${deal.nextAction || "미정"}\n메모: ${deal.notes || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
+        draft: `[영업 딜 고객 연락 맥락]\n딜/고객명: ${deal.name || deal.account}\n소속 회사: ${deal.account || "미지정"}\n진행 단계: ${deal.stage || "초기"}\n예상 금액: ${deal.value ? formatWon(deal.value) : "미정"}\n현재 다음 행동: ${deal.nextAction || "미정"}\n메모: ${deal.notes || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
       });
       setLoading(false);
       if (res.state === "done") {
@@ -1280,7 +1059,7 @@ function DealOutreachDrafter({ deal, onApplyNextAction }) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10.5 }}
             >
               접기
             </button>
@@ -2004,12 +1783,18 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
   // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
   const [dealTaskStats, setDealTaskStats] = React.useState(new Map());
+  const [dealTaskStatsState, setDealTaskStatsState] = React.useState('loading');
   const loadDealTaskStats = React.useCallback(async () => {
     try {
       const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
       const data = await res.json().catch(() => null);
+      if (!res.ok || !['live', 'partial'].includes(data?.status) || !Array.isArray(data?.tasks)
+        || data.source === 'error' || data.failedSources?.includes('tasks') || data.partialSources?.includes('tasks')) {
+        setDealTaskStatsState(data?.status === 'preview' ? 'preview' : data?.status === 'partial' ? 'partial' : 'error');
+        return;
+      }
       const stats = new Map();
-      (Array.isArray(data?.tasks) ? data.tasks : []).forEach((t) => {
+      data.tasks.forEach((t) => {
         if (!t.dealId) return;
         const s = stats.get(t.dealId) || { done: 0, total: 0 };
         s.total += 1;
@@ -2017,7 +1802,8 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
         stats.set(t.dealId, s);
       });
       setDealTaskStats(stats);
-    } catch { /* board count is decorative — the drawer keeps its own live list */ }
+      setDealTaskStatsState('live');
+    } catch { setDealTaskStatsState('error'); }
   }, []);
   // 마운트 + 드로어 닫힘 재조회를 한 이펙트로 — 마운트 시 editDealId가 null이라 이펙트가
   // 둘이면 동일 요청이 2번 나간다(첫 진입 비용 2배).
@@ -2428,9 +2214,13 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
                       <div style={{ flex: 1 }} />
                       {(() => {
                         const stat = dealTaskStats.get(d.id);
-                        return stat?.total ? (
-                          <span className="mono" style={{ fontSize: 10.5, color: stat.done === stat.total ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
-                            ✓{stat.done}/{stat.total}
+                        const unverified = dealTaskStatsState !== 'live';
+                        const label = unverified
+                          ? stat?.total ? `이전 ✓${stat.done}/${stat.total} · 미확인` : '할 일 미확인'
+                          : stat?.total ? `✓${stat.done}/${stat.total}` : '';
+                        return label && (stat?.total || dealTaskStatsState !== 'loading') ? (
+                          <span className="mono" title={unverified ? '현재 할 일 집계를 확인하지 못했습니다. 거래를 다시 열어 확인하세요.' : '확인한 할 일 완료/전체'} style={{ fontSize: 10.5, color: !unverified && stat.done === stat.total ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
+                            {label}
                           </span>
                         ) : null;
                       })()}
@@ -2485,7 +2275,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
             ...DEAL_STAGES.map(s => ({ value: s.key, label: s.label })),
             ...(DEAL_STAGES.some(s => s.key === LOST_STAGE.key) ? [] : [{ value: LOST_STAGE.key, label: LOST_STAGE.label }]),
           ] },
-          { key: 'value', row: 'primary', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
+          { key: 'value', row: 'primary', label: '금액 (원)', inputType: 'number', placeholder: '0' },
           { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
           { key: 'type', row: 'meta', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
         ]}

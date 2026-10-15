@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "purpose": "reviewer-private targeted follow-up holdout with positive confirmation controls",
+  "createdAt": "2026-09-29T16:11:24.833037+00:00",
+  "datasetStatus": "independent-holdout",
+  "scenarios": 2,
+  "generationCalls": 5,
+  "datasetFileSha256": "9936863af8e559e28887a6c433ba8b172fe20ea650b853913ef9ad49db28c19f",
+  "generationPermitted": false,
+  "chronology": [
+    "Authored after the completed v26 targeted holdout and its two council failure categories were disclosed.",
+    "Root announced the next bounded source-state instruction correction had begun while this suite was being prepared. Therefore it was not frozen before implementation started.",
+    "The reviewer has not inspected the new runtime implementation or generated candidate outputs. Exact wording, values and criteria stay private from root and implementer until the next candidate freeze/run authorization.",
+    "This suite is informed by prior failure categories and includes explicit positive confirmation controls; it is not a random quality sample."
+  ],
+  "rules": [
+    "No model call until explicit authorization on an exact frozen candidate commit.",
+    "Use the existing Office generation/service/source-context path, unchanged configured model and one attempt per planned generation.",
+    "Preserve errors and dependent blocked records; no retries or splicing.",
+    "After disclosure for tuning, subsequent use is development."
+  ]
+}

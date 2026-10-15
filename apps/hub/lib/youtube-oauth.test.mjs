@@ -237,6 +237,9 @@ test("server token helper refreshes an expired token and saves only the selected
         access_token: "new-access", refresh_token: "rotated-refresh", expires_in: 3600,
       }) };
     }
+    if (parsed.hostname === "www.googleapis.com") {
+      return { ok: true, json: async () => ({ items: [{ id: "UC123", snippet: { title: "Channel" } }] }) };
+    }
     assert.equal(options.method, "PATCH");
     const record = JSON.parse(options.body);
     assert.equal(parsed.searchParams.get("workspace_id"), "eq.workspace-1");
@@ -260,7 +263,7 @@ test("server token helper refreshes an expired token and saves only the selected
     workspaceId: "workspace-1", channelId: "UC123", now: Date.parse("2026-09-24T01:00:00.000Z"),
   });
   assert.deepEqual(result, { accessToken: "new-access", refreshed: true, expiresAt: "2026-09-24T02:00:00.000Z" });
-  assert.deepEqual(calls.map((call) => call.options.method || "GET"), ["GET", "POST", "PATCH"]);
+  assert.deepEqual(calls.map((call) => call.options.method || "GET"), ["GET", "POST", "GET", "PATCH"]);
 });
 
 test("server token helper refuses an expired refresh grant before calling Google", async () => {

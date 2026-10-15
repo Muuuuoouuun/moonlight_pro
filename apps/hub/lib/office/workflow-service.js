@@ -1,8 +1,8 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { isAgentUuid } from '@com-moon/agent-contracts';
 import { parseOfficeDeliberation, parseOfficeFailure } from '@com-moon/agent-contracts/office';
-import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext, parseOfficeWorkflowResult, parseOfficeWorkflowOrigin } from '@com-moon/agent-contracts/office-workflow';
+import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext, parseOfficeWorkflowResult, parseOfficeWorkflowOrigin, OFFICE_CUSTOMER_PREPARATION_VERSION, officeCustomerApprovalPayload, parseOfficeCustomerApproval, parseOfficeCustomerExecution } from '@com-moon/agent-contracts/office-workflow';
 
 const INTENTS = new Set(['weekly_report', 'customer_reply']);
 const errorResult = (error, status = 'error', persisted = false) => ({ status, error, persistence: { persisted }, capabilities: { generate: false, applyTask: false } });
@@ -16,6 +16,8 @@ export function projectOfficeReceipt(envelope) {
   if (!row) return errorResult(envelope?.error || 'office-receipt-unavailable', envelope?.status || 'unknown', envelope?.persisted ?? null);
   const status = envelope.status;
   let deliberation;
+  let execution;
+  try { if (row.result?.execution) execution = parseOfficeCustomerExecution(row.result.execution); } catch { /* Do not project malformed provider metadata. */ }
   // Project only the typed meeting controls, never arbitrary snapshot fields.
   if (row.mode === 'council' && row.input_snapshot?.deliberation) {
     try { deliberation = parseOfficeDeliberation(row.input_snapshot.deliberation, row.participants); } catch { /* Legacy/malformed controls are not exposed. */ }
@@ -27,6 +29,7 @@ export function projectOfficeReceipt(envelope) {
     logState: row.log_state ?? (row.state === 'generated' ? 'unknown' : null),
     parentRequestId: row.parent_request_id ?? null, expired: status === 'expired', resultRevision: row.result_revision ?? null,
     result: status === 'expired' ? null : row.state === 'generated' ? row.result ?? null : null,
+    ...(execution ? { execution } : {}),
     persistence: { persisted: true }, application: publicApplication(row.application),
     ...(row.state === 'error' && row.result?.error ? { error: row.result.error } : {}),
     ...(row.state === 'error' && parseOfficeFailure(row.result?.failure) ? { failure: parseOfficeFailure(row.result.failure) } : {}),
@@ -140,7 +143,8 @@ export function createOfficeWorkflowService(deps) {
       if (result.status === 'generated') result = parseOfficeWorkflowResult(result, request, resolved);
       else if (result.status !== 'unknown') {
         const failure = parseOfficeFailure(result.failure);
-        result = { status: 'error', error: result.error || 'office-generation-failed', ...(failure ? { failure } : {}) };
+        const execution = request.customerPreparationVersion === OFFICE_CUSTOMER_PREPARATION_VERSION && result.execution ? parseOfficeCustomerExecution(result.execution) : null;
+        result = { status: 'error', error: result.error || 'office-generation-failed', ...(failure ? { failure } : {}), ...(execution ? { execution } : {}) };
       }
     } catch { result = { status: 'error', error: 'office-result-validation-failed' }; }
     if (Buffer.byteLength(JSON.stringify(result), 'utf8') > 32768) result = { status: 'error', error: 'office-result-too-large' };
@@ -155,7 +159,7 @@ export function createOfficeWorkflowService(deps) {
       if (saved.persisted === true) {
         if (result.status === 'generated' && saved.status === 'generated') {
           let run = null;
-          try { run = await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: `office.${request.ownerId}`, mode: request.mode, ref: `office-request:${request.requestId}`, inputSummary: `intent=${request.intent} scope=${request.scope}`, recommendation: { requestId: request.requestId, artifactKind: result.artifact.kind, status: 'generated', elapsedMs: result.generation?.elapsedMs ?? null, usage: result.generation?.usage ?? null }, result: 'ok' }); } catch { /* receipt remains authoritative */ }
+          try { run = await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: `office.${request.ownerId}`, mode: request.mode, ref: `office-request:${request.requestId}`, inputSummary: `intent=${request.intent} scope=${request.scope}`, recommendation: { requestId: request.requestId, artifactKind: result.artifact.kind, status: 'generated', elapsedMs: result.generation?.elapsedMs ?? null, usage: result.generation?.usage ?? null, ...(result.execution ? { execution: result.execution } : {}) }, result: 'ok' }); } catch { /* receipt remains authoritative */ }
           const logState = run?.persisted === true && isAgentUuid(run.id) ? 'saved' : run?.persisted === false ? 'error' : 'unknown';
           try {
             const logged = await rpc('office_request_log_v1', { p_request_id: request.requestId, p_run_id: logState === 'saved' ? run.id : null, p_log_state: logState }, identity);
@@ -164,7 +168,7 @@ export function createOfficeWorkflowService(deps) {
         }
         // 2026-09-23 운영자 확정: 실패도 원인 분류만(본문 없음) 실행 기록에 남겨 Office 하단 요약에 보인다.
         if (result.status === 'error') {
-          try { await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: `office.${request.ownerId}`, mode: request.mode, ref: `office-request:${request.requestId}`, inputSummary: `intent=${request.intent} scope=${request.scope}`, recommendation: { requestId: request.requestId, status: 'error', failure: result.failure ?? null }, result: 'error' }); } catch { /* 영수증이 정본이다. */ }
+          try { await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: `office.${request.ownerId}`, mode: request.mode, ref: `office-request:${request.requestId}`, inputSummary: `intent=${request.intent} scope=${request.scope}`, recommendation: { requestId: request.requestId, status: 'error', failure: result.failure ?? null, ...(result.execution ? { execution: result.execution } : {}) }, result: 'error' }); } catch { /* 영수증이 정본이다. */ }
         }
         return projectOfficeReceipt(saved);
       }
@@ -212,21 +216,33 @@ export function createOfficeWorkflowService(deps) {
     try { existing = await internalReceipt(id, identity); } catch (error) { return failure(error, true); }
     if (!existing.request) return projectOfficeReceipt(existing);
     const row = existing.request;
-    let sourceRefs = null, contextChange = null;
+    let sourceRefs = null, contextChange = null, customerApproval = null, currentContextHash = null;
     if (!row.application) {
       if (existing.status === 'expired') return projectOfficeReceipt(existing);
       if (row.state !== 'generated' || input?.resultRevision !== row.result_revision || row.context_snapshot?.capabilities?.applyTask !== true) return errorResult('office-result-not-applicable', 'conflict');
-      if (!input?.fields || Object.keys(input).some(key => !['resultRevision', 'fields', 'acknowledgeContextChange'].includes(key))
+      if (!input?.fields || Object.keys(input).some(key => !['resultRevision', 'fields', 'acknowledgeContextChange', 'customerApproval'].includes(key))
         || (input.acknowledgeContextChange !== undefined && typeof input.acknowledgeContextChange !== 'boolean')) return errorResult('invalid-office-application', 'invalid-input');
+      if (row.input_snapshot?.customerPreparationVersion === OFFICE_CUSTOMER_PREPARATION_VERSION) {
+        try {
+          const resultHash = createHash('sha256').update(officeCustomerApprovalPayload(row.result, { reviewedContextHash: input.customerApproval?.reviewedContextHash })).digest('hex');
+          customerApproval = parseOfficeCustomerApproval(input.customerApproval, row.result, resultHash);
+        } catch { return errorResult('office-customer-approval-required', 'conflict'); }
+      } else if (input.customerApproval !== undefined) return errorResult('invalid-office-application', 'invalid-input');
       try {
         const current = await deps.readContext(query(row.input_snapshot), identity);
         if (current.status !== 'ready') return errorResult('office-context-unavailable', 'conflict');
+        currentContextHash = current.contextHash;
         // 2026-09-23 운영자 확정: 기록이 바뀌었으면 막지 않고 알린다. 운영자가 확인하면 그대로 연결한다.
         if (current.contextHash !== row.context_hash) {
           contextChange = officeContextChange(row.source_refs ?? row.context_snapshot?.sourceRefs, current.sourceRefs);
           if (input.acknowledgeContextChange !== true) return { ...errorResult('office-context-changed', 'conflict'), requestId: id, contextChange };
         }
-        const target = await deps.readTargets(input.fields, row.scope, identity);
+        // Keep the existing operator choice to use the earlier draft after a
+        // change. A stale review itself grants nothing until that explicit acknowledgement.
+        if (customerApproval && customerApproval.reviewedContextHash !== current.contextHash && input.acknowledgeContextChange !== true) return errorResult('office-customer-review-stale', 'conflict');
+        const sourceBrandId=row.intent==='customer_reply'?row.context_snapshot?.facts?.customer?.brandId:undefined;
+        if(sourceBrandId!=null&&current.facts?.customer?.brandId!==sourceBrandId)return errorResult('office-customer-brand-changed','conflict');
+        const target = await deps.readTargets(input.fields, row.scope, identity, {expectedBrandId:sourceBrandId});
         if (target.status !== 'ready') return target;
         sourceRefs = target.sourceRefs;
       } catch { return errorResult('office-target-read-unavailable'); }
@@ -240,7 +256,9 @@ export function createOfficeWorkflowService(deps) {
       // 이미 저장 확인된 적용의 재확인은 새 연결이 아니다 — 요약의 '할 일 연결' 수를 부풀리지 않는다.
       if (row.application?.state !== 'saved') try {
         await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: 'office.apply', mode: 'apply', ref: `office-request:${id}`, inputSummary: `intent=${row.intent} scope=${row.scope}`,
-          recommendation: { requestId: id, contextChanged: Boolean(contextChange), ...(contextChange ? { change: contextChange } : {}) }, result: 'ok' });
+          recommendation: { requestId: id, contextChanged: Boolean(contextChange), ...(contextChange ? { change: contextChange } : {}),
+            ...(customerApproval ? { approvedResultHash: customerApproval.resultHash, reviewedContextHash: customerApproval.reviewedContextHash, sourcesReviewed: true, questionsReviewed: true,
+              ...(input.acknowledgeContextChange === true ? { acknowledgedContextHash: currentContextHash } : {}) } : {}) }, result: 'ok' });
       } catch { /* 적용 영수증이 정본이다. 실행 기록 실패는 저장 결과를 바꾸지 않는다. */ }
       return { status: 'saved', requestId: id, persistence: { persisted: true }, application: { state: 'saved', action: 'create_task', commandId: outcome.commandId, entityId: outcome.entity.id, targetRef: { type: 'tasks', id: outcome.entity.id }, entityConfirmed }, capabilities: { generate: false, applyTask: false } };
     }

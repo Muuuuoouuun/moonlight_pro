@@ -8,7 +8,7 @@ export async function callOfficeWorkflowEngine(request, context, { fetcher = fet
   try {
     const response = await fetcher(`${engineUrl.trim().replace(/\/$/, '')}/api/ai/office-workflow`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-com-moon-shared-secret': secret.trim() },
-      body: JSON.stringify({ request, context }), cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(55000),
+      body: JSON.stringify({ request, context }), cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(request.intent === 'weekly_report' && request.mode !== 'council' ? 105_000 : 55_000),
     });
     const result = parseOfficeWorkflowResult(await response.json(), request, context);
     if (result.status === 'generated' && !response.ok) throw new Error('invalid-status');

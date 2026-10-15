@@ -20,6 +20,14 @@
   font: inherit;
 }
 
+.hub-app .guidance-inline-tip--home {
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 0 14px;
+}
+
 .guidance-inline-tip__kind {
   flex: none;
   color: var(--fg-dim);

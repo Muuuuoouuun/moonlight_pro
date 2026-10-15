@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>원고 작성 — 예약</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+a{color:#5274A8}a:hover{color:#3E5C8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; background: #F7F8FA; font-family: 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228; position: relative; overflow: hidden;">
+
+  <nav aria-label="허브 메뉴" style="width: 232px; flex-shrink: 0; background: #F1F3F6; border-right: 1px solid #E9ECEF; padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px;"><span style="width: 28px; height: 28px; border-radius: 6px; background: #1E2228; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px;">M</span><span style="font-weight: 600;">Moonlight</span></div>
+    <a href="Home.dc.html" style="padding: 8px 10px; border-radius: 8px; color: #545C66; text-decoration: none;">오늘</a>
+    <span style="padding: 8px 10px; color: #545C66;">내 작업</span>
+    <span style="padding: 8px 10px; color: #545C66;">고객 연락</span>
+    <span style="padding: 8px 10px; color: #545C66;">브랜드</span>
+    <span style="padding: 8px 10px; border-radius: 8px; background: #FFFFFF; font-weight: 500; box-shadow: 0 1px 2px rgba(20,24,30,0.06);">콘텐츠</span>
+  </nav>
+
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+    <div style="height: 52px; border-bottom: 1px solid #E9ECEF; display: flex; align-items: flex-end; gap: 24px; padding: 0 28px; font-size: 13px; color: #545C66; background: #FFFFFF;">
+      <span style="padding-bottom: 14px;">성과</span>
+      <span style="padding-bottom: 14px;">소재·제작</span>
+      <span style="padding-bottom: 13px; color: #1E2228; font-weight: 600; border-bottom: 1px solid #5274A8;">원고 작성</span>
+      <a href="Log.dc.html" style="padding-bottom: 14px; color: #545C66; text-decoration: none;">발행</a>
+    </div>
+
+    <div style="flex-grow: 1; padding: 28px 0; display: flex; justify-content: center;">
+      <div style="width: 780px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div><h2 style="margin: 0; font-size: 20px; font-weight: 500;">원고 작성</h2><div style="font-size: 12px; color: #545C66; margin-top: 4px;">Threads · class.moon</div></div>
+          <div style="display: flex; gap: 14px; align-items: center; font-size: 12.5px; color: #545C66;"><span>저장됨</span><span>+ 새 글</span><span>··· 더보기</span></div>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 22px 24px 0; display: flex; flex-direction: column; gap: 14px;">
+          <div style="font-size: 17px; font-weight: 500;">복습이 안 되는 진짜 이유</div>
+          <div style="font-size: 13px; color: #737C86; display: flex; gap: 8px; align-items: center;"><span>›</span><span>원문 메모</span><span style="margin-left: auto;">있음</span></div>
+          <div style="border: 1px solid #E9ECEF; border-radius: 6px; padding: 16px; font-size: 15px; line-height: 1.8; white-space: pre-line;">복습이 어려운 이유는 의지가 아니라 시작점이 없어서다.
+
+오늘 수업이 끝나고 한 학생이 물었다. "어디서부터 다시 봐야 해요?"
+
+그래서 수업 마지막 3분을 '다음에 볼 한 줄'을 정하는 시간으로 바꿨다.</div>
+          <div style="display: flex; gap: 8px; font-size: 12.5px;"><span style="padding: 6px 11px; border: 1px solid #DCE0E5; border-radius: 6px;">AI 초안</span><span style="padding: 6px 11px; border: 1px solid #DCE0E5; border-radius: 6px;">AI 다듬기</span></div>
+
+          <div style="display: flex; gap: 10px; align-items: center; padding: 12px 0 16px; border-top: 1px solid #E9ECEF;">
+            <button type="button" style="height: 36px; padding: 0 16px; border-radius: 6px; border: 1px solid #1E2228; background: #1E2228; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 500;">복사</button>
+            <button type="button" aria-expanded="true" style="height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #5274A8; background: #EAF0F8; color: #3E5C8C; font: inherit; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>오늘 19:30 예약</button>
+            <button type="button" style="height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; color: #1E2228; font: inherit; font-size: 13px;">발행했음</button>
+            <span style="margin-left: auto; font-size: 12px; color: #737C86;">예약하면 그 시각에 알림이 옵니다</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div role="dialog" aria-label="올릴 시각" style="position: absolute; left: 870px; top: 312px; width: 380px; background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 12px; box-shadow: 0 12px 32px rgba(20,24,30,0.12); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 15px; font-weight: 600;">올릴 시각</span><span style="font-size: 12px; color: #737C86;">Threads · class.moon</span></div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">자주 올리던 시간</span>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+        <button type="button" style="height: 56px; border-radius: 8px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-size: 11.5px; color: #737C86;">오늘</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px;">12:30</span></button>
+        <button type="button" aria-pressed="true" style="height: 56px; border-radius: 8px; border: 1px solid #5274A8; background: #EAF0F8; font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #3E5C8C;"><span style="font-size: 11.5px;">오늘</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500;">19:30</span></button>
+        <button type="button" style="height: 56px; border-radius: 8px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-size: 11.5px; color: #737C86;">내일</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px;">08:30</span></button>
+      </div>
+      <span style="font-size: 11.5px; color: #737C86;">최근 발행 기록의 시간대에서 골랐습니다 · 19:30에 겹치는 예약 없음</span>
+    </div>
+
+    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #545C66;">직접 정하기
+      <input type="datetime-local" value="2026-09-28T19:30" style="height: 38px; border: 1px solid #DCE0E5; border-radius: 6px; padding: 0 10px; font: inherit; font-size: 13px; color: #1E2228;">
+    </label>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #E9ECEF;">
+      <label style="display: flex; align-items: center; gap: 10px; font-size: 13px;"><input type="radio" name="mode" checked style="margin: 0;">시각이 되면 알림 — 내가 올린다</label>
+      <label style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #9AA2AB;"><input type="radio" name="mode" disabled style="margin: 0;">승인 후 자동 업로드 <span style="margin-left: auto; font-size: 11px; padding: 2px 8px; border: 1px dotted #9AA2AB; border-radius: 999px;">나중 · 결정 필요</span></label>
+    </div>
+
+    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+      <button type="button" style="height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13px;">예약 해제</button>
+      <button type="button" style="height: 36px; padding: 0 16px; border-radius: 6px; border: 1px solid #1E2228; background: #1E2228; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 500;">19:30으로 예약</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

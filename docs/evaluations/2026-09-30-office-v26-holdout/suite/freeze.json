@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "purpose": "private-to-reviewer one-shot post-correction holdout",
+  "createdAt": "2026-09-30",
+  "datasetStatus": "independent-holdout",
+  "scenarios": 6,
+  "generationCalls": 8,
+  "datasetFileSha256": "2de2e49762faed5e825d3b8dab25c46ddeff8a3a2cb28d6c2661886c79fd1dd7",
+  "generationPermitted": false,
+  "rules": [
+    "Freeze first bounded correction commit before any run or disclosure.",
+    "No model call until explicitly instructed.",
+    "Use actual Office service/provider and existing request/source contract.",
+    "Do not replace missing or failed turns.",
+    "After implementation sees wording/results for tuning, classify further use as development.",
+    "This small targeted holdout cannot certify 20-criterion quality for every role."
+  ]
+}

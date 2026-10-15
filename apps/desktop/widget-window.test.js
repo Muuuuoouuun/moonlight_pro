@@ -16,6 +16,8 @@ const {
   clampIntoWorkArea,
   resolveWidgetPosition,
   widgetToggleAction,
+  widgetPlatformOptions,
+  widgetWorkspaceOptions,
 } = require('./widget-window');
 
 const HUB = 'https://hub.example.com';
@@ -112,4 +114,19 @@ test('프리로드 채널은 WIDGET_CHANNELS와 같다', () => {
   const used = [...source.matchAll(/'(moonlight-widget:[a-z-]+)'/g)].map((m) => m[1]).sort();
   assert.deepEqual(used, Object.values(WIDGET_CHANNELS).sort());
   assert.doesNotMatch(source, /nodeIntegration|require\('\.\//);
+});
+
+test('macOS 위젯은 비활성 패널 + 첫 클릭 수락, 전체 화면 위에도 뜬다', () => {
+  assert.deepEqual(widgetPlatformOptions('darwin'), { type: 'panel', acceptFirstMouse: true });
+  assert.deepEqual(widgetWorkspaceOptions('darwin'), {
+    visible: true,
+    options: { visibleOnFullScreen: true, skipTransformProcessType: true },
+  });
+});
+
+test('Windows·Linux 위젯 창 옵션은 그대로(추가 없음)', () => {
+  for (const platform of ['win32', 'linux']) {
+    assert.deepEqual(widgetPlatformOptions(platform), {});
+    assert.equal(widgetWorkspaceOptions(platform), null);
+  }
 });

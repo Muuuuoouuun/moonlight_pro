@@ -36,6 +36,7 @@ export function normalizeProjectIndexPreferences(value) {
   return {
     order: uniqueIds(preferences.order),
     sort: sortValues.has(preferences.sort) ? preferences.sort : 'manual',
+    doneCollapsed: preferences.doneCollapsed === true,
   };
 }
 
@@ -81,6 +82,28 @@ export function sortProjectIndex(projects, preferences) {
     }
     return difference || compareRank(a, b);
   }).map(({ project }) => project);
+}
+
+// 할 일이 모두 끝나 진척 100%로 측정된 프로젝트는 "완료됨" 묶음으로 목록 맨 아래에 둔다.
+// 상태(completed)는 결과 확인 뒤 운영자가 바꾼다 — 여기서는 표시 순서만 내린다.
+// null = 판단 불가(미측정·일부 데이터). 축하는 false → true 전환에만 붙인다.
+export function projectIndexDoneState(project) {
+  const progress = project?.displayProgress;
+  if (!progress || progress.partial || progress.source !== 'tasks'
+    || !Number.isSafeInteger(progress.total) || progress.total <= 0
+    || !Number.isSafeInteger(progress.done) || progress.done < 0 || progress.done > progress.total) return null;
+  // A rounded display value (200/201 -> 100%) or a reported value is not proof
+  // that every checklist item is done. Lifecycle still requires result review.
+  return progress.done === progress.total;
+}
+
+// 정렬 결과를 보존한 채 완료됨 묶음만 뒤로 보낸다(안정 분할).
+export function sinkDoneProjects(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const open = [];
+  const done = [];
+  for (const project of list) (projectIndexDoneState(project) ? done : open).push(project);
+  return done.length ? [...open, ...done] : list;
 }
 
 /**

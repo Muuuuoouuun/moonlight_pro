@@ -1,0 +1,121 @@
+/* 막힘 풀기(확인할 것 스펙 §5.4) — 확인할 것 카드와 프로젝트 상세가 같이 쓴다. 토큰만, 보더 1px. */
+
+.hub-app .ub-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.hub-app .ub-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .ub-facts {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .ub-blocker {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+
+.hub-app .ub-branch-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .ub-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hub-app .ub-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .ub-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--danger-bg);
+  box-shadow: inset 1px 0 0 var(--danger);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+
+.hub-app .ub-error__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hub-app .ub-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hub-app .ub-history summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .ub-history ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.hub-app .ub-history li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--fg-dim);
+}
+
+.hub-app .ub-history__meta {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* 프로젝트 상세의 막힘 자리 — 상태 강조는 좌측 1px 위급 레일 하나(DESIGN.md §8.1). */
+.hub-app .ub-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  box-shadow: inset 1px 0 0 var(--danger-line);
+}
+
+.hub-app .ub-section__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .ub-section__head h4 { margin: 0; font-size: 13px; font-weight: 500; }

@@ -38,6 +38,11 @@ const STAGES_REQUIRING_REASON = new Set(["maintain", "sunset"]);
 export const PRODUCT_OPS_STATUSES = ["dev", "live", "paused", "ended"] as const;
 const OPS_SET = new Set<string>(PRODUCT_OPS_STATUSES);
 const OPS_REQUIRING_NOTE = new Set(["paused", "ended"]);
+// 집중 구간 — 동시에 MVP·출시·성장인 제품은 3개까지(2026-09-28 운영자 "3개 집중", 2026-09-30 확정,
+// 제품 렌즈 §4.2·§12-5). 종료(ended)한 제품은 세지 않는다. 막는 것은 **집중 구간에 새로 들어올 때**뿐이다 —
+// 이미 들어 있는 제품의 카드 편집은 막지 않는다. 자동으로 다른 제품을 내리지 않는다.
+export const FOCUS_STAGES = new Set(["mvp", "launch", "growth"]);
+export const FOCUS_LIMIT = 3;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const ORG_SCOPES = new Set(["personal", "classin"]);
 const PRICING_MODELS = new Set(["undecided", "free", "monthly", "per_use", "one_time"]);
@@ -455,6 +460,35 @@ function canonicalCreate(action: string, row: Row) {
   return JSON.stringify({ product_id: row.product_id, full_name: row.full_name });
 }
 
+function inFocus(stage: unknown, opsStatus: unknown) {
+  return FOCUS_STAGES.has(String(stage)) && opsStatus !== "ended";
+}
+
+// 이 제품 말고 집중 구간에 있는 제품이 이미 상한이면 거절한다. 단일 운영자 전제라 읽고-쓰기 사이의
+// 경합은 막지 않는다(동시에 두 제품을 올리는 경우만 4개가 될 수 있다).
+async function focusCapRejection(
+  action: string,
+  productId: string,
+  workspaceId: string,
+  deps: ProductDependencies,
+) {
+  const rows = await deps.fetchRows("products", {
+    select: "id,name,stage,ops_status",
+    filters: [["workspace_id", `eq.${workspaceId}`], ["stage", "in.(mvp,launch,growth)"], ["ops_status", "neq.ended"]],
+    limit: 100,
+  });
+  if (rows === null) return { status: "error", action, error: "focus-check-failed" };
+  const others = rows.filter((row) => row.id !== productId && inFocus(row.stage, row.ops_status));
+  if (others.length < FOCUS_LIMIT) return null;
+  return {
+    status: "invalid-input",
+    action,
+    error: "focus-cap-reached",
+    limit: FOCUS_LIMIT,
+    focus: others.map((row) => ({ id: row.id, name: row.name, stage: row.stage })),
+  };
+}
+
 export async function executeProductCommand(input: Row, context: Context, deps: ProductDependencies) {
   const command = normalizeProductCommand(input, context);
   if (!command.ok) return { status: "invalid-input", error: command.reason };
@@ -474,6 +508,23 @@ export async function executeProductCommand(input: Row, context: Context, deps: 
       });
       if (products === null) return { status: "error", error: "relationship-check-failed" };
       if (!products[0]) return { status: "invalid-input", error: "invalid-product-reference" };
+    }
+    if (command.table === "products") {
+      // 이미 저장된 생성 요청의 재전송은 새 집중 진입이 아니다 — 상한 조회보다 영수증을 먼저 확인한다.
+      const byId = await deps.fetchRows("products", {
+        filters: [["id", `eq.${command.record.id}`], ["workspace_id", `eq.${workspaceId}`]],
+        limit: 1,
+      });
+      if (byId === null) return { status: "error", error: "current-entity-read-failed" };
+      if (byId[0]) {
+        return canonicalCreate(command.action, byId[0]) === canonicalCreate(command.action, command.record)
+          ? { status: "duplicate", action: command.action, entity: byId[0] }
+          : { status: "conflict", action: command.action, error: "id-reuse-payload-mismatch", retryable: false, entity: byId[0] };
+      }
+      if (inFocus(command.record.stage, command.record.ops_status)) {
+        const rejection = await focusCapRejection(command.action, String(command.record.id), workspaceId, deps);
+        if (rejection) return rejection;
+      }
     }
     const persistence = await deps.insert(command.table, command.record);
     if (persistence.persisted) return { status: "saved", action: command.action, entity: persistence.record || command.record };
@@ -538,6 +589,12 @@ export async function executeProductCommand(input: Row, context: Context, deps: 
       if (contractSignature(merged) !== contractSignature({ ...emptyProductDetails(), ...currentDetails })) {
         patch.version = Number(current.version || 1) + 1;
       }
+    }
+    const entersFocus = !inFocus(current.stage, current.ops_status)
+      && inFocus(patch.stage ?? current.stage, patch.ops_status ?? current.ops_status);
+    if (entersFocus) {
+      const rejection = await focusCapRejection(command.action, String(current.id), workspaceId, deps);
+      if (rejection) return rejection;
     }
     if (patch.stage && patch.stage !== current.stage) {
       if (STAGES_REQUIRING_REASON.has(String(patch.stage)) && !command.stageReason) {

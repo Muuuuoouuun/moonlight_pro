@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>리포트 종류 지도</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:'SUIT Variable','Pretendard','Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;background:#0d0f12}
+a:focus-visible{outline:1px solid #b9bec7;outline-offset:2px}
+.row:hover{background:#191c21}
+.mono{font-family:'JetBrains Mono','Cascadia Mono',ui-monospace,monospace;letter-spacing:0}
+</style>
+</helmet>
+<div style="width:1440px;height:960px;box-sizing:border-box;background:#0d0f12;color:#e4e6ea;display:flex;flex-direction:column;padding:32px 40px;gap:20px;overflow:hidden">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<a href="Main.dc.html" style="font-size:12px;color:#9aa0a9;text-decoration:none">← 리포트</a>
+<h2 style="margin:0;font-size:20px;font-weight:500">필요한 리포트 종류</h2>
+<div style="font-size:13px;color:#9aa0a9">다른 탭과 문서를 조사해 정리했습니다. 각 리포트는 시간 축과 그래프 한 종류를 갖습니다.</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;font-size:12px;color:#9aa0a9">데이터 준비
+<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="#c4c8cf" stroke="#c4c8cf"/></svg>있음</span><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="#c4c8cf"/><path d="M6 1.5a4.5 4.5 0 0 0 0 9z" fill="#c4c8cf"/></svg>일부</span><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="#9aa0a9" stroke-dasharray="2 1.5"/></svg>없음</span></div>
+</div>
+<div style="border:1px solid #2a2e35;border-radius:14px;background:#14171b;overflow:hidden">
+<div style="display:flex;align-items:center;gap:20px;padding:10px 24px;border-bottom:1px solid #2a2e35;font-size:11px;letter-spacing:0.1em;color:#737a85;text-transform:uppercase">
+<div style="width:250px;flex-shrink:0">리포트</div><div style="width:200px;flex-shrink:0">시점 · 주기</div><div style="width:240px;flex-shrink:0">원천 탭</div><div style="width:72px;flex-shrink:0">그래프</div><div style="flex-grow:1">시간 축 · 그래프</div><div style="width:230px;flex-shrink:0">데이터 준비</div></div>
+<div class="row" style="display:flex;align-items:center;gap:20px;padding:0 24px;height:72px;border-bottom:1px solid #22262c;">
+<div style="width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;color:#e4e6ea">개인 주간 회고</span><span style="font-size:11px;color:#9aa0a9;border:1px dashed #3a3f48;border-radius:4px;padding:0 6px;height:20px;display:inline-flex;align-items:center">권장 1차</span></div>
+<div style="width:200px;flex-shrink:0;font-size:13px;color:#c4c8cf;line-height:1.5">매주 월요일 아침 · 직전 월–일</div>
+<div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">내 작업 · 하루 리뷰 · 메모</span><span class="mono" style="font-size:11px;color:#737a85">/dashboard/work/my</span></div>
+<div style="width:72px;flex-shrink:0"><svg width="72" height="28" viewBox="0 0 72 28" fill="none" aria-hidden="true"><path d="M2 26h68" stroke="#3a3f48"/><rect x="4" y="6" width="7" height="20" fill="#c4c8cf"/><rect x="14" y="12" width="7" height="14" fill="#c4c8cf"/><rect x="24" y="6" width="7" height="20" fill="#c4c8cf"/><rect x="34" y="18" width="7" height="8" fill="#c4c8cf"/><rect x="44" y="6" width="7" height="20" fill="#c4c8cf"/><rect x="54" y="24" width="7" height="2" fill="#c4c8cf"/><rect x="64" y="12" width="7" height="14" fill="#c4c8cf"/><path d="M2 6h68" stroke="#9aa0a9" stroke-dasharray="3 3"/></svg></div>
+<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">일별 7일</span><span style="font-size:12px;color:#9aa0a9">오늘 3개 완료 막대 + 목표선</span></div>
+<div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="#c4c8cf" stroke="#c4c8cf"/></svg>있음</span><span style="font-size:12px;color:#9aa0a9;line-height:1.45">오늘 3개 · 완료 할 일 · 메모 · 하루 리뷰 일수</span></div>
+</div>
+<div class="row" style="display:flex;align-items:center;gap:20px;padding:0 24px;height:72px;border-bottom:1px solid #22262c;">
+<div style="width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;color:#e4e6ea">회사 주간 요약 · ClassIn</span><span style="font-size:11px;color:#9aa0a9;border:1px dashed #3a3f48;border-radius:4px;padding:0 6px;height:20px;display:inline-flex;align-items:center">권장 1차</span></div>
+<div style="width:200px;flex-shrink:0;font-size:13px;color:#c4c8cf;line-height:1.5">매주 목요일 아침 · 직전 월–일</div>
+<div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">파이프라인</span><span class="mono" style="font-size:11px;color:#737a85">/dashboard/classin/pipeline</span></div>
+<div style="width:72px;flex-shrink:0"><svg width="72" height="28" viewBox="0 0 72 28" fill="none" aria-hidden="true"><path d="M2 26h68" stroke="#3a3f48"/><rect x="4" y="20" width="7" height="6" fill="#c4c8cf"/><rect x="14" y="14" width="7" height="12" fill="#c4c8cf"/><rect x="24" y="16" width="7" height="10" fill="#c4c8cf"/><rect x="34" y="10" width="7" height="16" fill="#c4c8cf"/><rect x="44" y="4" width="7" height="22" fill="#c4c8cf"/><rect x="54" y="12" width="7" height="14" fill="#c4c8cf"/><rect x="64" y="8" width="7" height="18" fill="#c4c8cf"/></svg></div>
+<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">일별 7일</span><span style="font-size:12px;color:#9aa0a9">연락 · 딜 단계 이동 막대</span></div>
+<div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="#c4c8cf" stroke="#c4c8cf"/></svg>있음</span><span style="font-size:12px;color:#9aa0a9;line-height:1.45">연락 · 새 딜 · 단계 이동 · 정체</span></div>
+</div>
+<div class="row" style="display:flex;align-items:center;gap:20px;padding:0 24px;height:72px;border-bottom:1px solid #22262c;">
+<div style="width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;color:#e4e6ea">콘텐츠 성과</span></div>
+<div style="width:200px;flex-shrink:0;font-size:13px;color:#c4c8cf;line-height:1.5">매주 · 브랜드별</div>
+<div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">콘텐츠 성과</span><span class="mono" style="font-size:11px;color:#737a85">/dashboard/content/performance</span></div>
+<div style="width:72px;flex-shrink:0"><svg width="72" height="28" viewBox="0 0 72 28" fill="none" aria-hidden="true"><path d="M2 26h68" stroke="#3a3f48"/><path d="M3 20L14 16L25 18L36 10L47 12L58 6L69 8" stroke="#c4c8cf" stroke-width="1.5"/><path d="M3 22L14 21L25 19L36 18L47 16L58 15L69 14" stroke="#9aa0a9" stroke-dasharray="3 3"/></svg></div>
+<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">일별 7일</span><span style="font-size:12px;color:#9aa0a9">조회 · 공유 · 답글 선 + 주간 목표 대비</span></div>
+<div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="#c4c8cf"/><path d="M6 1.5a4.5 4.5 0 0 0 0 9z" fill="#c4c8cf"/></svg>일부</span><span style="font-size:12px;color:#9aa0a9;line-height:1.45">수치는 있고 주간 실적(weekly_actual)은 수기 입력</span></div>
+</div>
+<div class="row" style="display:flex;align-items:center;gap:20px;padding:0 24px;height:72px;border-bottom:1px solid #22262c;">
+<div style="width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;color:#e4e6ea">자동화 · 에이전트 운영</span></div>
+<div style="width:200px;flex-shrink:0;font-size:13px;color:#c4c8cf;line-height:1.5">매주</div>
+<div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">Runs · Office</span><span class="mono" style="font-size:11px;color:#737a85">/dashboard/automations/runs</span></div>
+<div style="width:72px;flex-shrink:0"><svg width="72" height="28" viewBox="0 0 72 28" fill="none" aria-hidden="true"><path d="M2 26h68" stroke="#3a3f48"/><rect x="4" y="12" width="7" height="14" fill="#c4c8cf"/><rect x="4" y="9" width="7" height="3" fill="#14171b" stroke="#9aa0a9"/><rect x="14" y="10" width="7" height="16" fill="#c4c8cf"/><rect x="14" y="8" width="7" height="2" fill="#14171b" stroke="#9aa0a9"/><rect x="24" y="14" width="7" height="12" fill="#c4c8cf"/><rect x="24" y="9" width="7" height="5" fill="#14171b" stroke="#9aa0a9"/><rect x="34" y="9" width="7" height="17" fill="#c4c8cf"/><rect x="34" y="8" width="7" height="1" fill="#14171b" stroke="#9aa0a9"/><rect x="44" y="11" width="7" height="15" fill="#c4c8cf"/><rect x="44" y="9" width="7" height="2" fill="#14171b" stroke="#9aa0a9"/><rect x="54" y="13" width="7" height="13" fill="#c4c8cf"/><rect x="54" y="9" width="7" height="4" fill="#14171b" stroke="#9aa0a9"/><rect x="64" y="10" width="7" height="16" fill="#c4c8cf"/><rect x="64" y="8" width="7" height="2" fill="#14171b" stroke="#9aa0a9"/></svg></div>
+<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">일별 7일</span><span style="font-size:12px;color:#9aa0a9">실행 성공 · 실패 누적 막대</span></div>
+<div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="#c4c8cf"/><path d="M6 1.5a4.5 4.5 0 0 0 0 9z" fill="#c4c8cf"/></svg>일부</span><span style="font-size:12px;color:#9aa0a9;line-height:1.45">실행 기록은 원장, 에이전트 품질은 문서 평가</span></div>
+</div>
+<div class="row" style="display:flex;align-items:center;gap:20px;padding:0 24px;height:72px;border-bottom:1px solid #22262c;">
+<div style="width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;color:#e4e6ea">월간 프로젝트 리뷰</span></div>
+<div style="width:200px;flex-shrink:0;font-size:13px;color:#c4c8cf;line-height:1.5">매월 초 · 지난 달</div>
+<div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">프로젝트 · 기획</span><span class="mono" style="font-size:11px;color:#737a85">/dashboard/projects</span></div>
+<div style="width:72px;flex-shrink:0"><svg width="72" height="28" viewBox="0 0 72 28" fill="none" aria-hidden="true"><rect x="2" y="3" width="30" height="5" fill="#c4c8cf"/><rect x="32" y="3" width="26" height="5" fill="#14171b" stroke="#9aa0a9"/><rect x="2" y="11" width="44" height="5" fill="#c4c8cf"/><rect x="46" y="11" width="10" height="5" fill="#14171b" stroke="#9aa0a9"/><rect x="2" y="19" width="20" height="5" fill="#c4c8cf"/><rect x="22" y="19" width="30" height="5" fill="#14171b" stroke="#9aa0a9"/></svg></div>
+<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">월 · 프로젝트별</span><span style="font-size:12px;color:#9aa0a9">진행률 · 지연 일수 가로 막대</span></div>
+<div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="#c4c8cf"/><path d="M6 1.5a4.5 4.5 0 0 0 0 9z" fill="#c4c8cf"/></svg>일부</span><span style="font-size:12px;color:#9aa0a9;line-height:1.45">판단 항목은 스펙에 있으나 월간·분기 review 구현은 범위 밖</span></div>
+</div>
+<div class="row" style="display:flex;align-items:center;gap:20px;padding:0 24px;height:72px;border-bottom:1px solid #22262c;">
+<div style="width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;color:#e4e6ea">매출 · CRM 월간</span></div>
+<div style="width:200px;flex-shrink:0;font-size:13px;color:#c4c8cf;line-height:1.5">매월 · 지난 달</div>
+<div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">매출 히트맵 · 개요</span><span class="mono" style="font-size:11px;color:#737a85">/dashboard/revenue</span></div>
+<div style="width:72px;flex-shrink:0"><svg width="72" height="28" viewBox="0 0 72 28" fill="none" aria-hidden="true"><rect x="3" y="2" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.15"/><rect x="16" y="2" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.7"/><rect x="29" y="2" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.15"/><rect x="42" y="2" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.7"/><rect x="55" y="2" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.15"/><rect x="3" y="11" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="1"/><rect x="16" y="11" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.4"/><rect x="29" y="11" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="1"/><rect x="42" y="11" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.4"/><rect x="55" y="11" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="1"/><rect x="3" y="20" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.7"/><rect x="16" y="20" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.15"/><rect x="29" y="20" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.7"/><rect x="42" y="20" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.15"/><rect x="55" y="20" width="10" height="7" rx="1" fill="#c4c8cf" fill-opacity="0.7"/></svg></div>
+<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">주 × 요일</span><span style="font-size:12px;color:#9aa0a9">매출 히트맵 + 월 추이</span></div>
+<div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="#c4c8cf" stroke="#c4c8cf"/></svg>있음</span><span style="font-size:12px;color:#9aa0a9;line-height:1.45">히트맵 화면이 이미 있음</span></div>
+</div>
+<div class="row" style="display:flex;align-items:center;gap:20px;padding:0 24px;height:72px;border-bottom:1px solid #22262c;">
+<div style="width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;color:#e4e6ea">브랜드 리서치</span></div>
+<div style="width:200px;flex-shrink:0;font-size:13px;color:#c4c8cf;line-height:1.5">브랜드별 초안 주기 (2시간 · 하루 3개)</div>
+<div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">브랜드</span><span class="mono" style="font-size:11px;color:#737a85">/dashboard/brands</span></div>
+<div style="width:72px;flex-shrink:0"><svg width="72" height="28" viewBox="0 0 72 28" fill="none" aria-hidden="true"><rect x="2" y="4" width="14" height="20" fill="none" stroke="#c4c8cf" stroke-dasharray="0"/><rect x="19" y="7" width="14" height="14" fill="none" stroke="#c4c8cf" stroke-dasharray="0"/><rect x="36" y="10" width="14" height="8" fill="none" stroke="#c4c8cf" stroke-dasharray="3 2"/><rect x="53" y="13" width="14" height="2" fill="none" stroke="#c4c8cf" stroke-dasharray="3 2"/></svg></div>
+<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">시간대별</span><span style="font-size:12px;color:#9aa0a9">선별 → 초안 → 킵 · 디벨롭 · 완성 전환</span></div>
+<div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="#9aa0a9" stroke-dasharray="2 1.5"/></svg>없음</span><span style="font-size:12px;color:#9aa0a9;line-height:1.45">구현 미착수, 스펙 DRAFT</span></div>
+</div>
+<div class="row" style="display:flex;align-items:center;gap:20px;padding:0 24px;height:72px;">
+<div style="width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;color:#e4e6ea">평가 · QA</span></div>
+<div style="width:200px;flex-shrink:0;font-size:13px;color:#c4c8cf;line-height:1.5">비정기</div>
+<div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">문서</span><span class="mono" style="font-size:11px;color:#737a85">docs/evaluations · docs/superpowers/reports</span></div>
+<div style="width:72px;flex-shrink:0"><svg width="72" height="28" viewBox="0 0 72 28" fill="none" aria-hidden="true"><rect x="24" y="2" width="24" height="24" rx="2" stroke="#9aa0a9"/><path d="M29 9h14M29 14h14M29 19h9" stroke="#9aa0a9"/></svg></div>
+<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;color:#c4c8cf">전후 비교</span><span style="font-size:12px;color:#9aa0a9">점수표 (선택)</span></div>
+<div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:4px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#c4c8cf"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="#c4c8cf" stroke="#c4c8cf"/></svg>있음</span><span style="font-size:12px;color:#9aa0a9;line-height:1.45">파일 6건</span></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.6;color:#c4c8cf">
+<div style="display:flex;gap:10px;align-items:flex-start"><svg style="flex-shrink:0;margin-top:5px" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9aa0a9" aria-hidden="true"><path d="M5 1l4 4-4 4-4-4z" stroke-dasharray="2 1.5"/></svg><span>지금 주간 리포트 API는 "어제까지 7일"이라 주차 라벨과 어긋납니다. 월·목 아침 리포트는 직전 월–일로 기간을 고정하는 안을 권장합니다 (API는 명시 기간을 받을 수 있습니다).</span></div>
+<div style="display:flex;gap:10px;align-items:flex-start"><svg style="flex-shrink:0;margin-top:5px" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#9aa0a9" aria-hidden="true"><path d="M5 1l4 4-4 4-4-4z" stroke-dasharray="2 1.5"/></svg><span>일간은 하루 리뷰 화면이 이미 있어 허브에서는 링크만 둡니다. 분기 리뷰는 월간 데이터가 쌓인 뒤로 미룹니다.</span></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

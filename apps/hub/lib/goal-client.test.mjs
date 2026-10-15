@@ -43,7 +43,10 @@ test('the weekly actuals view is its own route state and never combines with the
   assert.equal(new URL(goalHref(null, 'all', { weekly: true, check: true }), 'https://hub.invalid').searchParams.has('check'), false);
   assert.equal(goalView(new URLSearchParams('weekly=1&check=1')), 'weekly');
   assert.equal(goalView(new URLSearchParams('check=1')), 'check');
-  assert.equal(goalView(new URLSearchParams('')), 'goals');
+  assert.equal(goalView(new URLSearchParams('')), 'okr');
+  assert.equal(goalView(new URLSearchParams('kpi=1')), 'kpi');
+  assert.equal(goalView(new URLSearchParams('matrix=1')), 'okr');
+  assert.equal(new URL(goalHref(null, 'all', { kpi: true }), 'https://hub.invalid').searchParams.get('kpi'), '1');
 });
 
 test('the weekly actuals view stays inside 내 작업 › OKR·KPI when opened there', async () => {

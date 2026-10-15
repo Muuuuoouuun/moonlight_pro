@@ -23,6 +23,7 @@ const byOperation: Record<string, string[]> = {
   polish: ["positioning", "evidence"],
   shorten: ["focus", "evidence"],
   hooks: ["audience", "hook", "evidence"],
+  openers: ["audience", "hook", "evidence"],
   repurpose: ["repurpose", "narrative", "evidence"],
 };
 export function getEditorialGuidance(operation: string) {

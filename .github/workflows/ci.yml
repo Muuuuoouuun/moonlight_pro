@@ -35,8 +35,29 @@ jobs:
       - name: Tests
         run: npm test
 
-      - name: Build
-        run: npm run build
+      - name: Desktop tests
+        run: npm --workspace @com-moon/desktop test
+
+      - name: Hub and Engine build
+        run: npm run build -- --filter=@com-moon/hub --filter=@com-moon/engine
 
       - name: Audit high severity
         run: npm audit --omit=dev --audit-level=high
+
+  macos-pet:
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Native session and state contracts
+        working-directory: prototypes/moonlight-pet-macos
+        run: |
+          ./script/test_panel_interaction.sh
+          ./script/test_hub_transport.sh
+          ./script/test_hub_domain.sh
+          node script/test_native_session_bridge.mjs
+
+      - name: Build and verify signed Mac pet bundle
+        working-directory: prototypes/moonlight-pet-macos
+        run: ./script/build_and_run.sh --build-only

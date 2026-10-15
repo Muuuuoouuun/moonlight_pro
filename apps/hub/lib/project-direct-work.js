@@ -1,8 +1,28 @@
 import { isCanonicalUuid } from './uuid.js';
 import { projectItemType, readTaskChecklist, validateTaskChecklist } from './task-checklist.js';
 import { saveTaskChanges } from './pms-work-items.js';
+import { moveProjectIndex } from './project-index-order.js';
 
 const failure = (status, message, extra = {}) => ({ ok: false, status, message, ...extra });
+
+// Save the entire checklist against the version the operator saw. Moving a check
+// must preserve its ID, completion, note and date, including on conflict.
+export async function reorderProjectChecklist(task, sourceId, targetId, placement, { saveChanges = saveTaskChanges } = {}) {
+  const checks = readTaskChecklist(task);
+  const ids = checks.map(item => item.id);
+  if (!task?.updatedAt || !ids.includes(sourceId) || !ids.includes(targetId)
+    || sourceId === targetId || !['before', 'after'].includes(placement)) {
+    return failure('invalid-input', '옮길 항목을 다시 확인하세요.');
+  }
+  const order = moveProjectIndex(ids, ids, sourceId, targetId, placement);
+  if (order.every((id, index) => id === ids[index])) return { ok: true, status: 'unchanged' };
+  const byId = new Map(checks.map(item => [item.id, item]));
+  const result = await saveChanges([task], { checklist: order.map(id => byId.get(id)) });
+  const saved = result.saved.find(receipt => receipt.id === task.id)?.task;
+  if (saved) return { ok: true, status: 'saved', task: saved };
+  const failed = result.failed.find(receipt => receipt.id === task.id);
+  return failure(failed?.status || 'error', failed?.message || '순서를 저장하지 못했습니다. 다시 시도하세요.');
+}
 
 // The caller owns the draft ID. Retain the first payload after an uncertain response:
 // retrying one intention must never create another row or move it to another project.

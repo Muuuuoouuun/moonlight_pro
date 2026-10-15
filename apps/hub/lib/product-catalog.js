@@ -2,6 +2,9 @@
 // 정본 기획: docs/superpowers/specs/2026-09-24-product-dev-projects-draft.md §4·§5·§6.
 // 제품 = 오래 사는 것(단계만 바뀐다). 프로젝트 = 끝나는 것(projects.product_id로 제품 아래에 붙는다).
 
+import { projectCustomerRef } from "./project-customer-context.js";
+import { formatWon } from "./won-format.js";
+
 export const PRODUCT_STAGES = [
   { key: "idea", label: "아이디어" },
   { key: "validation", label: "검증" },
@@ -46,7 +49,7 @@ export function formatPricing(pricing) {
   const model = pricing?.model || "undecided";
   if (model === "undecided") return "가격 미정";
   if (model === "free") return "무료";
-  const amount = Number.isFinite(pricing?.amount) ? `${Number(pricing.amount).toLocaleString("ko-KR")}원` : "금액 미정";
+  const amount = Number.isFinite(pricing?.amount) ? formatWon(pricing.amount) : "금액 미정";
   return `${PRICING_LABEL[model] || model} ${amount}`;
 }
 
@@ -368,12 +371,24 @@ const ERROR_TEXT = {
   "missing-title": "일 제목을 적어 주세요.",
   "invalid-area-id": "업무 분야를 골라 주세요.",
   "invalid-work-type": "일 종류를 다시 골라 주세요.",
+  // 프로젝트 쓰기(create_project)의 참조 확인 — 업무 분야·고객(리드·고객사) 중 하나가 워크스페이스에 없다.
+  "invalid-reference": "업무 분야나 고객 기록을 찾지 못했어요. 새로고침 뒤 다시 시도하세요.",
+  "invalid-entity-ref": "고객 연결 값이 올바르지 않아요. 새로고침 뒤 다시 시도하세요.",
   "stale-update": "다른 곳에서 먼저 바뀌었어요. 입력은 유지했으니 새로고침 뒤 다시 저장하세요.",
   "engine-not-configured": "Engine 연결이 없어 저장되지 않았어요.",
   "engine-unreachable": "Engine에 연결하지 못했어요. 잠시 뒤 다시 시도하세요.",
 };
 
-export function productErrorText(error) {
+// 집중 상한 거절 — 지금 칸을 차지한 제품 이름을 같이 말해 무엇을 내릴지 바로 고르게 한다(자동으로 내리지 않는다).
+function focusCapText(data) {
+  const names = Array.isArray(data?.focus) ? data.focus.map((row) => row?.name).filter(Boolean) : [];
+  const limit = Number(data?.limit) || 3;
+  const who = names.length ? ` 지금: ${names.join(" · ")}.` : "";
+  return `MVP·출시·성장은 동시에 ${limit}개까지예요.${who} 하나를 유지·종료로 내린 뒤 올려 주세요.`;
+}
+
+export function productErrorText(error, data = null) {
+  if (error === "focus-cap-reached") return focusCapText(data);
   return ERROR_TEXT[error] || (error ? `저장하지 못했어요 (${error}).` : "저장하지 못했어요.");
 }
 
@@ -403,6 +418,20 @@ export function productOps(value) {
   return OPS_BY_VALUE[value] || OPS_BY_VALUE.dev;
 }
 
+// 포트폴리오 목록 순서: 운영 상태(사용 중 → 개발 중 → 일시 중지 → 종료) → 단계(productStageOrder) → 이름.
+// 마지막 기준이 이름인 이유 — 서버 순서(updated_at)에 기대면 같은 칸의 제품이 수정할 때마다 자리를 바꾼다.
+const LIST_OPS_RANK = ["live", "dev", "paused", "ended"];
+function opsRank(value) {
+  const index = LIST_OPS_RANK.indexOf(value || "dev");
+  return index < 0 ? LIST_OPS_RANK.length : index;
+}
+export function orderProducts(products) {
+  return [...(products || [])].sort((a, b) =>
+    opsRank(a.opsStatus) - opsRank(b.opsStatus)
+    || productStageOrder(a.stage) - productStageOrder(b.stage)
+    || String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+}
+
 // 제품에 붙는 일(프로젝트)의 종류. 보수는 반복 주기를 가질 수 있다.
 export const WORK_TYPES = [
   { value: "feature", label: "신기능", glyph: "＋" },
@@ -421,6 +450,65 @@ export const RECURRENCES = [
 ];
 export function recurrenceLabel(value) {
   return RECURRENCES.find((item) => item.value === value)?.label || null;
+}
+
+// ＋ 일 쓰기 몸체(Engine create_project). 문의에서 만들 때 seed.customer가 있으면 그 고객을 entityRef로 붙인다
+// (projects.lead_id·customer_account_id). 고객이 없거나 모양이 틀리면 entityRef를 싣지 않는다 — 추측하지 않는다.
+export function workEntityRef(seed) {
+  const ref = projectCustomerRef(seed?.customer);
+  return ref ? { type: ref.type === "account" ? "customer_account" : "lead", id: ref.id } : null;
+}
+export function workCreateBody(product, draft, seed, id) {
+  const entityRef = workEntityRef(seed);
+  return {
+    id,
+    title: draft.title.trim(),
+    areaId: draft.areaId,
+    orgScope: product.orgScope,
+    status: "active",
+    priority: "medium",
+    productId: product.id,
+    workType: draft.workType,
+    ...(draft.dueAt ? { dueAt: draft.dueAt } : {}),
+    ...(draft.workType === "maintenance" && draft.recurrence ? { recurrence: draft.recurrence } : {}),
+    ...(entityRef ? { entityRef } : {}),
+    source: "hub-products",
+  };
+}
+
+// ＋ 일 저장 흐름(WorkDrawer). 일을 만든 뒤 문의 붙이기가 실패하면 만든 일 id(createdId)를 돌려준다 — 다시 누르면
+// 그 일에 문의만 붙이고, 같은 고객이 붙은 두 번째 일을 만들지 않는다. 쓰기 함수는 주입한다(product-client.js).
+export async function saveWork({ createWork, linkInquiry }, { product, draft, seed, id, createdId = null }) {
+  let workId = createdId;
+  if (!workId) {
+    const outcome = await createWork(workCreateBody(product, draft, seed, id));
+    if (!outcome.ok) return { ok: false, createdId: null, message: outcome.message };
+    workId = outcome.entity?.id || id;
+  }
+  if (seed?.inquiryId) {
+    const linked = await linkInquiry(seed.inquiryId, product.id, workId);
+    if (!linked.ok) return { ok: false, createdId: workId, message: `일은 만들었지만 문의를 붙이지 못했어요: ${linked.message} 다시 누르면 문의만 붙여요.` };
+  }
+  return { ok: true, createdId: workId };
+}
+
+// 문의의 고객 = 문의에 붙은 리드(inquiries.lead_id)뿐이다. 거래(deal_id)만 붙은 문의에서 고객을 추측하지 않는다 —
+// 운영 deals.lead_id는 거의 비어 있어(2026-09 실측 0/22) 거래에서 고른 고객은 틀릴 수 있다.
+// 이름은 문의에 적힌 연락처 이름(contact_name)이고, 없으면 null — 자리표시 이름을 고객 이름처럼 보이지 않는다.
+export function inquiryCustomer(inquiry) {
+  const ref = projectCustomerRef({ type: "lead", id: inquiry?.leadId });
+  return ref ? { ...ref, label: String(inquiry.contactName || "").trim() || null } : null;
+}
+export function inquiryWorkSeed(inquiry, type) {
+  const customer = inquiryCustomer(inquiry);
+  return { title: inquiry?.subject || "", workType: type, inquiryId: inquiry?.id || null, ...(customer ? { customer } : {}) };
+}
+// 조사는 늘 "고객" 뒤에 붙는다 — 이름은 괄호 안이라 자유 입력 이름("ABC학원 (원장)")의 받침을 따지지 않는다.
+export function workDrawerSubtitle(seed) {
+  if (!seed?.inquiryId) return "프로젝트 탭의 프로젝트로 만들어지고 이 제품에 붙어요.";
+  if (!workEntityRef(seed)) return "문의에서 만드는 일 — 만들면 문의가 이 일에 붙어요.";
+  const label = String(seed.customer.label || "").trim();
+  return `문의에서 만드는 일 — 만들면 문의와 고객${label ? `(${label})` : ""}이 이 일에 붙어요.`;
 }
 
 const PROJECT_STATE_LABEL = { draft: "계획", active: "진행", blocked: "막힘", completed: "완료", archived: "보관" };
@@ -531,7 +619,7 @@ export function monthNumbers(product, month) {
     activeUsers: row?.activeUsers ?? null,
     revenue,
     cost,
-    net: revenue !== null && cost !== null ? revenue - cost : revenue !== null ? revenue : cost !== null ? -cost : null,
+    net: revenue !== null && cost !== null ? revenue - cost : null,
     known: Boolean(row),
   };
 }
@@ -548,10 +636,10 @@ export function portfolioSummary(products, inquiries, month) {
   for (const product of list) {
     byOps[product.opsStatus || "dev"] = (byOps[product.opsStatus || "dev"] || 0) + 1;
     const numbers = monthNumbers(product, month);
-    if (numbers.activeUsers !== null) { users += numbers.activeUsers; usersKnown += 1; }
-    if (numbers.revenue !== null || numbers.cost !== null) {
-      revenue += numbers.revenue || 0;
-      cost += numbers.cost || 0;
+    if (product.opsStatus !== "ended" && numbers.activeUsers !== null) { users += numbers.activeUsers; usersKnown += 1; }
+    if (numbers.net !== null) {
+      revenue += numbers.revenue;
+      cost += numbers.cost;
       moneyKnown += 1;
     }
   }
@@ -561,7 +649,7 @@ export function portfolioSummary(products, inquiries, month) {
     byOps,
     users: usersKnown ? users : null,
     usersMissing: list.filter((p) => p.opsStatus !== "ended").length - usersKnown,
-    revenue, cost, net: moneyKnown ? revenue - cost : null, moneyKnown,
+    revenue, cost, net: moneyKnown ? revenue - cost : null, moneyKnown, moneyMissing: list.length - moneyKnown,
     openInquiries: open.length,
     newInquiries: open.filter((inquiry) => inquiry.status === "new").length,
     waitingInquiries: open.filter((inquiry) => inquiry.status === "waiting").length,
@@ -602,4 +690,19 @@ export function productNextStep(product, { today = seoulDay() } = {}) {
   const soon = flow.slice(0, 3).flatMap((bucket) => bucket.items).find((item) => item.kind === "work");
   if (soon) return soon.title;
   return productNextAction(product, { repositories: product?.repositories?.length || 0, projects: product?.projects?.length || 0 })?.text || null;
+}
+
+// 월 숫자는 의미를 바꾸지 않고 읽는다. 상한은 Engine record_month 계약과 같다.
+export function parseMonthInput(draft) {
+  const values = {};
+  const fields = [['activeUsers', '주간 사용자', 100_000_000], ['revenue', '매출', 100_000_000_000], ['cost', '비용', 100_000_000_000]];
+  for (const [field, label, max] of fields) {
+    const text = String(draft[field] ?? '').trim();
+    if (!text) { values[field] = null; continue; }
+    if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(text)) return { ok: false, message: `${label}은 0 이상의 정수로 적어 주세요.` };
+    const value = Number(text.replaceAll(',', ''));
+    if (!Number.isSafeInteger(value) || value > max) return { ok: false, message: `${label}은 ${max.toLocaleString('ko-KR')} 이하로 적어 주세요.` };
+    values[field] = value;
+  }
+  return { ok: true, values };
 }

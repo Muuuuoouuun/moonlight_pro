@@ -62,3 +62,17 @@ The new reading regions use AppKit HUD material, masked to title/control/content
 The Metal edge now separates a fine outer lip, curved key light and weaker bounce light, with a restrained spectral reflection in the first 1–3pt. The default bevel is 10pt; the flat center is exactly transparent. In the owned lab only, red/green/blue rays use IOR 1.453/1.46/1.472. No public desktop refraction-index API is claimed and no screen capture is added.
 
 Integrated GPU check: 2,356 prismatic pixels, peak channel separation 19/255, 560 displaced edge pixels in the calibrated refraction comparison, clear shader center drift 0.00/255. These validate the custom layer, not native desktop compositing or contrast across all possible wallpapers.
+
+### 2026-09-26: slightly stronger prismatic lip
+
+The reference asks for more visible edge dispersion without a thicker frame. Keep the 9pt bevel and one-physical-pixel hairline; spectral offset rises from 0.36 to 0.44, spectral intensity from 0.11 to 0.16, and neutral reflection from 0.66 to 0.72. A weak inner return stays inside the existing bevel. Central overlay alpha remains exactly zero; the native diffusion/veil and foreground glyphs are unchanged.
+
+The installed NSGlassEffectView header still exposes only style, tintColor, cornerRadius and contentView. Central desktop refraction remains system-controlled. The user subsequently approved a ScreenCaptureKit experiment; implementation is described below.
+
+### Opt-in desktop refraction experiment — user approved 2026-09-26
+
+`DesktopRefractionView` captures the active panel’s display using ScreenCaptureKit, explicitly excluding the running app (all windows and pet), with no cursor/audio/recording output. BGRA frames remain in memory. Nominal display resolution, 30fps cap, queue depth 3, CVMetalTexture zero-copy import and one cached MPS Gaussian blur (sigma 5) per new frame bound the rendering work. Closing the panel, turning the experiment off, sleeping or leaving the user session stops capture and releases textures. Stale startup completions are rejected by generation and stream identity. Display changes including geometry changes on the same ID restart capture.
+
+The fragment shader samples this blurred backdrop through a shallow continuous lens (6pt parameter; actual interior displacement is smaller), blending into the existing 9pt lip. It adds no central rectangle, luminance floor or glyph-specific background. Native glyph rendering, existing veil and transient character wash remain above the captured image. Screen permission failure, interrupted frames and accessibility contrast settings use the native fallback.
+
+Default off on every normal launch; More → `배경 굴절 실험` enables it. `script/build_and_run.sh --desktop-refraction` is the explicit experimental launch. Permission must be enabled in macOS for MoonlightPetPreview. GPU/coordinate checks pass without requesting permission; desktop visual balance and live capture performance remain pending until permission is granted. A white, dark and busy desktop comparison is required before treating this as the normal material.

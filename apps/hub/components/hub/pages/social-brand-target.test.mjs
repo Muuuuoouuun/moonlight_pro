@@ -24,3 +24,13 @@ test("social status and connect URLs bind the same brand key and handle", () => 
   assert.equal(socialBrandUrl("connect", "instagram_api", "unknown"), null);
   assert.equal(socialBrandUrl("connect", "unknown", "classmoon"), null);
 });
+
+test('Go;Re has an explicit Threads target and never builds another provider or brand URL', () => {
+  assert.ok(SOCIAL_BRAND_OPTIONS.some(option => option.value === 'gore' && option.label.includes('@go_re_startagain')));
+  for (const action of ['status', 'connect']) {
+    const url = new URL(socialBrandUrl(action, 'meta_threads', 'gore'), 'https://hub.example.com');
+    assert.equal(url.searchParams.get('brandKey'), 'gore');
+    assert.equal(url.searchParams.get('brand'), 'go_re_startagain');
+    assert.equal(socialBrandUrl(action, 'instagram_api', 'gore'), null);
+  }
+});

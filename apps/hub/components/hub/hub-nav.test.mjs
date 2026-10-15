@@ -69,15 +69,27 @@ test('goal palette shortcuts stay in the current scope without adding a sidebar 
 // Overview joined 2026-07-15 by direct operator instruction (see hub-nav.js
 // header); brands joined 2026-08-29 (브랜드 탭 설계 §5.2 — 프로젝트 다음, 콘텐츠 앞);
 // home joined 2026-09-18. 2026-09-24 the 고객 연락 anchor folded into 영업·매출
-// as its first tab (오늘 연락) — nine primary + two utility anchors.
-test("sidebar exposes exactly nine primary and two utility anchors", () => {
-  assert.equal(SIDEBAR_PRIMARY.length, 9);
+// as its first tab (오늘 연락); 2026-09-30 제품 joined between 프로젝트 and 브랜드
+// (운영자 "별도 탭 ㄱㄱ") — ten primary + two utility anchors.
+test("sidebar exposes exactly ten primary and two utility anchors", () => {
+  assert.equal(SIDEBAR_PRIMARY.length, 10);
   assert.equal(SIDEBAR_UTILITIES.length, 2);
   assert.deepEqual(
     SIDEBAR_PRIMARY.map((a) => a.key),
-    ["home", "today", "overview", "tasks", "revenue", "discovery", "projects", "brands", "content"],
+    ["home", "today", "overview", "tasks", "revenue", "discovery", "projects", "products", "brands", "content"],
   );
   assert.ok(!SIDEBAR_ANCHORS.some((a) => a.key === "followups" || a.label === "고객 연락"), "고객 연락 is a revenue tab now, not an anchor");
+});
+
+test("제품 is its own anchor and route, no longer a Projects view", () => {
+  assert.equal(ownerAnchorKey("dashboard/products"), "products");
+  for (const scope of ["all", "classin", "personal"]) {
+    assert.equal(resolveSidebarPath("products", scope), "dashboard/products", "제품 화면은 소속을 거르지 않는다 — scope 쿼리 없음");
+  }
+  assert.equal(isSidebarAnchorActive("projects", "dashboard/products"), false);
+  assert.match(appSource, /'dashboard\/products': \(n\) => <Products onNavigate=\{n\} \/>/);
+  assert.ok(navTreePaths().includes("dashboard/products"), "⌘K 제품 항목은 새 탭으로 간다");
+  assert.ok(!navTreePaths().some((path) => path.includes("view=products")));
 });
 
 test('news discovery stays under Content in every scope', () => {
@@ -89,6 +101,18 @@ test('news discovery stays under Content in every scope', () => {
     assert.ok(nav.tabs.some((tab) => tab.path === path), scope);
   }
   assert.ok(navTreePaths().includes(path));
+});
+
+test('research inbox is one Content tab and a direct destination in every scope', () => {
+  const path = 'dashboard/content/research';
+  assert.equal(ownerAnchorKey(path), 'content');
+  for (const scope of ['all', 'classin', 'personal']) {
+    const nav = topNavigationForRoute(path, scope);
+    assert.equal(nav.activeTab?.path, path, scope);
+    assert.ok(nav.tabs.some(tab => tab.path === path), scope);
+  }
+  assert.ok(navTreePaths().includes(path));
+  assert.match(appSource, /'dashboard\/content\/research':.*<ResearchInbox/);
 });
 
 test('overview goals subview has one active child and carries organizational scope', () => {
@@ -161,7 +185,7 @@ test("영업·매출 renders four tabs, plus 현금 흐름 for 개인 and 세그
     ["고객", "dashboard/revenue/customers?scope=personal"],
     ["거래", "dashboard/revenue/deals?scope=personal"],
     ["문의", "dashboard/revenue/inquiries?scope=personal"],
-    ["현금 흐름", "dashboard/revenue/overview?scope=personal"],
+    ["현금 흐름", "dashboard/revenue/cashflow?scope=personal"],
   ]);
   assert.deepEqual(shape("classin"), [
     ["오늘 연락", "dashboard/revenue/followups"],
@@ -220,10 +244,13 @@ test("screens that left the tab row stay routable and light the nearest tab with
   assert.equal(topNavigationForRoute("dashboard/revenue/deals", "all").routeLabel, null);
 });
 
-test("an exact tab beats a role alias: 개인 개요 is 현금 흐름, other scopes read it as 거래", () => {
-  const personal = topNavigationForRoute("dashboard/revenue/overview", "personal");
+test("personal cashflow has its own tab while the previous overview stays a revenue forecast", () => {
+  const personal = topNavigationForRoute("dashboard/revenue/cashflow", "personal");
   assert.equal(personal.activeTab?.key, "rev-cashflow");
   assert.equal(personal.routeLabel, null);
+  assert.equal(topNavigationForRoute("dashboard/revenue/overview", "personal").activeTab?.tab, "deals");
+  assert.ok(navTreePaths().includes("dashboard/revenue/overview?scope=personal"));
+  assert.ok(navTreePaths().includes("dashboard/revenue/cashflow?scope=personal"));
   assert.equal(topNavigationForRoute("dashboard/revenue/overview", "all").activeTab?.tab, "deals");
   // 다른 스코프의 같은 역할 경로 — ClassIn 거래 경로를 전체에서, 전역 거래 경로를 ClassIn에서.
   assert.equal(topNavigationForRoute("dashboard/classin/pipeline", "all").activeTab?.key, "rev-deals");
@@ -316,11 +343,11 @@ test("every child resolves and is owned by its parent anchor in every scope", ()
 
 test("single-destination anchors render no sub-list and ClassIn Content has its discovery tab", () => {
   for (const scope of SIDEBAR_SCOPES) {
-    for (const key of ["home", "today"]) {
+    for (const key of ["today"]) {
       assert.deepEqual(sidebarChildren(key, scope.key), [], `${key} in ${scope.key}`);
     }
   }
-  assert.deepEqual(sidebarChildren("content", "classin").map((child) => child.key), ["ct-queue", "ct-news"]);
+  assert.deepEqual(sidebarChildren("content", "classin").map((child) => child.key), ["ct-queue", "ct-research", "ct-news"]);
   assert.ok(sidebarChildren("content", "all").length > 1);
 });
 
@@ -388,7 +415,7 @@ test("AI·자동화 children all carry a group label for the two-eyebrow layout"
 
 test('Office, work execution, coaching and brand advice keep four distinct existing destinations', () => {
   const expected = [
-    ['Office', 'dashboard/agents/office-council'],
+    ['오피스', 'dashboard/agents/office-council'],
     ['작업·실행', 'dashboard/agents/orders'],
     ['코칭·대화', 'dashboard/agents/chat'],
     ['브랜드 자문', 'dashboard/agents/council'],
@@ -849,4 +876,33 @@ test('AI utility anchor lands on Office in every scope and Office is findable in
   for (const scope of SIDEBAR_SCOPES) assert.equal(ai.paths[scope.key], 'dashboard/agents/office-council');
   const office = NAV_TREE.find(node => node.key === 'agents').children.find(child => child.key === 'office-council');
   for (const word of ['오피스', '이브이', '비서']) assert.ok(office.keywords.includes(word), word);
+});
+
+test('explicit Office scope selection replaces the meeting link without changing other global routes', () => {
+  const target = mobileNavRuntime.officeScopeSelectionPath;
+  assert.equal(typeof target, 'function');
+  const meeting = '10000000-0000-4000-8000-000000000001';
+  for (const scope of ['all', 'personal', 'classin']) {
+    for (const path of ['dashboard/agents/office-council', `/dashboard/agents/office-council?meeting=${meeting}&scope=personal`]) {
+      const result = target(path, scope);
+      const url = new URL(result, 'https://hub.invalid/');
+      assert.equal(url.pathname, '/dashboard/agents/office-council');
+      assert.equal(url.searchParams.get('scope'), scope);
+      assert.equal(url.searchParams.has('meeting'), false);
+    }
+  }
+  for (const path of ['dashboard/agents', 'dashboard/agents/runs', 'dashboard/agents/office-council/history', 'dashboard/settings', 'dashboard/daily-brief']) {
+    assert.equal(target(path, 'personal'), null);
+  }
+});
+
+test('report hub is a Home secondary tab, reachable through command catalog with no new anchor', () => {
+  const path = 'dashboard/reports';
+  assert.equal(ownerAnchorKey(path), 'home');
+  assert.equal(SIDEBAR_PRIMARY.length, 10);
+  for (const scope of ['all', 'classin', 'personal']) {
+    assert.equal(topNavigationForRoute(path, scope).activeTab?.label, '보고서');
+  }
+  assert.ok(navTreePaths().includes(path));
+  assert.match(appSource, /'dashboard\/reports':.*<Reports/);
 });

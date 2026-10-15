@@ -36,3 +36,12 @@ test("runRef runs only when the same button would be enabled", () => {
   // 메모·본문이 비어 있으면 초안 조건이 거짓 — 호출해도 아무 것도 하지 않는다(예외 없음).
   assert.doesNotThrow(() => runRef.current("draft"));
 });
+
+test("첫 줄 3안 shows for text formats only, and a missing brand is said plainly", () => {
+  const thread = render({ studio: studio({ draft: { ...emptyStudioDraft(), contentId: "c", variantId: "v", body: "본문", sourceIdea: "메모", brandId: "" } }) });
+  assert.match(thread, /첫 줄 3안/);
+  assert.match(thread, /브랜드 미지정/);
+  const card = render({ studio: studio({ draft: { ...emptyStudioDraft(), contentId: "c", variantId: "v", body: '{"slides":[]}', variantType: "card_news", channel: "instagram", sourceIdea: "메모", brandId: "b" } }) });
+  assert.doesNotMatch(card, /첫 줄 3안/, "구조화 형식에는 첫 줄 제안이 없다");
+  assert.doesNotMatch(card, /브랜드 미지정/, "브랜드가 있으면 안내하지 않는다");
+});

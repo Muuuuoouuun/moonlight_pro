@@ -8,13 +8,15 @@
 // in both, so the operator had to answer "where does this live?" before
 // "what am I doing?".
 //
-// Nine primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
+// Ten primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
 // hub-nav.test.mjs pins both counts). Overview was added 2026-07-15 per direct
 // operator instruction; the anchor set is not a fixed contract and may change —
 // 2026-09-24 the separate 고객 연락 anchor folded into 영업·매출 as its first tab
-// (오늘 연락), taking the count from ten back to nine. Organizational context
+// (오늘 연락), taking the count from ten back to nine; 2026-09-30 제품 joined
+// between 프로젝트 and 브랜드, taking it back to ten. Organizational context
 // moves into one scope control.
 
+import { FEATURE_GATES } from '../../lib/feature-gates.js';
 export const DEFAULT_SCOPE = 'all';
 
 // Futura 텍스처 라우트는 페이지 헤더 안에 pill 탭을 직접 그린다(§15 2026-09-18).
@@ -84,12 +86,10 @@ const REVENUE_CHILDREN = [
   { key: 'rev-deals', tab: 'deals', label: '거래', path: 'dashboard/revenue/deals' },
   { key: 'rev-inquiries', tab: 'inquiries', label: '문의', path: 'dashboard/revenue/inquiries' },
 ];
-// 개인 스코프 다섯 번째 탭 — 30일 현금 흐름 로드맵(2026-08-31 개인 매출 로드맵, 운영자 확정
-// 기능)은 개요 라우트의 scope=personal이 연다. 개요 자체는 탭에서 내려갔지만 이 로드맵은
-// 계속 한 번에 닿아야 한다.
+// 개인 다섯 번째 탭은 실제 금융 장부. 기존 개인 매출 전망은 개요 딥링크·⌘K에 보존한다.
 const REVENUE_PERSONAL_CHILDREN = [
   ...personalScoped(REVENUE_CHILDREN),
-  { key: 'rev-cashflow', tab: 'cashflow', label: '현금 흐름', path: 'dashboard/revenue/overview?scope=personal' },
+  { key: 'rev-cashflow', tab: 'cashflow', label: '현금 흐름', path: 'dashboard/revenue/cashflow?scope=personal' },
 ];
 // ClassIn 스코프: 거래는 workspace="classin" Deals(classin/pipeline). 고객 목록(Customers)은
 // `?scope=classin`을 지원함에 따라 `dashboard/revenue/customers?scope=classin`으로 직접 연결된다(스펙 Q-RR1 해소).
@@ -103,7 +103,7 @@ const REVENUE_CLASSIN_CHILDREN = [
 ];
 
 // 영업·매출의 각 라우트가 켜는 탭 역할. 탭 경로와 정확히 같은 라우트는 그 탭이 먼저 이기고
-// (예: 개인 스코프의 개요 = 현금 흐름), 여기 역할은 그 밖의 경우에만 쓴다 — 다른 스코프의
+// (예: 개인 스코프의 금융 장부 = 현금 흐름), 여기 역할은 그 밖의 경우에만 쓴다 — 다른 스코프의
 // 같은 역할 경로와, 탭에서 내려왔지만 PAGE_MAP·⌘K로 계속 열리는 옛 화면이다.
 // Leads·Accounts는 고객의 단계, 개요·히트맵은 거래의 보기라서 그 탭을 켠다. Cases는 켤 탭이
 // 없다(⌘K 전용) — 역할 없음.
@@ -119,6 +119,7 @@ export const REVENUE_ROUTE_TABS = {
   'dashboard/classin/pipeline': 'deals',
   'dashboard/revenue/overview': 'deals',
   'dashboard/revenue/heatmap': 'deals',
+  'dashboard/revenue/cashflow': 'cashflow',
   'dashboard/revenue/inquiries': 'inquiries',
   'dashboard/classin/segments': 'segments',
 };
@@ -127,6 +128,7 @@ export const REVENUE_ROUTE_TABS = {
 // 자신의 이름으로 남는다 — Leads를 보면서 제목이 '고객'이라고 말하거나, 켤 탭이 없는
 // Cases에서 브레드크럼이 '영업·매출' 한 칸으로 무너지지 않게.
 export const REVENUE_ROUTE_LABELS = {
+  'dashboard/revenue/cashflow': '개인 현금 흐름',
   'dashboard/revenue/leads': 'Leads',
   'dashboard/revenue/accounts': 'Accounts',
   'dashboard/classin/revenue': 'Leads',
@@ -144,7 +146,7 @@ export const REVENUE_ROUTE_LABELS = {
 const PLANNING_TAIL = [
   { key: 'prj-calendar', label: 'Calendar', path: 'dashboard/work/calendar' },
   { key: 'prj-roadmap', label: 'Roadmap', path: 'dashboard/work/roadmap' },
-  { key: 'prj-decisions', label: 'Decisions', path: 'dashboard/work/decisions' },
+  { key: 'prj-decisions', label: FEATURE_GATES.decisionJournal ? '결정 일지' : 'Decisions', path: 'dashboard/work/decisions' },
   { key: 'prj-rhythm', label: 'Rhythm', path: 'dashboard/work/rhythm' },
 ];
 
@@ -160,9 +162,11 @@ const BRAND_CHILDREN = {
 
 const CONTENT_CHILDREN = [
   { key: 'ct-performance', label: '성과', path: 'dashboard/content/performance' },
+  { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
   { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
   { key: 'ct-queue', label: '소재·제작', path: 'dashboard/content/queue' },
   { key: 'ct-studio', label: '원고 작성', path: 'dashboard/content/studio' },
+  { key: 'ct-publish', label: '발행', path: 'dashboard/content/publish' },
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
 ];
 
@@ -175,7 +179,7 @@ const CONTENT_CHILDREN = [
 // 실행 피드백(§1 계약)이라 코어 유지.
 function aiChildren(sheetsPath) {
   return [
-    { key: 'ai-office', label: 'Office', path: 'dashboard/agents/office-council', group: 'Agents' },
+    { key: 'ai-office', label: '오피스', path: 'dashboard/agents/office-council', group: 'Agents', tab: 'office' },
     { key: 'ai-orders', label: '작업·실행', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
     { key: 'ai-chat', label: '코칭·대화', path: 'dashboard/agents/chat', group: 'Agents' },
     { key: 'ai-council', label: '브랜드 자문', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
@@ -217,7 +221,11 @@ export const SIDEBAR_PRIMARY = [
     label: '홈',
     icon: 'navHome',
     scopeAware: false,
-    owns: ['dashboard/home'],
+    owns: ['dashboard/home', 'dashboard/reports'],
+    children: Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [key, [
+      { key: 'home-desk', label: '홈', path: 'dashboard/home' },
+      { key: 'home-reports', label: '보고서', path: 'dashboard/reports' },
+    ]])),
     paths: {
       all: 'dashboard/home',
       classin: 'dashboard/home',
@@ -325,6 +333,22 @@ export const SIDEBAR_PRIMARY = [
     },
   },
   {
+    // 제품 — 파는 것(products 테이블)의 포트폴리오·흐름·문의함. 2026-09-30 운영자 "별도 탭 ㄱㄱ"로
+    // 프로젝트 탭의 한 보기(?view=products)에서 나왔다(제품 렌즈 §14.2 — 브랜드 탭 분리와 같은 이유:
+    // 끝나는 일이 아니라 계속 사는 운영 대상). 화면 안에서 소속을 거르지 않으므로 scope 쿼리를 붙이지
+    // 않는다(과약속 금지). 하위 목적지는 없다 — 포트폴리오·문의함 전환은 페이지 안 SegmentedControl이다.
+    key: 'products',
+    label: '제품',
+    icon: 'navProducts',
+    scopeAware: false,
+    owns: ['dashboard/products'],
+    paths: {
+      all: 'dashboard/products',
+      classin: 'dashboard/products',
+      personal: 'dashboard/products',
+    },
+  },
+  {
     // 브랜드 — 정체성·리듬·기록을 소유한다. 콘텐츠 바로 앞에 두어 제작 흐름과
     // 인접하게 하되 표면은 분리한다 (2026-08-29 브랜드 탭 설계 §3·§5.2).
     // 앵커 세트는 고정 계약이 아니다 (2026-07-15 스펙 §3.1) — 비효율이 파악되면 추가한다.
@@ -361,9 +385,11 @@ export const SIDEBAR_PRIMARY = [
       all: CONTENT_CHILDREN,
       classin: [
         { key: 'ct-queue', label: '소재·제작', path: 'dashboard/classin/content' },
+        { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
         { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
       ],
       personal: [
+        { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
         { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
         { key: 'ct-queue', label: '소재·제작', path: 'dashboard/brand/queue' },
         { key: 'ct-studio', label: '원고 작성', path: 'dashboard/brand/studio' },
@@ -379,6 +405,8 @@ export const SIDEBAR_UTILITIES = [
     icon: 'navAI',
     scopeAware: false,
     owns: ['dashboard/agents', 'dashboard/automations', 'dashboard/classin/automations'],
+    routeTabs: {'dashboard/agents/office-request':'office'},
+    routeLabels: {'dashboard/agents/office-request':'오피스 요청'},
     // 대표 경로는 Office — 2026-09-23 운영자 확정. Runs는 하위 탭으로 한 단계 아래에 남고,
     // 보류 스코프(agents/chat·council)는 여전히 착지 지점이 아니다(2026-08-05 re-audit).
     paths: {
@@ -425,6 +453,13 @@ export function resolveSidebarPath(anchorKey, scope) {
   const anchor = SIDEBAR_ANCHORS.find((a) => a.key === anchorKey);
   if (!anchor) return null;
   return anchor.paths[normalizeScope(scope)] || anchor.paths[DEFAULT_SCOPE];
+}
+
+// A selected Office scope replaces the old meeting pointer. The destination
+// session can restore its own meeting and drafts after navigation.
+export function officeScopeSelectionPath(activePath, scope) {
+  if (pathnameOf(activePath) !== 'dashboard/agents/office-council') return null;
+  return `dashboard/agents/office-council?scope=${normalizeScope(scope)}`;
 }
 
 // Anchors expanded when no stored preference exists — the operator's daily

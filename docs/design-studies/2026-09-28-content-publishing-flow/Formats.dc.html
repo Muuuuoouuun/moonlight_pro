@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>형식 고르기</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+a{color:#5274A8}a:hover{color:#3E5C8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 40px 48px; display: flex; flex-direction: column; gap: 22px; background: #F7F8FA; font-family: 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 500;">새 글 — 어떤 형식으로 만들까요?</h2>
+      <span style="font-size: 13px; color: #545C66;">형식마다 편집기 · 전용 AI 작업 · 기본 요청문 · 검사 규칙이 다릅니다. 원문 메모는 모든 형식이 함께 씁니다.</span>
+    </div>
+    <span style="font-size: 12.5px; color: #545C66;">기본값: 스레드</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; flex-grow: 1;">
+
+    <a href="Studio.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border: 1px solid #5274A8; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 16px; font-weight: 600;">스레드</span><span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #EAF0F8; color: #3E5C8C;">기본</span></div>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6;">짧은 글 · 빈 줄로 이어지는 3~5개 블록</span>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">결과물</span><div style="display: flex; flex-direction: column; gap: 4px;"><span style="height: 10px; border-radius: 3px; background: #E9ECEF; width: 90%;"></span><span style="height: 10px; border-radius: 3px; background: #E9ECEF; width: 70%;"></span><span style="height: 10px; border-radius: 3px; background: #E9ECEF; width: 80%;"></span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">전용 AI 작업</span><span style="font-size: 12.5px; line-height: 1.7;">첫 줄 3안 · 블록 나누기 · 더 짧게</span></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">검사</span><span style="font-size: 12.5px; line-height: 1.7;">블록당 500자 · 첫 줄 40자 이내</span></div>
+      <div style="margin-top: auto; padding: 10px; border-radius: 8px; background: #F1F3F6; font-size: 12px; color: #545C66; line-height: 1.6;">"첫 줄은 장면이나 질문. 한 블록에 한 생각. 마지막은 행동 한 가지."</div>
+    </a>
+
+    <a href="CardNews.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 16px; font-weight: 600;">인스타 카드뉴스</span>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6;">표지 + 본문 카드 + 마무리 · 6~8장 · 캡션</span>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">결과물</span><div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;"><span style="aspect-ratio: 4 / 5; border-radius: 3px; background: #1E2228;"></span><span style="aspect-ratio: 4 / 5; border-radius: 3px; background: #E9ECEF;"></span><span style="aspect-ratio: 4 / 5; border-radius: 3px; background: #E9ECEF;"></span><span style="aspect-ratio: 4 / 5; border-radius: 3px; background: #E9ECEF;"></span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">전용 AI 작업</span><span style="font-size: 12.5px; line-height: 1.7;">표지 문구 5안 · 캡션·해시태그 · 스레드에서 가져오기</span></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">검사</span><span style="font-size: 12.5px; line-height: 1.7;">장당 한 메시지 · 제목 18자 · 본문 60자</span></div>
+      <div style="margin-top: auto; padding: 10px; border-radius: 8px; background: #F1F3F6; font-size: 12px; color: #545C66; line-height: 1.6;">"표지는 결과를 약속, 2장은 문제, 마지막 장은 저장할 이유."</div>
+    </a>
+
+    <a href="YouTube.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 16px; font-weight: 600;">유튜브 원고</span>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6;">쇼츠 60초 또는 롱폼 · 장면별 화면·대사·자막</span>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">결과물</span><div style="display: flex; gap: 3px; height: 10px;"><span style="flex-grow: 1; border-radius: 3px; background: #1E2228;"></span><span style="flex-grow: 3; border-radius: 3px; background: #9AA2AB;"></span><span style="flex-grow: 5; border-radius: 3px; background: #E9ECEF;"></span><span style="flex-grow: 1; border-radius: 3px; background: #9AA2AB;"></span></div><span style="font-size: 11.5px; color: #737C86;">훅 · 문제 · 본론 · 행동</span></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">전용 AI 작업</span><span style="font-size: 12.5px; line-height: 1.7;">훅 5안 · 60초로 줄이기 · 자막 뽑기 · 썸네일 문구</span></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">검사</span><span style="font-size: 12.5px; line-height: 1.7;">총 길이 · 훅 3초 · 말하는 속도로 계산</span></div>
+      <div style="margin-top: auto; padding: 10px; border-radius: 8px; background: #F1F3F6; font-size: 12px; color: #545C66; line-height: 1.6;">"입말로. 문장은 짧게. 화면에 보일 것과 말할 것을 나눠서."</div>
+    </a>
+
+    <a href="Copy.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 16px; font-weight: 600;">카피라이트</span>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6;">헤드라인 · 한 줄 소개 · 광고 문구 · CTA</span>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">결과물</span><div style="display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: #545C66;"><span>A · 질문형</span><span>B · 숫자형</span><span>C · 반전형</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">전용 AI 작업</span><span style="font-size: 12.5px; line-height: 1.7;">유형별 5안 · 길이 맞추기 · 금지어 검사</span></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">검사</span><span style="font-size: 12.5px; line-height: 1.7;">자리별 글자 수 · 브랜드 금지어</span></div>
+      <div style="margin-top: auto; padding: 10px; border-radius: 8px; background: #F1F3F6; font-size: 12px; color: #545C66; line-height: 1.6;">"독자가 얻는 것 하나만. 형용사 대신 장면."</div>
+    </a>
+
+    <a href="Package.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 16px; font-weight: 600;">종합 패키지</span>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6;">원문 하나 → 스레드 · 카드뉴스 · 쇼츠 · 카피를 한 번에</span>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">결과물</span><div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; font-size: 11.5px;"><span style="padding: 4px 6px; border-radius: 4px; background: #F1F3F6;">스레드</span><span style="padding: 4px 6px; border-radius: 4px; background: #F1F3F6;">카드뉴스</span><span style="padding: 4px 6px; border-radius: 4px; background: #F1F3F6;">쇼츠</span><span style="padding: 4px 6px; border-radius: 4px; background: #F1F3F6;">카피 5안</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">전용 AI 작업</span><span style="font-size: 12.5px; line-height: 1.7;">형식별 초안 동시 생성 · 발행 순서 제안</span></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">검사</span><span style="font-size: 12.5px; line-height: 1.7;">형식마다 위 규칙 그대로</span></div>
+      <div style="margin-top: auto; padding: 10px; border-radius: 8px; background: #F1F3F6; font-size: 12px; color: #545C66; line-height: 1.6;">"핵심 메시지는 같게, 길이와 호흡만 형식에 맞게."</div>
+    </a>
+  </div>
+
+  <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 12px; padding: 14px 18px; display: flex; gap: 24px; align-items: center; font-size: 12.5px; color: #545C66;">
+    <span style="font-weight: 600; color: #1E2228;">프롬프트 3층</span>
+    <span><b style="font-weight: 500; color: #1E2228;">① 형식 기본 요청문</b> — 위 카드 아래 문장, 형식별로 수정 가능</span>
+    <span><b style="font-weight: 500; color: #1E2228;">② 브랜드 말투</b> — 브랜드 탭의 보이스·금지어·예시</span>
+    <span><b style="font-weight: 500; color: #1E2228;">③ 이번 글 요청</b> — AI 요청 칸 · 템플릿</span>
+    <span style="margin-left: auto;">사실 · 수치는 언제나 원문 메모에서만</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -823,7 +823,8 @@ alter table if exists public.content_variants
     'x_thread',
     'reels_script',
     'landing_copy',
-    'threads_post'
+    'threads_post',
+    'base_text'
   ));
 
 do $$

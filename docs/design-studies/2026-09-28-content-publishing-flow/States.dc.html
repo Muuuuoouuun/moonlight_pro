@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>예외 상태 8종</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'SUIT Variable','IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1180px; box-sizing: border-box; padding: 48px 56px; display: flex; flex-direction: column; gap: 22px; background: #F7F8FA; font-family: 'SUIT Variable', 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228;">
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <div style="font-size: 11px; letter-spacing: 0.1em; color: #737C86; font-weight: 500;">STATES · 확정 전 점검</div>
+    <h1 style="margin: 0; font-size: 28px; font-weight: 600;">막혔을 때 무엇을 보여 주나 — 8가지 예외</h1>
+    <p style="margin: 0; font-size: 14px; color: #545C66; line-height: 1.6; max-width: 900px;">정상 화면만 확정하면 실제 사용에서 막힙니다. 빨강은 "지금 잃을 수 있는 것"(저장 실패 · 놓침)에만, 나머지는 모양과 말로 알립니다. 입력한 글은 어떤 경우에도 지우지 않습니다.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 240px;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">1 · 빈 새 글</span>
+      <div style="border: 1px solid #E9ECEF; border-radius: 6px; padding: 12px; font-size: 13px; color: #9AA2AB; line-height: 1.7;">생각을 짧은 글로 시작해보세요.</div>
+      <div style="display: flex; gap: 8px;"><span style="height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #DCE0E5; font-size: 12.5px; display: inline-flex; align-items: center; color: #9AA2AB;">AI 초안</span></div>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6; margin-top: auto;">원문 메모를 적으면 AI 초안이 켜집니다. 복사·예약은 본문이 생기면 켜집니다. 이유를 옆에 한 줄로 알립니다.</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 240px;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">2 · 불러오는 중</span>
+      <div role="status" style="display: flex; flex-direction: column; gap: 8px;"><span style="height: 12px; border-radius: 3px; background: #EEF0F3; width: 34%;"></span><span style="height: 14px; border-radius: 3px; background: #EEF0F3;"></span><span style="height: 14px; border-radius: 3px; background: #EEF0F3;"></span><span style="height: 14px; border-radius: 3px; background: #EEF0F3; width: 62%;"></span></div>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6; margin-top: auto;">들어올 레이아웃을 예고하는 스켈레톤. "비어 있음" 문구는 쓰지 않습니다(로딩과 다른 뜻).</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px dashed #9AA2AB; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 240px;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">3 · 저장소 연결 필요 (preview)</span>
+      <span style="align-self: flex-start; font-size: 12px; padding: 3px 10px; border: 1px dashed #9AA2AB; border-radius: 999px; color: #545C66;">Preview · 연결 필요</span>
+      <span style="font-size: 13px; line-height: 1.6;">템플릿 테이블이 아직 없습니다. 요청은 이번 작업에만 쓸 수 있습니다.</span>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6; margin-top: auto;">가짜 목록을 채우지 않습니다. 할 일 한 줄만 안내합니다.</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 240px; box-shadow: inset 1px 0 0 #B8412F;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">4 · 저장 미확인</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; color: #B8412F; font-size: 12.5px; font-weight: 500;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5v.5"></path></svg>서버 저장 미확인</span>
+      <div style="display: flex; gap: 8px;"><span style="height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #DCE0E5; font-size: 12.5px; display: inline-flex; align-items: center;">저장 재시도</span><span style="height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #DCE0E5; font-size: 12.5px; display: inline-flex; align-items: center;">복사</span></div>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6; margin-top: auto;">브라우저에 사본은 남아 있습니다. 새 글은 저장이 확인될 때까지 열리지 않고 이유를 알립니다.</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 240px; box-shadow: inset 1px 0 0 #B8412F;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">5 · 다른 창에서 바뀜 (충돌)</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; color: #B8412F; font-size: 12.5px; font-weight: 500;">최신 내용 확인 필요</span>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px;"><div style="border: 1px solid #E9ECEF; border-radius: 6px; padding: 8px; color: #545C66;">서버 저장본</div><div style="border: 1px solid #E9ECEF; border-radius: 6px; padding: 8px; color: #545C66;">내가 쓴 것</div></div>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6; margin-top: auto;">두 개를 나란히 보여 주고 하나를 고릅니다. 자동으로 덮어쓰지 않습니다.</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 240px;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">6 · AI 결과가 애매함</span>
+      <span style="align-self: flex-start; font-size: 12px; color: #545C66; border-bottom: 1px dotted #9AA2AB;">확인 필요 2건</span>
+      <ul style="margin: 0; padding-left: 18px; font-size: 12.5px; color: #545C66; line-height: 1.7;"><li>3장: 원문에 사례 없음</li><li>"두 배" 수치 근거 없음</li></ul>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6; margin-top: auto;">사실처럼 채우지 않고 빠진 근거를 목록으로 돌려줍니다. 적용은 운영자가 확인한 뒤에.</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 240px;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">7 · AI 응답이 끊김</span>
+      <span style="align-self: flex-start; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #F1F3F6;">? 결과 확인 중</span>
+      <div style="display: flex; gap: 8px;"><span style="height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #DCE0E5; font-size: 12.5px; display: inline-flex; align-items: center;">같은 요청 상태 확인</span></div>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6; margin-top: auto;">"새로 생성"이 아니라 같은 요청을 확인합니다(중복 생성·비용 방지). 글은 계속 쓸 수 있습니다.</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 240px; box-shadow: inset 1px 0 0 #B8412F;">
+      <span style="font-size: 11px; letter-spacing: 0.1em; color: #737C86;">8 · 놓친 예약</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; color: #B8412F; font-size: 12.5px; font-weight: 500;">놓침 · 어제 밤 정리됨</span>
+      <div style="display: flex; gap: 8px;"><span style="height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #DCE0E5; font-size: 12.5px; display: inline-flex; align-items: center;">지금 올리기</span><span style="height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #DCE0E5; font-size: 12.5px; display: inline-flex; align-items: center;">다른 시간으로</span></div>
+      <span style="font-size: 12.5px; color: #545C66; line-height: 1.6; margin-top: auto;">낮에는 "시각 지남"(중립). 그날 밤 정리 때 안 올린 예약이 "놓침"(빨강)이 됩니다. 홈에서 빨간 선 한 줄, 여러 건이면 개수만.</span>
+    </section>
+  </div>
+
+  <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 12px; padding: 16px 20px; display: flex; gap: 28px; align-items: center; font-size: 12.5px; color: #545C66; flex-wrap: wrap;">
+    <span style="font-weight: 600; color: #1E2228;">공통</span>
+    <span>입력한 글은 지우지 않는다</span>
+    <span>빨강은 화면당 한 곳 · 3곳 넘으면 개수로 접는다</span>
+    <span>오류에는 이유 + 다음 행동 하나</span>
+    <span>미리보기(preview)엔 가짜 데이터를 넣지 않는다</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -44,6 +44,18 @@ test('Top 3 readiness requires its cap function and attached trigger', () => {
   assert.match(readinessSql([feature]), /pg_trigger/);
 });
 
+test('Office inbox readiness checks private RPC signature and metadata/paging body version', () => {
+  const feature = DATABASE_FEATURES.find(f => f.migration === '20261003_0066_office_request_inbox.sql');
+  assert.ok(feature, 'Office inbox migration is registered');
+  assert.deepEqual(feature.functions, ['office_request_inbox_v1(uuid,text,text,integer,jsonb)']);
+  assert.ok(feature.bodyIncludes.some(([, marker]) => marker === 'office_inbox_metadata_v1'));
+  assert.ok(feature.bodyIncludes.some(([, marker]) => marker === '(r.created_at,r.id)<(v_time,v_id)'));
+  const rows = rowsFor([feature]);
+  assert.equal(summarizeReadiness(rows, [feature])[0].ready, true);
+  assert.equal(summarizeReadiness(rows.filter(row => row.kind !== 'body_includes'), [feature])[0].ready, false);
+  assert.equal(summarizeReadiness(rows.map(row => row.kind === 'function' ? { ...row, protected: false } : row), [feature])[0].ready, false);
+});
+
 test('social multi-account readiness requires the account key, new unique index and removal of the old unique index', () => {
   const feature = DATABASE_FEATURES.find(f => f.migration === '20260924_0046_social_multiaccount_connections.sql');
   assert.ok(feature);
@@ -108,7 +120,15 @@ test('readinessSql emits one quoted row per check and stays a single SELECT', ()
 
 // A migration's copy of a function body (last definition in the file) and of a named constraint statement.
 const bodyOf = (sql, signature) => [...sql.matchAll(new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${signature.split('(')[0]}\\s*\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$`, 'gi'))].at(-1)?.[1];
-const constraintOf = (sql, name) => [...sql.matchAll(new RegExp(`alter\\s+table[^;]*?add\\s+constraint\\s+${name}\\b[^;]*;`, 'gi'))].at(-1)?.[0];
+const constraintOf = (sql, name) => {
+  const named=[...sql.matchAll(new RegExp(`alter\\s+table[^;]*?add\\s+constraint\\s+${name}\\b[^;]*;`, 'gi'))].at(-1)?.[0];
+  if(named)return named;
+  // PostgreSQL names an inline kind CHECK <table>_kind_check as well.
+  if(name.endsWith('_kind_check')) {
+    const table=name.slice(0,-'_kind_check'.length);
+    return [...sql.matchAll(new RegExp(`create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?public\\.${table}\\b[^;]*;`,'gi'))].map(match=>match[0]).find(statement=>/kind\s+text[^\n]*check/i.test(statement));
+  }
+};
 
 test('every body marker identifies its migration and holds after all migrations', async () => {
   const files = (await readdir(MIGRATIONS)).filter(n => n.endsWith('.sql')).sort();
@@ -252,6 +272,25 @@ test('readinessSql runs read-only on PostgreSQL and tells old and new versions a
       on public.integration_connections(workspace_id, provider, account_key) where provider = 'youtube';`);
     assert.deepEqual(check(social)[0].missingOrUnprotected,
       ['uq_integration_connections_workspace_provider_account 유니크 키 (workspace_id, provider, account_key) 불일치']);
+    const gore = DATABASE_FEATURES.filter(f => f.migration === '20261001_0063_gore_oauth_app_binding.sql');
+    sql(`create table public.social_oauth_flows(app_key text, app_id text,
+      constraint social_oauth_flows_app_key_check check (app_key is null or app_key in ('moonlight','politic_officer','classmoon')),
+      constraint social_oauth_flows_app_id_check check (app_id is null or app_id ~ '^[A-Za-z0-9_-]{1,128}$'),
+      constraint social_oauth_flows_app_identity_pair_check check ((app_key is null) = (app_id is null)));`);
+    assert.equal(check(gore)[0].ready, false);
+    sql(await migration('20261001_0063_gore_oauth_app_binding.sql'));
+    assert.equal(check(gore)[0].ready, true);
+    sql(`insert into public.social_oauth_flows(app_key, app_id) values
+      ('moonlight','synthetic-bridge'),('politic_officer','synthetic-politic'),('classmoon','synthetic-class'),('gore','synthetic-gore');
+      do $$ begin
+        begin insert into public.social_oauth_flows values ('unknown','synthetic-app');
+          raise exception 'unknown app accepted'; exception when check_violation then null; end;
+        begin insert into public.social_oauth_flows values ('gore',null);
+          raise exception 'incomplete app identity accepted'; exception when check_violation then null; end;
+        begin insert into public.social_oauth_flows values ('gore','invalid app id');
+          raise exception 'invalid app identity accepted'; exception when check_violation then null; end;
+      end $$;`);
+    assert.equal(sql('select count(*) from public.social_oauth_flows'), '4');
   } finally {
     if (running) spawnSync(join(bin, 'pg_ctl'), ['-D', join(root, 'data'), '-m', 'fast', '-w', 'stop'], { encoding: 'utf8', timeout: 30000, env });
     await rm(root, { recursive: true, force: true });

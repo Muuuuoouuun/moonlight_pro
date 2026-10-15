@@ -10,16 +10,15 @@ struct CompanionPanelView: View {
     let modeChanged: () -> Void
     let startFocus: () -> Void
     let pin: (() -> Void)?
-    let moveVertically: (CGFloat) -> Void
+    let move: (PanelMove) -> Void
 
-    @Namespace private var selection
     @State private var showsAddress = false
     private var isToday: Bool { mode == .tasks || mode == .calendar }
-    private var title: String { mode == .tasks ? "오늘" : mode == .memo ? "빠른 메모" : mode.title }
+    private var title: String { mode == .tasks ? "오늘" : mode == .memo ? "빠른 메모" : mode == .office ? "Office" : mode.title }
 
     var body: some View {
         VStack(spacing: 0) {
-            PanelDragHandle(move: moveVertically).frame(height: 20)
+            PanelDragHandle(move: move).frame(height: 20)
             VStack(spacing: 18) {
                 header
                 if isToday && !showsAddress { todayTabs }
@@ -69,6 +68,9 @@ struct CompanionPanelView: View {
             if mode == .memo && !showsAddress {
                 captureTabs.frame(width: 166)
             }
+            if mode == .office && model.officeTab == .work && !showsAddress {
+                OfficeRequestScopeMenu(requests: model.officeRequests)
+            }
             modeMenu
             if let pin, mode != .memo {
                 Button(action: pin) { Image(systemName: "pin").modifier(GlassGlyphShadow()).frame(width: 28, height: 32) }
@@ -87,6 +89,13 @@ struct CompanionPanelView: View {
 
     private var modeMenu: some View {
         Menu {
+            if mode == .office && model.officeTab == .work {
+                Button("요청 다시 불러오기") { Task { await model.officeRequests.refresh() } }
+                    .disabled(model.officeRequests.isLoading || !model.officeRequests.hasConnection)
+                Button("이 결과로 후속 질문 준비", action: model.discussOfficeResult)
+                    .disabled(!model.canDiscussOfficeResult)
+                Divider()
+            }
             if mode == .calendar {
                 Button("오늘 일정") { model.hub.selectedDate = Date() }
                 Button("이전 주") { moveCalendarWeek(by: -1) }
@@ -103,7 +112,7 @@ struct CompanionPanelView: View {
                 }
                 .disabled(model.capturedMemos.isEmpty || !model.memoDraft.isEmpty
                           || model.isCapturingMemo || model.hub.hasPendingMemo)
-                Button("Council에서 이어서", action: model.continueMemoInCouncil)
+                Button("이 메모로 담당자에게 묻기", action: model.continueMemoInCouncil)
                 Button("새 항목으로 Hub에 저장", action: model.saveMemoAsNewToHub)
                     .disabled(!model.hub.canSaveMemoAsNew
                               || model.memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -120,6 +129,17 @@ struct CompanionPanelView: View {
             Button(showsAddress ? "빠른 기능으로 돌아가기" : "Hub 연결·저장 위치") {
                 withAnimation(PetMotion.panel) { showsAddress.toggle() }
             }
+            Divider()
+            Toggle("사이드 자동 정렬", isOn: $model.autoAlignsToEdge)
+            Picker("붙일 사이드", selection: $model.alignmentEdge) {
+                ForEach(PanelEdge.allCases) { edge in Text(edge.title).tag(edge) }
+            }
+            .disabled(!model.autoAlignsToEdge)
+            Divider()
+            Toggle("배경 굴절 실험", isOn: $model.usesDesktopRefraction)
+            if model.usesDesktopRefraction {
+                Text(model.desktopRefractionStatus)
+            }
             Button("펫으로 접기", action: close)
         } label: {
             Image(systemName: "ellipsis").modifier(GlassGlyphShadow()).frame(width: 28, height: 32)
@@ -128,7 +148,7 @@ struct CompanionPanelView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .foregroundStyle(Palette.glassInkMuted)
-        .help("메모 · Office · Council · 집중")
+        .help("메모 · Office 대화 · 회의실 · 집중")
         .accessibilityLabel("빠른 기능 더보기")
     }
 
@@ -147,31 +167,7 @@ struct CompanionPanelView: View {
     }
 
     private func modeTabs(_ destinations: [QuickMode]) -> some View {
-        HStack(spacing: 2) {
-            ForEach(destinations) { destination in
-                Button { select(destination) } label: {
-                    Text(destination.title)
-                        .font(.system(size: 12, weight: mode == destination ? .semibold : .medium))
-                        .foregroundStyle(mode == destination ? Palette.glassInk : Palette.glassInkMuted)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 34)
-                        .background {
-                            if mode == destination {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Palette.glassInk.opacity(0.10))
-                                    .overlay { GlassRim(radius: 10, strength: 0.5) }
-                                    .matchedGeometryEffect(id: "today-selection", in: selection)
-                            }
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(PetPressStyle())
-                .accessibilityAddTraits(mode == destination ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(Palette.glassInk.opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
-        .overlay { GlassRim(radius: 13, strength: 0.20) }
+        GlassModeTabs(destinations: destinations, mode: mode, select: select)
     }
 
     @ViewBuilder private var modeContent: some View {
@@ -181,31 +177,11 @@ struct CompanionPanelView: View {
         case .memo: MemoCaptureContent(model: model, surface: persistent ? .widget : .quick,
                                       openRevision: openRevision, close: close, openConnection: showConnection)
         case .calendar: CalendarCompanionContent(model: model, openConnection: showConnection)
-        case .office: browserContent
+        case .office: OfficeCompanionContent(model: model, requests: model.officeRequests,
+                                             openRevision: openRevision, openConnection: showConnection)
         case .council: CouncilCompanionContent(model: model, openConnection: showConnection)
         case .notifications: NotificationContent(model: model, openConnection: showConnection)
         case .focus: focusSetup
-        }
-    }
-
-    private var browserContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(mode == .office ? "함께 진행할 작업을 열어요." : "다른 관점이 필요할 때, Council을 불러요.")
-                .font(.system(size: 15))
-                .fixedSize(horizontal: false, vertical: true)
-                .modifier(GlassReadability(inset: 9))
-            Text("브라우저의 기존 Hub에서 이어집니다.")
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.glassInkMuted)
-                .modifier(GlassReadability(inset: 8))
-            Spacer(minLength: 4)
-            HStack {
-                Spacer()
-                Button { model.openHub(mode) } label: {
-                    Label("\(mode.title) 열기", systemImage: "arrow.up.right")
-                }
-                .buttonStyle(GlassActionStyle())
-            }
         }
     }
 
@@ -246,5 +222,41 @@ struct CompanionPanelView: View {
 
     private func showConnection() {
         withAnimation(PetMotion.panel) { showsAddress = true }
+    }
+}
+
+/// Shared by production companion panels and the optical quality specimen.
+struct GlassModeTabs: View {
+    let destinations: [QuickMode]
+    let mode: QuickMode
+    var inkOverride: Color? = nil
+    let select: (QuickMode) -> Void
+    @Namespace private var selection
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(destinations) { destination in
+                Button { select(destination) } label: {
+                    Text(destination.title)
+                        .font(.system(size: 12, weight: mode == destination ? .semibold : .medium))
+                        .foregroundStyle(inkOverride ?? (mode == destination ? Palette.glassInk : Palette.glassInkMuted))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .background {
+                            if mode == destination {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill((inkOverride ?? Palette.glassInk).opacity(0.10))
+                                    .overlay { GlassRim(radius: 10, strength: 0.5) }
+                                    .matchedGeometryEffect(id: "today-selection", in: selection)
+                            }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(PetPressStyle())
+                .accessibilityAddTraits(mode == destination ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background((inkOverride ?? Palette.glassInk).opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
+        .overlay { GlassRim(radius: 13, strength: 0.20) }
     }
 }

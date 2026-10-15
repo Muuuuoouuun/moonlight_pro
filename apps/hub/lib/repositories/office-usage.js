@@ -3,6 +3,7 @@
 import { fetchSupabaseRowsDetailed, withWorkspaceFilter } from '@/lib/server-read';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const OFFICE_USAGE_ROW_LIMIT = 1000;
 
 export function summarizeOfficeRuns(rows) {
   const requests = rows.filter(row => row.mode !== 'apply');
@@ -25,13 +26,28 @@ export function summarizeOfficeRuns(rows) {
 
 export async function readOfficeUsage({ days = 7, now = Date.now(), fetchRows = fetchSupabaseRowsDetailed } = {}) {
   const since = new Date(now - days * DAY_MS).toISOString();
-  const answer = await fetchRows('agent_runs', {
+  const options = {
     select: 'mode,result,recommendation',
     filters: withWorkspaceFilter([['agent', 'like.office.*'], ['ran_at', `gte.${since}`]]),
     order: 'ran_at.desc',
-    limit: 1000,
-  });
+    // One extra row distinguishes a complete available-log window from truncation.
+    limit: OFFICE_USAGE_ROW_LIMIT + 1,
+  };
+  const answer = await fetchRows('agent_runs', options);
   if (answer?.configured === false) return { status: 'preview', windowDays: days };
-  if (!Array.isArray(answer?.rows)) return { status: 'error', source: 'error', error: 'office-usage-read-failed', windowDays: days };
-  return { status: 'live', windowDays: days, ...summarizeOfficeRuns(answer.rows) };
+  if (answer?.error || !Array.isArray(answer?.rows)) return { status: 'error', source: 'error', error: 'office-usage-read-failed', windowDays: days };
+  let truncated = answer.rows.length > OFFICE_USAGE_ROW_LIMIT;
+  if (answer.rows.length === OFFICE_USAGE_ROW_LIMIT) {
+    // A server-side 1000-row cap can suppress the requested lookahead row.
+    // Probe only the boundary, with the same window/scope and no recommendation.
+    const next = await fetchRows('agent_runs', { ...options, select: 'mode', offset: OFFICE_USAGE_ROW_LIMIT, limit: 1 });
+    if (next?.configured === false || next?.error || !Array.isArray(next?.rows)) {
+      return { status: 'error', source: 'error', error: 'office-usage-read-failed', windowDays: days };
+    }
+    truncated = next.rows.length > 0;
+  }
+  // These are available logs, never a guarantee that every request was logged.
+  return { status: 'live', windowDays: days, rowLimit: OFFICE_USAGE_ROW_LIMIT,
+    truncated,
+    ...summarizeOfficeRuns(answer.rows.slice(0, OFFICE_USAGE_ROW_LIMIT)) };
 }

@@ -1,0 +1,7 @@
+{
+  "reason": "Frozen candidate worktree has an existing tracked docs/README.md modification; parent explicitly permits documentation work during runtime freeze. No runtime mutation is allowed. Staged diff remains entirely clean.",
+  "originalSha256": "7c1dd20731dedd94ac7a51b5544d2ac2f37e7a940d194e21e8469282a863d79e",
+  "runSha256": "4956f0438946af5caa769d623ee0316f78a3bb2abb083a97d08a5b9e51994fac",
+  "allowedUnstagedPath": "docs/README.md",
+  "datasetSha256": "2de2e49762faed5e825d3b8dab25c46ddeff8a3a2cb28d6c2661886c79fd1dd7"
+}

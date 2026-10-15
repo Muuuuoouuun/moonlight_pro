@@ -11,14 +11,14 @@ const source = fs.readFileSync(new URL('../components/hub/pages/use-memos.js', i
 const loadHook = new Function('React', 'initialMemoContexts', 'buildNoteSave', 'createJournalWriter', 'isJournalEntry', 'noteFingerprint', 'noteToDraft', 'createJournalStore', 'journalTabId', source + '\nreturn useMemoDocument;');
 const id='11111111-1111-4111-8111-111111111111',workspaceId='22222222-2222-4222-8222-222222222222',requestId='33333333-3333-4333-8333-333333333333';
 const entry={id,body:'original',title:'',occurredAt:'2026-09-13T02:00:00.000Z',noteMeta:{kind:'note',enhancement:''},revision:1,contexts:[],links:[]};
-function harness(t) {
+function harness(t, { stored, initialProps = {} } = {}) {
   const nativeFetch=globalThis.fetch, nativeStorage=globalThis.sessionStorage;
   const disk=new Map(); globalThis.sessionStorage={get length(){return disk.size;},key:i=>[...disk.keys()][i],getItem:k=>disk.get(k)??null,setItem:(k,v)=>disk.set(k,v),removeItem:k=>disk.delete(k)};
   const requests=[],saved=[];
   globalThis.fetch=(_url,options)=>new Promise(resolve=>requests.push({payload:JSON.parse(options.body),resolve:result=>resolve({ok:true,json:async()=>result})}));
   t.after(()=>{globalThis.fetch=nativeFetch;if(nativeStorage===undefined)delete globalThis.sessionStorage;else globalThis.sessionStorage=nativeStorage;});
   const store=createJournalStore({storage:sessionStorage,workspaceId,tabId:journalTabId()}),draft={...client.noteToDraft(entry),body:'first requested edit'};
-  store.write(id,{entry,draft,dirty:true,pending:client.buildNoteSave(draft,requestId)});
+  store.write(id,stored || {entry,draft,dirty:true,pending:client.buildNoteSave(draft,requestId)});
   const cells=[];let cursor=0,effects=[],needsRender=false,model;
   const same=(a,b)=>a&&b&&a.length===b.length&&a.every((v,i)=>Object.is(v,b[i]));
   const React={
@@ -28,7 +28,7 @@ function harness(t) {
     useEffect(fn,deps){const i=cursor++,prior=cells[i];if(!prior||!same(prior.deps,deps)){cells[i]={deps,cleanup:prior?.cleanup};effects.push(()=>{cells[i].cleanup?.();cells[i].cleanup=fn();});}},
   };
   const useMemoDocument=loadHook(React,client.initialMemoContexts,client.buildNoteSave,client.createJournalWriter,client.isJournalEntry,client.noteFingerprint,client.noteToDraft,createJournalStore,journalTabId);
-  let props={id,isNew:false,workspaceId,workspaceConfirmed:true,source:'error',entry:null,onSaved:e=>saved.push(e)};
+  let props={id,isNew:false,workspaceId,workspaceConfirmed:true,source:'error',entry:null,onSaved:e=>saved.push(e),...initialProps};
   function render(patch={}){props={...props,...patch};do{needsRender=false;cursor=0;effects=[];model=useMemoDocument(props);const queue=effects;effects=[];for(const effect of queue)effect();}while(needsRender);return model;}
   render();return {render,get:()=>model,requests,store,saved};
 }
@@ -48,3 +48,38 @@ test('a connection reload cannot start a pending retry before its read finishes'
   const h=harness(t);h.render({source:'loading'});const attempt=h.get().retry();
   assert.equal(h.requests.length,0);assert.equal((await attempt).status,'unconfirmed-workspace');assert.ok(h.store.read(id).pending);
 });
+
+test('changing scope hides a clean company detail that is absent from the personal read',t=>{
+  const company={...entry,body:'company-only memo',noteMeta:{...entry.noteMeta,scope:'company'}};
+  const stored={entry:company,draft:client.noteToDraft(company),dirty:false,pending:null};
+  const h=harness(t,{stored,initialProps:{source:'live',entry:company,requestedScope:'company'}});
+  assert.equal(h.get().draft.body,company.body);
+  h.render({entry:null,requestedScope:'personal'});
+  assert.equal(h.get().draft,null);assert.equal(h.get().entry,null);
+  assert.match(h.get().loadError,/선택한 범위/);
+  assert.equal(h.store.read(id).draft.body,company.body);
+  h.render({entry:company,requestedScope:'company'});
+  assert.equal(h.get().draft.body,company.body);assert.equal(h.get().dirty,false);
+});
+
+for (const scope of ['company','unclassified']) {
+  test(`a personal deep link hides ${scope} pending input without deleting its recovery`,async t=>{
+    const original={...entry,noteMeta:{...entry.noteMeta,...(scope==='company'?{scope}:{})}};
+    const draft={...client.noteToDraft(original),body:`unsaved ${scope} input`};
+    const pending=client.buildNoteSave(draft,requestId);
+    const stored={entry:original,draft,dirty:true,pending};
+    const h=harness(t,{stored,initialProps:{source:'live',requestedScope:'personal'}});
+    assert.equal(h.get().draft,null);assert.equal(h.get().entry,null);assert.equal(h.get().pending,null);
+    assert.match(h.get().loadError,/선택한 범위/);
+    await h.get().retry();
+    assert.equal(h.requests.length,0);assert.deepEqual(h.store.read(id).pending,pending);
+    assert.equal(h.store.read(id).draft.body,draft.body);
+    // Only the filter changes: source and the absent remote detail stay equal.
+    h.render({requestedScope:scope});
+    assert.equal(h.get().draft.body,draft.body);assert.deepEqual(h.get().pending,pending);
+    const retry=h.get().retry();assert.equal(h.requests.length,1);assert.deepEqual(h.requests[0].payload,pending);
+    h.requests[0].resolve({status:'duplicate',entry:{...original,body:draft.body,revision:2}});
+    await retry;h.render();
+    assert.equal(h.get().draft.body,draft.body);assert.equal(h.get().pending,null);assert.equal(h.get().dirty,false);
+  });
+}

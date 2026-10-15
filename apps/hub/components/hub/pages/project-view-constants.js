@@ -25,8 +25,7 @@ export const PROJECT_VIEW_OPTIONS = [
   { key: 'memos', label: '메모' },
   { key: 'timeline', label: 'Timeline' },
   { key: 'todos', label: 'To-dos' },
-  // 제품 = 오래 사는 것(2026-09-24 제품 렌즈 §6). 프로젝트 목록과 따로 제품 카탈로그를 본다.
-  { key: 'products', label: '제품' },
+  // 제품은 2026-09-30 사이드바 `제품` 탭(dashboard/products)으로 나갔다 — 여기 보기가 아니다.
 ];
 const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
 

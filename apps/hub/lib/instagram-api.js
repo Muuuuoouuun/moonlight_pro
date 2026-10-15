@@ -5,6 +5,7 @@ import {
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 import { isValidMetaOAuthAppIdentity, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
+import { fetchSocialToken } from "./social-token-health.js";
 
 const INSTAGRAM_API_PROVIDER = "instagram_api";
 const INSTAGRAM_API_SYNC_SOURCE = "instagram_api";
@@ -242,21 +243,14 @@ export async function exchangeInstagramApiCode({ code, redirectUri, app }) {
     code,
   });
 
-  const response = await fetch(INSTAGRAM_TOKEN_URL, {
+  return fetchSocialToken(INSTAGRAM_TOKEN_URL, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
     },
     body: body.toString(),
     cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Instagram token exchange failed with ${response.status}`);
-  }
-
-  return await response.json();
+  }, "instagram", "token-exchange");
 }
 
 export async function exchangeInstagramApiLongLivedToken(accessToken, app) {
@@ -270,16 +264,9 @@ export async function exchangeInstagramApiLongLivedToken(accessToken, app) {
     access_token: accessToken,
   });
 
-  const response = await fetch(`${INSTAGRAM_LONG_LIVED_TOKEN_URL}?${params.toString()}`, {
+  return fetchSocialToken(`${INSTAGRAM_LONG_LIVED_TOKEN_URL}?${params.toString()}`, {
     cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Instagram long-lived token exchange failed with ${response.status}`);
-  }
-
-  return await response.json();
+  }, "instagram", "long-lived-token-exchange");
 }
 
 export async function refreshInstagramApiAccessToken(accessToken) {
@@ -292,16 +279,9 @@ export async function refreshInstagramApiAccessToken(accessToken) {
     access_token: accessToken,
   });
 
-  const response = await fetch(`${INSTAGRAM_REFRESH_TOKEN_URL}?${params.toString()}`, {
+  return fetchSocialToken(`${INSTAGRAM_REFRESH_TOKEN_URL}?${params.toString()}`, {
     cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Instagram token refresh failed with ${response.status}`);
-  }
-
-  return await response.json();
+  }, "instagram", "token-refresh");
 }
 
 export async function fetchInstagramApiProfile(accessToken) {
@@ -440,6 +420,7 @@ export function summarizeInstagramApiConnection(connection) {
     followersCount: config.followersCount ?? null,
     mediaCount: config.mediaCount ?? null,
     expiresAt: config.expiresAt || null,
+    hasAccessToken: Boolean(config.accessToken),
   };
 }
 

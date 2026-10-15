@@ -2,10 +2,11 @@
 'use strict';
 (function (root, factory) {
   const C = typeof require === 'function' ? require('../../shared/contract.js') : root.PetContract;
-  const api = factory(C);
+  const Plat = typeof require === 'function' ? require('./platform.js') : root.PetModel.platform;
+  const api = factory(C, Plat);
   if (typeof module === 'object' && module && module.exports) module.exports = api;
   else (root.PetModel = root.PetModel || {}).notices = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (C) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (C, Plat) {
   const KIND = Object.freeze({
     inquiry: Object.freeze({ glyph: 'tray', label: '문의' }),
     event: Object.freeze({ glyph: 'calendar', label: '일정' }),
@@ -76,7 +77,7 @@
     return { kind: 'hub', path: C.HUB_PATHS.notifications };
   }
 
-  // 목적지가 없는 일정 알림: 알림 시각(pet-activity 는 일정 시작 시각)의 이 PC 날짜.
+  // 목적지가 없는 일정 알림: 알림 시각(pet-activity 는 일정 시작 시각)의 이 기기(PC·Mac) 날짜.
   function eventDateOf(notice) {
     const ms = typeof notice.at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(notice.at) ? Date.parse(notice.at) : NaN;
     if (!Number.isFinite(ms)) return null;
@@ -93,11 +94,11 @@
   }
 
   // 펫 옆 말풍선 첫 줄. 알림 수·연결 상태에서만 만든다(업무 데이터는 말풍선이 따로 읽지 않는다).
-  function bubbleSummary({ hubStatus, badge, hubUrl }) {
+  function bubbleSummary({ hubStatus, badge, hubUrl, platform }) {
     const n = Number(badge) || 0;
     if (hubStatus === 'unauthorized') return 'Hub 로그인이 필요해요. 메인 창에서 로그인해 주세요.';
     if (hubStatus === 'not-configured') return hubUrl ? 'Hub 서버에 운영자 로그인 설정이 아직 없어요.' : 'Hub 주소가 아직 없어요. 메인 창에서 정해 주세요.';
-    if (hubStatus === 'offline') return 'Hub에 연결하지 못했어요. 입력은 이 PC에 보관돼요.';
+    if (hubStatus === 'offline') return Plat.localize('Hub에 연결하지 못했어요. 입력은 이 PC에 보관돼요.', platform);
     if (n > 0) return `새 알림 ${n > 99 ? '99+' : n}개가 있어요.`;
     return '새 알림은 없어요. 펫을 눌러 빠른 기능을 열어요.';
   }

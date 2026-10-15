@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto';
-import { OFFICE_WORKFLOW_VERSION, parseOfficeWorkflowAnswer, parseOfficeWorkflowResult, type OfficeWorkflowRequest, type OfficeWorkflowContext, type OfficeWorkflowResult } from '@com-moon/agent-contracts/office-workflow';
+import { OFFICE_WORKFLOW_VERSION, OFFICE_CUSTOMER_PREPARATION_VERSION, parseOfficeWorkflowAnswer, parseOfficeWorkflowResult, type OfficeWorkflowRequest, type OfficeWorkflowContext, type OfficeWorkflowResult } from '@com-moon/agent-contracts/office-workflow';
 import type { generateGeminiText } from '../gemini.ts';
 import { buildOfficeWorkflowPrompt, buildOfficeWorkflowReview, OFFICE_WORKFLOW_POLICY_VERSION } from './workflow-prompt.ts';
 import { officeWorkflowResponseSchema } from './workflow-response-schema.ts';
-import { OFFICE_DISCUSSION_VERSION, parseOfficeDiscussion, officeFailureMessage } from '@com-moon/agent-contracts/office';
-import { runOfficeDiscussion, discussionSynthesisPrompt, OfficeDiscussionError, type OfficeDiagnosticEvent } from './deliberation.ts';
+import { OFFICE_DISCUSSION_VERSION, parseOfficeDiscussion, officeFailureMessage, type OfficeDiscussionTurn } from '@com-moon/agent-contracts/office';
+import { runOfficeDiscussion, discussionSynthesisPrompt, officeDiscussionSynthesisSchema, readOfficeSynthesisOutput, OfficeDiscussionError, type OfficeDiagnosticEvent } from './deliberation.ts';
 import { buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
 import { usageFor } from './usage.ts';
+import { groundWeeklyReport } from './weekly-report-policy.ts';
+import { contentQualityGeneration } from '../content-quality.ts';
+import { groundOfficeCustomerPreparation } from './customer-preparation-policy.ts';
 
 function parseModel(text: string, request: OfficeWorkflowRequest, context: OfficeWorkflowContext) {
   const raw = text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1');
@@ -20,28 +23,33 @@ export type OfficeWorkflowExecution = { signal: AbortSignal; generate: typeof ge
 export async function runOfficeWorkflow(request: OfficeWorkflowRequest, context: OfficeWorkflowContext, execution: OfficeWorkflowExecution): Promise<OfficeWorkflowResult> {
   if (!(execution?.signal instanceof AbortSignal) || typeof execution.generate !== 'function') throw new TypeError('Office execution requires an AbortSignal and provider.');
   const { signal, generate } = execution;
+  const customerPreparation = request.customerPreparationVersion === OFFICE_CUSTOMER_PREPARATION_VERSION;
+  let modelCalls = 0;
+  const executionRecord = () => customerPreparation ? { execution: { modelCalls, providerRetries: 0 as const, costStatus: 'unknown' as const } } : {};
   const meta = { version: OFFICE_WORKFLOW_VERSION, requestId: request.requestId, ownerId: request.ownerId, mode: request.mode, participants: request.participants, scope: request.scope };
-  const failure = (status: 'preview'|'error', error: string): OfficeWorkflowResult => ({ ...meta, status, error });
+  const failure = (status: 'preview'|'error', error: string): OfficeWorkflowResult => ({ ...meta, status, error, ...executionRecord() });
   // 2026-09-23 운영자 확정: 실패는 어느 단계에서 무엇 때문인지 분류만 싣는다 — 제공자 문구·예외는 싣지 않는다.
   type Phase = OfficeDiagnosticEvent['phase']; type Category = OfficeDiagnosticEvent['category'];
-  const failed = (phase: Phase, category: Category): OfficeWorkflowResult => ({ ...meta, status: 'error', error: officeFailureMessage({ category }), failure: { phase, category } });
+  const failed = (phase: Phase, category: Category): OfficeWorkflowResult => ({ ...meta, status: 'error', error: officeFailureMessage({ category }), failure: { phase, category }, ...executionRecord() });
   let phase: Phase = request.mode === 'council' ? 'position' : 'draft';
   let first: OfficeDiagnosticEvent | null = null;
   const onDiagnostic = (event: OfficeDiagnosticEvent) => { first ??= event; };
   if (context.status !== 'ready' || !context.capabilities.generate) return failure(context.status === 'error' ? 'error' : 'preview', '업무 자료와 AI 연결을 확인한 뒤 다시 요청해 주세요.');
   const startedAt = Date.now();
-  const responseJsonSchema = officeWorkflowResponseSchema(request.mode);
+  const responseJsonSchema = officeWorkflowResponseSchema(request.mode, customerPreparation);
   const reviewSource = { facts: context.facts, sourceRefs: context.sourceRefs, missing: context.missing, asOf: context.asOf };
   const sourceCatalog = buildOfficeSourceCatalog(request, reviewSource);
   const reviewSchema = officeSourceReviewSchema(responseJsonSchema, sourceCatalog);
-  const parseReviewed = (text: string) => {
+  const parseReviewed = (text: string, turns?: OfficeDiscussionTurn[]) => {
     const reviewed = readSourceReviewedOutput(JSON.parse(text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')), request, reviewSource, sourceCatalog);
     // The contract upgrades this to 'untraced' when every returned evidence ref falls outside the sources.
-    return parseOfficeWorkflowAnswer({ ...reviewed.answer, sourceCheck: reviewed.sourceCheck }, request, context);
+    const synthesis = turns ? readOfficeSynthesisOutput(reviewed.answer, turns) : null;
+    return { ...groundOfficeCustomerPreparation(groundWeeklyReport(parseOfficeWorkflowAnswer({ ...(synthesis?.answer ?? reviewed.answer), sourceCheck: reviewed.sourceCheck }, request, context), request, context), request, context), ...(synthesis ? { resolutions: synthesis.resolutions } : {}) };
   };
   const call = async (input: Parameters<typeof generateGeminiText>[0]) => {
     signal.throwIfAborted();
-    const result = await generate(input);
+    modelCalls++;
+    const result = await generate(customerPreparation ? { ...input, retries: 0 } : input);
     signal.throwIfAborted();
     return result;
   };
@@ -59,14 +67,14 @@ export async function runOfficeWorkflow(request: OfficeWorkflowRequest, context:
         council: { perspectives: latest.map(turn => ({ ownerId: turn.ownerId, judgment: turn.position, tradeoff: turn.objection || turn.revisionCondition })), recommendation: latest.find(turn => turn.ownerId === request.ownerId)!.position },
       };
       const review = officeSourceReviewPrompt(discussionSynthesisPrompt(buildOfficeWorkflowReview(request, context, draft), roles), sourceCatalog);
-      const reviewed = await call({ ...review, model: roles.model, signal, maxOutputTokens: 8192, responseJsonSchema: reviewSchema, thinkingLevel: 'high' });
+      const reviewed = await call({ ...review, model: roles.model, signal, maxOutputTokens: 8192, responseJsonSchema: officeDiscussionSynthesisSchema(reviewSchema, roles.turns), thinkingLevel: 'high' });
       if (!reviewed.ok || reviewed.model !== roles.model) {
         first ??= { phase: 'synthesis', category: signal.aborted ? 'deadline' : !reviewed.ok ? 'provider' : 'model-mismatch' };
         throw new OfficeDiscussionError('synthesis-failed');
       }
       signal.throwIfAborted();
-      const answer = parseReviewed(reviewed.text);
-      const discussion = parseOfficeDiscussion({ version: OFFICE_DISCUSSION_VERSION, settings: roles.settings, turns: roles.turns, modelCalls: roles.results.length + 1 }, request);
+      const { resolutions, ...answer } = parseReviewed(reviewed.text, roles.turns);
+      const discussion = parseOfficeDiscussion({ version: OFFICE_DISCUSSION_VERSION, settings: roles.settings, turns: roles.turns, modelCalls: roles.results.length + 1, resolutions }, request);
       signal.throwIfAborted();
       return parseOfficeWorkflowResult({ ...meta, status: 'generated', resultRevision: 1, ...answer, discussion,
         context: { asOf: context.asOf, contextHash: context.contextHash, missing: context.missing },
@@ -74,19 +82,21 @@ export async function runOfficeWorkflow(request: OfficeWorkflowRequest, context:
       }, request, context);
     }
     const prompt = buildOfficeWorkflowPrompt(request, context);
-    const result = await call({ ...prompt, signal, maxOutputTokens: 8192, responseJsonSchema });
+    const quality = request.intent === 'weekly_report' ? contentQualityGeneration() : null;
+    const result = await call({ ...prompt, maxOutputTokens: 8192, ...quality, signal, responseJsonSchema });
     if (!result.ok) return result.reason === 'missing-api-key' ? failure('preview', 'AI 연결이 필요합니다. 입력은 보존됩니다.') : failed('draft', signal.aborted ? 'deadline' : 'provider');
     signal.throwIfAborted();
     const draft = parseModel(result.text, request, context);
     phase = 'review';
     const review = officeSourceReviewPrompt(buildOfficeWorkflowReview(request, context, draft), sourceCatalog);
-    const reviewed = await call({ ...review, model: result.model, signal, maxOutputTokens: 8192, responseJsonSchema: reviewSchema, thinkingLevel: 'high' });
+    const reviewed = await call({ ...review, maxOutputTokens: 8192, thinkingLevel: 'high', ...quality, model: result.model, signal, responseJsonSchema: reviewSchema });
     if (!reviewed.ok || reviewed.model !== result.model) return failed('review', signal.aborted ? 'deadline' : !reviewed.ok ? 'provider' : 'model-mismatch');
     signal.throwIfAborted();
     const answer = parseReviewed(reviewed.text);
     signal.throwIfAborted();
     return parseOfficeWorkflowResult({
       ...meta, status: 'generated', resultRevision: 1, ...answer,
+      ...executionRecord(),
       context: { asOf: context.asOf, contextHash: context.contextHash, missing: context.missing },
       generation: { policyVersion: OFFICE_WORKFLOW_POLICY_VERSION, promptHash: createHash('sha256').update(JSON.stringify({ policyVersion: OFFICE_WORKFLOW_POLICY_VERSION, prompt, review })).digest('hex'), model: reviewed.model, usage: usageFor([result, reviewed]), elapsedMs: Date.now() - startedAt },
     }, request, context);

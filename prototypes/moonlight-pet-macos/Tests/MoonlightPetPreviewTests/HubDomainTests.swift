@@ -6,6 +6,17 @@ private func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
 }
 
 private actor ControlledHub: HubServing {
+    var credentialFailure = false
+    var disconnectCount = 0
+    func setCredentialFailure(_ value: Bool) { credentialFailure = value }
+    var anonymous = false
+    func setAnonymous(_ value: Bool) { anonymous = value }
+    var rejectsLogin = false
+    func rejectLogin(_ value: Bool) { rejectsLogin = value }
+    var rejectsReads = false
+    func rejectReads(_ value: Bool) { rejectsReads = value }
+    var rejectsWrites = false
+    func rejectWrites(_ value: Bool) { rejectsWrites = value }
     var failsRead = false
     var failToggle = false
     var holdToggle = false
@@ -39,8 +50,15 @@ private actor ControlledHub: HubServing {
     func holdWritesAndCalendar() { holdCreate = true; holdCalendar = true }
     func releaseWrite() { holdCreate = false; releaseCreate?.resume(); releaseCreate = nil }
     func releaseEvents() { holdCalendar = false; releaseCalendar?.resume(); releaseCalendar = nil }
-    func login(username: String, password: String) async throws {}
+    func login(username: String, password: String) async throws {
+        if rejectsLogin { throw HubTransportError.unauthorized }
+    }
+    func clearSession() async throws { anonymous = true }
+    func disconnect() async { disconnectCount += 1 }
     func tasks() async throws -> HubTaskPage {
+        if credentialFailure { throw HubTransportError.credentialStorage }
+        if anonymous { throw HubTransportError.unauthorized }
+        if rejectsReads { throw HubTransportError.unauthorized }
         if holdRead { startedRead = true; await withCheckedContinuation { releaseRead = $0 } }
         if failsRead { throw HubTransportError.offline }
         return HubTaskPage(tasks: [row] + (confirmedTask.map { [$0] } ?? []), partial: partial)
@@ -52,11 +70,15 @@ private actor ControlledHub: HubServing {
     }
     func release() { holdRead = false; releaseRead?.resume(); releaseRead = nil }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage {
+        if credentialFailure { throw HubTransportError.credentialStorage }
+        if anonymous { throw HubTransportError.unauthorized }
+        if rejectsReads { throw HubTransportError.unauthorized }
         if holdCalendar { startedCalendar = true; await withCheckedContinuation { releaseCalendar = $0 } }
         return HubCalendarPage(events: [], partial: partial)
     }
     func createTask(_ command: HubTaskCommand) async throws -> HubTask {
         creates.append(command)
+        if rejectsWrites { throw HubTransportError.unauthorized }
         if holdCreate { startedCreate = true; await withCheckedContinuation { releaseCreate = $0 } }
         if conflictCreateOnce { conflictCreateOnce = false; throw HubTransportError.conflict }
         if failCreateOnce { failCreateOnce = false; throw HubTransportError.timeout }
@@ -73,6 +95,7 @@ private actor ControlledHub: HubServing {
     }
     func saveMemo(_ command: HubMemoCommand) async throws -> HubMemoEntry {
         saves.append(command)
+        if rejectsWrites { throw HubTransportError.unauthorized }
         if memoConflict { throw HubDataError.conflict }
         if failMemoOnce { failMemoOnce = false; throw HubTransportError.timeout }
         let saved = HubMemoEntry(id: UUID(uuidString: command.entryId)!, body: command.body, title: command.title, occurredAt: command.occurredAt, revision: command.expectedRevision + 1, noteMeta: command.noteMeta, contexts: command.contexts)
@@ -90,6 +113,12 @@ struct HubDomainTests {
     @MainActor static func main() async {
         do {
             try modelChecks()
+            try await sharedSessionReplacementChecks()
+            try await progressiveLoadingChecks()
+            try await loginChecks()
+            try await anonymousMemoNoticeChecks()
+            try await connectionRecoveryChecks()
+            try await sessionExpiryChecks()
             try await recoveryChecks()
             try await storeChecks()
             try await captureChecks()
@@ -100,6 +129,175 @@ struct HubDomainTests {
             fputs("FAIL: \(error)\n", stderr)
             exit(1)
         }
+    }
+
+    // Regression: ISSUE-001 — an older read must not erase a newer unauthorized write.
+    // Found by /qa on 2026-10-03; see docs/qa/widget-pet-connectivity-2026-10-03.md.
+    @MainActor static func sessionExpiryChecks() async throws {
+        for isMemo in [true, false] {
+            let suite = "pet-session-expiry-check-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let api = ControlledHub()
+            let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+            await store.connect(baseURL: "https://expiry.test")
+            await api.configure(hold: true)
+            let refreshing = Task { await store.refresh() }
+            while !(await api.startedRead) { await Task.yield() }
+            await api.rejectWrites(true)
+            if isMemo { _ = await store.saveMemo(body: "세션 만료 후 보존할 메모") }
+            else { _ = await store.createTask(title: "세션 만료 후 보존할 할 일") }
+            try check(store.needsLogin, "An unauthorized write must require login immediately")
+            await api.release()
+            await refreshing.value
+            try check(store.needsLogin && !store.canWriteTasks && !store.canSaveMemo,
+                      "An older successful read must not clear the newer login requirement")
+            try check(isMemo ? store.hasPendingMemo : store.hasPendingTask,
+                      "Session expiry must retain the unconfirmed write for recovery")
+            await api.rejectWrites(false)
+            await store.refresh()
+            try check(!store.needsLogin && store.canSaveMemo && store.canWriteTasks,
+                      "A fresh successful read must allow recovery after authentication")
+        }
+        print("PASS: Session expiry ordering checks (8)")
+    }
+
+    @MainActor static func sharedSessionReplacementChecks() async throws {
+        let suite = "pet-shared-session-replacement-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let previous = ControlledHub()
+        let current = ControlledHub()
+        await previous.configure(hold: true)
+        await current.rejectReads(true)
+        var clients = 0
+        let store = HubStore(defaults: defaults, makeAPI: { _ in
+            clients += 1
+            return clients == 1 ? previous : current
+        })
+        let oldRead = Task { await store.connect(baseURL: "https://shared.test") }
+        while !(await previous.startedRead) { await Task.yield() }
+        _ = await store.connect(baseURL: "https://shared.test", forceReconnect: true)
+        let appliedLogout = store.needsLogin && !store.taskReady
+        await previous.release()
+        _ = await oldRead.value
+        try check(appliedLogout, "Hub logout must apply without waiting for an old read")
+        try check(store.needsLogin && !store.taskReady, "Late results from a previous session must not restore access")
+        await current.rejectReads(false)
+        _ = await store.connect(baseURL: "https://shared.test", forceReconnect: true)
+        try check(store.taskReady && !store.needsLogin, "Hub re-login must recover the native connection")
+        print("PASS: Shared session replacement, logout ordering and re-login (3)")
+    }
+
+    @MainActor static func progressiveLoadingChecks() async throws {
+        for slowCalendar in [true, false] {
+            let suite = "pet-progressive-read-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let api = ControlledHub()
+            if slowCalendar { await api.holdWritesAndCalendar() }
+            else { await api.configure(hold: true) }
+            let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+            let loading = Task { await store.connect(baseURL: "https://progress.test") }
+            let deadline = Date().addingTimeInterval(2)
+            while !(slowCalendar ? store.taskReady : store.calendarReady) && Date() < deadline { await Task.yield() }
+            let readyBeforeOtherRead = slowCalendar ? store.taskReady && !store.calendarReady : store.calendarReady && !store.taskReady
+            let canUseTasks = !slowCalendar || store.canWriteTasks
+            if slowCalendar { await api.releaseEvents() } else { await api.release() }
+            _ = await loading.value
+            try check(readyBeforeOtherRead, "A fast read must render without waiting for the other surface")
+            try check(canUseTasks, "A slow calendar must not block task input after connection")
+            try check(store.taskReady && store.calendarReady, "Both snapshots must remain available when loading finishes")
+        }
+        print("PASS: Progressive loading and slow-source isolation (6)")
+    }
+
+    @MainActor static func loginChecks() async throws {
+        let suite = "pet-login-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let api = ControlledHub()
+        let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+        let empty = await store.signIn(baseURL: "https://example.com", username: "", password: "")
+        try check(!empty && !store.hasConnection, "Empty credentials must not dismiss the login form")
+        await api.rejectLogin(true)
+        let denied = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
+        try check(!denied && store.needsLogin, "Rejected login must remain on the form")
+        await api.rejectLogin(false)
+        let accepted = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
+        try check(accepted && !store.needsLogin && store.taskReady, "Accepted login returns to the content screen")
+        // Data availability is shown by the content screen, independently of login.
+        await api.configure(readError: true)
+        let readFailure = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
+        try check(readFailure && !store.taskReady, "A task read error must not misrepresent accepted credentials")
+    }
+
+    @MainActor static func anonymousMemoNoticeChecks() async throws {
+        let suite = "pet-anonymous-memo-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("보존할 메모 초안", forKey: "petPreview.memo")
+        let api = ControlledHub()
+        await api.setAnonymous(true)
+        let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+        await store.connect(baseURL: "https://example.com")
+        try check(store.needsLogin && !store.canSaveMemo, "Anonymous pet must block Hub save")
+        try check(store.errorMessage?.contains("로그인") == true, "Memo must explain why Hub save is disabled")
+        try check(defaults.string(forKey: "petPreview.memo") == "보존할 메모 초안", "Login failure must keep the local memo")
+        await api.setAnonymous(false)
+        await store.refresh()
+        try check(!store.needsLogin && store.canSaveMemo && store.errorMessage == nil, "Recovered authentication must clear stale login notice")
+        await api.setCredentialFailure(true)
+        await store.refresh()
+        try check(store.needsLogin && store.errorMessage?.contains("키체인") == true && !store.canSaveMemo, "Memo must show Keychain access failure")
+        await api.setCredentialFailure(false)
+        await store.refresh()
+        try check(store.canSaveMemo && store.errorMessage == nil, "Recovered Keychain access clears its notice")
+        await store.connect(baseURL: "https://other.example.com")
+        let disconnected = await api.disconnectCount
+        try check(disconnected == 1, "Changing origin must invalidate the old transport before replacement")
+        let signedOut = await store.signOut()
+        try check(signedOut && store.needsLogin && !store.canSaveMemo, "Signing out disables saving and automatic login")
+        try check(defaults.string(forKey: "petPreview.memo") == "보존할 메모 초안", "Sign-out must preserve the draft")
+    }
+
+    @MainActor static func connectionRecoveryChecks() async throws {
+        let suite = "pet-address-recovery-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let oldOrigin = "http://127.0.0.1:3000"
+        defaults.set(oldOrigin, forKey: "petPreview.hubURL")
+        let api = ControlledHub()
+        var requestedOrigins: [String] = []
+        let store = HubStore(defaults: defaults, makeAPI: { url in
+            requestedOrigins.append(url.absoluteString)
+            return api
+        })
+        await api.rejectLogin(true)
+        let denied = await store.signIn(baseURL: "https://hub.test", username: "operator", password: "test-only")
+        try check(!denied && defaults.string(forKey: "petPreview.hubURL") == oldOrigin,
+                  "A failed login at a replacement address must preserve the saved address")
+        try check(requestedOrigins == ["https://hub.test"], "Recovery credentials go to the explicitly submitted address")
+        await api.rejectLogin(false)
+        let accepted = await store.signIn(baseURL: " https://HUB.test:443/ ", username: "operator", password: "test-only")
+        try check(accepted && defaults.string(forKey: "petPreview.hubURL") == "https://hub.test",
+                  "An authenticated replacement address is saved in canonical form")
+        let rejected = await store.signIn(baseURL: "https://hub.test/dashboard", username: "operator", password: "test-only")
+        try check(!rejected && requestedOrigins.count == 2
+                  && defaults.string(forKey: "petPreview.hubURL") == "https://hub.test",
+                  "Recovery must retain origin validation without replacing a working address")
+
+        await api.configure(hold: true)
+        let first = Task { await store.signIn(baseURL: "https://slow.test", username: "operator", password: "test-only") }
+        while !(await api.startedRead) { await Task.yield() }
+        let overlapping = await store.signIn(baseURL: "https://other.test", username: "operator", password: "test-only")
+        try check(!overlapping && requestedOrigins.last == "https://slow.test" && requestedOrigins.count == 3,
+                  "A second submission cannot change the address during sign-in")
+        await api.release()
+        let finished = await first.value
+        try check(finished && defaults.string(forKey: "petPreview.hubURL") == "https://slow.test",
+                  "The first sign-in retains ownership of the saved address")
+        print("PASS: Hub address recovery checks (6)")
     }
 
     @MainActor static func captureChecks() async throws {

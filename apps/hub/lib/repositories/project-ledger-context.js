@@ -38,30 +38,33 @@ function normalizeProjectStatus(status) {
 
 // 서버(UTC)에서 실행되므로 운영자 시간대를 고정한다 — 미지정 시 배포 환경에서 -9시간 라벨이 나온다.
 const TIME_ZONE = "Asia/Seoul";
+// 행마다 생성하지 않고 시간대·표시 형식이 고정된 포매터를 재사용한다.
+const SHORT_DATE_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: TIME_ZONE,
+  month: "numeric",
+  day: "numeric",
+});
+const ACTIVITY_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: TIME_ZONE,
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 function formatShortDate(value) {
   if (!value) return "미정";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "미정";
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: TIME_ZONE,
-    month: "numeric",
-    day: "numeric",
-  }).format(date);
+  return SHORT_DATE_FORMAT.format(date);
 }
 
 function formatActivityTime(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: TIME_ZONE,
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
+  return ACTIVITY_TIME_FORMAT.format(date);
 }
 
 export function mapProjectAreas(rows = []) {

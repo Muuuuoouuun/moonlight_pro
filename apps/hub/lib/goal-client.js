@@ -8,12 +8,13 @@ export function goalScope(value) {
 // (2026-09-23 운영자 "OKR·KPI 트래킹 탭 신설"). base를 넘기면 그 경로 안에서 링크가 머문다.
 export const GOAL_WORK_BASE = '/dashboard/work/goals';
 
-// 목표·성과의 세 보기 — 목표별 · 빠른 체크 · 주간 실측. 주간 실측은 체크와 겹치지 않는다.
-export function goalHref(id, scope, { check = false, create = false, weekly = false, base = '/dashboard/overview' } = {}) {
+// 목표·성과의 네 보기 — OKR(목표와 핵심 결과) · KPI(계속 지킬 건강 지표) · 체크인 · 주간 실측.
+export function goalHref(id, scope, { check = false, create = false, weekly = false, kpi = false, base = '/dashboard/overview' } = {}) {
   const params = new URLSearchParams(base === GOAL_WORK_BASE ? {} : { view: 'goals' });
   params.set('scope', goalScope(scope) === 'company' ? 'classin' : goalScope(scope) || 'all');
   if (id) params.set('goal', id);
   if (weekly) params.set('weekly', '1');
+  else if (kpi) params.set('kpi', '1');
   else if (check) params.set('check', '1');
   if (create) params.set('new', 'goal');
   return `${base}?${params}`;
@@ -21,7 +22,8 @@ export function goalHref(id, scope, { check = false, create = false, weekly = fa
 
 export function goalView(params) {
   if (params.get('weekly') === '1') return 'weekly';
-  return params.get('check') === '1' ? 'check' : 'goals';
+  if (params.get('kpi') === '1') return 'kpi';
+  return params.get('check') === '1' ? 'check' : 'okr';
 }
 
 // 하루 리뷰(journal_entries)에는 소속이 없어 정본 규칙상 언제나 개인이다(source-adapters

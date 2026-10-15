@@ -1,4 +1,5 @@
 import { buildOfficeMentorQuestion, buildOfficeMentorRequest, OFFICE_MENTOR_FIRST_QUESTION } from './office-mentor-client.js';
+import { registerOfficeUnloadStore } from './office-unload.js';
 
 // Intentionally in memory only. Reopening the drawer in this browser session
 // keeps the conversation, but a reload or a new browser session does not restore it.
@@ -101,3 +102,5 @@ export function createOfficeMentorSessionStore() {
 }
 
 export const officeMentorSessions = createOfficeMentorSessionStore();
+// The Hub shell guards unsent mentor questions across page navigation (office-session-provider.jsx).
+registerOfficeUnloadStore(officeMentorSessions);

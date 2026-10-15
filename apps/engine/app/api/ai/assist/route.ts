@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     input = assistancePrompt(JSON.parse(raw));
   } catch { return NextResponse.json({ status: 'invalid-input', error: 'invalid-assistance-context' }, { status: 400 }); }
   if (!getGeminiIntegrationStatus().configured) return NextResponse.json({ status: 'preview', error: 'gemini-not-configured', usage: null }, { status: 202 });
-  const result = await generateGeminiText({ ...input, retries: 1 });
+  const result = await generateGeminiText({ ...input, retries: 1, usageSurface: 'ai-assist' });
   const usageMetadata = result.usageMetadata;
   const usage = usageMetadata ? Object.fromEntries(['promptTokenCount','candidatesTokenCount','totalTokenCount','cachedContentTokenCount','thoughtsTokenCount'].filter(key => Number.isFinite(usageMetadata[key]) && usageMetadata[key] >= 0).map(key => [key, usageMetadata[key]])) : null;
   const valid = result.ok && result.text.trim() && Buffer.byteLength(result.text) <= 24000;

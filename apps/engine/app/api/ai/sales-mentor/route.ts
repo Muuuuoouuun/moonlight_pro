@@ -160,6 +160,7 @@ export async function POST(req: Request) {
           maxOutputTokens,
           ...DRAFT_GENERATION_BOUNDS,
           retries: 1,
+          usageSurface: "sales-mentor",
         }
       : {
           systemInstruction: buildAdvisorySystemInstruction({
@@ -171,6 +172,7 @@ export async function POST(req: Request) {
           prompt: buildGuruAdvicePrompt({ mode: mode as GuruAdviceMode, context, draft, guidanceId, history }),
           maxOutputTokens,
           retries: 1,
+          usageSurface: "sales-mentor",
         },
   );
   const finishedAt = new Date().toISOString();

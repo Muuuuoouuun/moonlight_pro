@@ -152,3 +152,17 @@ test('a company objective cannot get a daily-review metric through any client, i
   assert.equal((await executeGoalCommand(payload, context, storage([objective]))).status, 'saved');
   assert.equal((await executeGoalCommand({ ...payload, input: { ...payload.input, sourceKey: 'contacts_recorded' } }, context, storage([company]))).status, 'saved');
 });
+
+test('task links carry title, due date, status and item type for the milestone line',async()=>{
+  const task='44444444-4444-4444-4444-444444444442';
+  const link={workspace_id:workspace,objective_id:id,entity_type:'tasks',entity_id:task};
+  const linkedDependencies=dependencies({fetchRows:async table=>{
+    const rows=table==='operating_goal_links'?[link]:table==='operating_objectives'?[objective]:[];
+    return {rows,count:rows.length};
+  },metricReader:{get:async()=>({id:task,workspace_id:workspace,title:'강의 모집 오픈',status:'todo',due_at:'2026-10-09T09:00:00+00:00',meta:{item_type:'milestone'}}),resolveEntityScope:async()=> 'personal'}});
+  const result=await getGoalsLedger({},context,linkedDependencies);
+  assert.equal(result.links[0].entityTitle,'강의 모집 오픈');
+  assert.equal(result.links[0].dueAt,'2026-10-09T09:00:00+00:00');
+  assert.equal(result.links[0].taskStatus,'todo');
+  assert.equal(result.links[0].itemType,'milestone');
+});

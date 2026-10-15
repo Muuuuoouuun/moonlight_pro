@@ -36,8 +36,11 @@
       const scroll = h('div', { class: 'scroll' });
       const listWrap = h('div', { class: 'list-wrap' }, metaRow, scroll);
       const status = h('span', { class: 'status' });
+      const refresh = M.platform.isMac() ? U.quiet('', { icon: 'refresh', iconSize: 14, title: 'Hub 새로고침',
+        onClick: () => { if (!loading) load(); } }) : null;
       const footer = h('div', { class: 'footer' }, status,
         U.quiet('Hub에서 열기', { icon: 'arrowUpRight', iconSize: 12, iconAfter: true, onClick: () => ctx.openHub(C.HUB_PATHS.tasks) }));
+      if (refresh) footer.insertBefore(refresh, footer.lastChild);
       let lastDraftTitle = '';
       const el = h('section', { class: 'mode tasks', 'aria-label': '할 일' }, field, note, listWrap, footer);
 
@@ -99,6 +102,7 @@
       function visible() { return grace.visible(tasks, includeCompleted); }
 
       function renderList() {
+        if (refresh) refresh.disabled = loading;
         const failed = view && !view.showData;
         const shown = visible();
         countText.textContent = T.countLabel({ loading: loading && !loadedAt, failed: failed && !loadedAt, visibleTasks: shown });
@@ -231,14 +235,15 @@
         ], { label: '할 일 목록 보기 설정' });
       }
 
-      const timer = setInterval(() => { if (document.visibilityState === 'visible') load(); }, C.LIMITS.pollMs);
+      const timer = setInterval(() => { if (ctx.isShown()) load(); }, C.LIMITS.pollMs);
       updateSend();
       load();
 
       return {
         el,
         focus() { input.focus(); },
-        // Ctrl+Enter: 적어 둔 할 일을 추가한다(Hub 열기는 아래 ‘Hub에서 열기’). 빈 입력이면 입력 칸으로.
+        refresh: load,
+        // Ctrl+Enter(mac ⌘Return): 적어 둔 할 일을 추가한다(Hub 열기는 아래 ‘Hub에서 열기’). 빈 입력이면 입력 칸으로.
         primary() { if (input.value.trim()) add(); else input.focus(); },
         menuItems() {
           return [

@@ -79,15 +79,17 @@ function formatRelative(value) {
   return date.toISOString().slice(0, 10);
 }
 
+let endDateFormatter;
+
 function formatEnd(value) {
   if (!value) return "미정";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "미정";
-  return new Intl.DateTimeFormat("ko-KR", {
+  return (endDateFormatter ??= new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     month: "long",
     day: "numeric",
-  }).format(date);
+  })).format(date);
 }
 
 function normalizeChannels(meta, channelColumn) {

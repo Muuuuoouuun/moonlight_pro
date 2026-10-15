@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "verifiedAt": "2026-09-29T16:30:20.067038+00:00",
+  "candidateCommit": "c6d1ca8de5ca8e531c145a7f869b1fd85fec16f6",
+  "candidateSourceFilesVerified": 26,
+  "evaluationToolingFilesVerified": 7,
+  "bothRunsSameRuntimeSources": true,
+  "originalV26JournalSha256": "ea945e5839bfe9d6daa39f1ad36f286ccfc5900ce9f8f52697027e0bb389e7ab",
+  "originalV26ArtifactFilesVerified": 23,
+  "credentialValueMatchesInArtifacts": 0,
+  "credentialValuesOrNamesPrinted": false,
+  "liveRuns": {
+    "development": 1,
+    "freshPrivateHoldout": 1,
+    "additionalCallsAfterCompletion": 0
+  },
+  "noRuntimeEditsByReviewer": true,
+  "noBusinessDatabaseWrites": true,
+  "scope": "Checks evidence and exact candidate Git blobs; does not re-certify all product tests or semantic judgments."
+}

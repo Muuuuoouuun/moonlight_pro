@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 import {
   buildGoogleCalendarAuthUrl,
@@ -12,7 +13,7 @@ export async function GET(req) {
   const { searchParams, origin } = req.nextUrl;
   const workspaceId = resolveDefaultWorkspaceId();
   const calendarId = searchParams.get("calendarId") || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary";
-  const returnPath = searchParams.get("returnPath") || "/dashboard/work/calendar";
+  const returnPath = sanitizeReturnPath(searchParams.get("returnPath"), "/dashboard/work/calendar");
 
   if (!hasGoogleCalendarOAuthStateSecret()) {
     const target = new URL(returnPath, origin);
