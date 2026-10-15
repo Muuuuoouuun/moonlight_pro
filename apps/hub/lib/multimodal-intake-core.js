@@ -1,8 +1,8 @@
 // Gemini multimodal: photo/audio/text -> structured fields. Raw fetch, no SDK.
 // Matches the hub lib/google-vision pattern (x-goog-api-key header).
+import { geminiGenerationConfig, resolveGeminiModel } from "./gemini-model.js";
 
 const BASE = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 export const MAX_MULTIMODAL_MEDIA_BYTES = 14 * 1024 * 1024;
 // 14 MiB becomes 19,573,420 base64 bytes, leaving room for JSON and prompts
@@ -156,7 +156,7 @@ export function formatMeetingBriefForShare(data) {
 
 export function getMultimodalStatus() {
   const apiKey = process.env.GEMINI_API_KEY?.trim() || "";
-  return { configured: Boolean(apiKey), apiKey, model: MODEL, base: BASE };
+  return { configured: Boolean(apiKey), apiKey, model: resolveGeminiModel(), base: BASE };
 }
 
 function safeJson(raw) {
@@ -217,13 +217,13 @@ export async function extractMultimodalIntakeHub(input = {}) {
     });
   }
 
-  const generationConfig = {
+  const generationConfig = geminiGenerationConfig(model, {
     responseMimeType: "application/json",
     responseJsonSchema: MULTIMODAL_SCHEMA,
     temperature: 0.1,
     maxOutputTokens: 8192,
     ...(Number.isFinite(input.thinkingBudget) ? { thinkingConfig: { thinkingBudget: input.thinkingBudget } } : {}),
-  };
+  });
 
   const body = {
     system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },

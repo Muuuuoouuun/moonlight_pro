@@ -219,7 +219,7 @@ async function checkGitHubIntegration(label, env, failures) {
 async function checkGeminiIntegration(label, env, failures) {
   const apiKey = env.GEMINI_API_KEY || env.GOOGLE_GENERATIVE_AI_API_KEY || "";
   const apiBaseUrl = (env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-  const model = env.GEMINI_MODEL || env.AI_DEFAULT_MODEL || "gemini-3-flash-preview";
+  const model = env.GEMINI_MODEL || env.AI_DEFAULT_MODEL || "gemini-4-argon";
 
   if (!apiKey) {
     printResult("WARN", `${label} Gemini integration`, "missing GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY");

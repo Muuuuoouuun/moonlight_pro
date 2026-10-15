@@ -103,6 +103,16 @@ export function classifyGeminiFailure(value: unknown, signal?: AbortSignal): str
   return 'provider-error';
 }
 
+// Fallback when neither GEMINI_MODEL nor AI_DEFAULT_MODEL is set. Gemini 4 has one model so far
+// (no Flash variant), so default chat moved from gemini-3.5-flash to it.
+export const DEFAULT_GEMINI_MODEL = "gemini-4-argon";
+
+// Gemini 3 and later take thinkingLevel; Gemini 2.5 takes thinkingBudget, which 3 rejects and 4
+// deprecates. Gemini 4 also drops temperature/topP/topK (ignored with a warning; Vertex answers
+// 400), so it never receives them. Same rule as apps/hub/lib/gemini-model.js.
+const THINKING_LEVEL_MODEL = /^gemini-(?:[3-9]|[1-9]\d)[.-]/;
+const NO_SAMPLING_MODEL = /^gemini-(?:[4-9]|[1-9]\d)[.-]/;
+
 function resolveGeminiApiKey() {
   return (
     process.env.GEMINI_API_KEY?.trim() ||
@@ -118,7 +128,7 @@ export function getGeminiIntegrationStatus() {
     model:
       process.env.GEMINI_MODEL?.trim() ||
       process.env.AI_DEFAULT_MODEL?.trim() ||
-      "gemini-3.5-flash",
+      DEFAULT_GEMINI_MODEL,
     apiBaseUrl:
       process.env.GEMINI_API_BASE_URL?.trim() ||
       "https://generativelanguage.googleapis.com/v1beta",
@@ -181,17 +191,17 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       },
     ],
     generationConfig: {
-      // gemini-3-* are thinking models: thinking tokens count against maxOutputTokens, so a
+      // gemini-3+ are thinking models: thinking tokens count against maxOutputTokens, so a
       // low cap starves the visible answer and truncates it mid-sentence. Keep headroom for
       // thinking + a full answer. maxOutputTokens is a cap, not a charge — billing is per
       // actual token — so a generous default is safe.
       maxOutputTokens: input.maxOutputTokens || 8192,
-      ...(typeof input.temperature === 'number' ? { temperature: input.temperature } : {}),
+      ...(typeof input.temperature === 'number' && !NO_SAMPLING_MODEL.test(targetModel) ? { temperature: input.temperature } : {}),
       ...(input.responseJsonSchema ? {
         responseMimeType: "application/json", responseJsonSchema: input.responseJsonSchema,
       } : {}),
-      // Gemini 2.5 uses thinkingBudget; do not send an incompatible 3-series option.
-      ...(input.thinkingLevel && /^gemini-3[.-]/.test(targetModel) ? {
+      // Gemini 2.5 uses thinkingBudget; do not send an incompatible 3+ option.
+      ...(input.thinkingLevel && THINKING_LEVEL_MODEL.test(targetModel) ? {
         thinkingConfig: { thinkingLevel: input.thinkingLevel },
       } : {}),
     },
@@ -206,10 +216,10 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
 
   // 0 is a meaningful budget (thinking off), so test for undefined rather than falsiness.
   // Same family guard as thinkingLevel above, mirrored: thinkingBudget is the Gemini 2.5
-  // option and the 3-series rejects it, which would fail every draft cron (the draft modes
-  // send DRAFT_GENERATION_BOUNDS.thinkingBudget on the default gemini-3.5-flash). Merge
-  // rather than assign so a caller that sends both never loses thinkingLevel silently.
-  if (typeof input.thinkingBudget === "number" && !/^gemini-3[.-]/.test(targetModel)) {
+  // option and 3+ rejects it, which would fail every draft cron (the draft modes send
+  // DRAFT_GENERATION_BOUNDS.thinkingBudget on the default model). Merge rather than assign
+  // so a caller that sends both never loses thinkingLevel silently.
+  if (typeof input.thinkingBudget === "number" && !THINKING_LEVEL_MODEL.test(targetModel)) {
     generationConfig.thinkingConfig = {
       ...(generationConfig.thinkingConfig as Record<string, unknown> | undefined),
       thinkingBudget: input.thinkingBudget,

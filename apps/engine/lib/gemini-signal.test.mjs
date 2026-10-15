@@ -79,3 +79,31 @@ test('thinkingBudget only reaches 2.5-series models and never erases thinkingLev
     else process.env.GEMINI_API_KEY = originalKey;
   }
 });
+
+// Gemini 4는 2.5의 thinkingBudget을 폐기했고 temperature·topP·topK를 받지 않는다. 3 계열처럼
+// thinkingLevel만 싣고, 기본 모델이 4로 바뀌어도 초안 크론의 thinkingBudget 512가 닿지 않아야 한다.
+test('Gemini 4 receives thinkingLevel only and never thinkingBudget or temperature', async () => {
+  const originalFetch = globalThis.fetch;
+  const before = { key: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL, fallback: process.env.AI_DEFAULT_MODEL };
+  process.env.GEMINI_API_KEY = 'fake-office-test-key';
+  delete process.env.GEMINI_MODEL; delete process.env.AI_DEFAULT_MODEL;
+  const calls = [];
+  try {
+    globalThis.fetch = async (url, options) => {
+      calls.push({ url, config: JSON.parse(options.body).generationConfig });
+      return Response.json({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] });
+    };
+    await generateGeminiText({ prompt: 'default', thinkingBudget: 512, temperature: 0.2 });
+    await generateGeminiText({ prompt: 'both', thinkingBudget: 512, thinkingLevel: 'high', temperature: 0.2, model: 'gemini-4-argon' });
+    await generateGeminiText({ prompt: 'older', temperature: 0.2, model: 'gemini-3.5-flash' });
+    assert.match(calls[0].url, /\/models\/gemini-4-argon:generateContent$/, '기본 모델은 Gemini 4');
+    assert.equal(calls[0].config.thinkingConfig, undefined);
+    assert.equal(calls[0].config.temperature, undefined);
+    assert.deepEqual(calls[1].config.thinkingConfig, { thinkingLevel: 'high' });
+    assert.equal(calls[1].config.temperature, undefined);
+    assert.equal(calls[2].config.temperature, 0.2, '3 계열은 temperature를 그대로 받는다');
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of [['GEMINI_API_KEY', before.key], ['GEMINI_MODEL', before.model], ['AI_DEFAULT_MODEL', before.fallback]]) value === undefined ? delete process.env[name] : process.env[name] = value;
+  }
+});
