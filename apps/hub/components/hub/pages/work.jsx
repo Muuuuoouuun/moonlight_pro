@@ -10,6 +10,8 @@ import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmToday } from "../rhythm-today";
 import { RhythmHistory } from "../rhythm-history";
 import { DecisionFollowups, DecisionMeta, decisionMatches, decisionMonthGroups, decisionSourceOptions } from "./decision-journal";
+import { DecisionDesk } from "./decision-desk";
+import { buildDecisionQueue, deskStats } from "@/lib/decision-desk";
 import { FEATURE_GATES } from "@/lib/feature-gates";
 import { linkDecision, saveDecisionWithFollowup } from "../decision-actions";
 import { todayKey } from "../check-items/check-item-actions";
@@ -110,6 +112,7 @@ function useWorkLedger(projectId = null) {
     decisionsState: { state: 'preview', partial: false, error: null },
     rituals: [],
     projects: [],
+    blockedProjects: [],
     summary: null,
     syncState: 'preview',
     rhythmState: 'preview',
@@ -234,6 +237,8 @@ function useWorkLedger(projectId = null) {
         decisionsState,
         rituals: Array.isArray(data.rituals) ? data.rituals : [],
         projects: Array.isArray(data.projects) ? data.projects : [],
+        // 결정 데스크의 막힌 프로젝트 — 못 읽었으면 null(모름), 빈 배열(없음)과 구분한다.
+        blockedProjects: Array.isArray(data.blockedProjects) ? data.blockedProjects : data.source === 'supabase' ? null : [],
         summary: data.summary || null,
         syncState: data.source === 'supabase' ? 'live' : 'preview',
         rhythmState: rhythm.state || 'error',
@@ -851,6 +856,7 @@ export function Decisions({ onNavigate, scope }) {
     decisions: liveDecisions,
     decisionsState,
     projects: linkableProjects,
+    blockedProjects,
     retry,
   } = useWorkLedger();
   const [localDecisions, setLocalDecisions] = React.useState([]);
@@ -992,12 +998,27 @@ export function Decisions({ onNavigate, scope }) {
   // 탭은 hub-nav의 SSOT에서 가져온다 — 페이지가 자체 목록을 들면 사이드바·탑바와 갈라진다.
   const navigation = topNavigationForRoute('dashboard/work/decisions', scope);
 
+  // 결정 데스크(2026-10-15 스펙) — 결정 일지의 기본 보기는 `정하기`, `?view=journal`이면 일지 전체.
+  const view = DECISION_JOURNAL && searchParams.get('view') !== 'journal' ? 'desk' : 'journal';
+  const setView = (next) => router.replace(next === 'journal' ? `${pathname}?view=journal` : pathname);
+  const deskReady = decisionComplete || decisionSyncState === 'partial';
+  const deskQueue = React.useMemo(
+    () => (view === 'desk' ? buildDecisionQueue({ decisions: liveList, blockedProjects: blockedProjects || [] }) : []),
+    [view, liveList, blockedProjects],
+  );
+  const stats = view === 'desk' ? deskStats({ decisions: liveList, queue: deskQueue }) : null;
+  const statsLine = stats ? [
+    `이번 주 정한 것 ${stats.decidedThisWeek}`,
+    stats.openFollowups !== null ? `그래서 할 일 남음 ${stats.openFollowups}` : '',
+    stats.oldestDays !== null ? `가장 오래 미정 ${stats.oldestDays}일` : '',
+  ].filter(Boolean).join(' · ') : '';
+
   return (
     <div className="hub-futura hub-page fade-up">
       <header>
-        <div className="fx-eyebrow">{navigation.anchor?.label || 'Work'}</div>
-        <h2 className="fx-page-title">{DECISION_JOURNAL ? '결정 일지' : 'Decisions'}</h2>
-        <p className="fx-page-sub">일정 · 프로젝트 · 결정</p>
+        <div className="fx-eyebrow">{navigation.anchor?.label || 'Work'}{view === 'desk' ? ' · 결정 일지' : ''}</div>
+        <h2 className="fx-page-title">{view === 'desk' && deskReady ? `정할 것 ${deskQueue.length}건` : DECISION_JOURNAL ? '결정 일지' : 'Decisions'}</h2>
+        <p className="fx-page-sub">{view === 'desk' && deskReady ? statsLine : '일정 · 프로젝트 · 결정'}</p>
         {navigation.tabs.length > 0 && (
           <nav className="fx-tabs" aria-label={`${navigation.anchor.label} 하위 메뉴`}>
             {navigation.tabs.map((tab) => (
@@ -1013,8 +1034,40 @@ export function Decisions({ onNavigate, scope }) {
             ))}
           </nav>
         )}
+        {DECISION_JOURNAL ? (
+          <SegmentedControl className="dd-view-toggle" label="결정 일지 보기" value={view} onChange={setView}
+            options={[{ key: 'desk', label: '정하기' }, { key: 'journal', label: '일지 전체' }]} />
+        ) : null}
       </header>
 
+      {view === 'desk' ? (
+        <section aria-label="결정 데스크">
+          {decisionSyncState === 'loading' ? <Skeleton lines={5} label="정할 것 불러오는 중" /> : null}
+          {!deskReady && decisionSyncState !== 'loading' ? (
+            <Card>
+              <EmptyState
+                icon="decisions"
+                title={decisionSyncState === 'error' ? '결정 기록 읽기 실패' : '결정 기록 미연결'}
+                description={decisionSyncState === 'error'
+                  ? decisionsState?.error?.message || '결정 기록을 다시 읽은 뒤 정할 것을 보여 드립니다.'
+                  : 'Supabase decisions 기록을 연결하면 정할 것이 표시됩니다.'}
+                action={decisionSyncState === 'error' ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button> : undefined}
+              />
+            </Card>
+          ) : null}
+          {deskReady ? (
+            <DecisionDesk
+              queue={deskQueue}
+              decisions={liveList}
+              blockedReadable={Array.isArray(blockedProjects)}
+              onSaved={retry}
+              onRetry={retry}
+              onOpenJournal={() => setView('journal')}
+              onAskAdvice={setCouncilDecision}
+            />
+          ) : null}
+        </section>
+      ) : (
       <section>
         <div className="fx-section-head">
           <div>
@@ -1127,7 +1180,7 @@ export function Decisions({ onNavigate, scope }) {
           </div>
         )}
       </section>
-
+      )}
 
       {editingDecision && (
         <EditDrawer
@@ -1204,7 +1257,8 @@ export function Decisions({ onNavigate, scope }) {
             status: councilDecision.decidedAt ? "Committed" : "Draft",
           }}
           onApplyText={(text) => {
-            if (editDecisionId) {
+            if (councilDecision.apply) councilDecision.apply(text);
+            else if (editDecisionId) {
               updateDraft('rationale', editingDecision?.rationale ? `${editingDecision.rationale}\n\n[Council 자문 검증]:\n${text}` : text);
             }
           }}

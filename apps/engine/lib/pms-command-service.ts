@@ -115,6 +115,10 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       decided_at: comparableTimestamp(row.decided_at),
       source: meta.source ?? null,
       source_ref: sourceRef ? { type: sourceRef.type ?? null, id: sourceRef.id ?? null } : null,
+      question: meta.question ?? null,
+      options: Array.isArray(meta.options) ? meta.options : null,
+      chosen_option_id: meta.chosenOptionId ?? null,
+      defer_until: meta.deferUntil ?? null,
     };
   }
 
@@ -344,7 +348,18 @@ export async function executePmsCommand(
       if (!rows[0]) return { status: "error", error: "not-found" };
       const current = rows[0];
       const meta = current.meta && typeof current.meta === "object" ? current.meta as Record<string, unknown> : {};
-      command.patch.meta = { ...meta, ...command.patch.meta as Record<string, unknown> };
+      const incoming = command.patch.meta as Record<string, unknown>;
+      const merged: Record<string, unknown> = { ...meta, ...incoming };
+      // 고른 선택지는 병합된 선택지 안에 있어야 한다(결정 데스크) — 없는 것을 고르면 거절하고,
+      // 선택지만 바꿔 예전에 고른 것이 사라졌으면 선택을 비운다.
+      if (typeof merged.chosenOptionId === "string") {
+        const options = Array.isArray(merged.options) ? merged.options as Array<Record<string, unknown>> : [];
+        if (!options.some((option) => option?.id === merged.chosenOptionId)) {
+          if (Object.prototype.hasOwnProperty.call(incoming, "chosenOptionId")) return { status: "invalid-input", error: "invalid-chosen-option" };
+          merged.chosenOptionId = null;
+        }
+      }
+      command.patch.meta = merged;
       if (current.updated_at && !filterValue(command.filters, "updated_at")) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
     }
     // Read + compare-and-swap protects the metadata merge and schedule history.
