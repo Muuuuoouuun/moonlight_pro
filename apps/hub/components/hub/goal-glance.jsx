@@ -66,22 +66,21 @@ function KpiMeter({ row, today }) {
   </div>;
 }
 
-export function KpiStrip({ rows, today, kpiHref, railBudget, readState = 'live' }) {
+export function KpiStrip({ rows, today, kpiHref, hrefFor, onOpen, railBudget, readState = 'live' }) {
   const outside = rows.filter(row => row.health === 'outside').length;
   const railed = outside > 0 && outside <= railBudget;
   return <section className="goal-kpi-strip" aria-label="지킬 선 · KPI">
     <div className="goal-section-head"><h3 className="goal-section-title">지킬 선 · KPI</h3><Link className="goal-section-link hub-row" href={kpiHref}>KPI 자세히 →</Link></div>
-    {rows.length ? <ul className="goal-kpi-tiles">{rows.map(row => {
+    {rows.length ? <ul className="goal-kpi-tiles stagger-up">{rows.map(row => {
       const { metric, objective, health, freshness } = row;
       const zero = isZeroKeep(metric);
       const { previous } = kpiBulletReading(metric, row.observations);
       const meta = zero ? '0건 유지' : kpiThresholdLabel(metric);
       const when = freshness;
-      return <li key={metric.id} className={`goal-kpi-tile${health === 'outside' && railed ? ' goal-kpi-tile--outside' : ''}`}>
-        <div className="goal-kpi-tile__head"><span className="goal-kpi-tile__name">{metric.name}</span><TonePill tone={KPI_HEALTH_TONE[health]} small>{KPI_HEALTH_GLYPH[health]} {KPI_HEALTH_LABEL[health]}</TonePill></div>
+      return <li key={metric.id} className={`goal-kpi-tile${health === 'outside' && railed ? ' goal-kpi-tile--outside' : ''}`} title={`${objective.title} · ${objective.periodStart}–${objective.periodEnd}`}>
+        <div className="goal-kpi-tile__head">{hrefFor ? <Link className="hub-row goal-kpi-tile__name" data-goal-id={objective.id} onClick={onOpen} href={hrefFor(objective)}>{metric.name}</Link> : <span className="goal-kpi-tile__name">{metric.name}</span>}<TonePill tone={KPI_HEALTH_TONE[health]} small>{KPI_HEALTH_GLYPH[health]} {KPI_HEALTH_LABEL[health]}</TonePill></div>
         <KpiValue metric={metric} />
         <KpiMeter row={row} today={new Intl.DateTimeFormat('en-CA', { timeZone: objective.timezone || 'Asia/Seoul' }).format(new Date())} />
-        <span className="goal-muted">{objective.title} · {objective.periodStart}–{objective.periodEnd}</span>
         <div className="goal-kpi-tile__meta mono"><span>{meta}</span><span>{previous !== null ? `지난 ${number(previous)} · ` : ''}{when}</span></div>
       </li>;
     })}</ul> : readState !== 'live' ? <p role="status" className="goal-muted">KPI 목록을 모두 확인하지 못했습니다. 다시 불러온 뒤 지킬 선을 확인하세요.</p> : <p className="goal-muted">지킬 선(KPI)이 아직 없습니다. 목표를 이루면서도 무너지면 안 되는 선을 <Link className="hub-row" href={kpiHref}>KPI 보기</Link>에서 정하세요.</p>}
@@ -89,19 +88,19 @@ export function KpiStrip({ rows, today, kpiHref, railBudget, readState = 'live' 
 }
 
 // 이번 주 챙길 것 — 선 밖 KPI · 늦은 KR · 일주일 안 마일스톤 · 기록 공백. 새 데이터 없이 카드에 흩어진 신호를 모은다.
-export function GlanceAttention({ items, suggestion, unknown = false }) {
+export function GlanceAttention({ items, suggestion, onOpen, unknown = false }) {
   return <section className="goal-panel goal-attention" aria-label="이번 주 챙길 것">
     <div className="goal-section-head"><h3 className="goal-panel__title">이번 주 챙길 것</h3><span className="num">{items.length}</span></div>
-    {items.length ? <ul className="goal-attention__list">{items.map(item => <li key={item.key} className={`goal-attention__item goal-attention__item--${item.tone}`}>
+    {items.length ? <ul className="goal-attention__list stagger-up">{items.map(item => <li key={item.key} className={`goal-attention__item goal-attention__item--${item.tone}`}>
       <span className="goal-attention__glyph" aria-hidden="true">{item.glyph}</span>
-      <div><b>{item.title}</b><span>{item.detail}</span></div>
+      {item.href ? <Link className="hub-row goal-attention__link" href={item.href} data-goal-id={item.goalId || undefined} onClick={item.goalId ? onOpen : undefined}><div><b>{item.title}</b><span>{item.detail}</span></div>{item.cta && <em className="goal-attention__cta">{item.cta} →</em>}</Link> : <div><b>{item.title}</b><span>{item.detail}</span></div>}
     </li>)}</ul> : <p className="goal-muted">{unknown ? '측정이나 읽기 근거를 먼저 확인하세요. 아직 이번 주 상태를 확정할 수 없습니다.' : '이번 주 챙길 것이 없습니다. 모든 KR이 페이스 안이고 KPI도 선 안입니다.'}</p>}
-    {suggestion && <div className="goal-attention__suggestion"><CertaintyBadge state="recommended" label="제안" /><span>{suggestion.text}</span>{suggestion.href && <Link className="hub-row goal-section-link" href={suggestion.href}>{suggestion.cta} →</Link>}</div>}
+    {suggestion && <div className="goal-attention__suggestion"><CertaintyBadge state="recommended" label="제안" /><span>{suggestion.text}</span>{suggestion.href && <Link className="hub-row goal-section-link" onClick={onOpen} href={suggestion.href}>{suggestion.cta} →</Link>}</div>}
   </section>;
 }
 
 // 이번 주 메모 — 메모(learning)로 저장하고 개인 목표에 연결한다. 마이그레이션 없음.
-export function WeeklyMemo({ objective, today, onSaved }) {
+export function WeeklyMemo({ objective, today, hrefFor, onOpen, onSaved }) {
   const week = periodWeeks(objective, today).find(item => item.phase === 'now');
   const draftKey = `weekly-memo:${objective.id}:${week?.start || today}`;
   const [recovery] = React.useState(() => {
@@ -136,9 +135,9 @@ export function WeeklyMemo({ objective, today, onSaved }) {
   }
 
   return <section className="goal-panel goal-weekly-memo" aria-label="이번 주 메모" aria-busy={state === 'saving'}>
-    <div className="goal-section-head"><h3 className="goal-panel__title">이번 주 메모</h3>{week && <span className="mono goal-muted">{week.label} 주</span>}</div>
+    <div className="goal-section-head"><h3 className="goal-panel__title">이번 주 메모</h3><div className="goal-weekly-memo__head-meta">{week && <span className="mono goal-muted">{week.label} 주</span>}<Link className="hub-row goal-section-link" href="/dashboard/work/memos">메모 탭 →</Link></div></div>
     <TextAreaField label="잘된 것 · 막힌 것 · 다음 주에 하나만" rows={4} value={text} readOnly={frozen} disabled={state === 'saving'} onChange={change} onCmdEnter={save} />
-    <div className="goal-weekly-memo__foot"><span className="goal-muted">{objective.title}에 연결</span><Button size="xs" variant="outline" disabled={!text.trim() || state === 'saving' || recovery.error} onClick={save}>{state === 'saving' ? '저장 중…' : frozen ? '같은 요청 다시 확인' : '저장'}</Button></div>
+    <div className="goal-weekly-memo__foot">{hrefFor ? <Link className="hub-row goal-muted goal-weekly-memo__goal-link" data-goal-id={objective.id} onClick={onOpen} href={hrefFor(objective)}>{objective.title}에 연결</Link> : <span className="goal-muted">{objective.title}에 연결</span>}<Button size="xs" variant="outline" disabled={!text.trim() || state === 'saving' || recovery.error} onClick={save}>{state === 'saving' ? '저장 중…' : frozen ? '같은 요청 다시 확인' : '저장'}</Button></div>
     {message && <p role="status" className={['error', 'unknown', 'conflict'].includes(state) ? 'goal-error' : 'goal-muted'}>{message}</p>}
   </section>;
 }
