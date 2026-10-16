@@ -136,6 +136,48 @@ function decisionSourceRef(value: unknown): { ok: true; value: { type: string; i
   return { ok: true, value: { type, id } };
 }
 
+// 결정 데스크(2026-10-15 결정 데스크 스펙 §4) — 질문·선택지·고른 선택지·미루기는 decisions.meta에 둔다.
+// 고르지 않은 선택지도 지우지 않는다: 결정 옆에 "고르지 않은 것"으로 남는다.
+const DECISION_OPTION_LIMIT = 5;
+const DECISION_OPTION_ID = /^[a-z0-9-]{1,40}$/i;
+
+function decisionDeskMeta(input: Record<string, unknown>): { ok: true; value: Record<string, unknown> } | { ok: false; reason: string } {
+  const value: Record<string, unknown> = {};
+  if (has(input, "question")) value.question = nullableText(input.question, 300);
+  let optionIds: Set<string> | null = null;
+  if (has(input, "options")) {
+    const raw = input.options;
+    if (raw !== null && !Array.isArray(raw)) return { ok: false, reason: "invalid-options" };
+    const rows = Array.isArray(raw) ? raw : [];
+    if (rows.length > DECISION_OPTION_LIMIT) return { ok: false, reason: "too-many-options" };
+    const options = [];
+    optionIds = new Set();
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) return { ok: false, reason: "invalid-options" };
+      const option = row as Record<string, unknown>;
+      const id = text(option.id, 40);
+      const title = text(option.title, 200);
+      if (!DECISION_OPTION_ID.test(id) || !title || optionIds.has(id)) return { ok: false, reason: "invalid-options" };
+      optionIds.add(id);
+      options.push({ id, title, gain: text(option.gain, 300), loss: text(option.loss, 300) });
+    }
+    value.options = options;
+  }
+  if (has(input, "chosenOptionId")) {
+    const raw = input.chosenOptionId;
+    const id = raw === null || raw === "" ? null : text(raw, 40);
+    if (id !== null && (!DECISION_OPTION_ID.test(id) || (optionIds && !optionIds.has(id)))) return { ok: false, reason: "invalid-chosen-option" };
+    value.chosenOptionId = id;
+  }
+  if (has(input, "deferUntil")) {
+    const raw = input.deferUntil;
+    const day = raw === null || raw === "" ? null : text(raw, 10);
+    if (day !== null && !validDay(day)) return { ok: false, reason: "invalid-defer-until" };
+    value.deferUntil = day;
+  }
+  return { ok: true, value };
+}
+
 function has(input: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(input, key);
 }
@@ -559,6 +601,9 @@ export function normalizePmsCommand(
     if (!title) return { ok: false, reason: "missing-title" };
     if (!decidedAt.ok) return { ok: false, reason: "invalid-decided-at" };
     if (!sourceRef.ok) return { ok: false, reason: "invalid-source-ref" };
+    const desk = decisionDeskMeta(input);
+    if (!desk.ok) return { ok: false, reason: desk.reason };
+    if (desk.value.chosenOptionId && !desk.value.options) return { ok: false, reason: "invalid-chosen-option" };
 
     return {
       ok: true,
@@ -576,6 +621,7 @@ export function normalizePmsCommand(
         meta: {
           source: text(input.source || "manual", 80),
           ...(sourceRef.value ? { sourceRef: sourceRef.value } : {}),
+          ...Object.fromEntries(Object.entries(desk.value).filter(([, entry]) => entry !== null)),
         },
       },
     };
@@ -609,6 +655,10 @@ export function normalizePmsCommand(
       if (!value) return { ok: false, reason };
       patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), [key]: value };
     }
+    // 결정 데스크 — 질문·선택지·고른 선택지·미루기. 고른 선택지가 저장된 선택지에 있는지는 서비스가 병합 뒤 본다.
+    const desk = decisionDeskMeta(input);
+    if (!desk.ok) return { ok: false, reason: desk.reason };
+    if (Object.keys(desk.value).length) patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), ...desk.value };
 
     if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };
     patch.updated_at = now.value;

@@ -5,7 +5,7 @@
 // 중간에 멈추면 무엇이 남았는지 그대로 말한다. `progress`를 넘기면 이미 끝난 단계는 건너뛴다.
 // 저장 성공은 응답이 보낸 기록을 명시적으로 돌려줄 때만이다(check-write-ack) — 확인 못 하면 `unknown`.
 
-import { sendCheckWrite, taskAcknowledges, decisionAcknowledges } from '@/lib/check-write-ack';
+import { sendCheckWrite, taskAcknowledges, decisionAcknowledges, decisionPatchAcknowledges } from '@/lib/check-write-ack';
 
 function acknowledges(url, method) {
   return (data, submitted) => {
@@ -21,9 +21,7 @@ function acknowledges(url, method) {
         && row.status === 'active' && row.meta?.delivery?.blocker === ''
         && row.meta.delivery.nextVersion === submitted.delivery.nextVersion;
     }
-    return data.decision?.id === submitted.id
-      && (!submitted.nextTaskId || data.decision.meta?.nextTaskId === submitted.nextTaskId)
-      && (!submitted.unblockedProjectId || data.decision.meta?.unblockedProjectId === submitted.unblockedProjectId);
+    return decisionPatchAcknowledges(data.decision, submitted);
   };
 }
 
@@ -40,14 +38,44 @@ export function failureReason(result) {
 
 const scope = context => (context ? { expectedWorkspaceId: context.workspaceId, recoveryOwner: context.ownerKey } : {});
 
+// 결정 데스크의 질문·선택지·고른 선택지·미루기 — 보낸 것만 싣는다(예전 호출의 본문은 그대로).
+function deskFields(decision) {
+  const fields = {};
+  if (decision.question !== undefined) fields.question = String(decision.question || '').trim().slice(0, 300) || null;
+  if (decision.options !== undefined) fields.options = cleanOptions(decision.options);
+  if (decision.chosenOptionId !== undefined) fields.chosenOptionId = decision.chosenOptionId || null;
+  if (decision.deferUntil !== undefined) fields.deferUntil = decision.deferUntil || null;
+  return fields;
+}
+
+/** 빈 선택지는 빼고 글을 다듬는다 — 서버(pms-command decisionDeskMeta)와 같은 길이 제한. */
+export function cleanOptions(options) {
+  return (Array.isArray(options) ? options : [])
+    .map((option) => ({
+      id: String(option?.id || ''),
+      title: String(option?.title || '').trim().slice(0, 200),
+      gain: String(option?.gain || '').trim().slice(0, 300),
+      loss: String(option?.loss || '').trim().slice(0, 300),
+    }))
+    .filter((option) => option.id && option.title)
+    .slice(0, 5);
+}
+
+/** 결정 하나의 일부만 고친다(미루기·초안 저장) — 명시 ACK가 보낸 필드를 돌려줘야 성공이다. */
+export function patchDecision(fetchImpl, decisionId, fields, { context = null } = {}) {
+  return sendJson(fetchImpl, '/api/hub/decisions', 'PATCH', { id: decisionId, ...scope(context), ...fields });
+}
+
 /** 재시도해도 같은 결정·할 일이 되도록 한 번 만들어 두는 id 묶음. */
 export function newDecisionIds(now = Date.now()) {
   return { decisionId: globalThis.crypto.randomUUID(), taskId: globalThis.crypto.randomUUID(), decidedAt: new Date(now).toISOString() };
 }
 
 /**
- * @param decision { title, rationale?, projectId?, decidedAt?, source, sourceRef?, taskTitle?, taskDueAt?, signalKey? }
+ * @param decision { title, rationale?, projectId?, decidedAt?, source, sourceRef?, taskTitle?, taskDueAt?, signalKey?,
+ *                   question?, options?, chosenOptionId?, deferUntil?, existing? }
  *   decidedAt — 생략하면 ids.decidedAt(지금), 빈 문자열이면 미정.
+ *   existing  — true면 ids.decisionId의 미정 초안을 PATCH로 확정한다(결정 데스크). 출처·프로젝트는 그대로 둔다.
  * @param options  { ids, progress, context } — context는 useCheckWrite가 준 { workspaceId, ownerKey }.
  * @returns {{ ok, stage, status, progress: { decision, task }, decisionId, taskId, message }}
  */
@@ -60,16 +88,22 @@ export async function saveDecisionWithFollowup(fetchImpl, decision, { ids = newD
 
   // 1. 결정 — 명시 ACK를 확인하지 못하면 같은 ID로 멈춘다.
   if (!done.decision) {
-    const saved = await sendJson(fetchImpl, '/api/hub/decisions', 'POST', {
+    const common = {
       id: ids.decisionId,
       ...scope(context),
       title: title.slice(0, 300),
       rationale: String(decision.rationale || '').trim().slice(0, 4000) || null,
-      projectId,
       decidedAt: decision.decidedAt === undefined ? ids.decidedAt : decision.decidedAt,
-      source: decision.source || 'hub-work',
-      ...(decision.sourceRef ? { sourceRef: decision.sourceRef } : {}),
-    });
+      ...deskFields(decision),
+    };
+    const saved = decision.existing
+      ? await sendJson(fetchImpl, '/api/hub/decisions', 'PATCH', common)
+      : await sendJson(fetchImpl, '/api/hub/decisions', 'POST', {
+        ...common,
+        projectId,
+        source: decision.source || 'hub-work',
+        ...(decision.sourceRef ? { sourceRef: decision.sourceRef } : {}),
+      });
     if (!saved.ok) {
       return { ok: false, stage: 'decision', status: saved.status, progress: done,
         message: failureReason(saved) || '결정의 저장 응답을 확인하지 못했습니다. 같은 요청으로 다시 확인하세요.' };

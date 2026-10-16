@@ -19,7 +19,8 @@ export function appendNextVersion(current, addition) {
   return (before ? `${before}\n${add}` : add).slice(0, 4000);
 }
 
-async function patchProject(fetchImpl, project, { branch, note = '', nextVersionText = '', decisionId = null, context = null }) {
+/** 막힌 점을 비우고 다시 진행으로 — 결정 데스크도 결정 뒤 같은 요청을 보낸다. */
+export async function patchProject(fetchImpl, project, { branch, note = '', nextVersionText = '', decisionId = null, context = null }) {
   const plan = deliveryDraft(project.delivery || {});
   const delivery = {
     ...plan,
