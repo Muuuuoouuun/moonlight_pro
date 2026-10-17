@@ -108,8 +108,8 @@ struct TaskCaptureContent: View {
                     selectedIDs = selectedIDs.count == model.displayedTasks.count ? [] : Set(model.displayedTasks.map(\.id))
                 }
                 .buttonStyle(GlassQuietStyle()).disabled(!canChangeTasks)
-                Button { requestDeletion(model.displayedTasks.filter { selectedIDs.contains($0.id) }) } label: {
-                    Label("삭제", systemImage: "trash")
+                Button(role: .destructive) { requestDeletion(model.displayedTasks.filter { selectedIDs.contains($0.id) }) } label: {
+                    Label("삭제", systemImage: "trash").modifier(GlassGlyphShadow())
                 }
                 .buttonStyle(GlassQuietStyle()).disabled(selectedIDs.isEmpty || !canChangeTasks)
                 .accessibilityLabel("선택한 할 일 삭제")
@@ -182,7 +182,7 @@ struct TaskCaptureContent: View {
                 Image(systemName: isEditing ? (selectedIDs.contains(task.id) ? "checkmark.square.fill" : "square")
                       : task.isDone ? "checkmark.circle.fill" : "circle").modifier(GlassGlyphShadow())
                     .font(.system(size: 19, weight: .ultraLight))
-                    .foregroundStyle(Palette.glassInkMuted)
+                    .foregroundStyle(isEditing && selectedIDs.contains(task.id) ? Palette.danger : Palette.glassInkMuted)
                 Text(task.title).font(.system(size: 13))
                     .strikethrough(task.isDone)
                     .foregroundStyle(task.isDone ? Palette.glassInkFaint : Palette.glassInk)
