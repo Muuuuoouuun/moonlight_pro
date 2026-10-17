@@ -9,6 +9,12 @@ private actor ControlledHub: HubServing {
     var deletes: [UUID] = []
     var deletedIDs: Set<UUID> = []
     var deleteFailure: HubTransportError?
+    var additionalTasks: [HubTask] = []
+    var failedDeleteID: UUID?
+    var heldDeleteID: UUID?
+    func configureBatch(rows: [HubTask], failedID: UUID? = nil, heldID: UUID? = nil) {
+        additionalTasks = rows; failedDeleteID = failedID; heldDeleteID = heldID
+    }
     var commitsDeleteBeforeFailure = false
     var holdDelete = false
     var startedDelete = false
@@ -16,7 +22,7 @@ private actor ControlledHub: HubServing {
     func configureDelete(failure: HubTransportError? = nil, hold: Bool = false, commitsBeforeFailure: Bool = false) {
         deleteFailure = failure; holdDelete = hold; commitsDeleteBeforeFailure = commitsBeforeFailure
     }
-    func releaseTaskDelete() { holdDelete = false; releaseDelete?.resume(); releaseDelete = nil }
+    func releaseTaskDelete() { holdDelete = false; heldDeleteID = nil; releaseDelete?.resume(); releaseDelete = nil }
     var credentialFailure = false
     var disconnectCount = 0
     func setCredentialFailure(_ value: Bool) { credentialFailure = value }
@@ -67,7 +73,7 @@ private actor ControlledHub: HubServing {
     func tasks() async throws -> HubTaskPage {
         if credentialFailure { throw HubTransportError.credentialStorage }
         if anonymous { throw HubTransportError.unauthorized }
-        let snapshot = ([row] + (confirmedTask.map { [$0] } ?? [])).filter { !deletedIDs.contains($0.id) }
+        let snapshot = ([row] + additionalTasks + (confirmedTask.map { [$0] } ?? [])).filter { !deletedIDs.contains($0.id) }
         if holdRead { startedRead = true; await withCheckedContinuation { releaseRead = $0 } }
         if failsRead { throw HubTransportError.offline }
         return HubTaskPage(tasks: snapshot, partial: partial)
@@ -99,7 +105,8 @@ private actor ControlledHub: HubServing {
     }
     func deleteTask(_ id: UUID) async throws {
         deletes.append(id)
-        if holdDelete { startedDelete = true; await withCheckedContinuation { releaseDelete = $0 } }
+        if holdDelete || heldDeleteID == id { startedDelete = true; await withCheckedContinuation { releaseDelete = $0 } }
+        if failedDeleteID == id { throw HubTransportError.timeout }
         if commitsDeleteBeforeFailure { deletedIDs.insert(id) }
         if let deleteFailure { throw deleteFailure }
         deletedIDs.insert(id)
@@ -135,6 +142,7 @@ struct HubDomainTests {
             try await recoveryChecks()
             try await storeChecks()
             try await taskDeletionChecks()
+            try await bulkDeletionChecks()
             try await captureChecks()
             let apiChecks = try await runHubAPIContractTests()
             if CommandLine.arguments.contains("--live-read") { try await liveRead() }
@@ -143,6 +151,65 @@ struct HubDomainTests {
             fputs("FAIL: \(error)\n", stderr)
             exit(1)
         }
+    }
+
+    @MainActor static func bulkDeletionChecks() async throws {
+        let suite = "pet-bulk-delete-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let targets = (1...3).map { HubTask(id: UUID(), title: "선택 \($0)", status: "todo", updatedAt: "2026-10-17T00:00:00Z") }
+        let ids = targets.map(\.id)
+
+        let api = ControlledHub()
+        await api.configureBatch(rows: targets, heldID: ids[1])
+        let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+        await store.connect(baseURL: "https://bulk-delete.test")
+        let deleting = Task { await store.deleteTasks([ids[0], ids[0], ids[1], ids[2], UUID()]) }
+        while !(await api.startedDelete) { await Task.yield() }
+        try check(store.isSavingTask && !store.canWriteTasks && !store.tasks.contains { $0.id == ids[0] }, "One batch must keep task writes locked across acknowledgements")
+        try check(store.tasks.contains { $0.id == ids[1] }, "An unconfirmed item must remain visible")
+        let repeated = await store.deleteTasks(ids)
+        try check(repeated.isEmpty, "Another batch cannot overtake an in-flight batch")
+        await api.releaseTaskDelete()
+        let removed = await deleting.value
+        let attempts = await api.deletes
+        try check(removed == Set(ids) && attempts == ids, "Batch deletion must deduplicate IDs and skip unknown rows")
+        try check(store.tasks.count == 1 && store.taskReceipt?.contains("3") == true, "Only selected rows disappear and the receipt states the confirmed count")
+
+        let failingAPI = ControlledHub()
+        await failingAPI.configureBatch(rows: targets, failedID: ids[1])
+        let failing = HubStore(defaults: defaults, makeAPI: { _ in failingAPI })
+        await failing.connect(baseURL: "https://bulk-failure.test")
+        let partial = await failing.deleteTasks(ids)
+        let failedAttempts = await failingAPI.deletes
+        try check(partial == [ids[0]] && failedAttempts == Array(ids.prefix(2)), "The first failure must stop later destructive requests and return confirmed IDs only")
+        try check(failing.tasks.contains { $0.id == ids[1] } && failing.tasks.contains { $0.id == ids[2] }
+                  && failing.errorMessage?.contains("1개") == true && !failing.isSavingTask, "A partial failure must preserve remaining rows and explain how many were deleted")
+
+        let lateAPI = ControlledHub()
+        await lateAPI.configureBatch(rows: targets, heldID: ids[1])
+        let late = HubStore(defaults: defaults, makeAPI: { _ in lateAPI })
+        await late.connect(baseURL: "https://bulk-late.test")
+        let pending = Task { await late.deleteTasks(ids) }
+        while !(await lateAPI.startedDelete) { await Task.yield() }
+        late.useLocalStorage()
+        await lateAPI.releaseTaskDelete()
+        let staleResult = await pending.value
+        let lateAttempts = await lateAPI.deletes
+        try check(staleResult.isEmpty && lateAttempts == Array(ids.prefix(2)) && !late.isEnabled && late.tasks.isEmpty,
+                  "Changing source must invalidate the batch result and stop all remaining requests")
+
+        let staleAPI = ControlledHub()
+        await staleAPI.configureBatch(rows: targets)
+        let stale = HubStore(defaults: defaults, makeAPI: { _ in staleAPI })
+        await stale.connect(baseURL: "https://bulk-stale.test")
+        await staleAPI.configure(hold: true)
+        let reading = Task { await stale.refresh() }
+        while !(await staleAPI.startedRead) { await Task.yield() }
+        let deleted = await stale.deleteTasks(ids)
+        await staleAPI.release(); await reading.value
+        try check(deleted == Set(ids) && stale.tasks.count == 1, "A stale refresh cannot resurrect any deleted batch item")
+        print("PASS: Bulk task deletion ordering, partial failure, serialization and source isolation")
     }
 
     @MainActor static func taskDeletionChecks() async throws {

@@ -19,14 +19,27 @@ enum SelfCheck {
             model.removeTask(remote.id)
             while hub.tasks.contains(where: { $0.id == remote.id }) { await Task.yield() }
             guard model.tasks.map(\.id) == [localID], hub.taskReceipt != nil else { result = false; return }
+            let remoteBatch = (1...2).map { HubTask(id: UUID(), title: "Hub batch check \($0)", status: "todo", updatedAt: "2026-10-17T00:00:00Z") }
+            await service.offerTasks(remoteBatch)
+            await hub.refresh()
+            let remoteDeleted = await model.removeTasks(remoteBatch.map(\.id))
+            guard remoteDeleted == Set(remoteBatch.map(\.id)), hub.tasks.isEmpty, model.tasks.map(\.id) == [localID] else {
+                result = false; return
+            }
             hub.useLocalStorage()
-            model.removeTask(localID)
+            model.taskDraft = "두 번째 선택 검사"; model.addTask()
+            guard let secondID = model.tasks.first?.id else { result = false; return }
+            model.taskDraft = "선택하지 않은 할 일"; model.addTask()
+            let localDeleted = await model.removeTasks([localID, secondID, secondID])
+            guard localDeleted == [localID, secondID], model.tasks.count == 1,
+                  AppModel(defaults: defaults).tasks == model.tasks else { result = false; return }
+            model.removeTask(model.tasks[0].id)
             result = model.tasks.isEmpty && AppModel(defaults: defaults).tasks.isEmpty
         }
         let deadline = Date().addingTimeInterval(5)
         while result == nil && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
         if result != true { fputs("Task deletion must affect only the current source and persist local removal\n", stderr) }
-        else { print("PASS: AppModel Hub/local task deletion routing and local persistence") }
+        else { print("PASS: AppModel Hub/local single/bulk deletion routing and local persistence") }
         return result == true
     }
 
@@ -528,21 +541,22 @@ enum SelfCheck {
 
 /// In-memory protocol probe used only by --self-check; it never contacts a Hub.
 private actor CaptureCheckService: HubServing {
-    private var offeredTask: HubTask?
-    func offerTask(_ task: HubTask) { offeredTask = task }
+    private var offeredTasks: [HubTask] = []
+    func offerTask(_ task: HubTask) { offeredTasks = [task] }
+    func offerTasks(_ tasks: [HubTask]) { offeredTasks = tasks }
     var started = false
     private var continuation: CheckedContinuation<Bool, Never>?
     func release(fail: Bool) { started = false; continuation?.resume(returning: fail); continuation = nil }
     func login(username: String, password: String) async throws {}
     func clearSession() async {}
     func disconnect() async {}
-    func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: offeredTask.map { [$0] } ?? [], partial: false) }
+    func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: offeredTasks, partial: false) }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage { HubCalendarPage(events: [], partial: false) }
     func createTask(_ command: HubTaskCommand) async throws -> HubTask { throw HubDataError.invalidResponse }
     func setTask(_ task: HubTask, done: Bool) async throws -> HubTask { throw HubDataError.invalidResponse }
     func deleteTask(_ id: UUID) async throws {
-        guard offeredTask?.id == id else { throw HubDataError.invalidResponse }
-        offeredTask = nil
+        guard offeredTasks.contains(where: { $0.id == id }) else { throw HubDataError.invalidResponse }
+        offeredTasks.removeAll { $0.id == id }
     }
     func memo(id: UUID) async throws -> HubMemoEntry { throw HubDataError.invalidResponse }
     func saveMemo(_ command: HubMemoCommand) async throws -> HubMemoEntry {

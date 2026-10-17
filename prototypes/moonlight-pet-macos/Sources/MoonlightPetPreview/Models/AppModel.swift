@@ -318,6 +318,20 @@ final class AppModel: ObservableObject {
         persistTasks()
     }
 
+    @discardableResult
+    func removeTasks(_ ids: [UUID]) async -> Set<UUID> {
+        if hub.isEnabled {
+            let deleted = await hub.deleteTasks(ids)
+            deleted.forEach { completionFeedback.cancel($0) }
+            return deleted
+        }
+        let deleted = Set(tasks.map(\.id)).intersection(ids)
+        deleted.forEach { completionFeedback.cancel($0) }
+        tasks.removeAll { deleted.contains($0.id) }
+        persistTasks()
+        return deleted
+    }
+
     func saveMemo() {
         savedMemo = memoDraft
         defaults.set(savedMemo, forKey: "petPreview.memo")

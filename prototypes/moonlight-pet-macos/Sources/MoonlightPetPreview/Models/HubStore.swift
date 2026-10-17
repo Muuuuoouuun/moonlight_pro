@@ -275,31 +275,48 @@ final class HubStore: ObservableObject {
 
     @discardableResult
     func deleteTask(_ id: UUID) async -> Bool {
-        guard isEnabled, canWriteTasks, let service = api, tasks.contains(where: { $0.id == id }) else { return false }
-        // The loaded row confirms an older create whose receipt may have been
-        // lost. Retire it before deleting, even if the delete response is lost too.
-        if pending.task?.id == id.uuidString.lowercased() {
-            pending.task = nil
-            persistPending()
-        }
+        (await deleteTasks([id])).contains(id)
+    }
+
+    @discardableResult
+    func deleteTasks(_ ids: [UUID]) async -> Set<UUID> {
+        guard isEnabled, canWriteTasks, let service = api else { return [] }
+        let available = Set(tasks.map(\.id))
+        var seen: Set<UUID> = []
+        let targets = ids.filter { available.contains($0) && seen.insert($0).inserted }
+        guard !targets.isEmpty else { return [] }
         let ticket = generation
+        var deleted: Set<UUID> = []
         taskVersion += 1; isSavingTask = true; errorMessage = nil; taskReceipt = nil
         defer { if ticket == generation { isSavingTask = false } }
-        do {
-            try await service.deleteTask(id)
-            guard ticket == generation else { return false }
-            taskVersion += 1
-            tasks.removeAll { $0.id == id }
-            taskReceipt = "할 일을 삭제했어요."
-            return true
-        } catch {
-            guard ticket == generation else { return false }
-            record(error)
-            taskVersion += 1; taskReady = false; isSavingTask = false
-            // Resolve uncertain server state with a read, never another DELETE.
-            if !needsLogin { await refresh() }
-            return false
+        for id in targets {
+            guard ticket == generation else { return [] }
+            // A loaded row confirms any older create whose receipt was lost.
+            // Retire that command even if this delete response is lost too.
+            if pending.task?.id == id.uuidString.lowercased() {
+                pending.task = nil; persistPending()
+            }
+            do {
+                try await service.deleteTask(id)
+                guard ticket == generation else { return [] }
+                taskVersion += 1
+                tasks.removeAll { $0.id == id }
+                deleted.insert(id)
+            } catch {
+                guard ticket == generation else { return [] }
+                record(error)
+                taskVersion += 1; taskReady = false; isSavingTask = false
+                // Stop the batch and resolve uncertainty with a read, never a retry.
+                if !needsLogin { await refresh() }
+                guard ticket == generation else { return [] }
+                if !deleted.isEmpty {
+                    errorMessage = "\(deleted.count)개 삭제됨 · 나머지 삭제를 확인하지 못했어요. " + (errorMessage ?? friendly(error))
+                }
+                return deleted
+            }
         }
+        taskReceipt = deleted.count == 1 ? "할 일을 삭제했어요." : "\(deleted.count)개 할 일을 삭제했어요."
+        return deleted
     }
 
     @discardableResult
