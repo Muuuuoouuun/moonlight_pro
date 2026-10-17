@@ -12,6 +12,7 @@ final class HubStore: ObservableObject {
     @Published private(set) var needsLogin = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var taskMessage: String? = "Hub에서 불러오는 중이에요."
+    @Published private(set) var taskReceipt: String?
     @Published private(set) var calendarMessage: String? = "Hub에서 불러오는 중이에요."
     @Published private(set) var tasks: [HubTask] = []
     @Published private(set) var events: [HubCalendarEvent] = []
@@ -86,7 +87,7 @@ final class HubStore: ObservableObject {
         let previousService = api
         api = nil; connectedOrigin = nil; tasks = []; events = []; loadedCalendarWeek = nil; lastSyncedAt = nil
         taskReady = false; calendarReady = false; needsLogin = false
-        errorMessage = nil; memoReceipt = nil; pending = HubPendingState(); storageKey = nil
+        errorMessage = nil; memoReceipt = nil; taskReceipt = nil; pending = HubPendingState(); storageKey = nil
         isRefreshing = false; refreshRequested = false; isSavingTask = false; isSavingMemo = false; isConnecting = true
         taskMessage = "Hub에서 불러오는 중이에요."; calendarMessage = taskMessage
         defer { if ticket == generation { isConnecting = false } }
@@ -124,7 +125,7 @@ final class HubStore: ObservableObject {
         defaults.set(false, forKey: "petHub.enabled")
         isConnecting = false; isRefreshing = false; isSavingTask = false; isSavingMemo = false
         needsLogin = false; errorMessage = nil; taskMessage = nil; calendarMessage = nil
-        tasks = []; events = []; loadedCalendarWeek = nil; taskReady = false; calendarReady = false; lastSyncedAt = nil; memoReceipt = nil
+        tasks = []; events = []; loadedCalendarWeek = nil; taskReady = false; calendarReady = false; lastSyncedAt = nil; memoReceipt = nil; taskReceipt = nil
     }
 
     @discardableResult
@@ -136,7 +137,7 @@ final class HubStore: ObservableObject {
         defer { if ticket == generation { isConnecting = false } }
         onConnectionChanged?(nil, nil)
         isRefreshing = false; refreshRequested = false; isSavingTask = false; isSavingMemo = false
-        taskReady = false; calendarReady = false; needsLogin = true; memoReceipt = nil
+        taskReady = false; calendarReady = false; needsLogin = true; memoReceipt = nil; taskReceipt = nil
         taskMessage = "Hub 로그인이 필요해요. 입력한 할 일은 그대로 보관합니다."
         calendarMessage = "Hub 로그인이 필요해요."
         do {
@@ -153,6 +154,7 @@ final class HubStore: ObservableObject {
     func refresh() async {
         guard isEnabled, let service = api else { return }
         if isRefreshing { refreshRequested = true; return }
+        taskReceipt = nil
         let ticket = generation
         let wasNeedingLogin = needsLogin
         let version = taskVersion
@@ -218,7 +220,7 @@ final class HubStore: ObservableObject {
         let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard pending.task != nil || (!normalized.isEmpty && normalized.utf16.count <= 300) else { errorMessage = HubDataError.invalidTask.localizedDescription; return nil }
         let ticket = generation
-        isSavingTask = true; errorMessage = nil; taskVersion += 1
+        isSavingTask = true; errorMessage = nil; taskReceipt = nil; taskVersion += 1
         defer { if ticket == generation { isSavingTask = false } }
         let command = pending.task ?? HubTaskCommand(title: normalized)
         pending.task = command; persistPending()
@@ -251,7 +253,7 @@ final class HubStore: ObservableObject {
     func toggleTask(_ id: UUID) async -> HubTask? {
         guard isEnabled, canWriteTasks, let service = api, let task = tasks.first(where: { $0.id == id }) else { return nil }
         let ticket = generation
-        taskVersion += 1; isSavingTask = true; errorMessage = nil
+        taskVersion += 1; isSavingTask = true; errorMessage = nil; taskReceipt = nil
         defer { if ticket == generation { isSavingTask = false } }
         do {
             let saved = try await service.setTask(task, done: !task.isDone)
@@ -270,6 +272,35 @@ final class HubStore: ObservableObject {
     }
 
     private var memoConflictMessage: String { "Hub에서 메모가 바뀌었어요. 로컬 입력을 새 항목으로 저장하려면 더보기를 이용해 주세요." }
+
+    @discardableResult
+    func deleteTask(_ id: UUID) async -> Bool {
+        guard isEnabled, canWriteTasks, let service = api, tasks.contains(where: { $0.id == id }) else { return false }
+        // The loaded row confirms an older create whose receipt may have been
+        // lost. Retire it before deleting, even if the delete response is lost too.
+        if pending.task?.id == id.uuidString.lowercased() {
+            pending.task = nil
+            persistPending()
+        }
+        let ticket = generation
+        taskVersion += 1; isSavingTask = true; errorMessage = nil; taskReceipt = nil
+        defer { if ticket == generation { isSavingTask = false } }
+        do {
+            try await service.deleteTask(id)
+            guard ticket == generation else { return false }
+            taskVersion += 1
+            tasks.removeAll { $0.id == id }
+            taskReceipt = "할 일을 삭제했어요."
+            return true
+        } catch {
+            guard ticket == generation else { return false }
+            record(error)
+            taskVersion += 1; taskReady = false; isSavingTask = false
+            // Resolve uncertain server state with a read, never another DELETE.
+            if !needsLogin { await refresh() }
+            return false
+        }
+    }
 
     @discardableResult
     func saveMemo(body: String) async -> HubMemoEntry? {

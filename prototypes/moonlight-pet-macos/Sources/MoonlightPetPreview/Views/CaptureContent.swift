@@ -6,6 +6,12 @@ struct TaskCaptureContent: View {
     let openRevision: Int
     let openConnection: () -> Void
     @FocusState private var focused: Bool
+    @State private var pendingDeletion: DeletionTarget?
+
+    private struct DeletionTarget {
+        let task: LocalTask
+        let hubURL: String?
+    }
 
     private var canChangeTasks: Bool { model.hub.canWriteTasks && !model.hub.isSavingTask }
     private var readMessage: String? {
@@ -64,6 +70,19 @@ struct TaskCaptureContent: View {
         .onChange(of: model.activeCompanion) { _, active in
             if active == surface { focusInput() } else { focused = false }
         }
+        .alert("할 일을 삭제할까요?", isPresented: Binding(
+            get: { pendingDeletion != nil },
+            set: { if !$0 { pendingDeletion = nil } }
+        ), presenting: pendingDeletion) { target in
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive) { remove(target) }
+        } message: { target in
+            Text("“\(target.task.title)”\n" + (target.hubURL != nil
+                 ? "Hub의 원본 할 일도 삭제되며 되돌릴 수 없어요."
+                 : "이 Mac에 저장한 할 일을 삭제하며 되돌릴 수 없어요."))
+        }
+        .onChange(of: model.hubBaseURL) { _, _ in pendingDeletion = nil }
+        .onChange(of: model.hub.isEnabled) { _, _ in pendingDeletion = nil }
     }
 
     private var taskCount: some View {
@@ -139,19 +158,21 @@ struct TaskCaptureContent: View {
         }
         .buttonStyle(GlassQuietStyle())
         .disabled(!canChangeTasks)
-        .help(task.isDone ? "완료했어요 · 다시 눌러 취소 · 기본 목록에서 3초 뒤 숨김" : task.title + (model.hub.isEnabled ? " · 우클릭하여 Hub에서 열기" : " · 우클릭하여 삭제"))
+        .help(task.isDone ? "완료했어요 · 다시 눌러 취소 · 우클릭하여 삭제 · 기본 목록에서 3초 뒤 숨김" : task.title + " · 우클릭하여 삭제")
         .accessibilityLabel("\(task.title) \(task.isDone ? "완료 취소" : "완료")")
-        .accessibilityAction(named: Text(model.hub.isEnabled ? "Hub에서 열기" : "삭제")) {
-            if model.hub.isEnabled { model.openHub(.tasks) } else { remove(task.id) }
+        .accessibilityActions {
+            if model.hub.isEnabled { Button("Hub에서 열기") { model.openHub(.tasks) } }
+            Button("삭제…") { requestDeletion(task) }
         }
         .contextMenu {
             Button("Office 회의 안건으로 준비") { model.prepareOfficeFromTask(task) }
             Button("이 할 일로 담당자에게 묻기") { model.prepareCouncilFromTask(task) }
             if model.hub.isEnabled {
                 Button("Hub에서 열기") { model.openHub(.tasks) }
-            } else {
-                Button("삭제", role: .destructive) { remove(task.id) }
             }
+            Divider()
+            Button("삭제…", role: .destructive) { requestDeletion(task) }
+                .disabled(!canChangeTasks)
         }
         .overlay(alignment: .bottom) { Palette.glassInk.opacity(0.08).frame(height: 1) }
         .transition(.opacity.combined(with: .offset(y: 4)))
@@ -168,9 +189,14 @@ struct TaskCaptureContent: View {
         guard canChangeTasks else { return }
         withAnimation(PetMotion.panel) { model.addTask() }
     }
-    private func remove(_ id: UUID) {
-        guard !model.hub.isEnabled else { return }
-        withAnimation(PetMotion.panel) { model.removeTask(id) }
+    private func requestDeletion(_ task: LocalTask) {
+        guard canChangeTasks else { return }
+        pendingDeletion = DeletionTarget(task: task, hubURL: model.hub.isEnabled ? model.hubBaseURL : nil)
+    }
+    private func remove(_ target: DeletionTarget) {
+        guard canChangeTasks,
+              target.hubURL == (model.hub.isEnabled ? model.hubBaseURL : nil) else { return }
+        withAnimation(PetMotion.panel) { model.removeTask(target.task.id) }
     }
 }
 

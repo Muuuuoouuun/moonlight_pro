@@ -1,6 +1,35 @@
 import AppKit
 
 enum SelfCheck {
+    @MainActor private static func checkTaskDeletion() -> Bool {
+        var result: Bool?
+        Task { @MainActor in
+            let suite = "pet-task-deletion-check-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            defaults.set(false, forKey: "petHub.enabled")
+            let service = CaptureCheckService()
+            let hub = HubStore(defaults: defaults, makeAPI: { _ in service })
+            let model = AppModel(defaults: defaults, hub: hub)
+            model.taskDraft = "로컬 삭제 검사"; model.addTask()
+            guard let localID = model.tasks.first?.id else { result = false; return }
+            let remote = HubTask(id: UUID(), title: "Hub delete check", status: "todo", updatedAt: "2026-10-17T00:00:00Z")
+            await service.offerTask(remote)
+            await hub.connect(baseURL: "https://delete.test")
+            model.removeTask(remote.id)
+            while hub.tasks.contains(where: { $0.id == remote.id }) { await Task.yield() }
+            guard model.tasks.map(\.id) == [localID], hub.taskReceipt != nil else { result = false; return }
+            hub.useLocalStorage()
+            model.removeTask(localID)
+            result = model.tasks.isEmpty && AppModel(defaults: defaults).tasks.isEmpty
+        }
+        let deadline = Date().addingTimeInterval(5)
+        while result == nil && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+        if result != true { fputs("Task deletion must affect only the current source and persist local removal\n", stderr) }
+        else { print("PASS: AppModel Hub/local task deletion routing and local persistence") }
+        return result == true
+    }
+
     @MainActor private static func checkOfficeAgendaReplacement() -> Bool {
         let suite = "pet-office-agenda-check-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
@@ -77,7 +106,7 @@ enum SelfCheck {
                 return false
             }
         }
-        guard checkOfficeAgendaReplacement(), checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkPetOpeningHandoff(), checkReadingTone(), checkCompanionWindows() else { return false }
+        guard checkOfficeAgendaReplacement(), checkHubMemoCapture(), checkTaskDeletion(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkPetOpeningHandoff(), checkReadingTone(), checkCompanionWindows() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -499,16 +528,22 @@ enum SelfCheck {
 
 /// In-memory protocol probe used only by --self-check; it never contacts a Hub.
 private actor CaptureCheckService: HubServing {
+    private var offeredTask: HubTask?
+    func offerTask(_ task: HubTask) { offeredTask = task }
     var started = false
     private var continuation: CheckedContinuation<Bool, Never>?
     func release(fail: Bool) { started = false; continuation?.resume(returning: fail); continuation = nil }
     func login(username: String, password: String) async throws {}
     func clearSession() async {}
     func disconnect() async {}
-    func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: [], partial: false) }
+    func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: offeredTask.map { [$0] } ?? [], partial: false) }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage { HubCalendarPage(events: [], partial: false) }
     func createTask(_ command: HubTaskCommand) async throws -> HubTask { throw HubDataError.invalidResponse }
     func setTask(_ task: HubTask, done: Bool) async throws -> HubTask { throw HubDataError.invalidResponse }
+    func deleteTask(_ id: UUID) async throws {
+        guard offeredTask?.id == id else { throw HubDataError.invalidResponse }
+        offeredTask = nil
+    }
     func memo(id: UUID) async throws -> HubMemoEntry { throw HubDataError.invalidResponse }
     func saveMemo(_ command: HubMemoCommand) async throws -> HubMemoEntry {
         let fails = await withCheckedContinuation { continuation = $0; started = true }

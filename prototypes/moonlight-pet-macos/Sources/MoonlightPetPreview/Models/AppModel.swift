@@ -178,7 +178,7 @@ final class AppModel: ObservableObject {
     }
     var completedTaskCount: Int { sourceTasks.filter(\.isDone).count }
     var openTaskCount: Int { displayedTasks.filter { !$0.isDone }.count }
-    var taskStatusLabel: String { hub.isEnabled ? (hub.isRefreshing ? "Hub 새로고침 중…" : hub.connectionLabel) : "이 Mac에 저장" }
+    var taskStatusLabel: String { hub.isEnabled ? (hub.isSavingTask ? "할 일 변경 중…" : hub.isRefreshing ? "Hub 새로고침 중…" : hub.taskReceipt ?? hub.connectionLabel) : "이 Mac에 저장" }
     var memoStatusLabel: String {
         if hub.isSavingMemo { return "Mac에 보관 · Hub 저장 중…" }
         if hub.isEnabled, hub.savedMemoBody == memoDraft, !hub.hasPendingMemo { return "Hub에 저장됨 · Mac에 보관" }
@@ -306,7 +306,13 @@ final class AppModel: ObservableObject {
     }
 
     func removeTask(_ id: UUID) {
-        guard !hub.isEnabled else { return }
+        if hub.isEnabled {
+            Task {
+                guard await hub.deleteTask(id) else { return }
+                completionFeedback.cancel(id)
+            }
+            return
+        }
         completionFeedback.cancel(id)
         tasks.removeAll { $0.id == id }
         persistTasks()

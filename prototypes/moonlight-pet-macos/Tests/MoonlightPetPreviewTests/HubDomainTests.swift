@@ -6,6 +6,17 @@ private func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
 }
 
 private actor ControlledHub: HubServing {
+    var deletes: [UUID] = []
+    var deletedIDs: Set<UUID> = []
+    var deleteFailure: HubTransportError?
+    var commitsDeleteBeforeFailure = false
+    var holdDelete = false
+    var startedDelete = false
+    var releaseDelete: CheckedContinuation<Void, Never>?
+    func configureDelete(failure: HubTransportError? = nil, hold: Bool = false, commitsBeforeFailure: Bool = false) {
+        deleteFailure = failure; holdDelete = hold; commitsDeleteBeforeFailure = commitsBeforeFailure
+    }
+    func releaseTaskDelete() { holdDelete = false; releaseDelete?.resume(); releaseDelete = nil }
     var credentialFailure = false
     var disconnectCount = 0
     func setCredentialFailure(_ value: Bool) { credentialFailure = value }
@@ -56,9 +67,10 @@ private actor ControlledHub: HubServing {
     func tasks() async throws -> HubTaskPage {
         if credentialFailure { throw HubTransportError.credentialStorage }
         if anonymous { throw HubTransportError.unauthorized }
+        let snapshot = ([row] + (confirmedTask.map { [$0] } ?? [])).filter { !deletedIDs.contains($0.id) }
         if holdRead { startedRead = true; await withCheckedContinuation { releaseRead = $0 } }
         if failsRead { throw HubTransportError.offline }
-        return HubTaskPage(tasks: [row] + (confirmedTask.map { [$0] } ?? []), partial: partial)
+        return HubTaskPage(tasks: snapshot, partial: partial)
     }
     func confirmCreatedElsewhere() {
         guard let command = creates.last else { return }
@@ -84,6 +96,13 @@ private actor ControlledHub: HubServing {
         if holdToggle { startedToggle = true; await withCheckedContinuation { releaseToggle = $0 } }
         if failToggle { throw HubTransportError.conflict }
         return HubTask(id: task.id, title: task.title, status: done ? "done" : "todo", updatedAt: "2026-09-25T02:00:00Z")
+    }
+    func deleteTask(_ id: UUID) async throws {
+        deletes.append(id)
+        if holdDelete { startedDelete = true; await withCheckedContinuation { releaseDelete = $0 } }
+        if commitsDeleteBeforeFailure { deletedIDs.insert(id) }
+        if let deleteFailure { throw deleteFailure }
+        deletedIDs.insert(id)
     }
     func memo(id: UUID) async throws -> HubMemoEntry {
         guard let savedMemo else { throw HubDataError.invalidResponse }
@@ -115,6 +134,7 @@ struct HubDomainTests {
             try await sessionExpiryChecks()
             try await recoveryChecks()
             try await storeChecks()
+            try await taskDeletionChecks()
             try await captureChecks()
             let apiChecks = try await runHubAPIContractTests()
             if CommandLine.arguments.contains("--live-read") { try await liveRead() }
@@ -123,6 +143,85 @@ struct HubDomainTests {
             fputs("FAIL: \(error)\n", stderr)
             exit(1)
         }
+    }
+
+    @MainActor static func taskDeletionChecks() async throws {
+        let suite = "pet-task-delete-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let api = ControlledHub()
+        let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+        await store.connect(baseURL: "https://delete.test")
+        let id = store.tasks[0].id
+        await api.configureDelete(hold: true)
+        let deleting = Task { await store.deleteTask(id) }
+        while !(await api.startedDelete) { await Task.yield() }
+        try check(store.isSavingTask && !store.canWriteTasks && store.tasks.contains { $0.id == id }, "Keep the row until deletion is confirmed and serialize task writes")
+        let repeated = await store.deleteTask(id)
+        try check(!repeated, "Repeated delete while a command is pending must be refused")
+        await api.releaseTaskDelete()
+        let deleted = await deleting.value
+        let calls = await api.deletes
+        try check(deleted && store.tasks.isEmpty && !store.isSavingTask && calls == [id], "Confirmed deletion removes exactly the requested row")
+        let missing = await store.deleteTask(UUID())
+        try check(!missing, "An unknown task must not issue a delete")
+
+        for failure in [HubTransportError.timeout, .offline, .unauthorized] {
+            let failingAPI = ControlledHub()
+            let failing = HubStore(defaults: defaults, makeAPI: { _ in failingAPI })
+            await failing.connect(baseURL: "https://delete-failure.test")
+            let row = failing.tasks[0]
+            await failingAPI.configureDelete(failure: failure)
+            let saved = await failing.deleteTask(row.id)
+            let attempts = await failingAPI.deletes
+            try check(!saved && failing.tasks == [row] && failing.errorMessage != nil && !failing.isSavingTask, "Failed deletion preserves the task and explains the error")
+            try check(attempts == [row.id], "Failed deletion must not replay automatically")
+            if failure == .unauthorized {
+                try check(failing.needsLogin && !failing.canWriteTasks, "Rejected deletion must require login")
+            }
+        }
+
+        let staleAPI = ControlledHub()
+        let stale = HubStore(defaults: defaults, makeAPI: { _ in staleAPI })
+        await stale.connect(baseURL: "https://delete-stale.test")
+        let staleID = stale.tasks[0].id
+        await staleAPI.configure(hold: true)
+        let reading = Task { await stale.refresh() }
+        while !(await staleAPI.startedRead) { await Task.yield() }
+        let removed = await stale.deleteTask(staleID)
+        await staleAPI.release(); await reading.value
+        try check(removed && stale.tasks.isEmpty, "An older read must not resurrect a deleted task")
+
+        let lateAPI = ControlledHub()
+        let late = HubStore(defaults: defaults, makeAPI: { _ in lateAPI })
+        await late.connect(baseURL: "https://delete-late.test")
+        let lateID = late.tasks[0].id
+        await lateAPI.configureDelete(hold: true)
+        let pending = Task { await late.deleteTask(lateID) }
+        while !(await lateAPI.startedDelete) { await Task.yield() }
+        late.useLocalStorage()
+        await lateAPI.releaseTaskDelete()
+        let lateResult = await pending.value
+        try check(!lateResult && !late.isEnabled && late.tasks.isEmpty && !late.isSavingTask, "A late delete receipt cannot modify the replacement connection")
+
+        for failure: HubTransportError? in [nil, .timeout] {
+            let recoveryAPI = ControlledHub()
+            let recovery = HubStore(defaults: defaults, makeAPI: { _ in recoveryAPI })
+            await recovery.connect(baseURL: "https://delete-create-recovery.test")
+            await recoveryAPI.configure(createError: true)
+            _ = await recovery.createTask(title: "응답이 누락된 할 일")
+            await recoveryAPI.confirmCreatedElsewhere()
+            await recovery.refresh()
+            let recoveredID = (await recoveryAPI.creates)[0].id
+            try check(recovery.hasPendingTask && recovery.tasks.contains { $0.id.uuidString.lowercased() == recoveredID }, "Lost create response must be recovered as a durable row")
+            await recoveryAPI.configureDelete(failure: failure, commitsBeforeFailure: failure != nil)
+            _ = await recovery.deleteTask(UUID(uuidString: recoveredID)!)
+            try check(recovery.tasks.count == 1 && !recovery.tasks.contains { $0.id.uuidString.lowercased() == recoveredID }, "Confirmed deletion or readback after a lost response must remove only the target row")
+            let reopened = HubStore(defaults: defaults, makeAPI: { _ in recoveryAPI })
+            await reopened.connect(baseURL: "https://delete-create-recovery.test")
+            try check(!recovery.hasPendingTask && !reopened.hasPendingTask, "Deletion must retire a matching recovered create so it cannot resurrect the task, including after restart or lost delete acknowledgement")
+        }
+        print("PASS: Task deletion acknowledgement, failures, serialization and stale-response checks")
     }
 
     // Regression: ISSUE-001 — an older read must not erase a newer unauthorized write.
