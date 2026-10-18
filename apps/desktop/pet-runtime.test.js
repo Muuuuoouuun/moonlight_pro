@@ -45,10 +45,10 @@ test('Windows retains its Electron pet; shell smoke launches neither runtime', (
 test('existing standalone install is preferred; packaged and development copies are fallbacks', async () => {
   const candidates = nativePetCandidates({ home: '/users/operator', resourcesPath: '/App/Contents/Resources', desktopDir: '/repo/apps/desktop' });
   assert.deepEqual(candidates, [
-    '/users/operator/Applications/MoonlightPetPreview.app',
-    '/Applications/MoonlightPetPreview.app',
-    '/App/Contents/Resources/native/MoonlightPetPreview.app',
-    '/repo/prototypes/moonlight-pet-macos/dist/MoonlightPetPreview.app',
+    path.normalize('/users/operator/Applications/MoonlightPetPreview.app'),
+    path.normalize('/Applications/MoonlightPetPreview.app'),
+    path.normalize('/App/Contents/Resources/native/MoonlightPetPreview.app'),
+    path.resolve('/repo/prototypes/moonlight-pet-macos/dist/MoonlightPetPreview.app'),
   ]);
   for (const available of [candidates, candidates.slice(2), candidates.slice(3)]) {
     const calls = [];
