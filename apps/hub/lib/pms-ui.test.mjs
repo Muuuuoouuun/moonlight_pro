@@ -187,6 +187,7 @@ test("builds an edit draft from raw project fields and preserves its concurrency
     blocker: "",
     priority: "high",
     genre: "",
+    githubRepo: "",
     nextAction: "원본 다음 행동",
     dueAt: "2026-07-30",
     updatedAt: "2026-07-17T03:04:05.000Z",
@@ -398,6 +399,7 @@ test("rebases stale edit state while preserving only user-dirty fields", () => {
     blocker: "",
     priority: "high",
     genre: "",
+    githubRepo: "",
     nextAction: "Operator action",
     dueAt: "2026-07-31",
     updatedAt: "2026-07-17T02:00:00.000Z",
@@ -1113,6 +1115,20 @@ test("roadmap items carry their brand so a row can name it without a second look
 
   assert.equal(projection.items[0].brandKey, "sinabro");
   assert.equal(projection.items[0].brandName, "시나브로");
+});
+
+test("project edit carries a GitHub repo link, trims it, and validates owner/repo input", () => {
+  const source = { id: "p1", name: "Launch", githubRepo: "Muuuuoouuun/moonlight_pro", updatedAt: "2026-10-18T00:00:00Z" };
+  assert.equal(pmsUi.buildProjectEditDraft(source).githubRepo, "Muuuuoouuun/moonlight_pro");
+  assert.deepEqual(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source) }), { id: "p1", expectedUpdatedAt: source.updatedAt });
+  assert.equal(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source), githubRepo: " Muuuuoouuun/22th_nomad " }).githubRepo, "Muuuuoouuun/22th_nomad");
+  assert.equal(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source), githubRepo: "" }).githubRepo, "");
+  // 충돌 뒤 재기준: 원장 행(meta.github.repo)에서 연결을 다시 읽는다.
+  assert.equal(pmsUi.rebaseProjectEditSource(source, { meta: { github: { repo: "Muuuuoouuun/edb_make" } } }).githubRepo, "Muuuuoouuun/edb_make");
+  assert.equal(pmsUi.isValidGitHubRepoInput(""), true);
+  assert.equal(pmsUi.isValidGitHubRepoInput("https://github.com/Muuuuoouuun/video_-interference.git"), true);
+  assert.equal(pmsUi.isValidGitHubRepoInput("moonlight_pro"), false);
+  assert.equal(pmsUi.isValidGitHubRepoInput("a/b/c"), false);
 });
 
 test("project edit patch carries only a changed genre, and an emptied genre clears it", () => {

@@ -188,6 +188,8 @@ webhook 이벤트와 기록:
 
 ### 5.3 프로젝트·할 일과 GitHub
 
+> **2026-10-18 운영자 결정 — 아래 두 줄(마일스톤·이슈)의 할 일 부분을 대체한다.** 운영자 저장소는 이슈를 거의 쓰지 않고 브랜치·PR로 일한다(`moonlight_pro` 이슈 0건). 그래서 ① **PR 기준**: 열린 PR 하나가 프로젝트 할 일 하나다(draft는 `todo`, 그 외 `doing`). ② **연결 범위**: 제품 탭에 연결한 저장소(그 제품의 열린 프로젝트가 하나일 때) + 프로젝트 편집의 `GitHub 저장소` 칸으로 직접 연결한 저장소 — 첫 대상은 22세기 개인 콘텐츠(`Muuuuoouuun/22th_nomad`)와 회사 영상 작업(`Muuuuoouuun/video_-interference`). 한 저장소에 프로젝트가 여럿이면 추측하지 않고 건너뛴다. ③ **완료**: PR이 병합·닫혀도 할 일을 자동 완료하지 않는다 — `GitHub에서 병합됨`/`GitHub에서 닫힘` 표시와 `완료` 버튼만 두고 운영자가 누른다. 이미 병합·닫힌 PR은 과거 기록으로 가져오지 않는다. 구현 기록은 §13.1.
+
 - **프로젝트 ↔ 마일스톤 (선택):** `projects.meta.github = { repo, milestone }`. 연결하면 마일스톤의 열린/닫힌 이슈 수가 프로젝트 상세에 보인다. delivery 완료 조건을 자동으로 체크하지는 않는다 — "GitHub 마일스톤 닫힘 · 완료 조건을 확인할까요?"만 띄운다.
 - **할 일 ↔ 이슈 (선택):** `tasks.meta.github_issue = { repo, number, url }`. 이슈가 닫히면 할 일에 "GitHub에서 닫힘" 표시와 완료 버튼. 자동 완료 금지(되돌리기 어려운 판단은 확인 단계 유지 — 프로필 §2).
 - **에러 → Codex:** CI 실패·에러 행의 `Codex에 맡기기`가 기존 Codex 작업 큐(`pages/codex-jobs.jsx`)에 프로젝트·저장소·실패 로그 링크를 채운 초안을 연다. 보내기는 운영자가 누른다.
@@ -355,11 +357,31 @@ ClassIn은 회사 공식 객체의 정본이고, 개인 프로젝트는 ClassIn�
 - **오늘 화면 CI 실패 1행**(§6) — 표면 예산 결정이 필요해 넣지 않았다. 신호는 제품 보기의 막힘 열과 상세에만 보인다.
 - **에러 수집 연결** — 도구가 미정(§12-6)이라 체크리스트에 "도구 미정 · 확인 필요"로만 있다. 도구가 정해지면 Engine webhook → `error_logs`로 받는다.
 - 제품 점수(§9 — 체크리스트 진척률과 별개), 체크리스트 템플릿(3단계), 고객 적합도(4단계 — 결정 4는 확정돼 준비만 됨), 돈(5단계), 에러 도구(6단계).
-- 할 일 ↔ GitHub 이슈 연결(§5.3 선택), 프로젝트 ↔ 마일스톤 연결.
+- ~~할 일 ↔ GitHub 이슈 연결(§5.3 선택)~~ → 2026-10-18 PR 기준으로 구현(§13.1). 프로젝트 ↔ 마일스톤 연결은 여전히 안 했다.
 - 단계 게이트의 "출시 전 체크리스트"·"확정 매출"은 원천이 없어 `확인 필요`로만 보인다.
 
 운영에서 켜려면: ① `npm run db:migrate 20260925_0049_products.sql` 뒤 `npm run db:check` ② Engine에 `GITHUB_TOKEN`(읽기 전용)·`GITHUB_WEBHOOK_SECRET` ③ 저장소 webhook을 Engine `/api/webhook/github`로(이벤트: workflow_run·pull_request·issues·release·push, content type JSON).
 
+
+### 13.1 GitHub PR → 프로젝트 할 일 (2026-10-18, 브랜치 `claude/practical-einstein-mcs567`)
+
+운영자 지시 "깃허브 프로젝트들·작업들도 프로젝트에 싱크"와 §5.3의 2026-10-18 결정 3건을 구현했다. **마이그레이션 없음**(프로젝트·할 일의 기존 `meta` jsonb만 쓴다).
+
+| 층 | 들어간 것 | 위치 |
+| --- | --- | --- |
+| 연결 | `create_project`·`update_project`의 `githubRepo`(`owner/repo` 또는 github.com URL, 빈 값은 해제) → `projects.meta.github = { repo }`. 서비스의 기존 meta 병합·버전 가드를 그대로 탄다 | `apps/engine/lib/pms-command.ts` |
+| 연결 | 프로젝트 편집 드로어 `GitHub 저장소` 칸, 저장 전 형식 확인, 충돌 재기준 시 `meta.github.repo` 재읽기 | `apps/hub/lib/pms-ui.js`, `pages/projects.jsx`, `repositories/project-ledger-context.js` |
+| 동기화 | 대상 결정(직접 연결 우선 → 제품 저장소는 열린 프로젝트가 하나일 때만, 여럿·없음은 이유와 함께 건너뜀), 열린 PR 최대 50 + 최근 닫힌 PR 30 읽기, 열린 PR → `create_task`와 같은 정규화로 할 일 생성(`meta.source = github`, `meta.github_pr = { key, repo, number, url, title, state, draft, mergedAt, closedAt, updatedAt, syncedAt }`), 이후엔 `meta.github_pr`만 읽은 버전(`updated_at`)에 대해 고침 — 상태는 건드리지 않음 | `apps/engine/lib/github-project-tasks.ts` |
+| 동기화 | 가져온 PR 번호 기준선 `projects.meta.github_imports[저장소] = n` — 운영자가 지운 PR 할 일이 다음 동기화에서 되살아나지 않는다. 만들기에 실패하면 기준선을 올리지 않아 다시 시도한다 | 같은 파일 |
+| 동기화 | 기존 `syncGitHubRepositories`(Hub cron 매일 09:00 KST + 제품 탭 `GitHub 동기화` 버튼)가 함께 돌린다. 제품 저장소가 없어도 프로젝트 직접 연결이 있으면 돈다. 응답에 `projectTasks`(저장소별 생성·갱신·실패) | `apps/engine/lib/github-sync.ts` |
+| 화면 | 할 일 행의 `PR #n` 링크(새 창) · `초안` · 병합/닫힘이면 `LifecycleBadge`(done/cancelled) + `완료` 버튼(기존 완료 경로). 포트폴리오 작업 목록과 상세 패널 두 곳 | `components/hub/github-pr-mark.jsx`(+`.css`), `lib/github-pr-task.js`, `pages/project-work-list.jsx`, `pages/project-detail-panel.jsx` |
+| 화면 | 동기화 결과 문구에 `PR 할 일 새로 n개 · 상태 갱신 m개` | `pages/product-client.js` |
+
+테스트: `github-project-tasks.test.mjs`(8), `pms-command.test.mjs`·`pms-ui.test.mjs`(연결 칸), `github-pr-task.test.mjs`·`github-pr-mark.test.mjs`·`project-work-list.test.mjs`·`product-client.test.mjs`(화면).
+
+운영에서 쓰려면: ① Hub·Engine 배포 ② Engine `GITHUB_TOKEN`이 대상 저장소를 읽을 수 있어야 한다 — `22th_nomad`는 **비공개**라 fine-grained token의 저장소 목록에 넣어야 한다(Pull requests: read) ③ 프로젝트 편집에서 저장소를 적고 저장 ④ 다음 09:00 cron 또는 제품 탭 `GitHub 동기화`. 0049(`product_repositories`)가 운영 DB에 없어도 직접 연결 경로는 돈다(제품 저장소 읽기 실패는 환경 변수 폴백으로 넘어간다).
+
+알려진 빈틈: PR 없이 기본 브랜치에 바로 커밋하는 저장소는 할 일이 생기지 않는다(운영자가 PR 기준을 골랐다). 병합 표시는 동기화 주기(하루 1회 + 수동)를 따른다 — webhook의 `pull_request`는 아직 할 일을 고치지 않는다. 같은 PR을 두 동기화가 동시에 처음 보면 할 일이 두 개 생길 수 있다(고유 인덱스 없음 — cron과 수동 버튼이 같은 순간에 겹칠 때만).
 
 ## 14. 제품 탭 UI 기획 — 목업 정리 (2026-09-28~29, v0.4)
 

@@ -3,6 +3,7 @@
 import React from 'react';
 import { Button, Checkbox, Input, LifecycleBadge } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
+import { GitHubPrMark } from '../github-pr-mark';
 import { projectItemType, readTaskChecklist, TASK_CHECKLIST_LIMIT } from '@/lib/task-checklist';
 import { normalizeProjectIndexPreferences, sortProjectIndex, moveProjectIndex } from '@/lib/project-index-order';
 import { useProjectWorkOrder } from './project-work-order';
@@ -189,6 +190,7 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
           {type !== 'task' && <span className={styles.itemType}>{TYPE_LABEL[type]}</span>}
           <span>{task.title}</span><Iconed name={isOpen ? 'chevronD' : 'chevronR'} size={12} />
         </button>
+        <GitHubPrMark pr={task.githubPr} done={task.done} title={task.title} disabled={!canWrite || pending} onComplete={(event) => toggle(task, null, event)} />
         {checks.length > 0 && <span className={`${styles.checkCount} num`} aria-label={`세부 체크 ${checks.filter(item => item.done).length}/${checks.length} 완료`}>{checks.filter(item => item.done).length}/{checks.length}</span>}
         {task.status === 'blocked' && <LifecycleBadge label="막힘" state="blocked" />}
         {task.status === 'doing' && <LifecycleBadge label="진행" state="active" />}

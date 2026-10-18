@@ -228,6 +228,9 @@ test('selected or focused row scrolls into view on exact completion even without
 test('project group uses token motion, 44px touch controls and reduced-motion final state', () => {
   const css = readFileSync(new URL('./project-index-controls.module.css', import.meta.url), 'utf8');
   assert.match(css, /\.doneHead\s*\{\s*min-height:\s*44px/);
+  // 선택 행 레일은 DESIGN.md §8.1의 1px inset이다(굵게 하지 않는다).
+  assert.match(css, /\.row\[data-selected="true"\]\s*\{[^}]*inset 1px 0 0 var\(--accent\)/);
+  assert.doesNotMatch(css, /inset\s+(?:[2-9]|1\.\d)\S*px\s+0\s+0/);
   assert.match(css, /\.doneHead:focus-visible\s*\{\s*outline:\s*1px solid var\(--moon-300\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/);
   assert.doesNotMatch(css, /\d+(?:ms|s)\b/);
