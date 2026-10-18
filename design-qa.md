@@ -1,87 +1,82 @@
-# Project Portfolio Workspace Design QA
-
-## Comparison target
-
-- Source visual truth: `/Users/clmagi/.codex/generated_images/01a06ae6-fa1c-7042-baac-4d1b0601b1d2/exec-bdae48df-c778-47e1-babb-faaf18916d8e.png`
-- Source pixels: `1487 × 1058`
-- Implementation route: `/dashboard/work/projects`
-- Implementation screenshot: Codex in-app Browser tab 1 inline capture, captured from the implementation route above
-- Implementation pixels and CSS viewport: `1440 × 1024` at device scale factor `1`
-- Density normalization: source aspect ratio `1.405` and implementation aspect ratio `1.406`; both full frames were fit side by side without cropping in a temporary comparison canvas. The implementation iframe used its native `1440 × 1024` CSS viewport and was scaled uniformly for the combined view.
-- State: dark theme, live populated project ledger, all-project scope, default List view, first project selected, all three operational rows collapsed
-
-## Full-view comparison evidence
-
-- A temporary local comparison canvas placed the selected source image and the browser-rendered implementation together in one `1600 × 640` screenshot.
-- Both views use the same major composition: global navigation, dedicated multi-project index, wide selected-project workspace, oversized progress value, next-action region, progress ruler, and three collapsed summary rows.
-- The implementation intentionally retains Moonlight's existing expanded global navigation and live ledger content. The source's slim icon rail is therefore not copied into this page-local change.
-- A second same-input comparison was captured after moving the portfolio metrics below the title and adding mini progress/schedule visuals to the collapsed rows.
-
-## Focused-region comparison evidence
-
-- The selected project hero and collapsed summary stack were inspected at the native `1440 × 1024` viewport. The final capture shows the complete hero, next-action copy, CTA, progress ruler, and all three collapsed rows without horizontal clipping.
-- A `390 × 844` CSS viewport was captured separately. The project index becomes a bounded top section and the selected-project workspace stacks below it; controls remain readable and do not overlap.
-- No content imagery is present in the source. Visible icons use the existing Moonlight icon library; the generated source image is not embedded into the product UI.
-
-## Required fidelity surfaces
-
-- Fonts and typography: the existing Moonlight sans/mono families are preserved. The oversized numeric progress, compact mono metrics, Korean hierarchy, and long live next-action wrapping remain readable at desktop and mobile sizes.
-- Spacing and layout rhythm: the index-to-stage ratio, hero split, hairline borders, large negative space, and collapsed-row heights match the source direction. The existing expanded app navigation makes the project workspace narrower than the mock, but the layout remains balanced and unclipped.
-- Colors and visual tokens: all new surfaces use Moonlight `--bg`, `--surface*`, `--line*`, `--fg*`, and Moonstone tokens. Danger red appears only on the single overdue/risk channel; normal completion and no-risk states stay neutral.
-- Image quality and asset fidelity: no raster imagery, illustration, logo replacement, handcrafted SVG, emoji, or placeholder art was introduced. Icons come from the product's canonical icon set.
-- Copy and content: labels are coherent with the live model (`하위 아이템`, `체크리스트`, `일정`). A fake project-parent relationship was not invented; the app continues to treat linked tasks as the actual child items.
-
-## Findings
-
-- No actionable P0, P1, or P2 findings remain.
-- [P3] The existing global navigation is expanded while the source shows an icon-only rail. This is an intentional project-scope constraint; changing the global shell for one tab would be broader than the selected implementation.
-- [P3] Long English live next-action text wraps to three lines where the Korean source copy fits more compactly. It remains fully visible and is expected dynamic-content variation.
-
-## Primary interactions and console checks
-
-- Project index selection updates the focused project without opening a drawer.
-- Checklist disclosure expands and collapses with correct accessibility state.
-- Project search and the risk quick filter update the index and focused workspace.
-- `프로젝트 열기` opens the existing project detail inspector, and `상세 닫기` returns to the workspace.
-- List, Table, Board, Timeline, and To-dos routes were exercised. Table preserves the prior dense operational list instead of merging it into the minimal default view.
-- Browser console warnings/errors checked after the interaction pass: none.
-
-## Comparison history
-
-### Pass 1 — blocked
-
-- [P2] Portfolio metrics were visually detached at the far right of the title row, unlike the compact source hierarchy.
-- [P2] The three collapsed operational rows were text-heavy and lacked the source's at-a-glance micro progress visuals.
-
-Fixes made:
-
-1. Moved the four clickable portfolio metrics directly under the workspace title.
-2. Added status bars, checklist progress, and schedule marks to the collapsed rows using Moonlight tokens.
-3. Reduced next-action display sizing and hero padding slightly so long live copy remains composed in the narrower existing shell.
-
-### Pass 2 — passed
-
-- The revised combined comparison shows the title/metric hierarchy grouped correctly and the three rows carrying visible, low-density progress signals.
-- Native desktop and mobile captures show no clipped persistent controls, overlapping content, or broken hierarchy.
-- No actionable P0/P1/P2 visual differences remain after accounting for the existing global shell and live data.
-
-## Implementation checklist
-
-- [x] Match the selected master-detail composition.
-- [x] Preserve live project, task, detail, and mutation behavior.
-- [x] Keep Board, Timeline, To-dos, and the previous dense Table surface available.
-- [x] Verify desktop and mobile responsive behavior.
-- [x] Verify primary interactions and browser console.
-- [x] Run the production build and the full 711-test suite.
+# OKR·KPI 첨부안 적용 검증 · 2026-10-18
 
 final result: passed
 
-## 2026-09-09 메모 연결 적용 QA
+사용자가 확정한 구조·디자인 범위에서 P0/P1/P2 미해결 항목 없음. 운영 배포와 운영 데이터 쓰기는 범위 밖이다.
 
-- 범위: 이미지 시안의 메모→업무 전환·원문 역참조·칸반 패널 요소를 기존 Projects에 통합. 전체 앱 외형 1:1 복제는 아님.
-- 비교: 이미지 시안의 원문/전환 폼과 실제 MemoWorkspace 가상 데이터 렌더(1440×1024). 목록 왼쪽·원문과 폼 오른쪽 구조를 유지. 390×844에서는 한 열로 전환.
-- 수정: Hub 공통 button reset이 목록 padding을 덮어쓰던 문제를 컴포넌트 CSS 범위로 해결. Drawer가 열렸을 때 배경 단축키를 비활성화.
-- 기능 검증: 필수 프로젝트 안내, 생성 후 관계 재조회, 기존 업무 연결, 본문 검색, 연결 없음 필터, 실제 칸반 패널 열기/닫기·포커스 복귀 확인.
-- 캡처: `artifacts/memo-links-2026-09-09/memo-workspace-desktop.png`. 캡처가 흐려 세부 픽셀 충실도는 확정하지 않음.
-- 로컬 기능 검증: passed. 운영 적용: blocked — Supabase 관리 API 401, 신규 테이블/RPC 미적용. 운영에서 end-to-end 저장 검증 필요.
-- final result: blocked (운영 적용·세부 시각 충실도 최종 확인 전)
+## 비교 기준
+
+- 원본: 사용자가 첨부한 `스크린샷 2026-10-18 오후 7.25.40.png`, 대화에 표시된 675×678px 이미지. 원본의 Mac 파일 경로는 클라우드 파일 경로가 아니다.
+- 대상: `/dashboard/work/goals`, 데스크톱 1440×1100 CSS px / DPR 1, 모바일 390×844 CSS px / DPR 1.
+- 환경: Chromium / Playwright. Browser의 필수 `js` 도구가 노출되지 않아 사용자에게 대체 검증 승인을 받고 사용했다.
+- 데이터: 브라우저 검사에만 주입한 검증용 응답. 앱 소스·운영 DB에 예시 업무 레코드를 넣지 않았다. 실제 읽기 실패 화면도 별도로 확인했다.
+- 규모 정규화: 원본에는 Hub 셸이 없고 원본의 글자가 작으므로, 셸을 제외한 화면의 영역 순서·비율·색·표현을 비교했다. 동일 크기 픽셀 복제를 주장하지 않는다. 본문 최소 글자 크기와 기존 동작은 유지한다.
+- 사용자 확정 변경: 전체 OKR/KPI 적용, 이 탭은 첨부 디자인 우선, 콘텐츠 퍼널·발행 수치는 KR 진행률·관측 기록 건수로 교체.
+
+## 시각 비교와 수정 기록
+
+1. 초기 화면: 상단 게이지와 3개 목표 카드 → 4개 KPI 카드 → 비교/주간 차트 → 최근 기록 순서, 쿨 그레이 배경, 파스텔 카드, 입체 그림자를 확인했다.
+2. P2 · 상단 밀도: 목표 카드와 검색 영역이 길어 하단 차트가 과도하게 밀렸다. 카드 간격·미니 게이지 여백을 줄이고 헤더 동작을 한 줄로 정리했다. 검색 라벨은 접근 가능한 이름을 유지하며 시각적으로 숨겼다.
+3. 수정 후 증거: `/workspace/scratch/okr-kpi-2026-10-18/okr-desktop-light.png`, `/workspace/scratch/okr-kpi-2026-10-18/okr-dashboard-analytics.png`. 목표 카드와 KPI 카드 및 비교 차트의 간격·라운딩·그림자를 참조와 다시 비교했다.
+4. P2 · KR 문맥: 여러 목표에 같은 이름의 KR이 있을 때 구별하기 어려웠다. 각 비교 막대에 소속·목표 이름과 전체 이름 툴팁을 추가했고 `/workspace/scratch/okr-kpi-2026-10-18/okr-final-check.json`의 6개 문맥 라벨 검사 및 수정 후 차트 캡처로 확인했다.
+5. 캡처 유효성: 개발 서버의 재컴파일 중 CSS가 빠진 중간 캡처와 검사 스크립트의 잘못된 버튼 이름으로 중단된 결과는 최종 증거에서 제외한다. 최종 캡처는 레이아웃 CSS 로드를 확인한 상태만 사용한다.
+
+## 필수 표현 검토
+
+- 글꼴: 기존 SUIT Variable / JetBrains Mono를 재사용. 제목·큰 숫자는 굵은 sans, 시간·작은 수치는 기존 규칙을 유지. 데이터 12px / 메타 10.5px 이상.
+- 간격·배치: 카드 순서, 3열 목표·4열 KPI, 넓은 비교 차트와 좁은 주간 차트를 재현. 추가 목표·KR은 펼치기와 상세 링크로 접근한다.
+- 색·토큰: `--goal-dash-*`를 작업 탭의 `.goals-page--reference`에 한정. 라이트·다크를 각각 정의했다. 카드 색은 장식이며 상태는 글자·기호로 구분한다.
+- 이미지 품질: 참조에는 사진·일러스트·로고 등 새 이미지 자산이 없다. 게이지와 막대는 실제 값에서 그리는 데이터 시각화다.
+- 문구·지표: 종합 게이지는 측정 KR 평균이며 미측정을 제외한 수를 밝힌다. KPI는 기존 선 안·밖 의미를 유지한다. 주간 기록은 서울 시간의 기록 건수이며 성과값 합계나 전환율로 표시하지 않는다.
+
+## 코드 검사
+
+- 관련 테스트: 149개 중 148 통과, DB 실행 조건 1개 skip.
+- 신규 계산 검사: 미측정/실제 0, KPI·참고값 제외, 소속·검색 범위, 기간과 기대선, 서울 주간 경계, 조회 부족/실패, 최근 기록, 목표별 시간대.
+- 소스 구문 검사: 1744개 파일, 오류 0.
+- 프로덕션 빌드·타입 검사: 통과.
+- 운영 원장: `goals-read-failed` / Supabase 요청 실패로 실데이터 연동 검증은 미완료. 읽기 실패를 빈 원장이나 0으로 표시하지 않는 것을 확인했다.
+
+
+## 브라우저 검사
+
+흐름: 내 작업 → OKR·KPI → 목표/소속 선택 → 기존 상세·KPI 기록·체크인 → 예상 화면과 주소 상태 확인.
+
+| 검사 | 결과 | 증거 |
+| --- | --- | --- |
+| 페이지 식별 | 통과 | `/dashboard/work/goals`, 문서 제목 `Moonlight` |
+| 빈 화면 여부 | 통과 | 종합 게이지, 3개 목표 카드, 4개 KPI, 비교·주간 차트 및 최근 기록 렌더 |
+| 프레임워크 오류 화면 | 없음 | 두 테마·모바일 캡처, 주요 조작 가능 |
+| 콘솔 | 통과 | 최종 검사 런타임 오류 0, 설명되지 않은 콘솔 오류·경고 0 |
+| 시각 증거 | 통과 | 아래 캡처와 첨부 원본의 영역 순서·색·간격·타이포를 비교 |
+| 조작 | 통과 | 목표 3→4 / KR 6→12 펼침, 상세·Esc 닫기, KPI 기록 진입·닫기, 검색, ClassIn 필터, KPI 보기, 체크인, 종료 목표 채점 |
+| 반응형 | 통과 | 390px에서 페이지와 대시보드 내부 요소의 가로 넘침 0 |
+| 데이터 상태 | 통과 | 실제 0 / 미측정, 관측 읽기 실패, 빈 목표, 전체 읽기 실패, preview를 구분 |
+| 현황 경로 | 통과 | 기존 `overview?view=goals`는 기존 한눈에 레이아웃으로 렌더 |
+
+초기 전체 흐름 검사에서는 기존 홈 화면 CSS의 미사용 preload 경고 1건이 최종 '경고 0개' 단정을 실패시켰다. 대시보드 흐름의 15개 상태 검사는 모두 통과했으며, 이 경고는 Hub의 다른 화면 사전 로드에서 나왔다. 마지막 별도 검사에서는 오류·경고가 없었다. 관련 없는 홈 사전 로드 코드는 이번 범위에서 수정하지 않았다.
+
+### 최종 증거
+
+- 라이트: `/workspace/scratch/okr-kpi-2026-10-18/okr-desktop-light.png` (1440×1100)
+- 비교·주간 차트: `/workspace/scratch/okr-kpi-2026-10-18/okr-dashboard-analytics.png` (1440×1100)
+- 다크: `/workspace/scratch/okr-kpi-2026-10-18/okr-desktop-dark.png` (1440×1100)
+- 모바일: `/workspace/scratch/okr-kpi-2026-10-18/okr-mobile-light.png`, `/workspace/scratch/okr-kpi-2026-10-18/okr-mobile-analytics.png` (390×844)
+- 실제 원장 읽기 실패: `/workspace/scratch/okr-kpi-2026-10-18/okr-live-state.png`
+- 마지막 브라우저 검사: `/workspace/scratch/okr-kpi-2026-10-18/okr-final-check.json`
+
+상단 게이지·카드와 하단 비교 차트는 서로 다른 스크롤 캡처를 사용했다. 'fullPage' 옵션도 내부 스크롤을 펼치지는 않으므로 전체 화면을 한 장에 담았다고 주장하지 않는다. 비교는 대화의 원본 이미지와 해당 캡처를 함께 확인한 것이며, 원본과 나란히 합성한 이미지 파일은 만들지 않았다.
+
+### 실행한 검사
+
+- `npm run lint`: 소스 1743개, 구문 오류 0 (페이지 전용 컴포넌트를 `goals.jsx` 안으로 정리한 뒤 파일 수가 1개 줄었다).
+- 관련 테스트 148개 통과 / 실행 조건 1개 skip, 팔레트·모션·포커스·업무 목업 유입 가드 9개 통과.
+- 최종 페이지 정리 후 계산·화면 계약 22개 추가 재실행 통과.
+- `NEXT_DIST_DIR=.next.validation next build --webpack`: 프로덕션 빌드·타입 검사.
+- Playwright: `goto`, 역할 기반 locator, `click`/`fill`/`press`, 주소·개수·CSS/넘침 상태 검사, 스크린샷, 런타임·콘솔 수집. 외부 API·DB 쓰기 없음.
+
+### 범위와 남은 확인
+
+전체 OKR/KPI에 맞춰 콘텐츠 퍼널은 KR 비교로, 주간 발행은 관측 기록 건수로 바꿨다. KPI에는 허용 범위·0 유지 표시를 사용하며, 원본처럼 달성 퍼센트로 합치지 않았다. 기존 필터·체크인·메모·채점을 남겨 원본보다 하단이 길어지는 것은 의도한 차이다. 새 사진·일러스트 자산은 없으므로 자산 해상도 비교는 해당 없음.
+
+실제 목표 원장 조회는 이 클라우드 환경의 Supabase 요청 실패로 검증하지 못했다. 운영 저장·배포·다른 브라우저는 검증 범위에 포함되지 않는다. 이 한계를 화면 UI 검증 통과와 구분한다.
