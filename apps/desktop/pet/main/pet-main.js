@@ -284,7 +284,7 @@ function install(options = {}) {
 
   const focusRunning = () => state.focus.running;
   const glassSizeNow = () => {
-    const base = G.panelGlassSize(state.mode);
+    const base = G.panelGlassSize(state.mode, platform);
     return contentHeight ? { width: base.width, height: contentHeight } : base;
   };
 

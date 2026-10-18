@@ -19,8 +19,8 @@ const round = (rect) => ({
 // 펫 모드별 유리 창 크기. Acrylic 창은 시스템 그림자를 쓰므로 Mac의 8px 여백을 뺀 유리만 창이 된다
 // (contract.glassSize). 메모는 Mac 크기에 걸친 캐릭터 띠(54px)가 이미 들어 있어(MEMO_ALREADY_HAS_STRIP)
 // 그만큼 뺀다 — 걸친 캐릭터는 유리 창이 아니라 따로 뜬 72×72 창이 그린다.
-function panelGlassSize(mode) {
-  const size = C.glassSize(mode);
+function panelGlassSize(mode, platform = 'win32') {
+  const size = C.glassSize(mode, platform);
   if (mode === 'memo' && C.MEMO_ALREADY_HAS_STRIP) return { width: size.width, height: size.height - C.PERCH_STRIP };
   return size;
 }
