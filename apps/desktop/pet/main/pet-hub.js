@@ -211,15 +211,21 @@ function createPetHub(input = {}) {
       setHubStatus('not-configured');
       return ready.then(() => undefined);
     }
+    let next;
     const client = createHubClient({
       origin, fetch: options.fetch, cookieHeader: options.cookieHeader, storeCookies: options.storeCookies,
       setTimeout: options.setTimeout, clearTimeout: options.clearTimeout,
+      isCurrent: () => conn === next,
     });
     const api = createHubApi(client);
     const pending = previous?.origin === origin ? previous.pending : createPending({ api, store, origin, now: clock });
-    const next = { origin, client, api, office: createOfficeApi(client), pending, ready: null };
+    pending.setApi(api);
+    // Preserve initialization and any in-flight write state across cookie changes.
+    // Reloading a snapshot here can resurrect an already acknowledged command.
+    const pendingReady = previous?.origin === origin ? previous.pendingReady : pending.load();
+    next = { origin, client, api, office: createOfficeApi(client), pending, pendingReady, ready: null };
     chat.configure({ service: api, origin });
-    next.ready = Promise.all([pending.load(), activity.configure({ service: api, origin })]).then(() => undefined);
+    next.ready = Promise.all([pendingReady, activity.configure({ service: api, origin })]).then(() => undefined);
     conn = next;
     setHubStatus('unknown');
     return next.ready;
@@ -232,6 +238,7 @@ function createPetHub(input = {}) {
     const current = conn;
     if (!current) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
     await current.ready;
+    if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
     let envelope;
     try {
       const result = await fn(current);

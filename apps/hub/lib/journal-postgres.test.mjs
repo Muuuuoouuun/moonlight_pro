@@ -221,7 +221,8 @@ test('journal PostgreSQL atomic persistence, reuse, isolation and permissions', 
     });
     await t.test('quick memo content handoff replays the journal RPC after a lost reply without a legacy note', async () => {
       const draft = prepareMemoIdea({ ...newMemoDraft(), body: '  저장소 통합 뒤 소재 연결\n원문 보존  ' });
-      const entryForClient = entry => entry && ({ ...entry, revision: entry.note_revision, occurredAt: entry.occurred_at });
+      // Match journal-ledger's public entry mapping, including the saved lane.
+      const entryForClient = entry => entry && ({ ...entry, revision: entry.note_revision, occurredAt: entry.occurred_at, noteMeta: entry.note_meta });
       let firstHandoff;
       const fetch = async (url, options = {}) => {
         if (url === '/api/hub/journal' && options.method === 'POST') {

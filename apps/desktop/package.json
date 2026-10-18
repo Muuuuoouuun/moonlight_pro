@@ -10,7 +10,7 @@
     "predev": "node scripts/build-mac-pet.mjs",
     "dev": "electron .",
     "build": "node scripts/write-build-info.mjs && electron-builder --win --x64",
-    "build:mac": "node scripts/build-mac-pet.mjs && node scripts/build-mac-glass.mjs --arch=arm64 && electron-builder --mac --arm64",
+    "build:mac": "node scripts/build-mac-pet.mjs && node scripts/build-mac-glass.mjs --arch=arm64 && node scripts/write-build-info.mjs && electron-builder --mac --arm64",
     "build:mac-glass": "node scripts/build-mac-glass.mjs",
     "install:mac": "node scripts/install-mac.mjs",
     "icons:generate": "node scripts/generate-icons.mjs",

@@ -20,12 +20,13 @@ const PERCH_INSET_RIGHT = 20;
 const GLASS_RADIUS = 26; // Mac 값 — Acrylic 창은 시스템 8px가 되고, CSS 레이어(중앙 음영·림)는 이 값을 참고만 한다
 const PANEL_SIZES = Object.freeze({
   // [width, height] — Mac 빠른 패널 크기(여백 포함). widget 모드는 +PERCH_STRIP(메모는 이미 포함).
-  tasks: [336, 504], calendar: [336, 484], memo: [520, 440], office: [460, 620],
+  tasks: [336, 504], calendar: [336, 484], memo: [520, 440], office: [424, 296],
   council: [460, 580], notifications: [360, 480], focus: [380, 320],
 });
 const MEMO_ALREADY_HAS_STRIP = true;
-function glassSize(mode) {
-  const [w, h] = PANEL_SIZES[mode] || PANEL_SIZES.tasks;
+const WINDOWS_PANEL_SIZES = Object.freeze({ office: [460, 620] });
+function glassSize(mode, platform = 'win32') {
+  const [w, h] = (platform !== 'darwin' && WINDOWS_PANEL_SIZES[mode]) || PANEL_SIZES[mode] || PANEL_SIZES.tasks;
   return { width: w - SHADOW_MARGIN * 2, height: h - SHADOW_MARGIN * 2 };
 }
 const PET_SIZE = 56;
@@ -118,7 +119,7 @@ const PET_EVENTS = Object.freeze(['pet:state-changed', 'pet:wash', 'pet:notice',
 
 module.exports = {
   MODES, MODE_LABEL, MODE_HOTKEY_ORDER,
-  SHADOW_MARGIN, PERCH_STRIP, PERCH_SIZE, PERCH_INSET_RIGHT, GLASS_RADIUS, PANEL_SIZES, MEMO_ALREADY_HAS_STRIP, glassSize,
+  SHADOW_MARGIN, PERCH_STRIP, PERCH_SIZE, PERCH_INSET_RIGHT, GLASS_RADIUS, PANEL_SIZES, WINDOWS_PANEL_SIZES, MEMO_ALREADY_HAS_STRIP, glassSize,
   PET_SIZE, PET_PORTRAIT, PET_EDGE_INSET, PANEL_GAP, BUBBLE_SIZE, FOCUS_CARD_WIDTH,
   CHARACTERS, DEFAULT_CHARACTER, SOURCE_ASSETS, characterByKey,
   MOTION, GLASS, ENVELOPE_KINDS, HUB_PATHS, LIMITS, PET_INVOKE, PET_EVENTS,

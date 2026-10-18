@@ -36,6 +36,18 @@ async function boot(t, platform, extra = {}) {
   return { E, pet, kept };
 }
 
+test('Office windows use the platform contract through the shell layout path', async t => {
+  for (const [platform, size] of [['darwin', {width:408,height:280}], ['win32', {width:444,height:604}]]) {
+    await t.test(platform, async t => {
+      const { pet } = await boot(t, platform);
+      pet.openMode('office');
+      const frame = pet.windows.panel.getBounds();
+      assert.equal(frame.width, size.width);
+      assert.equal(frame.height, size.height);
+    });
+  }
+});
+
 test('macOS: 걸친 캐릭터·말풍선 창은 처음 쓸 때 만든다 — 대기 중에는 펫·패널 둘만', async (t) => {
   const { E, pet } = await boot(t, 'darwin');
   assert.equal(pet.platform, 'darwin');
