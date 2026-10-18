@@ -20,6 +20,19 @@ function scriptedFetch(handler) {
 }
 const json = (value, status = 200, headers = {}) => new Response(typeof value === 'string' ? value : JSON.stringify(value), { status, headers });
 
+test('a late response cannot restore the cookie of a discarded connection', async () => {
+  let current = true;
+  const restored = [];
+  const client = createHubClient({ origin: HUB, isCurrent: () => current,
+    fetch: async () => {
+      current = false;
+      return json({ status: 'ok' }, 200, { 'set-cookie': 'com_moon_operator_session=old-session; Path=/; HttpOnly' });
+    }, storeCookies: async cookies => { restored.push(...cookies); } });
+  await client.request('/api/hub/tasks');
+  assert.deepEqual(restored, [], 'the replacement session must keep its own cookie');
+  await assert.rejects(client.request('/api/hub/tasks'), error => error.error === 'stale-origin');
+});
+
 async function rejects(promise, kind, error) {
   await assert.rejects(promise, (e) => {
     assert.ok(e instanceof HubError, `HubError 가 아니다: ${e}`);
