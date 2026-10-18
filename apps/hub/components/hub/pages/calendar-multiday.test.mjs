@@ -120,3 +120,19 @@ test('midnight/01:00 ends do not create an extra full-day card', () => {
   const early = mountedCalendar([event({ start: '2026-10-05T17:00:00', end: '2026-10-06T01:00:00' })]);
   assert.equal(early.buttons(early.render()).length, 1, 'the 00–01 segment stays outside the current 08–20 time grid');
 });
+
+test('Calendar agenda view renders vertical day list without time grid and opens outcome drawer on tap', () => {
+  const input = event({ start: '2026-10-05T09:00:00', end: '2026-10-05T10:00:00' });
+  const harness = mountedCalendar([input], { mode: 'agenda' });
+  const tree = harness.render();
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /class="hub-calendar-agenda\b/);
+  assert.doesNotMatch(html, /class="hub-calendar-time-grid/);
+  const cards = harness.buttons(tree);
+  assert.equal(cards.length, 1);
+  cards[0].props.onClick();
+  const [outcome] = harness.outcomes(harness.render());
+  assert.equal(outcome.props.eventKey, input.outcomeKey);
+  assert.equal(outcome.props.whenLabel, '9:00 – 10:00');
+});
+

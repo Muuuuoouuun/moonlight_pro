@@ -161,13 +161,19 @@ function InquiryDetail({ id, onClose, onSelect, onChanged, onNavigate }) {
         <ReferenceFields draft={draft} setDraft={setDraft} links={detail.links} />
       </form> : <>
         <div className="inquiry-toolbar"><Badge>{INQUIRY_STATUSES[row.status]}</Badge><Badge>{INQUIRY_KINDS[row.kind]}</Badge><Badge>{INQUIRY_SCOPES[row.org_scope]}</Badge>{row.classification === 'review' && <Badge>확인 필요</Badge>}</div>
-        <p className="inquiry-notice">{row.contact_name || '이름 없음'} · {row.contact_email || row.contact_phone || '연락처 없음'}</p>
+        <p className="inquiry-notice">
+          {row.contact_name || '이름 없음'} · {row.contact_email || ''}{row.contact_email && row.contact_phone ? ' · ' : ''}
+          {row.contact_phone
+            ? <a href={`tel:${String(row.contact_phone).replace(/[^+\d]/g, '')}`} className="mono">{row.contact_phone}</a>
+            : (!row.contact_email ? '연락처 없음' : null)}
+        </p>
         <p className="inquiry-notice">{row.reason || '직접 등록'} · 읽음 처리는 처리 상태를 바꾸지 않습니다.</p>
         <div className="inquiry-toolbar" aria-label="연결된 내역">
           {(detail.links || []).length ? detail.links.map(link => link.status === 'live'
             ? <Button key={link.type} onClick={() => onNavigate?.(link.href)}>{link.typeLabel}: {link.label} ↗</Button>
             : <span className="inquiry-notice" key={link.type}>{link.typeLabel} 연결 {link.status === 'not-found' ? '내역 없음' : '확인 실패'}</span>)
             : <span className="inquiry-notice">연결된 고객·거래·지원 건 없음</span>}
+          {!row.lead_id && <Button size="sm" variant="outline" onClick={() => onNavigate?.(`dashboard/revenue/customers?new=customer${row.contact_name ? `&q=${encodeURIComponent(row.contact_name)}` : ''}${row.contact_phone ? `&phone=${encodeURIComponent(row.contact_phone)}` : ''}`)}>고객으로 등록 ↗</Button>}
         </div>
         <InquiryProductLink inquiryId={id} onNavigate={onNavigate} />
         {(detail.events || []).map(event => {

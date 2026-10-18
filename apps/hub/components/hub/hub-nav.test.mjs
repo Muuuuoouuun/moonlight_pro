@@ -906,3 +906,72 @@ test('report hub is a Home secondary tab, reachable through command catalog with
   assert.ok(navTreePaths().includes(path));
   assert.match(appSource, /'dashboard\/reports':.*<Reports/);
 });
+
+test('mobile back overlay bridge closes topmost ESC layer before mobile sidebar and leaves page history when idle', async () => {
+  const esc = await import('./esc-layers.js');
+  assert.equal(esc.hasOpenEscLayer(), false);
+  const token = esc.pushEscLayer();
+  assert.equal(esc.hasOpenEscLayer(), true);
+  const dispatched = [];
+  assert.equal(esc.dismissTopEscLayer({ dispatchEvent: (event) => dispatched.push(event) }), true);
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0].key, 'Escape');
+  esc.popEscLayer(token);
+  assert.equal(esc.hasOpenEscLayer(), false);
+
+  let navClosed = 0;
+  let escDismissed = 0;
+  assert.equal(
+    mobileNavRuntime.dismissTopMobileOverlay({
+      hasEscLayer: () => true,
+      dismissEscLayer: () => { escDismissed += 1; return true; },
+      mobileNavOpen: true,
+      closeMobileNavigation: () => { navClosed += 1; },
+    }),
+    true,
+  );
+  assert.equal(escDismissed, 1);
+  assert.equal(navClosed, 0);
+
+  assert.equal(
+    mobileNavRuntime.dismissTopMobileOverlay({
+      hasEscLayer: () => false,
+      dismissEscLayer: () => false,
+      mobileNavOpen: true,
+      closeMobileNavigation: () => { navClosed += 1; },
+    }),
+    true,
+  );
+  assert.equal(navClosed, 1);
+
+  assert.equal(
+    mobileNavRuntime.dismissTopMobileOverlay({
+      hasEscLayer: () => false,
+      dismissEscLayer: () => false,
+      mobileNavOpen: false,
+      closeMobileNavigation: () => { navClosed += 1; },
+    }),
+    false,
+  );
+  assert.match(appSource, /window\.moonlightDismissTopOverlay\s*=/);
+});
+
+test("mobile topbar tabs support active auto-scroll, touch scrolling, and unclipped deferred menu without JS hover", async () => {
+  const css = await readFile(new URL("./hub-tokens.css", import.meta.url), "utf8");
+  // 1. 활성 탭 자동 시야 정렬 및 ref 연결
+  assert.match(topbarSource, /activeTabRef\.current\.scrollIntoView/);
+  assert.match(topbarSource, /ref=\{selected \? activeTabRef : undefined\}/);
+  assert.match(topbarSource, /prefers-reduced-motion/);
+
+  // 2. 보류 메뉴: overflow-x에 잘리지 않게 fixed 좌표 기반 + JS hover 제거
+  assert.doesNotMatch(topbarSource, /onMouseEnter|onMouseLeave/);
+  assert.match(topbarSource, /className="hub-topbar__deferred-item"/);
+  assert.match(topbarSource, /position:\s*'fixed'/);
+
+  // 3. CSS 터치 반응성: touch-action manipulation, 가로 스크롤 제어, 스크롤 여백
+  assert.match(css, /\.hub-topbar__tabs\s*\{[\s\S]*?-webkit-overflow-scrolling:\s*touch/);
+  assert.match(css, /\.hub-topbar__tabs\s*\{[\s\S]*?overscroll-behavior-x:\s*contain/);
+  assert.match(css, /\.hub-topbar__tabs button\s*\{[\s\S]*?touch-action:\s*manipulation/);
+  assert.match(css, /\.hub-topbar__tabs button\s*\{[\s\S]*?-webkit-tap-highlight-color:\s*transparent/);
+});
+

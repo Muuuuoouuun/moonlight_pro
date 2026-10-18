@@ -27,8 +27,9 @@ final class GlassOpticsRenderer {
     let desktopPipeline: MTLRenderPipelineState
 
     private init() throws {
+        let packaged = Bundle.main.resourceURL?.appendingPathComponent("MoonlightPetPreview_MoonlightPetPreview.bundle/Shaders/GlassOptics.metal")
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue(),
-              let url = Bundle.module.url(forResource: "GlassOptics", withExtension: "metal", subdirectory: "Shaders") else {
+              let url = packaged.flatMap({ FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }) ?? Bundle.module.url(forResource: "GlassOptics", withExtension: "metal", subdirectory: "Shaders") else {
             throw NSError(domain: "GlassOptics", code: 1, userInfo: [NSLocalizedDescriptionKey: "Metal device or shader resource missing"])
         }
         self.device = device

@@ -382,19 +382,62 @@ export function Divider({ style }) {
 }
 
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
+  const activeRef = React.useRef(null);
+  React.useEffect(() => {
+    if (activeRef.current) {
+      const prefersReduced = typeof window !== 'undefined'
+        && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      activeRef.current.scrollIntoView({
+        inline: 'nearest',
+        block: 'nearest',
+        behavior: prefersReduced ? 'auto' : 'smooth',
+      });
+    }
+  }, [active]);
+
   return (
-    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
+    <div
+      className={className}
+      role="tablist"
+      aria-label={ariaLabel}
+      style={{
+        display: 'flex',
+        gap: 2,
+        borderBottom: '1px solid var(--line-soft)',
+        overflowX: 'auto',
+        scrollbarWidth: 'none',
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehaviorX: 'contain',
+        ...style,
+      }}
+    >
       {tabs.map(t => {
         const isActive = t.key === active;
         return (
-          <button key={t.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
-            padding: '8px 12px', fontSize: 12.5, fontWeight: 500,
-            color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
-            borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
-            marginBottom: -1,
-            transition: 'color var(--dur-hover) var(--ease-hub)',
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-          }}>
+          <button
+            key={t.key}
+            ref={isActive ? activeRef : undefined}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange?.(t.key)}
+            style={{
+              padding: '8px 12px',
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
+              borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
+              marginBottom: -1,
+              transition: 'color var(--dur-hover) var(--ease-hub)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
             {t.label}
             {t.count != null && (
               <span className="mono" style={{
@@ -1113,6 +1156,23 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
 
+  let swipeStart = null;
+  const handleHeaderPointerDown = compact ? (e) => {
+    if (e.button != null && e.button !== 0) return;
+    if (typeof e.target?.closest === 'function' && e.target.closest('button, [role="button"], a, input, select, textarea')) return;
+    swipeStart = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  } : undefined;
+  const handleHeaderPointerUp = compact ? (e) => {
+    if (!swipeStart || (e.pointerId != null && swipeStart.id != null && e.pointerId !== swipeStart.id)) return;
+    const dy = (e.clientY ?? 0) - (swipeStart.y ?? 0);
+    const dx = Math.abs((e.clientX ?? 0) - (swipeStart.x ?? 0));
+    swipeStart = null;
+    if (dy >= 56 && dy > dx * 1.2) {
+      onCloseRef.current?.();
+    }
+  } : undefined;
+  const handleHeaderPointerCancel = compact ? () => { swipeStart = null; } : undefined;
+
   return (
     <>
       <div className="hub-drawer-overlay" data-presentation={presentation} data-exiting={exiting} aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-drawer-overlay)' }} />
@@ -1135,7 +1195,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
           }),
         }}
       >
-        <div className="hub-drawer__header" data-action={headerAction ? '' : undefined} style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="hub-drawer__header" data-action={headerAction ? '' : undefined} onPointerDown={handleHeaderPointerDown} onPointerUp={handleHeaderPointerUp} onPointerCancel={handleHeaderPointerCancel} style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           {headerAction && <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: '-10px 0 -10px -10px' }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>

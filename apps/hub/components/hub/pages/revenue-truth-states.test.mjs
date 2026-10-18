@@ -76,6 +76,8 @@ test("inquiries use the shared create hotkey, a Kbd hint, and fold secondary fil
   assert.doesNotMatch(inquiries, /addEventListener\('keydown'/, "수제 N 리스너는 공유 훅으로 흡수한다");
   assert.match(inquiries, /문의 등록 <Kbd>N<\/Kbd>/);
   assert.match(inquiries, /aria-expanded=\{filtersOpen\} aria-controls="inquiry-filters"/);
+  assert.match(inquiries, /href=\{`tel:\$\{String\(row\.contact_phone\)\.replace\(\/\[\^\+\\d\]\/g, ''\)\}`\}/);
+  assert.match(inquiries, /고객으로 등록 ↗/);
   assert.match(inquiriesCss, /\.inquiry-filter-toggle \{ display: none; \}/);
   assert.match(inquiriesCss, /@media \(max-width: 600px\) \{[\s\S]*\.inquiry-filters\[data-open="false"\] \{ display: none; \}/);
 });

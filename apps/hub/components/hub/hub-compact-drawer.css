@@ -39,8 +39,20 @@
     border-bottom: 0;
     animation-name: hubCompactSheetIn;
   }
+  .hub-app .hub-drawer[data-presentation="compact"]::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: var(--line-strong);
+    pointer-events: none;
+  }
   .hub-app .hub-drawer[data-presentation="compact"][data-exiting="true"] { animation-name: hubCompactSheetOut; }
-  .hub-drawer[data-presentation="compact"] .hub-drawer__header { padding: 22px 20px 18px; }
+  .hub-drawer[data-presentation="compact"] .hub-drawer__header { padding: 22px 20px 18px; touch-action: pan-x; }
   .hub-drawer[data-presentation="compact"] .hub-drawer__body { padding: 0 20px 20px; }
   .hub-drawer[data-presentation="compact"] .hub-drawer__footer { padding: 14px 20px max(14px, env(safe-area-inset-bottom)); }
 

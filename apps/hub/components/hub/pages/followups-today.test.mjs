@@ -197,4 +197,8 @@ test("늦은 실패 — 창 머리가 말했으면 토스트를 겹치지 않고
   assert.match(drawer, /onReturn=\{\(entry, \{ target: t, draft, error \} = \{\}\) => setRecordTarget\(\{ \.\.\.\(entry \|\| \{\}\), target: t \|\| entry\?\.target \|\| null, draft: draft \|\| null, error: error \|\| "" \}\)\}/);
   // 기록 후보는 요약이 저장된 뒤에만 정리한다 — 저장하고 다음으로 넘어간 뒤에도 같다(연 순간의 ctx를 붙든다).
   assert.match(drawer, /onSummaryPersisted=\{\(_ids, t\) => \{\s*if \(ctx\.candidate\) resolveCandidate\(ctx\.candidate\);\s*reload\(\)\.then\(\(\) => markLeaving\(t \? rowKey\(t\) : null, false\)\);/);
+  // 전화번호가 있는 행은 메타 줄에서 tel: 원탭 발신을 제공한다.
+  assert.match(page, /const telHref = cleanPhone \? `tel:\$\{cleanPhone\}` : null;/);
+  assert.match(page, /className="today-contact__channel today-contact__tel/);
 });
+

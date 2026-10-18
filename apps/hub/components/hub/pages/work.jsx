@@ -405,7 +405,9 @@ export function Calendar({ onNavigate }) {
   const pathname = usePathname();
   const [now, setNow] = React.useState(() => new Date());
   const [selectedDate, setSelectedDate] = React.useState(() => new Date());
-  const [viewMode, setViewMode] = React.useState('week');
+  const [viewMode, setViewMode] = React.useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(max-width: 600px)').matches ? 'agenda' : 'week'
+  ));
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
   const [creating, setCreating] = React.useState(false);
@@ -666,7 +668,7 @@ export function Calendar({ onNavigate }) {
         <SegmentedControl
           className="hub-toolbar"
           label="캘린더 보기"
-          options={[{ key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }]}
+          options={[{ key: 'agenda', label: 'Agenda' }, { key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }]}
           value={viewMode}
           onChange={setViewMode}
         />
@@ -674,104 +676,204 @@ export function Calendar({ onNavigate }) {
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)' }}>
-          <div />
-          {dayLabels.map((d, i) => (
-            <button
-              key={`${d}-${i}`}
-              type="button"
-              aria-label={`${d} 일간 보기`}
-              aria-pressed={i === selectedIndex}
-              onClick={() => selectDay(visibleDays[i])}
-              style={{
-                minHeight: 48, padding: '8px 12px', borderLeft: '1px solid var(--line-soft)',
-                fontSize: 11.5, fontWeight: i === selectedIndex ? 650 : 450,
-                color: i === todayIndex || i === selectedIndex ? 'var(--fg)' : 'var(--fg-muted)',
-                background: i === selectedIndex ? 'var(--surface-2)' : 'transparent', textAlign: 'left',
-              }}
-            >
-              {d}
-              {i === todayIndex && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
-            </button>
-          ))}
-        </div>
-        <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
-          <div className="mono" style={{ padding: '12px 10px', fontSize: 10.5, color: 'var(--fg-faint)', textAlign: 'right' }}>TASK</div>
-          {visibleDays.map((date, dayIndex) => {
-            const tasks = gridTasks.filter((task) => task.day === dayIndex);
-            const shown = tasks.slice(0, viewMode === 'day' ? 8 : 2);
-            return (
-              <div key={date.toISOString()} style={{ minHeight: 54, padding: 5, borderLeft: '1px solid var(--line-soft)', display: 'flex', flexDirection: viewMode === 'day' ? 'row' : 'column', gap: 4, flexWrap: viewMode === 'day' ? 'wrap' : 'nowrap' }}>
-                {shown.map((task) => (
+        {viewMode === 'agenda' ? (
+          <div className="hub-calendar-agenda scroll-y" style={{ flex: 1, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {visibleDays.map((date, di) => {
+              const dayEvents = gridEvents.filter((e) => e.day === di);
+              const dayTasks = gridTasks.filter((task) => task.day === di);
+              const isToday = di === todayIndex;
+              const isSelected = di === selectedIndex;
+              return (
+                <section
+                  key={date.toISOString()}
+                  className="hub-calendar-agenda__day"
+                  aria-label={dayLabels[di]}
+                  style={{
+                    border: '1px solid var(--line-soft)',
+                    borderRadius: 'var(--r)',
+                    background: isToday ? 'var(--surface-2)' : 'var(--surface)',
+                    overflow: 'hidden',
+                  }}
+                >
                   <button
-                    key={task.id}
                     type="button"
-                    className="hub-row"
-                    aria-label={`할 일 열기: ${task.title}`}
-                    onClick={() => onNavigate?.(`dashboard/work/my?task=${encodeURIComponent(task.id)}`)}
+                    aria-label={`${dayLabels[di]} 일간 보기`}
+                    aria-pressed={isSelected}
+                    onClick={() => selectDay(date)}
                     style={{
-                      minHeight: 44, minWidth: 0, padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7,
-                      color: 'var(--fg)', background: 'var(--surface)', border: '1px solid var(--line-soft)',
-                      borderRadius: 'var(--r-sm)', fontSize: 11.5, textAlign: 'left',
-                      flex: viewMode === 'day' ? '0 1 280px' : '0 0 auto',
+                      minHeight: 44, width: '100%', padding: '8px 12px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      borderBottom: (dayEvents.length > 0 || dayTasks.length > 0) ? '1px solid var(--line-soft)' : 'none',
+                      fontSize: 12.5, fontWeight: isToday || isSelected ? 650 : 500,
+                      color: isToday || isSelected ? 'var(--fg)' : 'var(--fg-muted)',
+                      textAlign: 'left',
                     }}
                   >
-                    <span aria-hidden="true" style={{ width: 8, height: 8, border: '1px solid var(--fg-dim)', borderRadius: 2, flexShrink: 0 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                    <span>
+                      {dayLabels[di]}
+                      {isToday && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
+                    </span>
+                    <span className="num" style={{ fontSize: 11, color: 'var(--fg-faint)', fontWeight: 450 }}>
+                      {dayEvents.length + dayTasks.length > 0 ? `일정 ${dayEvents.length} · 할 일 ${dayTasks.length}` : '일정 없음'}
+                    </span>
                   </button>
-                ))}
-                {tasks.length > shown.length && (
-                  <button type="button" onClick={() => onNavigate?.('dashboard/work/my?lens=week')} style={{ minHeight: 36, padding: '0 8px', color: 'var(--fg-dim)', fontSize: 10.5, textAlign: 'left' }}>
-                    +{tasks.length - shown.length} tasks
-                  </button>
-                )}
-                {tasks.length === 0 && <span style={{ padding: '8px', color: 'var(--fg-faint)', fontSize: 10.5 }}>—</span>}
-              </div>
-            );
-          })}
-        </div>
-        <div className="scroll-y" style={{ flex: 1, minWidth: 56 + dayWidths.reduce((width, dayWidth) => width + dayWidth, 0) }}>
-          <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative' }}>
-            <div>
-              {hours.map(h => (
-                <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10.5, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
+                  {(dayEvents.length > 0 || dayTasks.length > 0) && (
+                    <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {dayEvents.map((e) => (
+                        <button
+                          key={e.segmentKey}
+                          type="button"
+                          className="hub-card-link"
+                          aria-label={`일정 기록: ${e.title}`}
+                          onClick={() => setSelectedEvent(e)}
+                          style={{
+                            minHeight: 44, width: '100%', textAlign: 'left',
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                            background: toneBg[e.tone], color: toneFg[e.tone],
+                            border: `1px solid ${toneBd[e.tone]}`,
+                            borderRadius: 'var(--r-sm)', padding: '8px 10px',
+                            fontSize: 12.5, fontWeight: 500,
+                          }}
+                        >
+                          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {e.sourceLabel && (
+                              <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85, marginRight: 5 }}>[{e.sourceLabel}]</span>
+                            )}
+                            {e.title}
+                          </span>
+                          <span className="mono" style={{ fontSize: 11, opacity: 0.78, flexShrink: 0 }}>
+                            {e.allDay ? '종일' : `${formatHour(e.start)} – ${formatHour(e.end)}`}
+                          </span>
+                        </button>
+                      ))}
+                      {dayTasks.map((task) => (
+                        <button
+                          key={task.id}
+                          type="button"
+                          className="hub-row"
+                          aria-label={`할 일 열기: ${task.title}`}
+                          onClick={() => onNavigate?.(`dashboard/work/my?task=${encodeURIComponent(task.id)}`)}
+                          style={{
+                            minHeight: 44, width: '100%', padding: '8px 10px',
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            color: 'var(--fg)', background: 'var(--surface-2)',
+                            border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+                            fontSize: 12, textAlign: 'left',
+                          }}
+                        >
+                          <span aria-hidden="true" style={{ width: 8, height: 8, border: '1px solid var(--fg-dim)', borderRadius: 2, flexShrink: 0 }} />
+                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', flexShrink: 0 }}>TASK</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        ) : (
+          <>
+            <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)' }}>
+              <div />
+              {dayLabels.map((d, i) => (
+                <button
+                  key={`${d}-${i}`}
+                  type="button"
+                  aria-label={`${d} 일간 보기`}
+                  aria-pressed={i === selectedIndex}
+                  onClick={() => selectDay(visibleDays[i])}
+                  style={{
+                    minHeight: 48, padding: '8px 12px', borderLeft: '1px solid var(--line-soft)',
+                    fontSize: 11.5, fontWeight: i === selectedIndex ? 650 : 450,
+                    color: i === todayIndex || i === selectedIndex ? 'var(--fg)' : 'var(--fg-muted)',
+                    background: i === selectedIndex ? 'var(--surface-2)' : 'transparent', textAlign: 'left',
+                  }}
+                >
+                  {d}
+                  {i === todayIndex && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
+                </button>
               ))}
             </div>
-            {visibleDays.map((date, di) => (
-              <div key={date.toISOString()} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
-                {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
-                {gridEvents.filter(e => e.day === di).map((e) => {
-                  // Multi-day segments may cover midnight to midnight; keep them inside this grid's 08–20 window.
-                  const start = e.multiDay ? Math.max(8, e.start) : e.start;
-                  const end = e.multiDay ? Math.min(20, e.end) : e.end;
-                  if (end <= start) return null;
-                  const top = (start - 8) * 52;
-                  const height = (end - start) * 52 - 2;
-                  const columns = e.overlapColumns || 1;
-                  const width = columns === 1 ? 'calc(100% - 8px)' : `calc(${100 / columns}% - ${4 + 4 / columns}px)`;
-                  const left = !e.overlapColumn ? 4 : `calc(${100 * e.overlapColumn / columns}% + ${4 - 4 * e.overlapColumn / columns}px)`;
-                  return (
-                    <button key={e.segmentKey} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title}`} onClick={() => setSelectedEvent(e)} style={{
-                      textAlign: 'left', width,
-                      position: 'absolute', top, left, right: 4, height,
-                      background: toneBg[e.tone], color: toneFg[e.tone],
-                      border: `1px solid ${toneBd[e.tone]}`,
-                      borderLeft: `1px solid ${toneBd[e.tone]}`,
-                      borderRadius: 6, padding: '6px 8px',
-                      fontSize: 11, fontWeight: 500, overflow: 'hidden',
-                    }}>
-                      {e.sourceLabel && (
-                        <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85, marginRight: 4 }}>[{e.sourceLabel}]</span>
-                      )}
-                      {e.title}
-                      <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
-                    </button>
-                  );
-                })}
+            <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
+              <div className="mono" style={{ padding: '12px 10px', fontSize: 10.5, color: 'var(--fg-faint)', textAlign: 'right' }}>TASK</div>
+              {visibleDays.map((date, dayIndex) => {
+                const tasks = gridTasks.filter((task) => task.day === dayIndex);
+                const shown = tasks.slice(0, viewMode === 'day' ? 8 : 2);
+                return (
+                  <div key={date.toISOString()} style={{ minHeight: 54, padding: 5, borderLeft: '1px solid var(--line-soft)', display: 'flex', flexDirection: viewMode === 'day' ? 'row' : 'column', gap: 4, flexWrap: viewMode === 'day' ? 'wrap' : 'nowrap' }}>
+                    {shown.map((task) => (
+                      <button
+                        key={task.id}
+                        type="button"
+                        className="hub-row"
+                        aria-label={`할 일 열기: ${task.title}`}
+                        onClick={() => onNavigate?.(`dashboard/work/my?task=${encodeURIComponent(task.id)}`)}
+                        style={{
+                          minHeight: 44, minWidth: 0, padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7,
+                          color: 'var(--fg)', background: 'var(--surface)', border: '1px solid var(--line-soft)',
+                          borderRadius: 'var(--r-sm)', fontSize: 11.5, textAlign: 'left',
+                          flex: viewMode === 'day' ? '0 1 280px' : '0 0 auto',
+                        }}
+                      >
+                        <span aria-hidden="true" style={{ width: 8, height: 8, border: '1px solid var(--fg-dim)', borderRadius: 2, flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                      </button>
+                    ))}
+                    {tasks.length > shown.length && (
+                      <button type="button" onClick={() => onNavigate?.('dashboard/work/my?lens=week')} style={{ minHeight: 36, padding: '0 8px', color: 'var(--fg-dim)', fontSize: 10.5, textAlign: 'left' }}>
+                        +{tasks.length - shown.length} tasks
+                      </button>
+                    )}
+                    {tasks.length === 0 && <span style={{ padding: '8px', color: 'var(--fg-faint)', fontSize: 10.5 }}>—</span>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="scroll-y" style={{ flex: 1, minWidth: 56 + dayWidths.reduce((width, dayWidth) => width + dayWidth, 0) }}>
+              <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative' }}>
+                <div>
+                  {hours.map(h => (
+                    <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10.5, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
+                  ))}
+                </div>
+                {visibleDays.map((date, di) => (
+                  <div key={date.toISOString()} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
+                    {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
+                    {gridEvents.filter(e => e.day === di).map((e) => {
+                      // Multi-day segments may cover midnight to midnight; keep them inside this grid's 08–20 window.
+                      const start = e.multiDay ? Math.max(8, e.start) : e.start;
+                      const end = e.multiDay ? Math.min(20, e.end) : e.end;
+                      if (end <= start) return null;
+                      const top = (start - 8) * 52;
+                      const height = (end - start) * 52 - 2;
+                      const columns = e.overlapColumns || 1;
+                      const width = columns === 1 ? 'calc(100% - 8px)' : `calc(${100 / columns}% - ${4 + 4 / columns}px)`;
+                      const left = !e.overlapColumn ? 4 : `calc(${100 * e.overlapColumn / columns}% + ${4 - 4 * e.overlapColumn / columns}px)`;
+                      return (
+                        <button key={e.segmentKey} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title}`} onClick={() => setSelectedEvent(e)} style={{
+                          textAlign: 'left', width,
+                          position: 'absolute', top, left, right: 4, height,
+                          background: toneBg[e.tone], color: toneFg[e.tone],
+                          border: `1px solid ${toneBd[e.tone]}`,
+                          borderLeft: `1px solid ${toneBd[e.tone]}`,
+                          borderRadius: 6, padding: '6px 8px',
+                          fontSize: 11, fontWeight: 500, overflow: 'hidden',
+                        }}>
+                          {e.sourceLabel && (
+                            <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85, marginRight: 4 }}>[{e.sourceLabel}]</span>
+                          )}
+                          {e.title}
+                          <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
       </Card>
       {selectedEvent && (
         <Drawer title="일정 기록" subtitle="완료와 특이사항을 Moonlight에 남깁니다." onClose={() => { if (!outcomeSaving) setSelectedEvent(null); }} width="min(440px, 94vw)">
