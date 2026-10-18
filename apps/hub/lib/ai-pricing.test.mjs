@@ -6,7 +6,18 @@ test("price table names its source and check date", () => {
   assert.match(AI_PRICING_SOURCE.url, /^https:\/\/ai\.google\.dev\//);
   assert.match(AI_PRICING_SOURCE.checkedAt, /^\d{4}-\d{2}-\d{2}$/);
   assert.match(USD_KRW.checkedAt, /^\d{4}-\d{2}-\d{2}$/);
-  assert.ok(AI_MODEL_PRICING["gemini-3.5-flash"], "the default model is priced");
+  assert.ok(AI_MODEL_PRICING["gemini-4-argon"], "the default model is priced");
+  assert.ok(AI_MODEL_PRICING["gemini-3.5-flash"], "the previous default stays priced for past rows");
+});
+
+test("Gemini 4 Argon uses its launch price through 2026-11-30 and list price after or without a date", () => {
+  const call = { model: "gemini-4-argon", promptTokens: 1_000_000, outputTokens: 500_000, thinkingTokens: 500_000 };
+  assert.equal(estimateCallCostUsd({ ...call, occurredAt: "2026-10-14T03:00:00Z" }), 2 + 10);
+  assert.equal(estimateCallCostUsd({ ...call, occurredAt: "2026-11-30T23:59:59Z" }), 2 + 10);
+  assert.equal(estimateCallCostUsd({ ...call, occurredAt: "2026-12-01T00:00:00Z" }), 4 + 20);
+  assert.equal(estimateCallCostUsd(call), 4 + 20, "unknown time overestimates rather than underestimates");
+  assert.equal(estimateCallCostUsd({ ...call, occurredAt: "not-a-date" }), 4 + 20);
+  assert.equal(estimateCallCostUsd({ model: "gemini-4-argon", promptTokens: 300_000, occurredAt: "2026-12-02T00:00:00Z" }), 1.2, "no long-prompt tier");
 });
 
 test("cost = prompt × input price + (answer + thinking) × output price", () => {

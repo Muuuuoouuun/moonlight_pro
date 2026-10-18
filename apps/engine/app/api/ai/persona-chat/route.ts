@@ -4,7 +4,7 @@ export const maxDuration = 60;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini";
+import { DEFAULT_GEMINI_MODEL, generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini";
 import {
   insertIntegrationSyncRun,
   resolveDefaultWorkspaceId,
@@ -320,12 +320,14 @@ export async function POST(req: Request) {
   const prompt = buildPrompt({ personaId, mode, lens, message, context, draft, ragSnippets, conversationOnly: payload.conversationOnly === true });
   const startedAt = new Date().toISOString();
 
+  // Gemini 4 Argon sits above 3.1 Pro, so both fallbacks use it; GEMINI_PRO_MODEL still lets the
+  // thinking roles run on a different model.
   const isThinkingRole = personaId === "council" || personaId === "guru" || mode === "sparring" || mode === "weekly-review";
   const modelToUse = typeof payload.model === "string" && payload.model.trim()
     ? payload.model.trim()
     : isThinkingRole
-    ? (process.env.GEMINI_PRO_MODEL?.trim() || "gemini-3.1-pro-preview")
-    : (process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash");
+    ? (process.env.GEMINI_PRO_MODEL?.trim() || DEFAULT_GEMINI_MODEL)
+    : (process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL);
 
   const result = await generateGeminiText({
     systemInstruction,

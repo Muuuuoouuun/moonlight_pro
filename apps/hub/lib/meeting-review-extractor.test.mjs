@@ -25,13 +25,14 @@ test("meeting review anchors exact UTF-16 source spans and preserves provider us
   const result = await extractMeetingReviewText({
     text: source,
     fetchImpl: async (url, options) => {
-      assert.match(url, /\/models\/gemini-3\.5-flash:generateContent$/);
+      assert.match(url, /\/models\/gemini-4-argon:generateContent$/);
       assert.equal(options.method, "POST");
       assert.equal(options.headers["x-goog-api-key"], "test-key");
       assert.ok(options.signal instanceof AbortSignal);
       const body = JSON.parse(options.body);
       assert.equal(body.generationConfig.responseMimeType, "application/json");
       assert.equal(body.generationConfig.responseJsonSchema.properties.proposals.maxItems, 30);
+      assert.equal(body.generationConfig.temperature, undefined, "Gemini 4 does not take temperature");
       assert.ok(body.contents[0].parts[0].text.includes(source));
       return providerReply({
         summary: "가격과 견적 기한을 논의했다.",
@@ -44,7 +45,7 @@ test("meeting review anchors exact UTF-16 source spans and preserves provider us
     },
   });
   assert.equal(result.ok, true);
-  assert.equal(result.model, "gemini-3.5-flash");
+  assert.equal(result.model, "gemini-4-argon");
   assert.deepEqual(result.usage, { promptTokens: 100, candidatesTokens: 40, totalTokens: 140 });
   assert.equal(result.data.proposals.length, 2);
   for (const proposal of result.data.proposals) {

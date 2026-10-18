@@ -1,6 +1,7 @@
 // Manual, text-only meeting analysis. The source text remains the authority:
 // model-provided quotes are accepted only when they anchor to one exact span.
 import { recordAiUsage } from "./ai-usage-log.js";
+import { geminiGenerationConfig, resolveGeminiModel } from "./gemini-model.js";
 
 export const MAX_MEETING_REVIEW_TEXT_LENGTH = 20_000;
 
@@ -269,16 +270,16 @@ export async function extractMeetingReviewText(input = {}) {
   if (!apiKey) return { ok: false, reason: "gemini-not-configured", error: "GEMINI_API_KEY not configured", data: null };
 
   const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  const model = resolveGeminiModel();
   const body = {
     system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
     contents: [{ role: "user", parts: [{ text: `다음은 분석할 원문입니다. 원문 밖의 내용을 만들지 마십시오.\n\n<source>\n${sourceText}\n</source>` }] }],
-    generationConfig: {
+    generationConfig: geminiGenerationConfig(model, {
       responseMimeType: "application/json",
       responseJsonSchema: RESPONSE_SCHEMA,
       temperature: 0.1,
       maxOutputTokens: 8192,
-    },
+    }),
   };
 
   let response;

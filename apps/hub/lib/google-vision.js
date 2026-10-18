@@ -1,13 +1,10 @@
 // Gemini vision: business-card image -> structured fields. Raw fetch, no SDK.
 // Matches the engine's lib/gemini auth/parsing pattern (x-goog-api-key header).
 import { recordAiUsage } from "./ai-usage-log.js";
+import { geminiGenerationConfig, resolveGeminiModel } from "./gemini-model.js";
 
 function resolveBaseUrl() {
   return (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-}
-
-function resolveModel() {
-  return process.env.GEMINI_MODEL || "gemini-3.5-flash";
 }
 
 const PROMPT = `이 명함 이미지에서 아래 필드를 추출해 JSON만 출력해. 불확실한 값은 추측하지 말고 null로 둬.
@@ -19,7 +16,7 @@ export function getVisionStatus() {
     process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
     ""
   );
-  return { configured: Boolean(apiKey), apiKey, model: resolveModel(), base: resolveBaseUrl() };
+  return { configured: Boolean(apiKey), apiKey, model: resolveGeminiModel(), base: resolveBaseUrl() };
 }
 
 function extractText(data) {
@@ -56,7 +53,7 @@ export async function extractBusinessCard(imageBase64, mimeType = "image/jpeg") 
             ],
           },
         ],
-        generationConfig: { responseMimeType: "application/json", temperature: 0, maxOutputTokens: 2048 },
+        generationConfig: geminiGenerationConfig(model, { responseMimeType: "application/json", temperature: 0, maxOutputTokens: 2048 }),
       }),
     });
     raw = await response.text();
