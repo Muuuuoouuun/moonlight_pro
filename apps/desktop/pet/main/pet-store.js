@@ -20,6 +20,8 @@ const STORE_KEYS = Object.freeze([
   'petNotices.banners',
   'petCouncil.draft',
   'petCouncil.source',
+  'petOffice.drafts',
+  'petOffice.pending',
   'pet.position',
 ]);
 const MAIN_ONLY_PREFIXES = Object.freeze(['petHub.pending.v1.', 'petNotices.delivery.v1.']);
