@@ -23,6 +23,7 @@ import {
   buildTaskPatch,
   contentPipelineReloadContains,
   createClientId,
+  isValidGitHubRepoInput,
   mergeProjectDetailQuery,
   projectReloadContains,
   projectAreaLabel,
@@ -1161,6 +1162,9 @@ export function Projects({ workspace }) {
     if (projectDraft.status === 'blocked' && !projectDraft.blocker?.trim()
       && (projectEditSource.statusKey !== 'blocked' || Boolean(projectEditSource.delivery?.blocker))) {
       return { ok: false, status: 'invalid-input', message: '막힘 상태에는 막힌 이유를 적어주세요.' };
+    }
+    if (!isValidGitHubRepoInput(projectDraft.githubRepo)) {
+      return { ok: false, status: 'invalid-input', message: 'GitHub 저장소는 owner/repo 형식으로 적어주세요.' };
     }
     const patch = buildProjectPatch(projectEditSource, projectDraft);
     const dirtyKeys = Object.keys(patch).filter((key) => !['id', 'expectedUpdatedAt'].includes(key));
@@ -2974,6 +2978,7 @@ export function Projects({ workspace }) {
               key: 'genre', label: '장르', type: 'select',
               options: [{ value: '', label: '장르 없음' }, ...PROJECT_GENRES.map(item => ({ value: item.key, label: item.label }))],
             },
+            { key: 'githubRepo', label: 'GitHub 저장소', placeholder: 'owner/repo · 열린 PR이 할 일로 들어옵니다' },
             { key: 'nextAction', label: '다음 행동', placeholder: '다음에 할 한 가지' },
             ...(!projectEditSource?.delivery ? [{ key: 'dueAt', label: '기한', inputType: 'date' }] : []),
           ]}

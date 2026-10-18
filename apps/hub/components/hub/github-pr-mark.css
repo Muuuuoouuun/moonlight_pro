@@ -1,0 +1,5 @@
+/* GitHub PR 출처 표시 — 중립 글자와 1px 선만 쓴다(DESIGN.md §5.3 lifecycle, §8.1). */
+.hub-app .github-pr-mark { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; min-width: 0; flex-wrap: wrap; }
+.hub-app .github-pr-mark__link { font-size: 12px; color: var(--fg-muted); text-decoration: none; border-bottom: 1px solid var(--line); white-space: nowrap; transition: color var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub); }
+.hub-app a.github-pr-mark__link:hover { color: var(--fg); border-bottom-color: var(--line-strong); }
+.hub-app .github-pr-mark__meta { font-size: 10.5px; color: var(--fg-dim); white-space: nowrap; }

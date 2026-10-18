@@ -1,3 +1,5 @@
+import { randomUUID } from "crypto";
+
 import {
   insertIntegrationSyncRun,
   resolveDefaultWorkspaceId,
@@ -5,7 +7,9 @@ import {
 } from "./integration-state";
 import { ciTransitionUpdate, summarizeCheckRuns } from "./github-signals.ts";
 import type { RepositoryLink } from "./github-signals.ts";
-import { fetchSupabaseRows, insertSupabaseRecord, updateSupabaseRecord } from "./supabase-rest";
+import { syncProjectPullRequestTasks } from "./github-project-tasks.ts";
+import type { PullRequest } from "./github-project-tasks.ts";
+import { fetchSupabaseRows, inFilterQuoted, insertSupabaseRecord, updateSupabaseRecord } from "./supabase-rest";
 
 // 저장소 목록의 정본은 product_repositories(제품 렌즈 §5.1)다. 환경 변수 GITHUB_REPOSITORIES·
 // GITHUB_PROJECT_MAP은 테이블이 비었거나 아직 없을 때만 쓰는 읽기 폴백이다.
@@ -447,6 +451,51 @@ async function writeProjectUpdates(summaries: Array<ReturnType<typeof buildRepoS
   return writes;
 }
 
+// PR → 할 일 동기화용 PR 목록: 열린 PR 전부(최대 50)와 최근에 닫힌 PR(최대 30, 병합·닫힘 표시용).
+// 닫힌 목록을 못 읽으면 열린 PR만으로 진행한다 — 병합 표시는 다음 동기화에서 따라온다.
+async function fetchPullRequestsForTasks(fullName: string) {
+  const [open, closed] = await Promise.all([
+    fetchGitHubJson<PullRequest[]>(`/repos/${fullName}/pulls?state=open&sort=updated&direction=desc&per_page=50`),
+    fetchGitHubJson<PullRequest[]>(`/repos/${fullName}/pulls?state=closed&sort=updated&direction=desc&per_page=30`),
+  ]);
+  if (!open.ok) return { ok: false, status: open.status, data: null, error: open.error };
+  const byNumber = new Map<number, PullRequest>();
+  for (const pull of [...(open.data || []), ...(closed.ok ? closed.data || [] : [])]) {
+    if (Number.isInteger(pull?.number) && !byNumber.has(pull.number)) byNumber.set(pull.number, pull);
+  }
+  return { ok: true, status: open.status, data: [...byNumber.values()] };
+}
+
+// 프로젝트에 직접 연결한 저장소와 제품 탭 저장소의 열린 PR을 프로젝트 할 일로 맞춘다(github-project-tasks.ts).
+async function syncLinkedProjectTasks(repositories: GitHubRepoConfig[]) {
+  const workspaceId = resolveDefaultWorkspaceId();
+  if (!workspaceId) return null;
+  try {
+    return await syncProjectPullRequestTasks({
+      workspaceId,
+      now: new Date().toISOString(),
+      productRepositories: repositories
+        .filter((repo) => repo.productId)
+        .map((repo) => ({ full_name: repo.fullName, product_id: repo.productId, status: "connected" })),
+      deps: {
+        fetchRows: (table, options) => fetchSupabaseRows(table, options),
+        fetchPulls: fetchPullRequestsForTasks,
+        insert: (table, record) => insertSupabaseRecord(table, record),
+        update: (table, filters, patch) => updateSupabaseRecord(table, filters, patch, { returnRepresentation: true, select: "id" }),
+        newId: () => randomUUID(),
+        quotedIn: inFilterQuoted,
+      },
+    });
+  } catch (error) {
+    return {
+      status: "error" as const,
+      error: error instanceof Error ? error.message : String(error),
+      repositories: [],
+      skipped: [],
+    };
+  }
+}
+
 // 상세 상태(GET·Hub 화면용) — 테이블 연결 저장소 수까지 센다. health는 동기 getGitHubIntegrationStatus를 쓴다.
 export async function getGitHubIntegrationStatusDetailed() {
   const envStatus = getGitHubIntegrationStatus();
@@ -466,6 +515,33 @@ export async function syncGitHubRepositories() {
   const startedAt = new Date().toISOString();
 
   if (!repositories.length) {
+    // 제품 탭 저장소가 없어도 프로젝트에 직접 연결한 저장소의 PR은 맞춘다.
+    const projectTasks = await syncLinkedProjectTasks([]);
+    if (projectTasks?.repositories.length) {
+      const finishedAt = new Date().toISOString();
+      const failed = projectTasks.status === "error";
+      const connection = await upsertIntegrationConnection({
+        provider: "github",
+        status: failed ? "error" : "connected",
+        config: getGitHubIntegrationStatus(),
+        lastSyncedAt: failed ? null : finishedAt,
+      });
+      await insertIntegrationSyncRun({
+        provider: "github",
+        connectionId: connection.connection?.id || null,
+        status: failed ? "failure" : "success",
+        payload: { startedAt, finishedAt, projectTasks },
+        errorMessage: projectTasks.status === "synced" ? null : "project pull request task sync incomplete",
+      });
+      return {
+        status: projectTasks.status,
+        configured: true,
+        source: "projects" as const,
+        repositories: [],
+        failures: [],
+        projectTasks,
+      };
+    }
     const connection = await upsertIntegrationConnection({
       provider: "github",
       status: "pending",
@@ -489,6 +565,7 @@ export async function syncGitHubRepositories() {
       configured: false,
       message: "제품에 연결된 저장소가 없습니다.",
       repositories: [],
+      projectTasks,
     };
   }
 
@@ -514,6 +591,8 @@ export async function syncGitHubRepositories() {
   const projectUpdateWrites = targets.source === "env"
     ? await writeProjectUpdates(summaries)
     : await writeLinkedRepositoryState(repositories, results, finishedAt);
+  // 환경 변수 폴백 저장소는 제품이 없으므로 프로젝트 직접 연결만 본다.
+  const projectTasks = await syncLinkedProjectTasks(targets.source === "env" ? [] : repositories);
   const syncRun = await insertIntegrationSyncRun({
     provider: "github",
     connectionId: connection.connection?.id || null,
@@ -524,6 +603,7 @@ export async function syncGitHubRepositories() {
       summaries,
       failures,
       projectUpdateWrites,
+      projectTasks,
     },
     errorMessage: failures.length ? `${failures.length} repository sync failures` : null,
   });
@@ -534,6 +614,7 @@ export async function syncGitHubRepositories() {
     source: targets.source,
     repositories: summaries,
     failures,
+    projectTasks,
     persistence: {
       connection,
       syncRun,

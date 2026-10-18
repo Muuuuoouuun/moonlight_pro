@@ -63,6 +63,27 @@ function workMeta(input: Record<string, unknown>): { ok: true; meta: Record<stri
   }
   return { ok: true, meta };
 }
+// 프로젝트 ↔ GitHub 저장소(제품 렌즈 §5.3, 2026-10-18 운영자 결정: 열린 PR을 이 프로젝트의 할 일로 가져온다).
+// "owner/repo" 또는 github.com URL을 받는다. null·""는 연결 해제다.
+const GITHUB_REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/;
+
+export function normalizeGitHubRepo(value: unknown) {
+  if (typeof value !== "string") return "";
+  return value.trim()
+    .replace(/^https?:\/\/(?:www\.)?github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "");
+}
+
+function githubRepoMeta(input: Record<string, unknown>): { ok: true; github: { repo: string } | null } | { ok: false; reason: string } {
+  const raw = input.githubRepo ?? input.github_repo;
+  if (raw === null || raw === "") return { ok: true, github: null };
+  const repo = normalizeGitHubRepo(raw);
+  if (!repo) return { ok: true, github: null };
+  if (!GITHUB_REPO.test(repo)) return { ok: false, reason: "invalid-github-repo" };
+  return { ok: true, github: { repo } };
+}
+
 // PMS container (brand) taxonomy — mirrors the Hub 2026-07-15 spec §4.1.
 const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
 const BRAND_ORG_SCOPES = new Set(["classin", "personal"]);
@@ -229,6 +250,8 @@ export function normalizePmsCommand(
     const initialProgress = hasInitialProgress ? progress(input.progress) : null;
     const work = workMeta(input);
     if (!work.ok) return { ok: false, reason: work.reason };
+    const github = has(input, "githubRepo") || has(input, "github_repo") ? githubRepoMeta(input) : { ok: true as const, github: null };
+    if (!github.ok) return { ok: false, reason: github.reason };
 
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!areaId) return { ok: false, reason: "invalid-area-id" };
@@ -271,6 +294,7 @@ export function normalizePmsCommand(
           org_scope: orgScope,
           ...(dealId.value ? { origin_deal_id: dealId.value } : {}),
           ...Object.fromEntries(Object.entries(work.meta).filter(([, value]) => value !== null)),
+          ...(github.github ? { github: github.github } : {}),
           ...(delivery ? { delivery: { ...delivery, originalDueAt: dueAt.value, history: [] } } : {}),
         },
       },
@@ -515,6 +539,12 @@ export function normalizePmsCommand(
       const work = workMeta(input);
       if (!work.ok) return { ok: false, reason: work.reason };
       patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), ...work.meta };
+    }
+    // GitHub 저장소 연결 — 서비스가 현재 meta와 병합하므로 다른 meta 키는 보존된다.
+    if (has(input, "githubRepo") || has(input, "github_repo")) {
+      const github = githubRepoMeta(input);
+      if (!github.ok) return { ok: false, reason: github.reason };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), github: github.github };
     }
     if (has(input, "delivery")) {
       const delivery = parseDelivery(input.delivery);

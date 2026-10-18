@@ -20,7 +20,7 @@ import {
   type SupabaseWriteResult,
 } from "@com-moon/supabase-rest";
 
-export { inFilter } from "@com-moon/supabase-rest";
+export { inFilter, inFilterQuoted } from "@com-moon/supabase-rest";
 
 export function fetchSupabaseRowsDetailed(
   table: string,

@@ -369,6 +369,17 @@ function dateInputValue(value) {
   return value ? String(value).slice(0, 10) : "";
 }
 
+// Engine pms-command.ts의 GITHUB_REPO와 같은 형식. "owner/repo"나 github.com URL을 받는다.
+const GITHUB_REPO_INPUT = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/;
+
+export function isValidGitHubRepoInput(value) {
+  const repo = String(value ?? "").trim()
+    .replace(/^https?:\/\/(?:www\.)?github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "");
+  return repo === "" || GITHUB_REPO_INPUT.test(repo);
+}
+
 export function buildProjectEditDraft(project = {}) {
   return {
     kind: "project",
@@ -387,6 +398,7 @@ export function buildProjectEditDraft(project = {}) {
     blocker: project.delivery?.blocker || "",
     priority: project.priority || "medium",
     genre: project.genre || "",
+    githubRepo: project.githubRepo || "",
     nextAction: project.projectNextAction ?? "",
     dueAt: dateInputValue(project.dueAt),
     updatedAt: project.updatedAt || null,
@@ -404,9 +416,12 @@ export function rebaseProjectEditSource(source = {}, current = {}) {
   // genre lives in meta on raw rows; only carry the key when either side knows it.
   const genre = currentProjectValue(current, ["genre"],
     current.meta && typeof current.meta === "object" ? current.meta.genre ?? null : source.genre);
+  const githubRepo = currentProjectValue(current, ["githubRepo"],
+    current.meta && typeof current.meta === "object" ? current.meta.github?.repo ?? null : source.githubRepo);
   return {
     ...source,
     ...(genre !== undefined ? { genre } : {}),
+    ...(githubRepo !== undefined ? { githubRepo } : {}),
     id: currentProjectValue(current, ["id"], source.id),
     name: currentProjectValue(current, ["name", "title"], source.name),
     brand: currentProjectValue(current, ["brand"], source.brand),
@@ -440,10 +455,12 @@ export function buildProjectPatch(source = {}, draft = {}) {
   const patch = { id: source.id };
   if (source.updatedAt) patch.expectedUpdatedAt = source.updatedAt;
 
-  const fields = ["title", "areaId", "brandId", "summary", "status", "priority", "genre", "nextAction", "dueAt"];
+  const fields = ["title", "areaId", "brandId", "summary", "status", "priority", "genre", "githubRepo", "nextAction", "dueAt"];
   fields.forEach((field) => {
     if (field === "areaId" && !draft.areaId) return;
-    const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");
+    const next = field === "dueAt" ? dateInputValue(draft[field])
+      : field === "githubRepo" ? String(draft[field] ?? "").trim()
+        : (draft[field] ?? "");
     if (next !== original[field]) patch[field] = next;
   });
   if (draft.entityKey !== undefined && draft.entityKey !== original.entityKey) {
