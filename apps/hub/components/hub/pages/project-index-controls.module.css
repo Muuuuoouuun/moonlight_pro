@@ -1,5 +1,5 @@
 .row { position: relative; user-select: none; -webkit-user-select: none; transition: transform var(--dur-panel) var(--ease-hub), box-shadow var(--dur-panel) var(--ease-hub), background var(--dur-hover) var(--ease-hub); }
-.row[data-selected="true"] { box-shadow: inset 2.5px 0 0 var(--accent); background: var(--surface-2); }
+.row[data-selected="true"] { box-shadow: inset 1px 0 0 var(--accent); background: var(--surface-2); }
 .row :global(button.hub-project-portfolio-index-row) { padding-right: 38px; cursor: grab; }
 /* The lifted row follows the pointer 1:1 (no transform transition) and floats above the
    rows sliding aside for it. */

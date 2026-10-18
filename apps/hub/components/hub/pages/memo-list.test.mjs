@@ -86,3 +86,14 @@ test('compact styles retain existing 44px selection hitboxes and 16px mobile ana
   assert.match(css, /\.memo-list-header__left \.hub-checkbox::before\s*\{[^}]*inset:\s*-13px/);
   assert.match(css, /\.memo-list-header__actions \.hub-input\s*\{[^}]*font-size:\s*16px;[^}]*min-height:\s*44px/);
 });
+
+test('memo surface keeps DESIGN.md rails, title weight and Button height without !important', () => {
+  // §8.1 상태 레일은 1px, §11 페이지 제목은 20px/500, Button 인라인 높이는 min-height로 맞춘다.
+  assert.match(css, /\.memos-header h2\s*\{[^}]*font-size:\s*20px;[^}]*font-weight:\s*500/);
+  assert.match(css, /\.memo-list-header--active\s*\{[^}]*inset 1px 0 0 var\(--moon-300\)/);
+  assert.match(css, /\.memo-list-item\[data-selected="true"\]\s*\{[^}]*background:\s*var\(--accent-soft\);[^}]*inset 1px 0 0 var\(--moon-300\)/);
+  assert.match(css, /\.memo-search-bar \.hub-btn\s*\{\s*min-height:\s*36px/);
+  assert.doesNotMatch(css, /inset\s+(?:[2-9]|1\.\d)\S*px\s+0\s+0/);
+  assert.doesNotMatch(css, /height:\s*\d+px\s*!important/);
+  assert.doesNotMatch(css, /oklch\(/);
+});
