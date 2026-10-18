@@ -36,7 +36,7 @@ async function main() {
   });
   assert.equal(files.find(file => file.name === 'win-unpacked/Moonlight.exe').peMachine, 'x64');
   const archive = path.join(dist, 'win-unpacked/resources/app.asar');
-  const read = name => asar.extractFile(archive, name);
+  const read = name => asar.extractFile(archive, path.normalize(name));
   assert.equal(JSON.parse(read('package.json')).version, version);
   const build = JSON.parse(read('build-info.json'));
   assert.equal(build.revision, revision);
