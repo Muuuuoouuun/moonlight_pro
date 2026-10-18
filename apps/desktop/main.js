@@ -35,6 +35,7 @@ const {
 const { buildAppMenuTemplate, buildDockMenuTemplate, loginItemMenuItem } = require('./menu-template');
 const { installPetRuntime } = require('./pet-runtime');
 const { startHubSessionBridge } = require('./hub-session-bridge');
+const { readBuildInfo } = require('./build-info');
 const { startNativeSessionBridge } = require('./native-session-bridge');
 let nativeSessionBridge;
 
@@ -249,6 +250,16 @@ function loadHub() {
   const hubUrl = currentHubUrl();
   if (!hubUrl) return showSettings();
   return win.loadURL(dashboardUrl(hubUrl)).catch(() => {});
+}
+
+async function refreshHub() {
+  const hubUrl = currentHubUrl();
+  if (!hubUrl) return showSettings();
+  showWindow();
+  // Only cached network resources; operator cookies and local drafts survive.
+  await session.defaultSession.clearCache();
+  if (isSameOrigin(win.webContents.getURL(), hubUrl)) win.webContents.reloadIgnoringCache();
+  else await loadHub();
 }
 
 function showSettings(query = {}) {
@@ -552,6 +563,7 @@ function refreshMenus() {
   const actions = {
     quickCapture,
     showSettings: () => showSettings(),
+    refreshHub: () => refreshHub().catch(() => showSettings({ reason: '새로고침 실패' })),
     quit,
     showWindow,
     goBack: () => win && !win.isDestroyed() && win.webContents.navigationHistory.goBack(),
@@ -603,7 +615,8 @@ function fromSettingsPage(event) {
 function registerIpc() {
   ipcMain.handle('moonlight:get-settings', (event) => {
     fromSettingsPage(event);
-    return { hubUrl: currentHubUrl(), defaultHubUrl: resolveHubUrl('', appConfig.hubUrl) };
+    return { hubUrl: currentHubUrl(), defaultHubUrl: resolveHubUrl('', appConfig.hubUrl),
+      build: readBuildInfo(), addressSource: readSettings().hubUrl ? '사용자 설정' : '앱 기본값' };
   });
   ipcMain.handle('moonlight:set-settings', (event, patch) => {
     fromSettingsPage(event);

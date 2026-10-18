@@ -8,6 +8,8 @@
     'pet:hub-session', 'pet:tasks-list', 'pet:tasks-add', 'pet:tasks-toggle', 'pet:journal-read', 'pet:journal-save',
     'pet:calendar-week', 'pet:notices-list', 'pet:notices-read', 'pet:notices-hide', 'pet:notices-read-all',
     'pet:chat-send', 'pet:chat-cancel', 'pet:chat-session', 'pet:council-handoff',
+    'pet:office-inbox', 'pet:office-receipt', 'pet:office-meetings', 'pet:office-meeting',
+    'pet:office-create', 'pet:office-send',
   ]);
   const api = window.moonlightPet && typeof window.moonlightPet.invoke === 'function' ? window.moonlightPet : null;
 

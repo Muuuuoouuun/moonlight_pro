@@ -24,6 +24,7 @@ const { randomUUID } = require('node:crypto');
 const { LIMITS, CHARACTERS } = require('../shared/contract');
 const { canonicalOrigin, createHubClient, electronCookieBridge, fail, okEnvelope, errorEnvelope, HubError } = require('./pet-hub-client');
 const { createHubApi, isUuid } = require('./pet-hub-api');
+const { createOfficeApi } = require('./pet-office-api');
 const { createPending } = require('./pet-pending');
 const { createActivity, badgeLabel } = require('./pet-activity');
 const { createChat } = require('./pet-chat');
@@ -34,6 +35,7 @@ const HUB_STATUSES = Object.freeze(['connected', 'unauthorized', 'not-configured
 const CHANNEL_METHODS = Object.freeze([
   'session', 'tasksList', 'tasksAdd', 'tasksToggle', 'journalRead', 'journalSave', 'calendarWeek',
   'noticesList', 'noticesRead', 'noticesHide', 'noticesReadAll', 'chatSend', 'chatCancel', 'chatSession', 'councilHandoff',
+  'officeInbox', 'officeReceipt', 'officeMeetings', 'officeMeeting', 'officeCreate', 'officeSend',
 ]);
 // 이 상태에서는 폴링이 알림 원천(문의·일정)을 읽지 않고 세션만 가볍게 확인한다 — 401 을 60초마다 쌓지 않는다.
 const PROBE_ONLY_STATUSES = Object.freeze(['unauthorized', 'not-configured']);
@@ -197,10 +199,12 @@ function createPetHub(input = {}) {
     onReply: (payload) => emit('pet:chat-reply', payload),
   });
 
-  function connect(originInput) {
+  function connect(originInput, force = false) {
     const origin = canonicalOrigin(originInput);
-    if (conn && origin === conn.origin) return conn.ready;
+    if (conn && origin === conn.origin && !force) return conn.ready;
+    const previous = conn;
     conn = null;
+    pollInFlight = null;
     if (!origin) {
       chat.configure({ service: null, origin: null });
       const ready = activity.configure({ service: null, origin: null });
@@ -212,8 +216,8 @@ function createPetHub(input = {}) {
       setTimeout: options.setTimeout, clearTimeout: options.clearTimeout,
     });
     const api = createHubApi(client);
-    const pending = createPending({ api, store, origin, now: clock });
-    const next = { origin, client, api, pending, ready: null };
+    const pending = previous?.origin === origin ? previous.pending : createPending({ api, store, origin, now: clock });
+    const next = { origin, client, api, office: createOfficeApi(client), pending, ready: null };
     chat.configure({ service: api, origin });
     next.ready = Promise.all([pending.load(), activity.configure({ service: api, origin })]).then(() => undefined);
     conn = next;
@@ -256,6 +260,12 @@ function createPetHub(input = {}) {
 
   // ── 채널 ─────────────────────────────────────────────────────────────
   const hub = {
+    officeInbox(payload) { return run(async c => ({ data: await c.office.inbox(payloadOf(payload)) })); },
+    officeReceipt(payload) { return run(async c => ({ data: await c.office.receipt(payloadOf(payload)) })); },
+    officeMeetings(payload) { return run(async c => ({ data: await c.office.meetings(payloadOf(payload)) })); },
+    officeMeeting(payload) { return run(async c => ({ data: await c.office.detail(payloadOf(payload)) })); },
+    officeCreate(payload) { return run(async c => ({ data: await c.office.create(payloadOf(payload)) })); },
+    officeSend(payload) { return run(async c => ({ data: await c.office.send(payloadOf(payload)) })); },
     // 'pet:hub-session' → { status:'authenticated'|'anonymous', configured, reason }
     session() {
       return run(async (c) => ({ data: await c.client.sessionStatus() }),
@@ -447,7 +457,7 @@ function createPetHub(input = {}) {
       if (!current) return { skipped: true };
       await current.ready;
       if (pollInFlight) return pollInFlight;
-      pollInFlight = (async () => {
+      const flight = (async () => {
         if (PROBE_ONLY_STATUSES.includes(hubStatus)) {
           await hub.session();
           if (current !== conn || hubStatus !== 'connected') return { skipped: true, probed: true, status: hubStatus };
@@ -459,10 +469,11 @@ function createPetHub(input = {}) {
         }
         return result;
       })();
+      pollInFlight = flight;
       try {
-        return await pollInFlight;
+        return await flight;
       } finally {
-        pollInFlight = null;
+        if (pollInFlight === flight) pollInFlight = null;
       }
     },
     startPolling(intervalMs = LIMITS.pollMs) {
@@ -528,6 +539,13 @@ function createPetHub(input = {}) {
         .then(() => (conn ? hub.tick() : null))
         .catch(() => {})
         .then(() => { emit('pet:hub-status', { status: hubStatus }); });
+    },
+    async sessionChanged() {
+      // New connection identity rejects responses started with the old cookie.
+      // Pending writes keep their original IDs and are never replayed here.
+      await connect(conn?.origin || options.origin, true);
+      await hub.session();
+      if (hubStatus === 'connected') await hub.tick();
     },
     dispose() {
       hub.stopPolling();

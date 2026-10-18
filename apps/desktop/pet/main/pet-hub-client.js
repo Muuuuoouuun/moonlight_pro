@@ -91,7 +91,8 @@ function resolveApiUrl(origin, path) {
 
 // Office chat POST(정확한 경로)만 긴 예산을 쓴다. 쿼리·접미사·인코딩 변형은 일반 예산.
 function timeoutsFor(path, method = 'GET') {
-  const exactChat = path === OFFICE_CHAT_PATH && String(method).toUpperCase() === 'POST';
+  const exactChat = (path === OFFICE_CHAT_PATH || /^\/api\/hub\/office\/meetings\/[\da-f-]{36}\/turns$/i.test(path))
+    && String(method).toUpperCase() === 'POST';
   return exactChat
     ? { request: LIMITS.chatTimeoutMs, total: LIMITS.chatTotalTimeoutMs }
     : { request: LIMITS.requestTimeoutMs, total: LIMITS.totalTimeoutMs };

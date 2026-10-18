@@ -20,7 +20,7 @@ const PERCH_INSET_RIGHT = 20;
 const GLASS_RADIUS = 26; // Mac 값 — Acrylic 창은 시스템 8px가 되고, CSS 레이어(중앙 음영·림)는 이 값을 참고만 한다
 const PANEL_SIZES = Object.freeze({
   // [width, height] — Mac 빠른 패널 크기(여백 포함). widget 모드는 +PERCH_STRIP(메모는 이미 포함).
-  tasks: [336, 504], calendar: [336, 484], memo: [520, 440], office: [424, 296],
+  tasks: [336, 504], calendar: [336, 484], memo: [520, 440], office: [460, 620],
   council: [460, 580], notifications: [360, 480], focus: [380, 320],
 });
 const MEMO_ALREADY_HAS_STRIP = true;
@@ -110,6 +110,8 @@ const PET_INVOKE = Object.freeze([
   'pet:journal-read', 'pet:journal-save', 'pet:calendar-week',
   'pet:notices-list', 'pet:notices-read', 'pet:notices-hide', 'pet:notices-read-all',
   'pet:chat-send', 'pet:chat-cancel', 'pet:chat-session', 'pet:council-handoff',
+  'pet:office-inbox', 'pet:office-receipt', 'pet:office-meetings', 'pet:office-meeting',
+  'pet:office-create', 'pet:office-send',
   'pet:focus-start', 'pet:focus-stop', 'pet:focus-state',
 ]);
 const PET_EVENTS = Object.freeze(['pet:state-changed', 'pet:wash', 'pet:notice', 'pet:badge', 'pet:chat-reply', 'pet:focus-tick', 'pet:hub-status']);

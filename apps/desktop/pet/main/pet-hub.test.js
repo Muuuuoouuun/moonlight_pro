@@ -103,8 +103,29 @@ function hubFor(double, extra = {}) {
 
 const channelMethod = (channel) => channel.replace(/^pet:/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
+test('a response started with the old cookie cannot reconnect the pet after logout', async () => {
+  let loggedIn = true, release, started;
+  const began = new Promise(resolve => { started = resolve; });
+  const hub = createPetHub({ origin: 'https://hub.example.test', cookieHeader: async () => loggedIn ? 'session=valid' : '',
+    fetch: async (url, init) => {
+      if (new URL(url).pathname === '/api/operator/session') return new Response(JSON.stringify({ status: loggedIn ? 'authenticated' : 'anonymous', configured: true }));
+      started();
+      return new Promise(resolve => { release = () => resolve(new Response(JSON.stringify({ status: 'live', tasks: [] }))); });
+    } });
+  await hub.session();
+  const oldRead = hub.tasksList();
+  await began;
+  loggedIn = false;
+  await hub.sessionChanged();
+  assert.equal(hub.status, 'unauthorized');
+  release();
+  assert.equal((await oldRead).error, 'stale-origin');
+  assert.equal(hub.status, 'unauthorized');
+  hub.dispose();
+});
+
 test('허브 채널은 모두 메서드로 있고, 봉투 kind 는 계약 목록 안', async () => {
-  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-)/.test(c));
+  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-|office-)/.test(c));
   const { hub } = hubFor({ origin: '', state: {} });
   for (const channel of hubChannels) {
     const method = channel === 'pet:hub-session' ? 'session' : channelMethod(channel);
@@ -751,7 +772,7 @@ test('셸 hubContext 로 만들고 invoke 로 부른다 — 쿠키·이벤트·�
 
 test('invoke 채널표: 계약의 허브 채널 전부가 메서드로 이어진다', () => {
   const { PET_INVOKE } = require('../shared/contract');
-  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-)/.test(c));
+  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-|office-)/.test(c));
   assert.deepEqual(hubChannels.map(hubChannelMethod).sort(), [...CHANNEL_METHODS].sort());
 });
 

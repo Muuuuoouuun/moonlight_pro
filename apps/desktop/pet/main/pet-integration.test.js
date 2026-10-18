@@ -89,6 +89,30 @@ test('허브 모델은 pet-hub 하나 — 셸 ctx.store 를 같이 쓰고(같은
   await until(() => pet.state().hubStatus === 'connected', 'connected after first poll');
 });
 
+test('Windows cookie change rechecks logout/login immediately without a polling interval', async t => {
+  const { pet, double } = await boot(t);
+  await until(() => pet.state().hubStatus === 'connected', 'initial session');
+  double.state.cookie = 'new-session';
+  await pet.sessionChanged();
+  assert.equal(pet.state().hubStatus, 'unauthorized');
+  double.state.cookie = 'com_moon_operator_session=operator-session';
+  await pet.sessionChanged();
+  assert.equal(pet.state().hubStatus, 'connected');
+  assert.ok(double.state.seen.filter(r => r.path === '/api/operator/session').length >= 2);
+  assert.ok(double.state.seen.every(r => r.method === 'GET'), 'session recovery must not create or replay writes');
+});
+
+test('Office command identity is flushed before a renderer can send; disk failure is explicit', async t => {
+  const { pet, call } = await boot(t);
+  const flush = pet.store.flush;
+  let flushed = false;
+  pet.store.flush = () => { flushed = true; return false; };
+  try {
+    assert.deepEqual(await call('pet:store-set', { key: 'petOffice.pending', value: { requestId: randomUUID() } }), { ok: false, reason: 'disk' });
+    assert.equal(flushed, true);
+  } finally { pet.store.flush = flush; }
+});
+
 test('할 일: 목록·추가·완료(updatedAt 낙관적 잠금)·낡은 완료는 conflict — 렌더러 뷰 모델이 그대로 읽는다', async (t) => {
   const { call, double } = await boot(t);
   const list = await call('pet:tasks-list', {});

@@ -32,7 +32,19 @@ if (params.get('failed')) {
   failure.hidden = false;
 }
 
-bridge.getSettings().then(({ hubUrl }) => {
+bridge.getSettings().then(({ hubUrl, defaultHubUrl, build, addressSource }) => {
+  document.getElementById('build-info').textContent = build
+    ? `Moonlight ${build.version} · ${build.revision}${build.modified ? ' · 수정된 소스' : ''}${build.builtAt ? ` · ${new Date(build.builtAt).toLocaleString()}` : ''}` : '';
+  const status = document.getElementById('address-status');
+  status.hidden = false;
+  status.textContent = hubUrl === defaultHubUrl ? `운영 허브 · ${addressSource}` : `앱 기본값과 다른 주소입니다. 현재 주소: ${hubUrl}`;
+  const useDefault = document.getElementById('use-default');
+  useDefault.disabled = !defaultHubUrl;
+  useDefault.addEventListener('click', () => {
+    input.value = defaultHubUrl;
+    clearError();
+    status.textContent = '기본 주소를 선택했습니다. 저장하면 이 주소로 연결합니다.';
+  });
   if (hubUrl) {
     input.value = hubUrl;
     back.hidden = false;
