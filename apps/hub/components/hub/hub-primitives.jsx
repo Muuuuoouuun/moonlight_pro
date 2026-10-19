@@ -56,11 +56,12 @@ export function Kbd({ children, style }) {
       alignItems: 'center', justifyContent: 'center',
       minWidth: 18, height: 18, padding: '0 5px',
       fontSize: 10.5, fontWeight: 500,
-      color: 'var(--moon-300)',
-      background: 'var(--surface-2)',
-      border: '1px solid var(--line)',
-      borderRadius: 4,
-      boxShadow: '0 1px 0 0 oklch(0 0 0 / 0.3)',
+      color: 'var(--fg-muted)',
+      // 5a(2026-10-19): 눌린 작은 pill — 솟은 키캡 대신 면에 파인 홈.
+      background: 'var(--tint)',
+      border: '1px solid transparent',
+      borderRadius: 'var(--fx-pill)',
+      boxShadow: 'var(--shadow-inset)',
       ...style,
     }}>{children}</kbd>
   );
@@ -73,7 +74,8 @@ export function Card({ children, style, pad = true, interactive = false, classNa
   return (
     <div {...props} className={cls} style={{
       background: 'var(--surface)',
-      ...(interactive ? {} : { border: '1px solid var(--line-soft)' }),
+      // 5a(2026-10-19): 카드 가장자리는 선이 아니라 위쪽 빛(--edge-hi) — 다크에선 거의 보이지 않는 1px.
+      ...(interactive ? {} : { border: '1px solid var(--edge-hi)' }),
       borderRadius: 'var(--r-lg)',
       boxShadow: 'var(--shadow-card)',
       padding: pad ? 'var(--card-pad)' : 0,
@@ -89,7 +91,7 @@ export function SectionTitle({ children, right, style, subtitle }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
       <div>
-        <h3 style={{ margin: 0, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</h3>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-label)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</h3>
         {subtitle && <div style={{ fontSize: 12, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
       </div>
       {right}
@@ -383,16 +385,17 @@ export function Divider({ style }) {
 
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
   return (
-    // 2026-10-19 첨부 스킨: 밑줄 탭 대신 회색 트랙 위의 pill — 고른 탭만 흰 면 + 그림자로 뜬다.
-    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'inline-flex', flexWrap: 'wrap', alignSelf: 'flex-start', gap: 2, padding: 3, borderRadius: 'var(--fx-pill)', background: 'var(--surface-3)', ...style }}>
+    // 2026-10-19 시안 5a: 밑줄 탭 대신 옅은 트랙 위의 pill — 고른 탭만 잉크(다크에선 밝은 은색)로 반전한다.
+    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'inline-flex', flexWrap: 'wrap', alignSelf: 'flex-start', gap: 2, padding: 3, borderRadius: 'var(--fx-pill)', background: 'var(--tint)', ...style }}>
       {tabs.map(t => {
         const isActive = t.key === active;
         return (
           <button key={t.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
             padding: '6px 14px', fontSize: 12.5, fontWeight: 500, borderRadius: 'var(--fx-pill)',
-            color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
-            background: isActive ? 'var(--surface)' : 'transparent',
-            boxShadow: isActive ? 'var(--shadow-card)' : 'none',
+            color: isActive ? 'var(--ink-fg)' : 'var(--fg-muted)',
+            background: isActive ? 'var(--ink)' : 'transparent',
+            backgroundImage: isActive ? 'var(--ink-gradient)' : 'none',
+            boxShadow: isActive ? 'var(--shadow-ink)' : 'none',
             transition: 'color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub)',
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>

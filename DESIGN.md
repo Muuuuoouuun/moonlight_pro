@@ -64,7 +64,7 @@ Bloomberg (command-deck rhythm: status / count / next action).
 **Do not reintroduce:**
 - Warm gold / amber / champagne accents
 - Jewel tones or Web3 metallic sheen
-- Colored radial gradients as backgrounds
+- Colored radial gradients as backgrounds (one operator exception: the 5a page glow `--bg-glow`, §15 2026-10-19)
 - Bright blue, green, or purple as brand accents
 - Dark mode produced by inverting a light theme (hub is dark-native)
 
@@ -88,17 +88,25 @@ overrides it.
 ```css
 .hub-app,
 .hub-app[data-theme="dark"] {
-  /* Surfaces — near-neutral void stack (hue 265, operator skin 2026-10-19) */
-  --bg:            oklch(0.155 0.004 265);
-  --surface:       oklch(0.195 0.005 265);
-  --surface-2:     oklch(0.225 0.006 265);
-  --surface-3:     oklch(0.26 0.007 265);
-  --elevated:      oklch(0.285 0.008 265);
+  /* Surfaces — 8a dark (operator mockup 5a/8a, 2026-10-19): panels float over a blue-lit page */
+  --bg:            oklch(0.17 0.008 250);
+  --bg-glow:       radial-gradient(120% 80% at 85% -10%, oklch(0.26 0.035 255) 0%, oklch(0.19 0.012 252) 45%, oklch(0.17 0.008 250) 100%);
+  --surface:       oklch(0.235 0.011 252);
+  --surface-2:     oklch(0.255 0.012 252);
+  --surface-3:     oklch(0.285 0.012 252);
+  --elevated:      oklch(0.30 0.012 252);
+  --neu-face:      oklch(0.215 0.01 255);   /* raised chrome: sidebar, search, user card */
+  --edge-hi:       oklch(1 0 0 / 0.06);     /* panel/card 1px edge light */
+  --tint:          oklch(1 0 0 / 0.065);    /* tracks, ghost hover */
+  --field-face:    oklch(0.27 0.012 252);
+  --ink:           oklch(0.92 0.006 250);   /* current item · primary · selected segment — bright in dark */
+  --ink-fg:        oklch(0.17 0.008 250);
+  --ink-gradient:  linear-gradient(180deg, oklch(0.94 0.004 250), oklch(0.895 0.006 250));
 
-  /* Hairlines — opaque since 2026-10-19 */
-  --line:          oklch(0.32 0.007 265);
-  --line-soft:     oklch(0.27 0.006 265);
-  --line-strong:   oklch(0.42 0.008 265);
+  /* Hairlines — opaque */
+  --line:          oklch(0.33 0.010 252);
+  --line-soft:     oklch(0.29 0.010 252);
+  --line-strong:   oklch(0.43 0.010 252);
   --line-control:  oklch(0.50 0.008 250);   /* input · checkbox edge, 3:1 (2026-10-06) */
 
   /* Moonstone accent stack (cool blue-silver) */
@@ -112,9 +120,9 @@ overrides it.
   --moon-700:      oklch(0.38 0.008 250);
 
   /* Text */
-  --fg:            var(--moon-100);
+  --fg:            oklch(0.94 0.004 250);
   /* Not the moon ramp since 2026-10-06 — the ramp gave dim 3.7–4.3:1 and faint 2.4–3.0:1 (§15) */
-  --fg-muted:      oklch(0.72 0.009 250);
+  --fg-muted:      oklch(0.76 0.008 250);
   --fg-dim:        oklch(0.65 0.010 250);
   --fg-faint:      oklch(0.60 0.009 250);
 
@@ -130,20 +138,26 @@ overrides it.
 }
 
 .hub-app[data-theme="light"] {
-  /* Grey page, white cards, depth from shadow (operator skin 2026-10-19) */
-  --bg:         oklch(0.965 0.0015 265);
-  --surface:    oklch(1 0 0);
-  --surface-2:  oklch(0.982 0.0015 265);
-  --surface-3:  oklch(0.955 0.002 265);
+  /* 5a light: pale page with a blue glow top-right, near-white panels, ink (near-black) current item */
+  --bg:         oklch(0.982 0.004 250);
+  --bg-glow:    radial-gradient(120% 80% at 85% -10%, oklch(0.93 0.03 250) 0%, oklch(0.975 0.006 250) 45%, oklch(0.985 0.003 250) 100%);
+  --surface:    oklch(0.995 0.002 250);
+  --surface-2:  oklch(0.972 0.004 252);
+  --surface-3:  oklch(0.952 0.006 255);
   --elevated:   oklch(1 0 0);
-  --line:       oklch(0.90 0.002 265);
-  --line-soft:  oklch(0.945 0.0015 265);
-  --line-strong: oklch(0.82 0.003 265);
-  /* Text is set with literals here, not through the moon ramp — kept at AA, not the skin's lighter greys */
-  --fg:         oklch(0.20 0.004 265);
-  --fg-muted:   oklch(0.42 0.004 265);
-  --fg-dim:     oklch(0.47 0.004 265);
-  --fg-faint:   oklch(0.52 0.004 265);
+  --neu-face:   oklch(0.955 0.006 255);
+  --edge-hi:    oklch(1 0 0 / 0.9);
+  --tint:       oklch(0.20 0.008 250 / 0.05);
+  --ink:        oklch(0.20 0.008 250);
+  --ink-fg:     oklch(0.985 0.003 250);
+  --line:       oklch(0.89 0.005 252);
+  --line-soft:  oklch(0.93 0.004 252);
+  --line-strong: oklch(0.80 0.006 252);
+  /* Text is set with literals here, not through the moon ramp — kept at AA, not the mockup's lighter greys */
+  --fg:         oklch(0.20 0.008 250);
+  --fg-muted:   oklch(0.42 0.008 250);
+  --fg-dim:     oklch(0.47 0.008 250);
+  --fg-faint:   oklch(0.52 0.007 250);
   --line-control: oklch(0.66 0.007 250);
   /* The moon ramp runs the other way (--moon-50 ≈ L 0.22 … --moon-700 ≈ L 0.88), so
      "--moon-200 fill" stays high-contrast against the surface in both themes.
@@ -159,13 +173,14 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
   (compact banners only, never full cards or rows).
 - Layering: `--z-quick-memo: 60`, `--z-project-detail: 61`, `--z-navigation-overlay: 64`, `--z-navigation: 65`,
   `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100` (defined once on the base block).
-- Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-lift`, `--shadow-pop` — soft drop shadows from the operator skin
-  (2026-10-19). `--shadow-card` carries lift only (no `0 0 0 1px` ring) — every card already draws its own 1px border,
+- Shadows (5a soft depth, 2026-10-19): `--shadow-soft`, `--shadow-card` (panels), `--shadow-lift` (hover lift),
+  `--shadow-panel` (the floating sidebar), `--shadow-raised` (secondary buttons, search and user pills),
+  `--shadow-inset` (tracks, fields, `Kbd`), `--shadow-ink` (ink pills), `--shadow-pop`. `--shadow-card` carries lift only (no `0 0 0 1px` ring) — every card already draws its own 1px border,
   and the ring made it read as 2px (§15 2026-10-06). `--shadow-lift` is the hover lift of `.hub-card-link` and
   non-ghost buttons; Futura's `--fx-shadow`/`--fx-shadow-lift` are now aliases of `--shadow-card`/`--shadow-lift`.
 - Control edge: `--line-control` / `--line-control-hover` — resting and hover border of text inputs (`.hub-input`,
   `.hub-field`) and the unchecked `Checkbox`, 3:1 against the surface. Decorative dividers keep `--line*`.
-- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7). Call sites use `--r` for the middle step; the undefined `--r-md` references were removed (§15 2026-09-24).
+- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 20px`, `--r-xl: 24px` (§7; `--r-lg`/`--r-xl` were 14/20 before 5a). Call sites use `--r` for the middle step; the undefined `--r-md` references were removed (§15 2026-09-24).
 - Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--dur-celebrate`, `--dur-gauge`, `--ease-hub`, `--ease-gauge`, `--stagger-step` (§9).
 - Selected project gauge only (§5.2 exception): `--project-gauge-0/25/50/75/100` (hue 255 → 218 → 190 → 280 → 325,
   i.e. blue → cyan → teal → violet → magenta), `--project-gauge-spark`, `--project-gauge-glow`, `--project-gauge-tip-line`.
@@ -183,13 +198,15 @@ type `--fx-hero: 44px`, `--fx-hero-weight: 300`, `--fx-title: 27px`, `--fx-stat:
 
 - **Accent anchor:** `--accent` is the theme-stable Moonstone `#5274a8` alias. Accent means current position, selection,
   focus, or the single primary action. It never means a category.
-- **Primary CTA:** `--fg` fill and border with `--bg` text plus `--shadow-card` (`.hub-btn--primary`; hover moves to
-  `--moon-50`) — near-black in light, bright silver in dark (operator skin 2026-10-19, replacing the `--moon-200` fill).
+- **Primary CTA:** the ink pill — `--ink` fill with `--ink-gradient`, `--ink-fg` text, `--shadow-ink` (`.hub-btn--primary`).
+  Near-black in light, bright silver in dark (mockup 5a/8a, 2026-10-19). Hover lifts 1px, press sinks slightly. The same ink
+  marks the current sidebar item, the selected segment/tab and the selected top-bar tab.
   Keep one visually dominant primary CTA per view; global and page-level create actions must not compete.
 - **Surface order:** `--bg` → `--surface` → `--surface-2` → `--surface-3` for nested elevation.
 - **Borders:** always `1px`. Never thicken. Use `--line-soft` for hairlines, `--line` for dividers,
   `--line-strong` only for pressed/emphasized states.
-- **Gradients:** reserved for the brand mark and the moonstone CTA rim. Never fill a hero, card,
+- **Gradients:** reserved for the brand mark, the ink pills (`--ink-gradient`) and the 5a page glow (`--bg-glow`) — operator
+  mockup 2026-10-19. Never fill a hero, card,
   or section background with a colored gradient. The Moonlight symbol uses a cool silver gradient in
   `public/icon.svg` (§15 2026-09-24); the primary rim remains an inset shadow and is no longer overridden
   by Futura's generic button shadow. The gauge track below is the only other sanctioned colored gradient. Neutral utility
@@ -315,8 +332,11 @@ system serif. Do not introduce serif display type.
 - **Hybrid number rule.** Hero / display figures (KPI values, big metrics ≥ 18px) use `.stat` — SUIT **sans** with `tabular-nums lining-nums` and a touch of display tracking (`-0.015em`), for a premium, non-code read. Instrument data (IDs, timestamps, inline values, counts < 18px) uses `.mono` — bundled JetBrains Mono, `letter-spacing: 0`. Don't set large display numbers in mono; don't set IDs/timestamps in sans.
 - 데이터 숫자는 크기로 나눔: 큰 지표는 `.stat`(sans tabular), 인라인/계기 데이터는 `.mono`(JetBrains Mono) + `tabular-nums` (column-stable). 사인에 남는 소형 카운트는 `.num` 유틸.
 - 데이터 값의 최소 크기 12px — 10–11px은 라벨 / eyebrow 전용.
+- **Labels in Mono (2026-10-19, operator choice):** section eyebrows (`SectionTitle`, `.fx-eyebrow`), the top-bar section
+  label and small counts (`.num`) use `--font-label` = JetBrains Mono for Latin/digits with SUIT for Hangul (JetBrains Mono has
+  no Hangul; the plain mono stack fell to a system monospace). Body and titles stay SUIT; big `.stat` figures stay sans.
 - Section eyebrow comes from the `SectionTitle` primitive: an `<h3>` at 11px, uppercase, `letter-spacing: 0.12em`,
-  `color: var(--fg-dim)`, weight 500. Inside Futura pages `.fx-eyebrow` uses 11px / `0.14em` / 500. This file
+  `color: var(--fg-dim)`, weight 500, `--font-label`. Inside Futura pages `.fx-eyebrow` uses 11px / `0.14em` / 500. This file
   used to say `0.1em`, and many shell and page labels still do (`.hub-topbar__section`, `.daily-brief__card-head`,
   `.fx-triage-kind`, several inline labels) — that spread is drift. §8 makes the primitive the source of truth:
   reach for `SectionTitle` (or `.fx-eyebrow` in Futura scope) rather than restyling an eyebrow inline.
@@ -625,7 +645,7 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
   펼침/접힘 토글에는 `aria-expanded`.
 - `Checkbox`는 `label` prop으로 스크린리더 이름을 전달한다 (행 제목 등).
 - 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 크기는 2026-10-19
-  운영자 첨부 스킨부터 크고 얇은 디스플레이(`--hub-title-size` = `clamp(30px, 3.4vw, 42px)`, `--hub-title-weight` 300,
+  운영자 첨부 스킨부터 크고 얇은 디스플레이(`--hub-title-size` = `clamp(30px, 3.2vw, 40px)`, `--hub-title-weight` 200 — 시안 5a 값,
   자간 -0.035em)이고 20px/500을 대체한다. 공용 PageHeader 프리미티브는 없다: `className="hub-page-title"`(hub-futura.css)을
   쓰거나, 페이지 CSS의 제목 규칙이 같은 두 변수를 읽는다. 승인된 카브아웃은 아래 세 가지다.
   - Daily Brief 히어로(`오늘의 실행`): §6 Display 스케일 `clamp(26px, 3.2vw, 32px)`/700 — 첫 화면의 페이지 레벨 모먼트 1곳.
@@ -795,3 +815,4 @@ Build order when adding a new surface:
 | 2026-09-30 | 고객 기록을 **넓은 기록창**에서 쓴다. 그릇은 같은 Drawer이고 폭만 바뀐다. 고객 탭의 R · `연락 기록` · `했어요 · 기록` · `메모`는 480px 드로어를 `min(960px, calc(100% - 56px))`로 넓힌다. 오늘 연락의 `기록` · `e` · `N` · 기록 후보는 같은 넓은 창을 연다. 거래 독 · 첫 화면 · 에이전트는 compact 그대로다. 새 presentation · 라우트 · Futura 확장은 없고, Drawer에 선택 prop `bodyStyle` · `sheet="full"` · `headerAction`만 더했다(§8). **쓰기 칸**: 요약 한 줄(필수, 16px)과 늘 펼친 자세히(글쓰기 칸 16px · 1.8 · 16px 여백 · `--r-sm`, 10줄에서 40줄까지 자람). 어떻게 · 반응 · 다음 약속 · 언제 · 저장 줄로 된 아래 띠는 제자리에 있고 그 위만 스크롤된다. **읽기 칸**(`clamp(280px, 33.4%, 320px)`): 약속 · 제안 팁 이유 · 최근 기록 5줄. `연락 기록 \| 메모` 두 모드가 한 줄기를 쓰고, 연락은 원, 메모는 네모 + `메모 · 연락 아님`이다. 모양과 글자로만 나누고 색은 쓰지 않는다. **좁은 화면**: 900px 이하는 `쓰기 \| 이 고객` 탭, 600px 이하는 전체 높이 시트(저장은 머리, 키보드 위는 칩 줄). **저장 글자**: `초안 · 이 탭` → `기록 중 · 되돌리기` → `저장 중` → `저장됨 hh:mm`(`.mono`, 서버가 확인한 뒤에만). `일부 저장`은 반만 찬 원 표식이고 빨강이 아니다. 빨강은 실패 한 곳, 1px 위급 레일 + `저장 못 함`뿐이고, 글은 지우지 않는다. primary는 하나다(`저장`, 오늘 연락에서는 `저장하고 다음 ⌘↵`). 중단점은 900 · 600만 쓴다 | recommended | 운영자가 목업 v2와 권장 답(Q-CR1·2·3·5·6·8·11)을 검토한 뒤 "ㄱㄱ 이어서"(2026-09-30)라고 진행을 지시했다. 권장 답이므로 화면을 확인한 뒤 확정한다. 한 줄 기록용 compact 창에서 긴 미팅 기록을 쓰면 읽던 약속과 기록이 가려졌다. 메모를 쓰는 길은 셋이었고, 그중 `메모만`은 마지막 연락일을 바꿨다. 휴대폰에서는 키보드가 저장 버튼을 가렸다. 새 Drawer 종류(focus)나 고객 페이지 대신 폭만 바꾼 것은 ESC 층 · 포커스 가둠 · 바깥 클릭이 그대로 남고 §8의 "오버레이는 Drawer/EditDrawer뿐" 계약을 건드리지 않아서다. 오늘 연락 페이지 배치와 Futura 범위는 바뀌지 않는다. 초안 `이 기기`(Q-CR4) · AI 비교(Q-CR7) · RPC v2(Q-CR9) · 날짜 칩(Q-CR10) · 잇는 키는 미결이라 만들지 않았다. 상세와 알려진 빈틈은 `docs/superpowers/specs/2026-09-30-customer-record-wide-composer.md` |
 | 2026-10-19 | 프로젝트 `개요` 보기의 선택 프로젝트를 Projects B Focus 시안(운영자 첨부 `Projects Focus` 개선안 — "요약 한 줄 · 세부 프로젝트·항목·날짜")으로 다시 그린다. 오른쪽은 **한 장의 카드**(`--surface`, `--r-xl`, 1px `--line-soft`, `--shadow-card`): 소속 + 상태 배지 → 제목(30px/400) → **요약 한 줄**(D-day·마감일 │ 진척 N% + 가는 게이지 │ 항목 n/m, 막힘·기한 지남만 빨강) → **`다음` 띠**(`--surface-2`, 다음 걸음 + 그 걸음이 속한 작업 묶음 + 날짜·D-day + primary `처리 완료`, 다 처리했으면 `완료 검토`) → 할 일 목록. 다음 걸음은 `lib/project-next-step.js`가 고른다 — 적어 둔 다음 행동과 같은 제목의 열린 걸음 → 급한 항목 → 가장 이른 기한. 맞는 걸음이 없으면 글만 보이고 `할 일로 추가`. `처리 완료`는 기존 할 일·세부 체크 토글을 그대로 부르고, 저장 봉투가 ok일 때만 `처리함`이라고 말한다. 작업 묶음 행은 기간(가장 이른~늦은 날짜)·가는 명도 막대·처리 수를 보이고, 열린 세부 체크가 있는 첫 묶음은 처음 열 때 펼쳐 둔다. 세부 체크 날짜는 `M/D`, 7일 안은 `D-N`, 지난 것만 빨강 `D+N`. `먼저 처리`는 `다음` 띠가 이미 가리키는 항목을 빼고 남을 때만 보인다. 카드 밖에는 결과·완료 기준, 일정·업데이트, **같은 소속의 다른 프로젝트**(최대 4장, 진행 중인 것만)를 둔다. 왼쪽 목록은 바탕(`--bg`) 위의 행이고 선택한 프로젝트만 떠 있는 카드다. 둘째 줄은 `상태 · 할 일 n/m`과 오른쪽 짧은 기한(7일 안 D-N, 그 밖은 날짜)이며, 2.5px accent 레일과 행마다의 미니 진척 막대는 뺐다. 선택 프로젝트 게이지(2026-09-23 행)는 요약 줄 안 72px 트랙으로 줄여 눈금·끝 반짝임을 걷고 근거 글자는 `aria-valuetext`·툴팁으로 옮긴다(§5.2). **바뀌지 않는 것**: 페이지 머리와 보기 7개(감사 P0 #9), 목록·Board·Timeline 등 다른 보기, 저장 계약, Futura 페이지 텍스처 범위(§7) | confirmed(방향) · 세부 recommended | 운영자가 Claude Design 묶음(`Projects Main`·A·B·C·편집 시트·입력창)과 함께 B Focus 개선안을 보내며 "이런 느낌"으로 지시했다(2026-10-19). 현재 `개요`가 이미 같은 목록 + 상세 구조라 화면을 새로 만들지 않고 그 보기를 시안 쪽으로 옮겼다. 시안의 담당자(`담당 Council`)는 저장된 담당 정보가 없어 그리지 않았고, 완료된 작업 묶음은 기존처럼 `완료 n` 아래에 접힌다. 메인 시안의 `덩어리로 보기 ↔ 전체 보기`, 편집 시트, 입력창 4종은 이번 범위 밖이다 |
 | 2026-10-19 | **허브 전체 테마를 운영자 첨부 스킨(Claude Design 묶음 `styles/futura.css`·`primitives-futura.jsx`)으로 바꾼다.** 한 번에 모든 페이지: ① 토큰 — 면·선을 거의 무채색(hue 265)으로, 라이트는 회색 바탕(0.965) + 흰 카드 + 거의 안 보이는 불투명 선, 깊이는 부드러운 그림자(`--shadow-soft/card/lift/pop`, 새 `--shadow-lift`), Futura의 `--fx-shadow*`는 공용 그림자의 별칭. 밀도는 스킨 기본(행 40 · 간격 20 · 섹션 44 · 카드 26), 900px 이하는 이전 촘촘한 값. ② 컨트롤 — `Button`·`IconButton`·`SegmentedControl`·`Tabs`·탑바 탭이 pill(09-19 (b)의 렌더되지 않던 간극을 닫음), 세그먼트·탭은 회색 트랙 위에서 고른 칸만 흰 면 + 그림자, primary는 `--fg` 면 + `--bg` 글자(라이트 먹색·다크 은색), secondary·outline은 흰 면. ③ 페이지 제목 — 모든 페이지 h2가 `--hub-title-size`(30~42px)/300 디스플레이(§11 20px/500 대체, 오늘·OKR·Futura 44px 카브아웃 유지). ④ 탑바는 따로 칠한 흰 띠가 아니라 바탕과 이어지고 탭은 밑줄 대신 pill. **바꾸지 않은 것**: 글자 토큰은 스킨의 옅은 회색(가장 옅은 글자 약 2:1)이 아니라 AA 4.5:1을 지키는 기존 값(운영자 선택), 글꼴은 SUIT 유지(운영자 선택 — 시안의 Inter Tight에는 한글이 없다), 상태 색 문법(§5.3)·1px 선·모션 토큰·사이드바 구조·`.hub-futura` 페이지 텍스처 클래스(48px 여백·`fx-card`)의 적용 범위 | confirmed | 운영자 "디자인 테마 내가 첨부한 스타일로 갈거야"(2026-10-19) → 범위 `허브 전체 한 번에`, 대비 `느낌은 시안, 대비는 기준 유지`, 글꼴 `SUIT 유지`를 운영자가 직접 골랐다. 09-18부터 한 화면씩 넓혀 온 Futura 레이어를 허브 전체의 기본 테마로 올리는 결정이라 위 2026-09-18·09-19·09-24 행의 "다른 페이지로 넓히는 것은 별도 결정" 조건을 이 행이 푼다. 같은 날 프로젝트 `개요` 행의 "Futura 페이지 텍스처 범위 불변"도 이 행이 대체한다. 390px에서 넓은 간격이 입력 줄 버튼을 밀어내 휴대폰 폭만 이전 밀도로 되돌렸다 |
+| 2026-10-19 | **허브 테마를 시안 5a(라이트)·8a(다크)로 다시 맞춘다 — 패널·버튼에만 가벼운 입체감(뉴모피즘).** 같은 날 위 행의 첨부 스킨(회색 바탕·흰 카드)을 이 행이 대체한다. ① 바탕 — 오른쪽 위에서 번지는 옅은 푸른 빛(`--bg-glow`, 셸이 칠하고 콘텐츠 판·프로젝트 판은 투명). ② 사이드바 — 데스크톱에서 12px 띄운 판(22px 모서리, `--neu-face`, `--shadow-panel`), 현재 항목은 미끄러지는 **잉크 pill**(라이트 먹색·다크 은색 + `--shadow-ink`), 검색·사용자 카드는 솟은 pill, 범위 전환은 눌린 홈 위 잉크 칸. 900px 이하 드로어는 띄우지 않는다. ③ 컨트롤 — primary·고른 세그먼트·`Tabs`·탑바 탭이 같은 잉크, 보조 버튼은 흰 면 + `--shadow-raised`, 고스트 hover는 옅은 칠(`--tint`), 가리키면 1px 떠오르고 누르면 살짝 눌림(잉크 번짐·광륜은 쓰지 않음), 한 줄 입력·`Kbd`는 눌린 pill(`--shadow-inset`, 경계선은 3:1 `--line-control` 유지). ④ 카드 — 20px 모서리(`--r-lg`), 가장자리는 위쪽 빛 1px(`--edge-hi`), 패널 그림자. ⑤ 제목 40px/200. ⑥ 글꼴 — 라벨·작은 숫자·탑바 위치 라벨을 `--font-label`(JetBrains Mono + 한글 SUIT). **바꾸지 않은 것**: 글자 토큰의 AA 대비, 본문·제목 SUIT, 상태 색 문법(§5.3 — 시안의 색 채운 상태 칩은 옮기지 않음), 모션 토큰, 사이드바 구조·내비 | confirmed | 운영자가 Claude Design 묶음(`Moonlight Components` 1a~5a·8a, `Moonlight Screens` 6a~6f, 뉴모피즘 참고 이미지)과 함께 "뉴모피즘 스타일, 변경 스타일 적용 안된거 같은데" → "폰트까지 같이 바꾸기"를 지시하고, 시안 `5a 절제된 입체감`과 글꼴 `시안처럼 라벨·숫자에 Mono`를 직접 골랐다(2026-10-19). 화면 시안(6a~6f)도 5a 기준이다. 장식 그라데이션 금지(§4·§5.2)의 바탕 빛 예외는 운영자 시안이 정했다 |

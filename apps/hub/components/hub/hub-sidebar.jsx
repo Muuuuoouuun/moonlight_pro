@@ -280,7 +280,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
       // 면 색은 .hub-sidebar-futura(hub-futura.css)가 소유한다 — 인라인 background는 그 규칙을 이긴다.
       // 펼친 폭은 셸의 --hub-sidebar-w(경계 드래그로 조절, hub-app.jsx)가 소유한다.
       width: collapsed ? 56 : 'var(--hub-sidebar-w, 232px)', flexShrink: 0,
-      borderRight: '1px solid var(--line-soft)',
+      // 테두리·모서리·그림자는 .hub-sidebar-futura가 소유한다 — 데스크톱에선 떠 있는 판(5a), 모바일 드로어에선 오른쪽 선.
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
     }}>

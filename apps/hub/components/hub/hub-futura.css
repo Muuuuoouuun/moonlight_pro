@@ -28,8 +28,8 @@
   --fx-pill: 999px;
 
   /* 페이지 제목(§11) — 2026-10-19부터 모든 페이지의 h2가 이 값을 쓴다. */
-  --hub-title-size: clamp(30px, 3.4vw, 42px);
-  --hub-title-weight: 300;
+  --hub-title-size: clamp(30px, 3.2vw, 40px);
+  --hub-title-weight: 200;
 
   /* 입체감 — 보더 대신 2단 그림자가 면을 분리한다. §8.1의 1px 하이라인 계약은
      기존 표면에 그대로 남고, 이 레이어만 그림자를 쓴다. */
@@ -47,6 +47,7 @@
 }
 
 .hub-app .fx-eyebrow {
+  font-family: var(--font-label);
   font-size: var(--fx-eyebrow);
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -541,10 +542,21 @@
  * 규칙은 여기 것이 이긴다. 인라인 스타일만 이기지 못한다(§15 2026-09-15).
  */
 
-/* 사이드바 면 — 흰 pill이 떠 보이려면 바닥이 한 단계 내려가야 한다. */
+/* 사이드바 면 — 5a(2026-10-19): 바탕 위에 떠 있는 판. 데스크톱에서만 띄운다 — 900px 이하는
+   화면을 덮는 드로어라 떠 있을 자리가 없다. */
 .hub-app .hub-sidebar-futura {
-  background: var(--surface-2);
-  border-right-color: var(--line-soft);
+  background: var(--neu-face);
+  border-right: 1px solid var(--line-soft);
+}
+@media (min-width: 901px) {
+  .hub-app .hub-sidebar-futura {
+    height: calc(100% - 24px);
+    align-self: center;
+    margin: 12px 0 12px 12px;
+    border: 1px solid var(--edge-hi);
+    border-radius: 22px;
+    box-shadow: var(--shadow-panel);
+  }
 }
 
 /* 내비 행 — 아이콘 + 라벨, 색점 없음(§15 2026-09-23). 현재 항목만 흰 pill + 그림자로 뜬다. */
@@ -560,24 +572,17 @@
     box-shadow var(--dur-hover) var(--ease-hub);
 }
 
-.hub-app .hub-nav-item:hover { background: transparent; color: var(--fg); }
+.hub-app .hub-nav-item:hover { background: var(--tint); color: var(--fg); }
 
+/* 현재 항목 — 5a 잉크 pill(라이트 먹색 · 다크 은색, 2026-10-19). 다크의 "파인 홈" 문제(2026-10-06)는
+ * 잉크가 다크에서 밝게 반전하므로 따로 덮지 않아도 풀린다. */
 .hub-app .hub-nav-item[aria-current="page"] {
-  color: var(--fg);
+  color: var(--ink-fg);
   font-weight: 500;
-  background: var(--surface);
+  background: var(--ink);
+  background-image: var(--ink-gradient);
   border-left-color: transparent;
-  box-shadow: var(--fx-shadow);
-}
-
-/* 다크에서는 사이드바 면(--surface-2)보다 --surface가 어두워 "떠 있는 pill"이 파인 홈처럼 보였고,
- * 검정 위의 검정 그림자는 보이지 않았다(2026-10-06 감사, 대비 1.07:1). 다크에서만 한 단계 밝은 면 +
- * 1px 윤곽으로 같은 "떠 있다"를 말한다. 아래 indicator 규칙이 행의 pill을 걷는 순서는 그대로다. */
-.hub-app:not([data-theme="light"]) .hub-nav-item[aria-current="page"],
-.hub-app:not([data-theme="light"]) .hub-nav-indicator,
-.hub-app:not([data-theme="light"]) .fx-shell-card {
-  background: var(--surface-3);
-  box-shadow: 0 0 0 1px var(--line), var(--fx-shadow);
+  box-shadow: var(--shadow-ink);
 }
 
 /* 미끄러지는 현재 항목 pill — 영역당 하나(hub-sidebar.jsx useNavIndicator). JS가 자리를
@@ -592,9 +597,10 @@
   left: 0;
   z-index: 0;
   pointer-events: none;
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  box-shadow: var(--fx-shadow);
+  border-radius: var(--fx-pill);
+  background: var(--ink);
+  background-image: var(--ink-gradient);
+  box-shadow: var(--shadow-ink);
   opacity: 0;
   transition:
     transform var(--dur-enter) var(--ease-hub),
@@ -611,15 +617,22 @@
 
 .hub-app [data-indicator="on"] > .hub-nav-item[aria-current="page"] {
   background: transparent;
+  background-image: none;
   box-shadow: none;
 }
 
 
-/* 검색 · 사용자 카드 — 같은 "떠 있는 흰 면" 어휘 */
+/* 검색 · 사용자 카드 — 사이드바 면에서 솟은 pill(5a) */
 .hub-app .fx-shell-card {
-  background: var(--surface);
-  border-radius: var(--r);
-  box-shadow: var(--fx-shadow);
+  background: var(--neu-face);
+  border-radius: var(--fx-pill);
+  box-shadow: var(--shadow-raised);
+}
+
+/* 사이드바의 범위 전환 — 눌린 홈 위에 잉크 칸(5a) */
+.hub-app .hub-sidebar-scope .hub-seg {
+  background: var(--neu-face);
+  box-shadow: var(--shadow-inset);
 }
 
 /* ═══ 컴포넌트 질감 ═════════════════════════════════════════════
@@ -628,12 +641,14 @@
  */
 .hub-app .hub-btn:not(.hub-btn--primary) {
   border-radius: var(--fx-pill);
-  box-shadow: var(--fx-shadow);
+  box-shadow: var(--shadow-raised);
 }
 
 .hub-app .hub-btn--primary { border-radius: var(--fx-pill); }
 
-.hub-app .hub-btn:not(.hub-btn--primary):hover { box-shadow: var(--fx-shadow-lift); }
+/* 5a: 가리키면 1px 떠오르고, 누르면 살짝 눌린다(잉크 번짐·광륜은 쓰지 않는다). */
+.hub-app .hub-btn:hover:not(:disabled):not(.hub-btn--ghost) { transform: translateY(-1px); }
+.hub-app .hub-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
 
 .hub-app .hub-btn--ghost { box-shadow: none; }
 .hub-app .hub-btn--ghost:hover { box-shadow: none; }

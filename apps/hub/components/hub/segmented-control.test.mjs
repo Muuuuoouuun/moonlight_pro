@@ -26,15 +26,15 @@ test("SegmentedControl buttons carry the CSS class and keep no resting chrome in
 test("hub-tokens.css owns rest / active / hover for .hub-seg__btn with the hover token (DESIGN.md 8.1, 9)", () => {
   const rule = (sel) => { const m = css.match(new RegExp(`\\n\\.hub-app ${sel.replace(/[.[\]"=:()]/g, "\\$&")} \\{([^}]*)\\}`)); assert.ok(m, `missing rule: .hub-app ${sel}`); return m[1]; };
   const rest = rule(".hub-seg__btn");
-  assert.match(rest, /color:\s*var\(--fg-dim\)/);
+  assert.match(rest, /color:\s*var\(--fg-muted\)/);
   assert.match(rest, /background:\s*transparent/);
   assert.match(rest, /transition:[^;]*var\(--dur-hover\)/);
   assert.doesNotMatch(rest, /\d+ms/);
   const active = rule('.hub-seg__btn[aria-pressed="true"]');
-  // 2026-10-19 첨부 스킨: 회색 트랙 위에서 고른 칸만 흰 면 + 그림자로 뜬다.
-  assert.match(active, /background:\s*var\(--surface\)/);
-  assert.match(active, /box-shadow:\s*var\(--shadow-card\)/);
-  assert.match(active, /color:\s*var\(--fg\)/);
+  // 2026-10-19 시안 5a: 옅은 트랙 위에서 고른 칸만 잉크(다크에선 밝은 은색) pill로 반전한다.
+  assert.match(active, /background:\s*var\(--ink\)/);
+  assert.match(active, /box-shadow:\s*var\(--shadow-ink\)/);
+  assert.match(active, /color:\s*var\(--ink-fg\)/);
   const hover = rule('.hub-seg__btn:hover:not([aria-pressed="true"])');
   // hover는 중립 한 단계(§5.2 "hover stays neutral") — 배경은 건드리지 않고 글자만 한 칸 밝게.
   assert.match(hover, /color:\s*var\(--fg\)/);
@@ -45,7 +45,7 @@ test("hub-tokens.css owns rest / active / hover for .hub-seg__btn with the hover
 test("the group container keeps its chrome in CSS and no rule sets border-radius on focus", () => {
   const m = css.match(/\n\.hub-app \.hub-seg \{([^}]*)\}/);
   assert.ok(m, ".hub-app .hub-seg rule must exist");
-  assert.match(m[1], /background:\s*var\(--surface-3\)/);
+  assert.match(m[1], /background:\s*var\(--tint\)/);
   assert.match(m[1], /border:\s*1px solid transparent/);
   assert.doesNotMatch(css, /\.hub-seg[^{]*:focus-visible[^{]*\{[^}]*border-radius/);
 });

@@ -86,9 +86,9 @@ test("Button chrome uses only design tokens and 1px borders", () => {
       );
     }
   }
-  // primary의 그림자는 2026-10-19 첨부 스킨에서 --shadow-card 토큰으로 승격됐다(구 인라인 raw 값 제거).
+  // primary는 2026-10-19 시안 5a의 잉크 pill — 그림자도 잉크 토큰이다(구 인라인 raw 값 제거).
   const primary = buttonRules.find((r) => r.selector === ".hub-app .hub-btn--primary");
-  assert.match(primary.body, /box-shadow: var\(--shadow-card\);/);
+  assert.match(primary.body, /box-shadow: var\(--shadow-ink\);/);
 });
 
 test("Button hover is neutral emphasis, never accent or a semantic category colour", () => {
@@ -214,6 +214,7 @@ const AUDITED_RAW_BUTTON_CONTAINERS = [
   // hub-topbar.jsx — 탭은 raw <button>, 유일한 <Button>은 nav 밖의 primary action이다
   ".hub-app .hub-topbar__tabs button",
   '.hub-topbar__tabs button[aria-current="page"]',
+  '.hub-topbar__tabs button:hover:not([aria-current="page"])',
   '.hub-topbar__tabs button[aria-current="page"]::after',
   '.hub-app .hub-topbar__tabs button[aria-selected="true"]',
   // daily-review.jsx / discovery.jsx — 둘 다 <button className="hub-row">

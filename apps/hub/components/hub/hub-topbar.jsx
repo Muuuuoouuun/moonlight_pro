@@ -77,9 +77,9 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
   return (
     <header className="hub-topbar" style={{
       flexShrink: 0,
-      // 2026-10-19 첨부 스킨: 탑바는 따로 칠한 띠가 아니라 페이지 바탕과 이어진다.
-      background: 'var(--bg)',
-      borderBottom: '1px solid var(--line-soft)',
+      // 2026-10-19 시안 5a: 탑바는 따로 칠한 띠가 아니라 빛이 번지는 페이지 바탕 위에 그대로 놓인다.
+      background: 'transparent',
+      borderBottom: '1px solid transparent',
       display: 'flex', flexDirection: 'column',
     }}>
       <div className="hub-topbar__main">
