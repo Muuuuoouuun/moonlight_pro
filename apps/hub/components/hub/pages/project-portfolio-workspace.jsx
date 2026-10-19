@@ -14,6 +14,8 @@ import { BrandMark, projectStatusLabel } from "./project-pms-components";
 import { projectGenreLabel, projectGenreTint } from "./project-view-constants";
 import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import { selectUrgentProjectItems } from '@/lib/project-urgent-items';
+import { selectProjectNextStep } from '@/lib/project-next-step';
+import stageStyles from './project-focus-stage.module.css';
 import { buildCurrentMonthProjectPreview } from '@/lib/project-monthly-preview';
 import { projectIndexDoneState } from '@/lib/project-index-order';
 
@@ -90,6 +92,28 @@ function PortfolioMetric({ metric, count, active, lowerBound, onSelect }) {
   );
 }
 
+const seoulMonthDay = new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" });
+function formatSlashDate(value) {
+  const date = dateValue(value);
+  if (!date) return "";
+  const parts = Object.fromEntries(seoulMonthDay.formatToParts(date).map(part => [part.type, part.value]));
+  return `${parts.month}/${parts.day}`;
+}
+
+function formatMonthDay(value) {
+  const date = dateValue(value);
+  return date ? new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", timeZone: "Asia/Seoul" }).format(date) : "";
+}
+
+// 목록·카드의 짧은 기한 글자: 지남은 D+N, 7일 안은 D-N, 그보다 멀면 날짜.
+function shortDue(dueAt) {
+  const dday = computeDDay(dueAt);
+  if (!dday) return { text: "기한 없음", tone: "neutral" };
+  if (dday.tone === "danger" || dday.text === "D-Day") return dday;
+  const days = Number(dday.text.slice(2));
+  return days <= 7 ? dday : { text: formatMonthDay(dueAt), tone: "neutral" };
+}
+
 function computeDDay(dueAt) {
   if (!dueAt) return null;
   const d = new Date(dueAt);
@@ -157,13 +181,16 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
         </span>}
       </span>
       <span className={indexStyles.compactMeta}>
-        <span title={formatLongDate(project.dueAt)} data-risk={risk.risky ? 'true' : undefined}>
-          <Iconed name={risk.risky ? 'flag' : done ? 'clock' : 'calendar'} size={12} />
-          {risk.risky ? (dday?.tone === 'danger' && risk.label !== '막힘' ? dday.text : risk.label)
-            : done ? '결과 확인 전' : project.deadlineAlertSuppressed ? '기한 알림 해제' : dday ? dday.text : '기한 없음'}
+        <span title={project.displayProgress?.label}>
+          {projectStatusLabel(project.status)} · {done ? '결과 확인 전'
+            : project.tasksPartial ? '할 일 일부만 읽음'
+            : project.tasks > 0 ? `할 일 ${project.done}/${project.tasks}` : '할 일 없음'}
         </span>
-        <span className={indexStyles.miniProgress} aria-hidden="true"><span style={{ width: `${progress ?? 0}%` }} /></span>
-        <span className="mono" title={project.displayProgress?.label}>{progress === null ? '—' : `${progress}%`}</span>
+        <span className="mono" title={formatLongDate(project.dueAt)} data-risk={risk.risky ? 'true' : undefined}>
+          {risk.risky && <Iconed name="flag" size={11} />}
+          {risk.risky ? (dday?.tone === 'danger' && risk.label !== '막힘' ? dday.text : risk.label)
+            : project.deadlineAlertSuppressed ? '알림 해제' : shortDue(project.dueAt).text}
+        </span>
       </span>
     </button>
     <IconButton className={indexStyles.handle} icon="drag" aria-label={`${project.name} 순서 이동 · 드래그 또는 메뉴의 위아래 이동`}
@@ -364,9 +391,35 @@ export function ProjectPortfolioWorkspace({
     onSelectProject?.(projectId);
   };
   const nextAction = project?.displayNextAction || project?.projectNextAction || nextTask?.title;
-  const actionTask = nextAction ? openTasks.find(task => task.title.trim() === nextAction.trim()) : null;
-  const nextActionSource = actionTask ? '연결된 할 일' : nextAction ? (project?.projectNextAction === nextAction ? '프로젝트 기록' : '최근 업데이트') : '미정';
   const lowerBound = Boolean(projectCorePartial || sourceState === "partial");
+  const nextStep = React.useMemo(() => selectProjectNextStep({ tasks: projectTasks, nextAction, urgentItems }), [projectTasks, nextAction, urgentItems]);
+  const nextStepKey = nextStep?.taskId ? `${nextStep.taskId}:${nextStep.checkId || ''}` : null;
+  // 다음 띠가 이미 가리키는 급한 항목은 아래 `먼저 처리`에 다시 그리지 않는다.
+  const otherUrgent = urgentItems.filter(item => !(nextStep?.taskId === item.taskId && (nextStep.checkId || null) === (item.checkId || null)));
+  const [stepSave, setStepSave] = React.useState({ projectId: null, key: null, status: 'idle', message: '' });
+  const stepSaving = stepSave.status === 'saving';
+  const canWriteStep = Boolean(canWriteTasks && project?.statusKey !== 'archived' && nextStep?.taskId && !pendingTodoIds?.has(nextStep.taskId));
+  async function completeNextStep() {
+    if (!nextStep?.taskId || stepSaving || !canWriteStep) return;
+    const step = nextStep;
+    setStepSave({ projectId: project.id, key: nextStepKey, status: 'saving', message: '저장 중…' });
+    try {
+      const result = step.checkId ? await onToggleChecklist(step.taskId, step.checkId) : await onToggleTodo(step.taskId);
+      setStepSave(result?.ok === true
+        ? { projectId: project.id, key: null, status: 'saved', message: `처리함 · ${step.title}` }
+        : { projectId: project.id, key: nextStepKey, status: 'error', message: result?.message || '저장하지 못했습니다. 다시 시도하세요.' });
+    } catch {
+      setStepSave({ projectId: project.id, key: nextStepKey, status: 'error', message: '저장 결과를 확인하지 못했습니다. 목록에서 상태를 확인하세요.' });
+    }
+  }
+  const stepNotice = stepSave.projectId === project?.id && stepSave.message ? stepSave : null;
+  const nextDue = nextStep?.dueAt ? computeDDay(nextStep.dueAt) : null;
+  const siblings = project && project.brand && project.brand !== 'all'
+    ? projects.filter(item => item.id !== project.id && item.brand === project.brand && !['completed', 'archived'].includes(item.statusKey)).slice(0, 4)
+    : [];
+  const itemCount = taskProgress
+    ? { done: project.displayProgress.done, total: project.displayProgress.total }
+    : { done: projectTasks.length - openTasks.length, total: projectTasks.length };
 
   return (
     <div
@@ -517,28 +570,6 @@ export function ProjectPortfolioWorkspace({
           <div className="hub-project-portfolio-stage__create">{createSurface}</div>
         ) : (
           <div className={`hub-project-portfolio-stage__inner ${deliveryStyles.portfolio}`}>
-          <header className="hub-project-portfolio-stage__header">
-            <div className="hub-project-portfolio-stage__title-row">
-              <div>
-                <span className={deliveryStyles.eyebrow}>선택한 프로젝트 · {brand?.name || "소속 미정"}</span>
-                <h1>{project?.name || "프로젝트"}</h1>
-                {project?.entityRef && (
-                  <button type="button" className="hub-project-portfolio-stage__customer hub-row" onClick={() => onOpenCustomer?.(project.id)}>
-                    <Iconed name="user" size={12} />{project.entityLabel || '연결된 고객'}<Iconed name="chevronR" size={12} />
-                  </button>
-                )}
-              </div>
-              <div className="hub-project-portfolio-stage__actions">
-                <span className={workStyles.mobileOnly}><Button variant="outline" size="sm" onClick={() => setShowMobilePicker(true)}>프로젝트 바꾸기</Button></span>
-                {project && <Button variant="outline" size="sm" icon="pencil" onClick={() => onEditProject?.(project)}>편집</Button>}
-                <Button variant="ghost" size="sm" iconRight="chevronD" aria-label="프로젝트 관리"
-                  aria-haspopup="menu" aria-expanded={indexControls.menu?.kind === 'manage'}
-                  onClick={event => indexControls.openMenu(event, 'manage', project)}>관리</Button>
-              </div>
-            </div>
-
-          </header>
-
           {sourceState === "error" && (
             <div className="hub-project-portfolio-truth" role="alert" data-state="error">
               <Iconed name="flag" size={15} />
@@ -556,67 +587,120 @@ export function ProjectPortfolioWorkspace({
 
           {project ? (
             <>
-              <section className={workStyles.overview} aria-label="프로젝트 실행 요약">
-                <div className={workStyles.nextAction}>
-                  <span>프로젝트 상태 · {projectStatusLabel(project.status)} · 할 일 {projectTasks.length - openTasks.length}/{projectTasks.length} 처리</span>
-                  <strong>{canReviewCompletion ? '할 일을 모두 처리했습니다. 이제 결과를 확인하세요.' : nextAction || '첫 할 일을 적고 바로 시작하세요'}</strong>
-                  {canReviewCompletion
-                    ? <Button variant="outline" size="sm" icon="arrowRight" onClick={() => onReviewCompletion?.(project)}>완료 검토</Button>
-                    : <Button variant="outline" size="sm" icon="arrowRight" onClick={() => actionTask ? focusTask(actionTask.id) : workListRef.current?.focusNewTask(nextAction || '')}>
-                      {actionTask ? '목록에서 보기' : nextAction ? '할 일로 추가' : '할 일 추가'}
-                    </Button>}
-                </div>
-                <div className={workStyles.progressSummary}>
-                  <div><strong className="stat">{progress === null ? '—' : <>{progress}<small>%</small></>}</strong><span>{evidenceDetail}</span></div>
-                  {progress !== null && <>
-                    <div
-                      className={workStyles.progressTrack}
-                      role="progressbar"
-                      aria-label="프로젝트 진척"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={progress}
-                      aria-valuetext={`${progress}% · ${evidenceDetail} · ${evidenceTime}`}
-                      style={{ '--gauge-progress': `${progress}%`, '--gauge-remaining': `${100 - progress}%` }}
-                    >
-                      <span key={`${project.id}:${progress}:fill`} className={workStyles.progressFill} aria-hidden="true" />
-                      {[25, 50, 75].map(value => <i key={value} style={{ left: `${value}%` }} aria-hidden="true" />)}
-                      {progress > 0 && <span key={`${project.id}:${progress}:tip`} className={workStyles.progressTip} aria-hidden="true" />}
+              <section className={stageStyles.sheet} aria-label="선택한 프로젝트">
+                <header className="hub-project-portfolio-stage__header">
+                  <div className="hub-project-portfolio-stage__title-row">
+                    <div>
+                      <span className={stageStyles.eyebrow}>
+                        <span>{brand?.name || "소속 미정"}</span>
+                        <Badge variant="outline" size="xs">{projectStatusLabel(project.status)}</Badge>
+                      </span>
+                      <h1>{project.name}</h1>
+                      {project.entityRef && (
+                        <button type="button" className="hub-project-portfolio-stage__customer hub-row" onClick={() => onOpenCustomer?.(project.id)}>
+                          <Iconed name="user" size={12} />{project.entityLabel || '연결된 고객'}<Iconed name="chevronR" size={12} />
+                        </button>
+                      )}
                     </div>
-                    <div className={workStyles.progressScale} aria-hidden="true"><span>0</span><span>25</span><span>50</span><span>75</span><span>100%</span></div>
-                  </>}
-                  {evidenceTime && <span className={workStyles.progressMeta}>{evidenceTime}</span>}
-                  <span className={workStyles.progressMeta}><Iconed name="calendar" size={12} />{formatLongDate(project.dueAt)}{dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}{risk.risky && <span className={workStyles.risk}>{risk.label}</span>}</span>
-                  {project.displayProgress?.partial && <span className={workStyles.progressMeta}>진척 근거를 일부 읽지 못했습니다.</span>}
-                  {project.displayProgress?.evidencePartial && <span className={workStyles.progressMeta}>업데이트 기록 일부 확인 불가</span>}
-                  {progress === null && !project.displayProgress?.partial && <span className={workStyles.progressMeta}>할 일이나 보고값을 추가하면 진척을 표시합니다.</span>}
-                  {progress === 100 && !['completed', 'archived'].includes(project.statusKey) && <span className={workStyles.progressMeta}>진척 100% · 프로젝트 완료는 결과 확인 후</span>}
-                </div>
-              </section>
-
-              {urgentItems.length > 0 && (
-                <section className="hub-project-portfolio-urgent" aria-label="먼저 처리할 할 일">
-                  <div className="hub-project-portfolio-urgent__heading"><strong>먼저 처리</strong><span className="num">{urgentItems.length}</span></div>
-                  <div className="hub-project-portfolio-urgent__list">
-                    {urgentItems.slice(0, 3).map(item => (
-                      <button type="button" key={item.taskId} className="hub-row" onClick={() => focusTask(item.taskId, item.checkId)}>
-                        <span className={item.blocked || item.rank === 0 ? 'is-risk' : ''}>{item.reason}</span>
-                        <strong>{item.title}</strong>
-                        {item.checkTitle && <em>다음 체크 · {item.checkTitle}</em>}
-                        <Iconed name="arrowRight" size={13} />
-                      </button>
-                    ))}
-                    {urgentItems.length > 3 && <span className="hub-project-portfolio-urgent__more">외 {urgentItems.length - 3}건은 아래에서 확인</span>}
+                    <div className="hub-project-portfolio-stage__actions">
+                      <span className={workStyles.mobileOnly}><Button variant="outline" size="sm" onClick={() => setShowMobilePicker(true)}>프로젝트 바꾸기</Button></span>
+                      <Button variant="outline" size="sm" icon="pencil" onClick={() => onEditProject?.(project)}>편집</Button>
+                      <Button variant="ghost" size="sm" iconRight="chevronD" aria-label="프로젝트 관리"
+                        aria-haspopup="menu" aria-expanded={indexControls.menu?.kind === 'manage'}
+                        onClick={event => indexControls.openMenu(event, 'manage', project)}>관리</Button>
+                    </div>
                   </div>
-                </section>
-              )}
+                </header>
 
-              <ProjectWorkList ref={workListRef} projectId={project.id} tasks={projectTasks}
-                draftStore={{ drafts: workDrafts, setDrafts: setWorkDrafts, draftsRef: workDraftsRef }}
-                canWrite={canWriteTasks && project.statusKey !== 'archived'} pendingIds={pendingTodoIds}
-                onCreate={onQuickCreateTodo} onAddChecklist={onAddChecklistItem}
-                onReorderChecklist={onReorderChecklist}
-                onToggleTask={onToggleTodo} onToggleChecklist={onToggleChecklist} onEdit={onEditTodo} />
+                <div className={stageStyles.summary} aria-label="프로젝트 요약">
+                  <span title={formatLongDate(project.dueAt)}>
+                    {dday && <span className={`${stageStyles.dday} mono`} data-tone={dday.tone}>{dday.text}</span>}
+                    {project.dueAt ? formatMonthDay(project.dueAt) : '기한 없음'}
+                    {project.deadlineAlertSuppressed && <span>· 알림 해제</span>}
+                  </span>
+                  <i className={stageStyles.sep} aria-hidden="true" />
+                  <span>
+                    진척 <strong className="mono">{progress === null ? '—' : `${progress}%`}</strong>
+                    {progress !== null && (
+                      <span
+                        className={`${workStyles.progressTrack} ${stageStyles.gauge}`}
+                        role="progressbar"
+                        aria-label="프로젝트 진척"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progress}
+                        aria-valuetext={`${progress}% · ${evidenceDetail}${evidenceTime ? ` · ${evidenceTime}` : ''}`}
+                        title={evidenceTime || evidenceDetail}
+                        style={{ '--gauge-progress': `${progress}%`, '--gauge-remaining': `${100 - progress}%` }}
+                      >
+                        <span key={`${project.id}:${progress}:fill`} className={workStyles.progressFill} aria-hidden="true" />
+                      </span>
+                    )}
+                  </span>
+                  <i className={stageStyles.sep} aria-hidden="true" />
+                  <span>항목 <strong className="mono">{itemCount.total ? `${itemCount.done}/${itemCount.total}` : '0'}</strong></span>
+                  {risk.risky && <span className={stageStyles.risk}><Iconed name="flag" size={12} />{risk.label}</span>}
+                </div>
+                {(project.displayProgress?.partial || project.displayProgress?.evidencePartial || (progress === 100 && !['completed', 'archived'].includes(project.statusKey))) && (
+                  <div className={stageStyles.notes}>
+                    {project.displayProgress?.partial && <span>진척 근거를 일부 읽지 못했습니다.</span>}
+                    {project.displayProgress?.evidencePartial && <span>업데이트 기록 일부 확인 불가</span>}
+                    {progress === 100 && !['completed', 'archived'].includes(project.statusKey) && <span>진척 100% · 프로젝트 완료는 결과 확인 후</span>}
+                  </div>
+                )}
+
+                <div className={stageStyles.next} aria-label="다음 행동">
+                  <span className={stageStyles.nextLabel}>다음</span>
+                  {canReviewCompletion ? (
+                    <span className={stageStyles.nextTitle}><strong>할 일을 모두 처리했습니다. 이제 결과를 확인하세요.</strong></span>
+                  ) : nextStep?.taskId ? (
+                    <button type="button" className={`${stageStyles.nextTitle} hub-row`} onClick={() => focusTask(nextStep.taskId, nextStep.checkId)}
+                      title="목록에서 보기">
+                      <strong>{nextStep.title}</strong>{nextStep.group && <span>{nextStep.group}</span>}
+                    </button>
+                  ) : (
+                    <span className={stageStyles.nextTitle}>
+                      <strong>{nextStep?.title || '첫 할 일을 적고 바로 시작하세요'}</strong>
+                      {nextStep && <span>프로젝트 기록</span>}
+                    </span>
+                  )}
+                  {!canReviewCompletion && nextStep?.dueAt ? (
+                    <span className={`${stageStyles.nextDue} mono`}>
+                      {formatSlashDate(nextStep.dueAt)}{nextDue && <span data-tone={nextDue.tone}>{nextDue.text}</span>}
+                    </span>
+                  ) : <span aria-hidden="true" />}
+                  {canReviewCompletion
+                    ? <Button variant="primary" size="sm" onClick={() => onReviewCompletion?.(project)}>완료 검토</Button>
+                    : nextStep?.taskId
+                      ? <Button variant="primary" size="sm" disabled={!canWriteStep || stepSaving} onClick={completeNextStep}>{stepSaving ? '저장 중' : stepNotice?.status === 'error' && stepSave.key === nextStepKey ? '다시 시도' : '처리 완료'}</Button>
+                      : <Button variant="outline" size="sm" icon="plus" onClick={() => workListRef.current?.focusNewTask(nextStep?.title || '')}>{nextStep ? '할 일로 추가' : '할 일 추가'}</Button>}
+                </div>
+                {stepNotice && <p className={stageStyles.feedback} role={stepNotice.status === 'error' ? 'alert' : 'status'}>{stepNotice.message}</p>}
+
+                {otherUrgent.length > 0 && (
+                  <section className="hub-project-portfolio-urgent" aria-label="먼저 처리할 할 일">
+                    <div className="hub-project-portfolio-urgent__heading"><strong>먼저 처리</strong><span className="num">{otherUrgent.length}</span></div>
+                    <div className="hub-project-portfolio-urgent__list">
+                      {otherUrgent.slice(0, 3).map(item => (
+                        <button type="button" key={item.taskId} className="hub-row" onClick={() => focusTask(item.taskId, item.checkId)}>
+                          <span className={item.blocked || item.rank === 0 ? 'is-risk' : ''}>{item.reason}</span>
+                          <strong>{item.title}</strong>
+                          {item.checkTitle && <em>다음 체크 · {item.checkTitle}</em>}
+                          <Iconed name="arrowRight" size={13} />
+                        </button>
+                      ))}
+                      {otherUrgent.length > 3 && <span className="hub-project-portfolio-urgent__more">외 {otherUrgent.length - 3}건은 아래에서 확인</span>}
+                    </div>
+                  </section>
+                )}
+
+                <ProjectWorkList ref={workListRef} projectId={project.id} tasks={projectTasks}
+                  draftStore={{ drafts: workDrafts, setDrafts: setWorkDrafts, draftsRef: workDraftsRef }}
+                  canWrite={canWriteTasks && project.statusKey !== 'archived'} pendingIds={pendingTodoIds}
+                  onCreate={onQuickCreateTodo} onAddChecklist={onAddChecklistItem}
+                  onReorderChecklist={onReorderChecklist}
+                  onToggleTask={onToggleTodo} onToggleChecklist={onToggleChecklist} onEdit={onEditTodo} />
+              </section>
 
               <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />
               <section className={workStyles.support} aria-label="프로젝트 참고 정보">
@@ -644,6 +728,22 @@ export function ProjectPortfolioWorkspace({
                     </details>
                   )}
               </section>
+              {siblings.length > 0 && (
+                <section className={stageStyles.siblings} aria-label={`${brand?.name || '같은 소속'}의 다른 프로젝트`}>
+                  <h3>{brand?.name || '같은 소속'}의 다른 프로젝트</h3>
+                  <div className={stageStyles.siblingGrid}>
+                    {siblings.map(item => {
+                      const due = item.deadlineAlertSuppressed ? { text: '알림 해제', tone: 'neutral' } : shortDue(item.dueAt);
+                      return (
+                        <button type="button" key={item.id} className={`${stageStyles.sibling} hub-card-link`} onClick={() => selectProject(item.id)}>
+                          <span><span>{projectStatusLabel(item.status)}</span><span className="mono" data-tone={due.tone}>{due.text}</span></span>
+                          <strong>{item.name}</strong>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
             </>
           ) : (
             <div className="hub-project-portfolio-stage__empty">

@@ -6,6 +6,7 @@ import * as order from '../../../lib/project-index-order.js';
 import * as metrics from './project-pms-metrics.js';
 import { readTaskChecklist } from '../../../lib/task-checklist.js';
 import { selectUrgentProjectItems } from '../../../lib/project-urgent-items.js';
+import { selectProjectNextStep } from '../../../lib/project-next-step.js';
 import { buildCurrentMonthProjectPreview } from '../../../lib/project-monthly-preview.js';
 
 const controlsSource = readFileSync(new URL('./project-index-controls.jsx', import.meta.url), 'utf8');
@@ -44,10 +45,10 @@ function mounted(kind, initial, { storage = new Map(), reduced = false } = {}) {
   };
   const styles = new Proxy({}, { get: (_, key) => key });
   const scope = { React, localStorage, window: browser, document, globalThis: { window: browser, document }, ...order, ...metrics,
-    styles, indexStyles: styles, workStyles: styles, deliveryStyles: styles,
+    styles, indexStyles: styles, workStyles: styles, deliveryStyles: styles, stageStyles: styles,
     Button: 'Button', Badge: 'Badge', Drawer: 'Drawer', EmptyState: 'EmptyState', IconButton: 'IconButton', Input: 'Input', SegmentedControl: 'SegmentedControl', Iconed: 'Iconed', BrandMark: 'BrandMark', ProjectWorkList: 'ProjectWorkList', ProjectDeliverySummary: 'ProjectDeliverySummary',
     projectGenreLabel: () => '', projectGenreTint: () => undefined, projectStatusLabel: value => value,
-    readTaskChecklist, selectUrgentProjectItems, buildCurrentMonthProjectPreview,
+    readTaskChecklist, selectUrgentProjectItems, selectProjectNextStep, buildCurrentMonthProjectPreview,
     setTimeout(callback) { const id = ++timerId; timers.set(id, callback); return id; }, clearTimeout(id) { timers.delete(id); },
     requestAnimationFrame: () => 1, cancelAnimationFrame() {},
   };

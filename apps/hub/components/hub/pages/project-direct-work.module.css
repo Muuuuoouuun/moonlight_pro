@@ -23,9 +23,10 @@
 .addOptions > div { position: absolute; z-index: 8; right: 0; top: calc(100% + 4px); display: grid; min-width: 166px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card); }
 .addOptions button { min-height: 36px; padding: 6px 10px; text-align: left; color: var(--fg); font-size: 12px; border-radius: var(--r-sm); }
 .addOptions button:hover { background: var(--surface-2); }
-.workList { min-width: 0; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); }
-.listHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); }
-.listHeader h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--fg); font-size: 13px; font-weight: 600; }
+/* 목록은 선택 프로젝트 카드(project-focus-stage.module.css .sheet) 안에 놓이므로 자기 테두리를 그리지 않는다. */
+.workList { min-width: 0; margin-inline: -8px; }
+.listHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 8px; }
+.listHeader h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--fg-dim); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; }
 .listHeader h2 span, .listHeader > span { color: var(--fg-muted); font-size: 12px; font-weight: 400; }
 .task { min-width: 0; position: relative; }
 .task + .task { border-top: 1px solid var(--line-soft); }
@@ -39,6 +40,13 @@
 .itemType { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; color: var(--fg-muted); font-size: 10.5px; }
 .due, .checkCount { flex-shrink: 0; font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
 .checkCount { border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 1px 5px; }
+/* 작업 묶음 행: 기간 · 가는 진척 막대 · 처리 수(2026-10-19 Projects B Focus). 막대는 명도만, 색 없음. */
+.groupGauge { flex: 0 0 56px; height: 3px; overflow: hidden; border-radius: 999px; background: var(--line-soft); }
+.groupGauge > span { display: block; height: 100%; border-radius: inherit; background: var(--fg); }
+.groupCount { flex-shrink: 0; min-width: 28px; text-align: right; font-size: 12px; color: var(--fg-muted); }
+.groupState { flex-shrink: 0; color: var(--fg-muted); font-size: 11px; }
+.due .dday { margin-left: 6px; color: var(--fg-muted); }
+.due .dday[data-late="true"] { color: var(--danger); }
 .details { margin: 0 14px 8px 48px; padding: 4px 0 0; border-top: 1px solid var(--line-soft); }
 .details[hidden] { display: none; }
 .description { margin: 8px 0; font-size: 12px; line-height: 1.6; color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -100,6 +108,7 @@
   .composer :global(.hub-btn) { min-height: 44px; }
   .listFooter > button, .addOptions > summary { min-height: 44px; }
   .due { font-size: 10.5px; }
+  .groupGauge { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) { .progressTip::before { display: none; } }
@@ -107,7 +116,7 @@
 @media (min-width: 901px) {
   .workspace:global(.hub-project-portfolio-workspace):not([data-detail-open="true"]) { grid-template-columns: 296px minmax(0, 1fr); }
   .workspace :global(.hub-project-portfolio-stage__header) { justify-content: flex-start; }
-  .overview, .workList { border-radius: var(--r-lg); }
+  .overview { border-radius: var(--r-lg); }
   .nextAction { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; }
   .nextAction > strong { font-size: 15px; line-height: 1.55; }
   .nextAction > :global(.hub-btn) { justify-self: start; margin-top: 2px; }
