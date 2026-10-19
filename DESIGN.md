@@ -88,17 +88,17 @@ overrides it.
 ```css
 .hub-app,
 .hub-app[data-theme="dark"] {
-  /* Surfaces — void-black stack */
-  --bg:            oklch(0.155 0.005 250);
-  --surface:       oklch(0.195 0.006 250);
-  --surface-2:     oklch(0.225 0.007 250);
-  --surface-3:     oklch(0.255 0.008 250);
-  --elevated:      oklch(0.285 0.009 250);
+  /* Surfaces — near-neutral void stack (hue 265, operator skin 2026-10-19) */
+  --bg:            oklch(0.155 0.004 265);
+  --surface:       oklch(0.195 0.005 265);
+  --surface-2:     oklch(0.225 0.006 265);
+  --surface-3:     oklch(0.26 0.007 265);
+  --elevated:      oklch(0.285 0.008 265);
 
-  /* Hairlines */
-  --line:          oklch(0.30 0.008 250 / 0.6);
-  --line-soft:     oklch(0.30 0.008 250 / 0.3);
-  --line-strong:   oklch(0.40 0.009 250 / 0.8);
+  /* Hairlines — opaque since 2026-10-19 */
+  --line:          oklch(0.32 0.007 265);
+  --line-soft:     oklch(0.27 0.006 265);
+  --line-strong:   oklch(0.42 0.008 265);
   --line-control:  oklch(0.50 0.008 250);   /* input · checkbox edge, 3:1 (2026-10-06) */
 
   /* Moonstone accent stack (cool blue-silver) */
@@ -130,16 +130,20 @@ overrides it.
 }
 
 .hub-app[data-theme="light"] {
-  --bg:         oklch(0.985 0.003 250);
+  /* Grey page, white cards, depth from shadow (operator skin 2026-10-19) */
+  --bg:         oklch(0.965 0.0015 265);
   --surface:    oklch(1 0 0);
-  --surface-2:  oklch(0.965 0.004 250);
-  --surface-3:  oklch(0.935 0.005 250);
+  --surface-2:  oklch(0.982 0.0015 265);
+  --surface-3:  oklch(0.955 0.002 265);
   --elevated:   oklch(1 0 0);
-  /* Text is set with literals here, not through the moon ramp */
-  --fg:         oklch(0.20 0.008 250);
-  --fg-muted:   oklch(0.42 0.008 250);
-  --fg-dim:     oklch(0.47 0.008 250);
-  --fg-faint:   oklch(0.52 0.007 250);
+  --line:       oklch(0.90 0.002 265);
+  --line-soft:  oklch(0.945 0.0015 265);
+  --line-strong: oklch(0.82 0.003 265);
+  /* Text is set with literals here, not through the moon ramp — kept at AA, not the skin's lighter greys */
+  --fg:         oklch(0.20 0.004 265);
+  --fg-muted:   oklch(0.42 0.004 265);
+  --fg-dim:     oklch(0.47 0.004 265);
+  --fg-faint:   oklch(0.52 0.004 265);
   --line-control: oklch(0.66 0.007 250);
   /* The moon ramp runs the other way (--moon-50 ≈ L 0.22 … --moon-700 ≈ L 0.88), so
      "--moon-200 fill" stays high-contrast against the surface in both themes.
@@ -155,8 +159,10 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
   (compact banners only, never full cards or rows).
 - Layering: `--z-quick-memo: 60`, `--z-project-detail: 61`, `--z-navigation-overlay: 64`, `--z-navigation: 65`,
   `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100` (defined once on the base block).
-- Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`. `--shadow-card` carries lift only (no `0 0 0 1px` ring) —
-  every card already draws its own 1px border, and the ring made it read as 2px (§15 2026-10-06).
+- Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-lift`, `--shadow-pop` — soft drop shadows from the operator skin
+  (2026-10-19). `--shadow-card` carries lift only (no `0 0 0 1px` ring) — every card already draws its own 1px border,
+  and the ring made it read as 2px (§15 2026-10-06). `--shadow-lift` is the hover lift of `.hub-card-link` and
+  non-ghost buttons; Futura's `--fx-shadow`/`--fx-shadow-lift` are now aliases of `--shadow-card`/`--shadow-lift`.
 - Control edge: `--line-control` / `--line-control-hover` — resting and hover border of text inputs (`.hub-input`,
   `.hub-field`) and the unchecked `Checkbox`, 3:1 against the surface. Decorative dividers keep `--line*`.
 - Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7). Call sites use `--r` for the middle step; the undefined `--r-md` references were removed (§15 2026-09-24).
@@ -177,9 +183,9 @@ type `--fx-hero: 44px`, `--fx-hero-weight: 300`, `--fx-title: 27px`, `--fx-stat:
 
 - **Accent anchor:** `--accent` is the theme-stable Moonstone `#5274a8` alias. Accent means current position, selection,
   focus, or the single primary action. It never means a category.
-- **Primary CTA:** use `--moon-200` fill with `--moon-100` border (`.hub-btn--primary`; hover one rung up to
-  `--moon-100` / `--moon-50`). Keep one visually dominant
-  primary CTA per view; global and page-level create actions must not compete.
+- **Primary CTA:** `--fg` fill and border with `--bg` text plus `--shadow-card` (`.hub-btn--primary`; hover moves to
+  `--moon-50`) — near-black in light, bright silver in dark (operator skin 2026-10-19, replacing the `--moon-200` fill).
+  Keep one visually dominant primary CTA per view; global and page-level create actions must not compete.
 - **Surface order:** `--bg` → `--surface` → `--surface-2` → `--surface-3` for nested elevation.
 - **Borders:** always `1px`. Never thicken. Use `--line-soft` for hairlines, `--line` for dividers,
   `--line-strong` only for pressed/emphasized states.
@@ -343,26 +349,25 @@ system serif. Do not introduce serif display type.
 
 ### Density (fixed)
 The hub ships one fixed density — no user-facing toggle. Values (CSS custom properties on `.hub-app` in
-`hub-tokens.css`): `--row-h: 36px`, `--pad-y: 10px`, `--pad-x: 14px`, `--gap: 12px`, `--section-gap: 24px`,
-`--card-pad: 20px`. Small screens tighten two of them: ≤900px `--section-gap`/`--card-pad` 16px, ≤560px 12px/14px.
+`hub-tokens.css`) follow the operator skin since 2026-10-19: `--row-h: 40px`, `--pad-y: 12px`, `--pad-x: 18px`,
+`--gap: 20px`, `--section-gap: 44px`, `--card-pad: 26px`. At ≤900px the previous compact values return (`36/10/14/12`,
+`--section-gap`/`--card-pad` 16px — 390px phones pushed controls off the row otherwise), ≤560px 12px/14px.
 
 ### Radius
 - Micro elements (chips, checkbox faces): `4px` (`--r-xs`)
-- Small controls: `6px` (`--r-sm`) — what `Button`, `IconButton` and the `SegmentedControl` track render today
-  (inline in the primitive; segment buttons are 4–5px). `Input` gets `--r-sm` from its `.hub-field` wrapper;
-  `TextField`/`TextAreaField` get it from `.hub-input`.
+- Selection and action controls: pill (`--fx-pill`, 999px) — `Button`, `IconButton`, `SegmentedControl` (track and
+  segments), the `Tabs` track and the top-bar tabs (inline in the primitives since 2026-10-19).
+- Writing controls: `6px` (`--r-sm`) — `Input` gets it from its `.hub-field` wrapper; `TextField`/`TextAreaField` from `.hub-input`.
 - Popover / menu containers: `10px` (`--r`) — text inputs use `--r-sm`
 - Standard cards: `14px` (`--r-lg`) — `Card` keeps a 1px `--line-soft` border plus `--shadow-card`
 - Feature panels: `20px` (`--r-xl`)
 - Pills: `999px` — `Badge`, `select.hub-input` (`SelectField`), and `.fx-pill-btn` inside Futura pages
 
-**Open gap with §15 2026-09-19 (b), confirmed.** That decision gives `Button`, `IconButton`, `Input` and
-`SegmentedControl` a pill radius and lets `Card` separate by shadow instead of border. The code does not render
-it: `hub-futura.css` carries the pill/shadow rules, but the primitives set `borderRadius: 'var(--r-sm)'` inline
-(which beats any class rule, §8.1 Hover), `button-hover.test.mjs` pins that inline value, and the `.hub-card`
-selector matches no element. 2026-09-21 later narrowed inputs back to `--r-sm` except `select`. Until the
-operator re-confirms the scope and the primitive itself changes, pages must not restyle control radius locally —
-use the primitive as it renders.
+**Closed 2026-10-19:** the §15 2026-09-19 (b) pill decision was confirmed but not rendered, because the primitives
+set `borderRadius: 'var(--r-sm)'` inline and that beat the Futura class rules. The operator skin moved the inline
+value to `var(--fx-pill)` (`button-hover.test.mjs` pins it). Cards separate by shadow because the skin's
+`--line-soft` is nearly invisible on white, not because the 1px border was removed. Pages still must not restyle
+control radius locally.
 
 Writing fields (titles, notes, and multi-line content) keep `--r-sm` (6px), including
 inside the Futura shell. The pill treatment applies to selection controls, not writing
@@ -416,7 +421,7 @@ truth. Do not recreate them ad-hoc inside pages.
 **Available primitives**
 - `Badge` — soft / outline, 8 tones (neutral · moon · success · warning · danger · info · personal · company)
 - `Dot`, `Kbd`, `Avatar`, `Divider`
-- `Card` (padded / unpadded), `SectionTitle`, `Tabs`
+- `Card` (padded / unpadded), `SectionTitle`, `Tabs` (pill track since 2026-10-19: `--surface-3` track, the selected tab a `--surface` pill with `--shadow-card`)
   - `SectionTitle` wraps: when its `right` slot is wider than the row (390px phones), the slot drops below the title instead of squeezing the title to one word per line (2026-10-06). A `right` group of several badges should itself use `flexWrap: 'wrap'`.
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
 - `Input`, `Checkbox`, `Progress`, `ProgressRing`, `Sparkline`, `Placeholder` (0 call sites), `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
@@ -619,15 +624,16 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - 클릭 가능한 `<div>`는 `role="button"` + `tabIndex={0}` + Enter/Space 핸들러 3종 세트 없이는 금지.
   펼침/접힘 토글에는 `aria-expanded`.
 - `Checkbox`는 `label` prop으로 스크린리더 이름을 전달한다 (행 제목 등).
-- 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀(20px/500)을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 공용
-  PageHeader 프리미티브는 없다: 대부분 인라인 `style={{ margin: 0, fontSize: 20, fontWeight: 500 }}`이거나 페이지 CSS가 같은
-  값을 준다. 승인된 카브아웃은 아래 세 가지다. 개인 매출 헤더는 2026-09-24부터 기본 20px/500을 따른다(§14 Known gaps 9).
+- 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 크기는 2026-10-19
+  운영자 첨부 스킨부터 크고 얇은 디스플레이(`--hub-title-size` = `clamp(30px, 3.4vw, 42px)`, `--hub-title-weight` 300,
+  자간 -0.035em)이고 20px/500을 대체한다. 공용 PageHeader 프리미티브는 없다: `className="hub-page-title"`(hub-futura.css)을
+  쓰거나, 페이지 CSS의 제목 규칙이 같은 두 변수를 읽는다. 승인된 카브아웃은 아래 세 가지다.
   - Daily Brief 히어로(`오늘의 실행`): §6 Display 스케일 `clamp(26px, 3.2vw, 32px)`/700 — 첫 화면의 페이지 레벨 모먼트 1곳.
   - Futura 페이지(§7 Futura): `<h2 className="fx-hero">`/`"fx-page-title">` 44px/300(≤900px 30px) — `dashboard/home`(확정
     2026-09-18)·`work/decisions`(확정 2026-09-19)·`work/rhythm`(권장 2026-09-23)·영업·매출의 `revenue/followups`(오늘 연락)·
     `revenue/customers`(고객)·`revenue/deals`(거래)(확정 2026-09-24, 구현 중).
   - OKR·KPI(`dashboard/work/goals`, 현황 `?view=goals`): `.goal-page-title` 32px/800, 섹션 19px/700(§15 2026-10-05 확정).
-  그 밖의 페이지로 확장하지 않는다 — 같은 영업·매출 안의 문의 탭과 탭에서 내려온 화면도 20px/500 그대로다.
+  위 카브아웃 밖의 페이지는 모두 공용 디스플레이 값을 쓴다.
 
 ## 12. Public vs Hub Rules
 
@@ -700,7 +706,7 @@ Build order when adding a new surface:
 
 **Known gaps (measured 2026-09-23 — debt or open questions, never precedent)**
 
-1. §15 2026-09-19 (b) pill controls and shadow-separated cards are confirmed but not rendered (§7 Radius).
+1. ~~§15 2026-09-19 (b) pill controls and shadow-separated cards are confirmed but not rendered~~ — rendered 2026-10-19 (§7 Radius).
 2. `hub-btn--subtle` (`pages/agents.jsx`) has no CSS rule.
 3. Rails outside §8.1: `inset 2px 0 0 var(--moon-500)` in `floating-mentor-widget.jsx` and `pages/agents.jsx`;
    gold `border-left: 2px solid #ffd166` in `hub-tokens.css` (personal revenue) and `pages/revenue-heatmap.jsx`.
@@ -788,3 +794,4 @@ Build order when adding a new surface:
 | 2026-10-05 | OKR·KPI 기본 보기를 **한눈에**(A안 스코어보드)로 바꾼다 — 맨 위 KPI 줄(값 34/800 · 허용 범위 띠 + 이번 값 막대 + 지난 값 선 · 0 유지형은 주별 칸), 아래 왼쪽 목표 블록(바닥까지 % 40/800 + 16px 게이지, KR 줄마다 10px 게이지·%·페이스 알약·기록), 오른쪽 **이번 주 챙길 것**(선 밖 KPI → 늦은 KR → 일주일 안 마일스톤 → 기록 공백, 최대 5)과 **이번 주 메모**(learning 메모 + 개인 목표 연결, 마이그레이션 없음). 막대 눈금은 점수(0~0.7)가 아니라 **바닥까지 진행률**(막대 끝 = 바닥), 세로선은 기간 경과 — 점수 = 0.7 × 진행률이라 판정은 그대로다. 운영자 확정 예외 3건: ① KR 페이스를 색으로 구분(`--okr-*`, 청록·파랑·코랄 + 선 밖 빨강, 언제나 글리프+글 동반) — §4 웜톤·§5.2 상태 색 분류 금지의 이 화면 한정 예외 ② 페이지 제목 32px/800·섹션 19px/700 — §11 20px/500 예외 ③ 본문 메모 칸 추가 — 표면 예산 예외. 선 밖 표시는 1px 레일 그대로(3px안은 채택 안 함). 주간 칸(`WeekCells`)은 한눈에 보기에서 빠지고 주 몫은 페이스 줄 글("이번 주 a/b")로 남는다. KPI·체크인·주간 실측 보기와 채점지는 그대로 | confirmed | 운영자가 레이아웃 3안(1a·1b·1c) 참고 시안 → 목업 5·6(A·B·C)을 보고 A를 고르고 예외 ①②③을 직접 확정했다(2026-10-05, ④ 3px 레일은 미선택). 1px 선 트랙과 0~1.0 점수 막대가 초반에 거의 비어 읽히지 않았다는 피드백("게이지바 가독성", "폰트 크기·볼드로 위계")이 출발점이다. 색은 09-23 프로젝트 게이지 예외와 같은 형식으로 전용 토큰에 가두고 다른 표면으로의 확장은 별도 결정. `goals-surface.test.mjs`가 토큰 두 테마 정의·페이지 안 토큰 재정의 금지·1px 선 밖 레일을 고정한다 |
 | 2026-09-30 | 고객 기록을 **넓은 기록창**에서 쓴다. 그릇은 같은 Drawer이고 폭만 바뀐다. 고객 탭의 R · `연락 기록` · `했어요 · 기록` · `메모`는 480px 드로어를 `min(960px, calc(100% - 56px))`로 넓힌다. 오늘 연락의 `기록` · `e` · `N` · 기록 후보는 같은 넓은 창을 연다. 거래 독 · 첫 화면 · 에이전트는 compact 그대로다. 새 presentation · 라우트 · Futura 확장은 없고, Drawer에 선택 prop `bodyStyle` · `sheet="full"` · `headerAction`만 더했다(§8). **쓰기 칸**: 요약 한 줄(필수, 16px)과 늘 펼친 자세히(글쓰기 칸 16px · 1.8 · 16px 여백 · `--r-sm`, 10줄에서 40줄까지 자람). 어떻게 · 반응 · 다음 약속 · 언제 · 저장 줄로 된 아래 띠는 제자리에 있고 그 위만 스크롤된다. **읽기 칸**(`clamp(280px, 33.4%, 320px)`): 약속 · 제안 팁 이유 · 최근 기록 5줄. `연락 기록 \| 메모` 두 모드가 한 줄기를 쓰고, 연락은 원, 메모는 네모 + `메모 · 연락 아님`이다. 모양과 글자로만 나누고 색은 쓰지 않는다. **좁은 화면**: 900px 이하는 `쓰기 \| 이 고객` 탭, 600px 이하는 전체 높이 시트(저장은 머리, 키보드 위는 칩 줄). **저장 글자**: `초안 · 이 탭` → `기록 중 · 되돌리기` → `저장 중` → `저장됨 hh:mm`(`.mono`, 서버가 확인한 뒤에만). `일부 저장`은 반만 찬 원 표식이고 빨강이 아니다. 빨강은 실패 한 곳, 1px 위급 레일 + `저장 못 함`뿐이고, 글은 지우지 않는다. primary는 하나다(`저장`, 오늘 연락에서는 `저장하고 다음 ⌘↵`). 중단점은 900 · 600만 쓴다 | recommended | 운영자가 목업 v2와 권장 답(Q-CR1·2·3·5·6·8·11)을 검토한 뒤 "ㄱㄱ 이어서"(2026-09-30)라고 진행을 지시했다. 권장 답이므로 화면을 확인한 뒤 확정한다. 한 줄 기록용 compact 창에서 긴 미팅 기록을 쓰면 읽던 약속과 기록이 가려졌다. 메모를 쓰는 길은 셋이었고, 그중 `메모만`은 마지막 연락일을 바꿨다. 휴대폰에서는 키보드가 저장 버튼을 가렸다. 새 Drawer 종류(focus)나 고객 페이지 대신 폭만 바꾼 것은 ESC 층 · 포커스 가둠 · 바깥 클릭이 그대로 남고 §8의 "오버레이는 Drawer/EditDrawer뿐" 계약을 건드리지 않아서다. 오늘 연락 페이지 배치와 Futura 범위는 바뀌지 않는다. 초안 `이 기기`(Q-CR4) · AI 비교(Q-CR7) · RPC v2(Q-CR9) · 날짜 칩(Q-CR10) · 잇는 키는 미결이라 만들지 않았다. 상세와 알려진 빈틈은 `docs/superpowers/specs/2026-09-30-customer-record-wide-composer.md` |
 | 2026-10-19 | 프로젝트 `개요` 보기의 선택 프로젝트를 Projects B Focus 시안(운영자 첨부 `Projects Focus` 개선안 — "요약 한 줄 · 세부 프로젝트·항목·날짜")으로 다시 그린다. 오른쪽은 **한 장의 카드**(`--surface`, `--r-xl`, 1px `--line-soft`, `--shadow-card`): 소속 + 상태 배지 → 제목(30px/400) → **요약 한 줄**(D-day·마감일 │ 진척 N% + 가는 게이지 │ 항목 n/m, 막힘·기한 지남만 빨강) → **`다음` 띠**(`--surface-2`, 다음 걸음 + 그 걸음이 속한 작업 묶음 + 날짜·D-day + primary `처리 완료`, 다 처리했으면 `완료 검토`) → 할 일 목록. 다음 걸음은 `lib/project-next-step.js`가 고른다 — 적어 둔 다음 행동과 같은 제목의 열린 걸음 → 급한 항목 → 가장 이른 기한. 맞는 걸음이 없으면 글만 보이고 `할 일로 추가`. `처리 완료`는 기존 할 일·세부 체크 토글을 그대로 부르고, 저장 봉투가 ok일 때만 `처리함`이라고 말한다. 작업 묶음 행은 기간(가장 이른~늦은 날짜)·가는 명도 막대·처리 수를 보이고, 열린 세부 체크가 있는 첫 묶음은 처음 열 때 펼쳐 둔다. 세부 체크 날짜는 `M/D`, 7일 안은 `D-N`, 지난 것만 빨강 `D+N`. `먼저 처리`는 `다음` 띠가 이미 가리키는 항목을 빼고 남을 때만 보인다. 카드 밖에는 결과·완료 기준, 일정·업데이트, **같은 소속의 다른 프로젝트**(최대 4장, 진행 중인 것만)를 둔다. 왼쪽 목록은 바탕(`--bg`) 위의 행이고 선택한 프로젝트만 떠 있는 카드다. 둘째 줄은 `상태 · 할 일 n/m`과 오른쪽 짧은 기한(7일 안 D-N, 그 밖은 날짜)이며, 2.5px accent 레일과 행마다의 미니 진척 막대는 뺐다. 선택 프로젝트 게이지(2026-09-23 행)는 요약 줄 안 72px 트랙으로 줄여 눈금·끝 반짝임을 걷고 근거 글자는 `aria-valuetext`·툴팁으로 옮긴다(§5.2). **바뀌지 않는 것**: 페이지 머리와 보기 7개(감사 P0 #9), 목록·Board·Timeline 등 다른 보기, 저장 계약, Futura 페이지 텍스처 범위(§7) | confirmed(방향) · 세부 recommended | 운영자가 Claude Design 묶음(`Projects Main`·A·B·C·편집 시트·입력창)과 함께 B Focus 개선안을 보내며 "이런 느낌"으로 지시했다(2026-10-19). 현재 `개요`가 이미 같은 목록 + 상세 구조라 화면을 새로 만들지 않고 그 보기를 시안 쪽으로 옮겼다. 시안의 담당자(`담당 Council`)는 저장된 담당 정보가 없어 그리지 않았고, 완료된 작업 묶음은 기존처럼 `완료 n` 아래에 접힌다. 메인 시안의 `덩어리로 보기 ↔ 전체 보기`, 편집 시트, 입력창 4종은 이번 범위 밖이다 |
+| 2026-10-19 | **허브 전체 테마를 운영자 첨부 스킨(Claude Design 묶음 `styles/futura.css`·`primitives-futura.jsx`)으로 바꾼다.** 한 번에 모든 페이지: ① 토큰 — 면·선을 거의 무채색(hue 265)으로, 라이트는 회색 바탕(0.965) + 흰 카드 + 거의 안 보이는 불투명 선, 깊이는 부드러운 그림자(`--shadow-soft/card/lift/pop`, 새 `--shadow-lift`), Futura의 `--fx-shadow*`는 공용 그림자의 별칭. 밀도는 스킨 기본(행 40 · 간격 20 · 섹션 44 · 카드 26), 900px 이하는 이전 촘촘한 값. ② 컨트롤 — `Button`·`IconButton`·`SegmentedControl`·`Tabs`·탑바 탭이 pill(09-19 (b)의 렌더되지 않던 간극을 닫음), 세그먼트·탭은 회색 트랙 위에서 고른 칸만 흰 면 + 그림자, primary는 `--fg` 면 + `--bg` 글자(라이트 먹색·다크 은색), secondary·outline은 흰 면. ③ 페이지 제목 — 모든 페이지 h2가 `--hub-title-size`(30~42px)/300 디스플레이(§11 20px/500 대체, 오늘·OKR·Futura 44px 카브아웃 유지). ④ 탑바는 따로 칠한 흰 띠가 아니라 바탕과 이어지고 탭은 밑줄 대신 pill. **바꾸지 않은 것**: 글자 토큰은 스킨의 옅은 회색(가장 옅은 글자 약 2:1)이 아니라 AA 4.5:1을 지키는 기존 값(운영자 선택), 글꼴은 SUIT 유지(운영자 선택 — 시안의 Inter Tight에는 한글이 없다), 상태 색 문법(§5.3)·1px 선·모션 토큰·사이드바 구조·`.hub-futura` 페이지 텍스처 클래스(48px 여백·`fx-card`)의 적용 범위 | confirmed | 운영자 "디자인 테마 내가 첨부한 스타일로 갈거야"(2026-10-19) → 범위 `허브 전체 한 번에`, 대비 `느낌은 시안, 대비는 기준 유지`, 글꼴 `SUIT 유지`를 운영자가 직접 골랐다. 09-18부터 한 화면씩 넓혀 온 Futura 레이어를 허브 전체의 기본 테마로 올리는 결정이라 위 2026-09-18·09-19·09-24 행의 "다른 페이지로 넓히는 것은 별도 결정" 조건을 이 행이 푼다. 같은 날 프로젝트 `개요` 행의 "Futura 페이지 텍스처 범위 불변"도 이 행이 대체한다. 390px에서 넓은 간격이 입력 줄 버튼을 밀어내 휴대폰 폭만 이전 밀도로 되돌렸다 |

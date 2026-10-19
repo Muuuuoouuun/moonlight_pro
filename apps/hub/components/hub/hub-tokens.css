@@ -1,14 +1,16 @@
 /* Moonlight Pro — Design Tokens (scoped to .hub-app) */
 .hub-app, .hub-app[data-theme="dark"] {
-  --bg:            oklch(0.155 0.005 250);
-  --surface:       oklch(0.195 0.006 250);
-  --surface-2:     oklch(0.225 0.007 250);
-  --surface-3:     oklch(0.255 0.008 250);
-  --elevated:      oklch(0.285 0.009 250);
+  /* 2026-10-19 운영자 첨부 스킨(Claude Design `styles/futura.css`): 거의 무채색(hue 265)의 면과
+     불투명한 선, 깊이는 그림자. 글자 토큰만 AA 대비를 지키는 기존 값으로 남긴다(DESIGN §15). */
+  --bg:            oklch(0.155 0.004 265);
+  --surface:       oklch(0.195 0.005 265);
+  --surface-2:     oklch(0.225 0.006 265);
+  --surface-3:     oklch(0.26 0.007 265);
+  --elevated:      oklch(0.285 0.008 265);
 
-  --line:          oklch(0.30 0.008 250 / 0.6);
-  --line-soft:     oklch(0.30 0.008 250 / 0.3);
-  --line-strong:   oklch(0.40 0.009 250 / 0.8);
+  --line:          oklch(0.32 0.007 265);
+  --line-soft:     oklch(0.27 0.006 265);
+  --line-strong:   oklch(0.42 0.008 265);
   /* 입력칸·체크박스의 경계 — 하이라인(1.1:1)으로는 다크에서 입력칸이 면에 녹는다. 면 대비 3:1(WCAG
      1.4.11)을 맞춘 1px 선이고, 장식 구분선이 아니라 "여기에 쓸 수 있다"를 말하는 곳에만 쓴다. */
   --line-control:  oklch(0.50 0.008 250);
@@ -96,26 +98,26 @@
   --genre-it-bg: oklch(0.31 0.045 200); --genre-it-fg: oklch(0.84 0.07 200); --genre-it-line: oklch(0.46 0.06 200 / 0.6);
   --genre-content-bg: oklch(0.31 0.045 310); --genre-content-fg: oklch(0.84 0.07 310); --genre-content-line: oklch(0.46 0.06 310 / 0.6);
 
-  --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 0 0 1px var(--line-soft);
+  --shadow-soft: 0 1px 2px oklch(0 0 0 / 0.4);
   /* 카드는 자기 1px 테두리를 가진다 — 그림자에 링(0 0 0 1px)을 또 그리면 테두리 바깥에 선이 한 겹
      더 생겨 2px로 보였다(2026-10-06 감사, §5.2 "보더는 항상 1px"). 그림자는 들림만 맡는다. */
-  --shadow-card:
-    0 1px 0 0 oklch(1 0 0 / 0.04) inset,
-    0 8px 24px -12px oklch(0 0 0 / 0.4);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.35), 0 6px 16px -8px oklch(0 0 0 / 0.5);
+  /* 가리키면 떠오르는 카드·버튼(.hub-card-link, .fx-lift). */
+  --shadow-lift: 0 2px 6px oklch(0 0 0 / 0.4), 0 16px 34px -14px oklch(0 0 0 / 0.65);
   --shadow-pop:
-    0 1px 0 0 oklch(1 0 0 / 0.06) inset,
     0 0 0 1px var(--line),
-    0 20px 60px -20px oklch(0 0 0 / 0.6);
+    0 28px 80px -24px oklch(0 0 0 / 0.7);
 
   --font-sans: 'SUIT Variable', 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace;
 
-  --row-h: 36px;
-  --pad-y: 10px;
-  --pad-x: 14px;
-  --gap: 12px;
-  --section-gap: 24px;
-  --card-pad: 20px;
+  /* 밀도 — 첨부 스킨의 기본 밀도(2026-10-19). 고정 밀도 하나라는 §15 2026-07-21 결정은 그대로다. */
+  --row-h: 40px;
+  --pad-y: 12px;
+  --pad-x: 18px;
+  --gap: 20px;
+  --section-gap: 44px;
+  --card-pad: 26px;
 
   --r-xs: 4px;
   --r-sm: 6px;
@@ -137,15 +139,15 @@
 }
 
 .hub-app[data-theme="light"] {
-  --bg:            oklch(0.985 0.003 250);
+  --bg:            oklch(0.965 0.0015 265);
   --surface:       oklch(1 0 0);
-  --surface-2:     oklch(0.965 0.004 250);
-  --surface-3:     oklch(0.935 0.005 250);
+  --surface-2:     oklch(0.982 0.0015 265);
+  --surface-3:     oklch(0.955 0.002 265);
   --elevated:      oklch(1 0 0);
 
-  --line:          oklch(0.82 0.006 250 / 0.9);
-  --line-soft:     oklch(0.88 0.005 250 / 0.8);
-  --line-strong:   oklch(0.72 0.007 250 / 0.9);
+  --line:          oklch(0.90 0.002 265);
+  --line-soft:     oklch(0.945 0.0015 265);
+  --line-strong:   oklch(0.82 0.003 265);
   --line-control:  oklch(0.66 0.007 250);
   --line-control-hover: oklch(0.56 0.008 250);
 
@@ -184,12 +186,12 @@
   --okr-track:     oklch(0.93 0.006 250);
   --okr-marker:    oklch(0.25 0.01 250);
 
-  --fg:            oklch(0.20 0.008 250);
-  --fg-muted:      oklch(0.42 0.008 250);
+  --fg:            oklch(0.20 0.004 265);
+  --fg-muted:      oklch(0.42 0.004 265);
   /* 라이트 강조 사다리: 밝을수록 옅다 — dim(0.50) < faint(0.55). 이전엔 dim(0.54)이
      faint(0.52)보다 옅어 위계가 뒤집혀 있었다(2026-08-05 재감사 §11). */
-  --fg-dim:        oklch(0.47 0.008 250);
-  --fg-faint:      oklch(0.52 0.007 250);
+  --fg-dim:        oklch(0.47 0.004 265);
+  --fg-faint:      oklch(0.52 0.004 265);
 
   --success:       oklch(0.48 0.14 155);
   --success-bg:    oklch(0.94 0.04 155 / 0.6);
@@ -220,14 +222,12 @@
   --genre-it-bg: oklch(0.94 0.035 200); --genre-it-fg: oklch(0.44 0.09 200); --genre-it-line: oklch(0.8 0.06 200 / 0.7);
   --genre-content-bg: oklch(0.94 0.035 310); --genre-content-fg: oklch(0.44 0.09 310); --genre-content-line: oklch(0.8 0.06 310 / 0.7);
 
-  --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.6) inset, 0 0 0 1px var(--line-soft);
-  --shadow-card:
-    0 1px 0 0 oklch(1 0 0 / 0.8) inset,
-    0 8px 24px -14px oklch(0.3 0.01 250 / 0.1);
+  --shadow-soft: 0 1px 2px oklch(0.2 0.01 265 / 0.05), 0 1px 1px oklch(0.2 0.01 265 / 0.03);
+  --shadow-card: 0 1px 2px oklch(0.2 0.01 265 / 0.05), 0 4px 12px -6px oklch(0.2 0.01 265 / 0.10);
+  --shadow-lift: 0 2px 4px oklch(0.2 0.01 265 / 0.06), 0 12px 28px -12px oklch(0.2 0.01 265 / 0.18);
   --shadow-pop:
-    0 1px 0 0 oklch(1 0 0 / 0.9) inset,
     0 0 0 1px var(--line),
-    0 20px 60px -20px oklch(0.3 0.01 250 / 0.18);
+    0 24px 70px -24px oklch(0.2 0.01 265 / 0.30), 0 2px 6px oklch(0.2 0.01 265 / 0.08);
 }
 
 .hub-app, .hub-app * { box-sizing: border-box; }
@@ -389,17 +389,16 @@
   transform: scale(0.98);
 }
 
-/* Primary CTA — --moon-200 fill on a --moon-100 rim (§5.2). Hover lifts one rung further
-   along the ramp: brighter in dark, darker in light, more contrast against the surface
-   either way. The inset/drop shadow is carried over verbatim from the old inline style. */
+/* Primary CTA — 글자색(--fg)으로 칠한 면 + 바탕색(--bg) 글자(2026-10-19 첨부 스킨, §5.2):
+   라이트에선 먹색, 다크에선 밝은 은색 버튼. Hover는 moon 램프 맨 끝(--moon-50)으로 한 칸 옮긴다. */
 .hub-app .hub-btn--primary {
   color: var(--bg);
-  background: var(--moon-200);
-  border: 1px solid var(--moon-100);
-  box-shadow: 0 1px 0 0 oklch(1 0 0 / 0.2) inset, 0 2px 8px -2px oklch(0 0 0 / 0.3);
+  background: var(--fg);
+  border: 1px solid var(--fg);
+  box-shadow: var(--shadow-card);
 }
 .hub-app .hub-btn--primary:hover:not(:disabled) {
-  background: var(--moon-100);
+  background: var(--moon-50);
   border-color: var(--moon-50);
 }
 /* 비활성 primary는 채움을 걷는다 — 반투명한 moon 채움(인라인 opacity)이 활성 secondary보다 진해 보여
@@ -417,7 +416,7 @@
    .hub-input make, and --line-strong is exactly the "emphasised state" role in §5.2. */
 .hub-app .hub-btn--secondary {
   color: var(--fg);
-  background: var(--surface-3);
+  background: var(--surface);
   border: 1px solid var(--line);
 }
 .hub-app .hub-btn--secondary:hover:not(:disabled) {
@@ -444,7 +443,7 @@
 
 .hub-app .hub-btn--outline {
   color: var(--fg);
-  background: transparent;
+  background: var(--surface);
   border: 1px solid var(--line);
 }
 .hub-app .hub-btn--outline:hover:not(:disabled) {
@@ -867,21 +866,22 @@
    휴지 chrome을 여기서 소유한다: 인라인 색은 :hover와 전이를 죽인다. 활성 = aria-pressed 하나가
    정본이라 CSS가 그 속성을 그대로 읽는다. hover는 §5.2대로 중립 한 단계(글자만 한 칸 밝게). */
 .hub-app .hub-seg {
-  background: var(--surface-2);
-  border: 1px solid var(--line-soft);
+  background: var(--surface-3);
+  border: 1px solid transparent;
 }
 .hub-app .hub-seg__btn {
-  color: var(--fg-faint);
+  color: var(--fg-dim);
   background: transparent;
   border: 1px solid transparent;
   transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
-.hub-app .hub-seg__btn:hover:not([aria-pressed="true"]) { color: var(--fg-muted); }
+.hub-app .hub-seg__btn:hover:not([aria-pressed="true"]) { color: var(--fg); }
 /* 필수 선택이 비었을 때만 — 색 단독이 아니라 폼 메시지와 함께 쓴다(§5.3). */
 .hub-app .hub-seg[data-invalid] { border-color: var(--danger); }
 .hub-app .hub-seg__btn[aria-pressed="true"] {
   color: var(--fg);
-  background: var(--surface-3);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
@@ -1471,15 +1471,15 @@
   white-space: nowrap;
 }
 
+/* 탭 줄 — 2026-10-19 첨부 스킨: 바탕 위의 pill, 고른 탭만 흰 면 + 그림자로 뜬다(밑줄 없음). */
 .hub-topbar__tabs {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 4px;
   min-width: 0;
   min-height: 44px;
-  padding: 0 16px;
+  padding: 2px 16px 10px;
   overflow-x: auto;
-  border-top: 1px solid var(--line-soft);
   scrollbar-width: none;
 }
 
@@ -1488,18 +1488,19 @@
 .hub-topbar__tabs button {
   position: relative;
   flex: 0 0 auto;
-  min-height: 44px;
-  padding: 0 10px;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: var(--fx-pill);
   color: var(--fg-dim);
   font-size: 12.5px;
-  font-weight: 450;
+  font-weight: 500;
   white-space: nowrap;
-  transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
+  transition: color var(--dur-hover) ease, background var(--dur-hover) ease, box-shadow var(--dur-hover) ease;
 }
 
 .hub-topbar__tabs button:hover {
   color: var(--fg);
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 
 /* 탭 줄은 가로 스크롤(overflow-x) 때문에 세로도 잘린다 — 바깥으로 그리는 링은 위·아래 변이 사라진다.
@@ -1508,17 +1509,8 @@
 
 .hub-topbar__tabs button[aria-current="page"] {
   color: var(--fg);
-  font-weight: 650;
-}
-
-.hub-topbar__tabs button[aria-current="page"]::after {
-  position: absolute;
-  right: 10px;
-  bottom: 0;
-  left: 10px;
-  height: 1px;
-  background: var(--accent);
-  content: "";
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .hub-page-header {
@@ -1738,6 +1730,11 @@
 
 @media (max-width: 900px) {
   .hub-app {
+    /* 넓은 데스크톱 밀도(2026-10-19)는 휴대폰 폭에서 이전 값으로 돌아온다 — 390px에서 입력 줄 버튼이 밀려났다. */
+    --row-h: 36px;
+    --pad-y: 10px;
+    --pad-x: 14px;
+    --gap: 12px;
     --section-gap: 16px;
     --card-pad: 16px;
   }
@@ -2369,9 +2366,9 @@
   font-weight: 500;
 }
 
-/* §11 페이지 제목 20px/500 — 승인되지 않은 clamp(22–28px) 확대를 걷었다(DESIGN §14 Known gap 12). */
+/* 페이지 제목 — 허브 공용 디스플레이 값(2026-10-19, DESIGN §11). */
 .personal-revenue-header h2 {
-  font-size: 20px;
+  font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1;
 }
 
 .personal-revenue-header p,

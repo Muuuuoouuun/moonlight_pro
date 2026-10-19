@@ -503,7 +503,7 @@ export function RevenueHeatmap({ onNavigate, embedded = false }) {
         <div>
           {embedded
             ? <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>지역별 매출</h3>
-            : <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>매출 히트맵</h2>}
+            : <h2 className="hub-page-title">매출 히트맵</h2>}
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             {periodLabel} · {metric.longLabel} · 딜 {ledgerUnsettled ? "—" : `${matchedDeals}건`} · 합계 <span className="num">{ledgerUnsettled ? "—" : fmtMoney(totalValue)}</span>
             <TruthBadge state={syncState} style={{ marginLeft: 8 }} />

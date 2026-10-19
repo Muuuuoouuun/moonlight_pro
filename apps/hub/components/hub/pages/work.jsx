@@ -622,7 +622,7 @@ export function Calendar({ onNavigate }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
           {/* 페이지 타이틀 계약(§11): 정확히 하나의 h2, 20px/500 — 앱 전체 타이틀과 동일 스케일. */}
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Calendar</h2>
+          <h2 className="hub-page-title">Calendar</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>{periodLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
@@ -1262,7 +1262,7 @@ export function Roadmap({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
+          <h2 className="hub-page-title">Roadmap</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             프로젝트와 마일스톤의 4개월 계획 축
             <span className="mono" style={{ marginLeft: 8, color: statusColor }}>{statusLabel}</span>

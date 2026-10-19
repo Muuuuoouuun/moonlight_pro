@@ -258,7 +258,7 @@ export function ProductPage({ product, month, areas, onBack, onOpenProject, onOp
       <header className={styles.pageHead}>
         <div style={{ minWidth: 0 }}>
           <div className="eyebrow">{[details.domain, details.audience].filter(Boolean).join(" · ") || "제품"}</div>
-          <h2 style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 500 }}>{product.name}</h2>
+          <h2 className="hub-page-title" style={{ marginTop: 4 }}>{product.name}</h2>
           <div className={styles.meta}>
             <Button variant="ghost" size="sm" onClick={() => setDrawer("ops")} aria-label={`운영 상태 바꾸기, 지금 ${PRODUCT_OPS.find((ops) => ops.value === product.opsStatus)?.label || "개발 중"}`}><OpsLabel value={product.opsStatus} /></Button>
             <span>{productStageLabel(product.stage)}</span>

@@ -21,7 +21,7 @@ export function Products({ onNavigate }) {
       onOpenBoard={openBoard}
       heading={(
         <header>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>제품</h2>
+          <h2 className="hub-page-title">제품</h2>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--fg-muted)" }}>
             파는 것마다 단계·운영 상태·문의·저장소를 한곳에서 봐요. MVP·출시·성장은 동시에 3개까지.
           </p>

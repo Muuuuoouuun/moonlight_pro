@@ -108,8 +108,9 @@ test("text sizes stay on the floor: nothing under 10.5px in owned surfaces", () 
   }
 });
 
-test("the personal revenue title follows the 20px/500 page title rule (§11)", async () => {
+test("the personal revenue title follows the shared page title rule (§11)", async () => {
   const tokens = await readFile(new URL("../hub-tokens.css", import.meta.url), "utf8");
-  assert.match(tokens, /\.personal-revenue-header h2 \{\s*font-size: 20px;\s*\}/);
+  // 2026-10-19부터 모든 페이지 제목은 허브 공용 디스플레이 값(--hub-title-size/weight)을 쓴다.
+  assert.match(tokens, /\.personal-revenue-header h2 \{\s*font-size: var\(--hub-title-size\); font-weight: var\(--hub-title-weight\);/);
   assert.doesNotMatch(tokens, /clamp\(22px, 2\.5vw, 28px\)/);
 });

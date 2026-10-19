@@ -124,7 +124,7 @@ export function Segments({ workspace, onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>세그먼트</h2>
+          <h2 className="hub-page-title">세그먼트</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {ws ? `${ws.label} · ` : ''}리드 {ledgerUnsettled ? '—' : `${leads.length}건`} · {dimLabel} 기준 {ledgerUnsettled ? '—' : `${segments.length}개`} 세그먼트
             <TruthBadge state={syncState} style={{ marginLeft: 8 }} />

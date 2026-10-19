@@ -1,6 +1,6 @@
 .content-studio { padding: var(--section-gap); display: flex; flex-direction: column; gap: var(--gap); color: var(--fg); }
 .studio-page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.studio-page-header h2 { font-size: 20px; font-weight: 500; margin: 0; }
+.studio-page-header h2 { font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1; margin: 0; }
 .studio-page-header p { color: var(--fg-muted); font-size: 12px; margin: 4px 0 0; }
 .content-studio > :is(.studio-page-header, .studio-feedback, .studio-main, .studio-recovery, .studio-stack) { width: 100%; max-width: 820px; margin-inline: auto; }
 .content-studio > .studio-format-tabs { align-self: flex-start; margin-left: max(0px, calc((100% - 820px) / 2)); }

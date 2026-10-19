@@ -27,15 +27,15 @@
 
   --fx-pill: 999px;
 
+  /* 페이지 제목(§11) — 2026-10-19부터 모든 페이지의 h2가 이 값을 쓴다. */
+  --hub-title-size: clamp(30px, 3.4vw, 42px);
+  --hub-title-weight: 300;
+
   /* 입체감 — 보더 대신 2단 그림자가 면을 분리한다. §8.1의 1px 하이라인 계약은
      기존 표면에 그대로 남고, 이 레이어만 그림자를 쓴다. */
-  --fx-shadow: 0 1px 2px oklch(0 0 0 / 0.05), 0 10px 28px -14px oklch(0 0 0 / 0.16);
-  --fx-shadow-lift: 0 2px 6px oklch(0 0 0 / 0.07), 0 20px 40px -16px oklch(0 0 0 / 0.22);
-}
-
-.hub-app[data-theme="dark"] {
-  --fx-shadow: 0 1px 2px oklch(0 0 0 / 0.5), 0 10px 28px -14px oklch(0 0 0 / 0.7);
-  --fx-shadow-lift: 0 2px 6px oklch(0 0 0 / 0.55), 0 20px 40px -16px oklch(0 0 0 / 0.8);
+  /* 2026-10-19부터 허브 전체가 같은 그림자를 쓴다 — 두 이름은 공용 토큰의 별칭이다. */
+  --fx-shadow: var(--shadow-card);
+  --fx-shadow-lift: var(--shadow-lift);
 }
 
 /* ── 페이지 골격 ─────────────────────────────────────────────── */
@@ -654,3 +654,16 @@
 /* 세그먼트 컨트롤 — pill */
 .hub-app .hub-seg { border-radius: var(--fx-pill); }
 .hub-app .hub-seg__btn { border-radius: var(--fx-pill); }
+
+/* ═══ 페이지 제목 ════════════════════════════════════════════════
+ * 2026-10-19 운영자 첨부 스킨: 모든 페이지의 제목은 크고 얇은 디스플레이(시안 Projects 머리와 같은 값).
+ * 예외는 그대로다 — 오늘 히어로(32/700), OKR·KPI(32/800), Futura 페이지의 fx-hero/fx-page-title(44/300).
+ */
+.hub-app .hub-page-title {
+  margin: 0;
+  color: var(--fg);
+  font-size: var(--hub-title-size);
+  font-weight: var(--hub-title-weight);
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}

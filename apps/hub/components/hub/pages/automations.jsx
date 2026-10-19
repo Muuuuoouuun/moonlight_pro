@@ -93,7 +93,7 @@ export function AutomationsIndex({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>자동화</h2>
+          <h2 className="hub-page-title">자동화</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>정기 운영 {activeCount}개 · 최근 24시간 실행 {runsTodayCount}건</span>
             <SyncBadge state={syncState} />
@@ -261,7 +261,7 @@ export function EmailAutomation({ onNavigate }) {
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', maxWidth: 1100 }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Email automations</h2>
+        <h2 className="hub-page-title">Email automations</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Gmail OAuth · Resend 발송</div>
       </div>
       <InquiryConnection />
@@ -409,7 +409,7 @@ export function Webhooks({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Webhooks</h2>
+          <h2 className="hub-page-title">Webhooks</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {hooks.length} endpoints
             <SyncBadge state={syncState} />
@@ -511,7 +511,7 @@ export function Runs({ onNavigate } = {}) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Run log</h2>
+          <h2 className="hub-page-title">Run log</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>Real-time automation execution log</span>
             <SyncBadge state={syncState} />
@@ -789,7 +789,7 @@ export function Flows({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Flows</h2>
+          <h2 className="hub-page-title">Flows</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             자동화 정의 기록
             <SyncBadge state={syncState} />

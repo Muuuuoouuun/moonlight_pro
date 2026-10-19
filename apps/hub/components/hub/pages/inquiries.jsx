@@ -218,7 +218,7 @@ export function Inquiries({ onNavigate }) {
   const resetSecondaryFilters = () => { setSource('all'); setKind('all'); };
   return <div className="hub-page inquiries-page">
     <div className="hub-page-header inquiry-toolbar" style={{ justifyContent: 'space-between' }}>
-      <div><h2 style={{ fontSize: 20, margin: 0, fontWeight: 500 }}>문의 내역</h2><p className="inquiry-notice">메일과 랜딩페이지 문의를 한곳에서 확인하고 처리합니다.</p></div>
+      <div><h2 className="hub-page-title">문의 내역</h2><p className="inquiry-notice">메일과 랜딩페이지 문의를 한곳에서 확인하고 처리합니다.</p></div>
       <Button variant="primary" onClick={openCreate}>문의 등록 <Kbd>N</Kbd></Button>
     </div>
     <InquiryConnection compact />

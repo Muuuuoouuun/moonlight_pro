@@ -86,10 +86,9 @@ test("Button chrome uses only design tokens and 1px borders", () => {
       );
     }
   }
-  // 유일한 예외: primary의 inset/drop shadow는 구 인라인 값을 그대로 옮긴 것이다.
-  // --shadow-* 토큰으로의 승격은 별도 후속 작업.
+  // primary의 그림자는 2026-10-19 첨부 스킨에서 --shadow-card 토큰으로 승격됐다(구 인라인 raw 값 제거).
   const primary = buttonRules.find((r) => r.selector === ".hub-app .hub-btn--primary");
-  assert.match(primary.body, /box-shadow: 0 1px 0 0 oklch\(1 0 0 \/ 0\.2\) inset, 0 2px 8px -2px oklch\(0 0 0 \/ 0\.3\);/);
+  assert.match(primary.body, /box-shadow: var\(--shadow-card\);/);
 });
 
 test("Button hover is neutral emphasis, never accent or a semantic category colour", () => {
@@ -122,7 +121,8 @@ test("Button motion uses the shared tokens and stays reduced-motion safe (DESIGN
 test("Button radius stays inline (IconButton parity) and no .hub-btn rule owns it (DESIGN.md 7)", () => {
   // radius는 hover 전이 대상이 아니므로 CSS 소유일 이유가 없다. IconButton과 같은 방식.
   // 전역 `:focus-visible`이 border-radius를 덮던 문제는 focus-ring.test.mjs가 별도로 막는다.
-  assert.match(buttonSource, /borderRadius:\s*'var\(--r-sm\)'/);
+  // 2026-10-19 첨부 스킨부터 값은 pill(--fx-pill) — DESIGN §7 Radius, §15.
+  assert.match(buttonSource, /borderRadius:\s*'var\(--fx-pill\)'/);
   for (const { selector, body } of buttonRules) {
     assert.doesNotMatch(body, /border-radius:/, `${selector}: radius stays inline like IconButton`);
   }

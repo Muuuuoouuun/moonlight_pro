@@ -1,6 +1,6 @@
 .content-performance { padding: var(--section-gap); display: flex; flex-direction: column; gap: 20px; max-width: 1120px; }
 .performance-header, .performance-toolbar, .performance-list-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.performance-header h2 { font-size: 20px; font-weight: 500; margin: 0; }
+.performance-header h2 { font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1; margin: 0; }
 .performance-header p, .performance-muted { color: var(--fg-muted); font-size: 12px; line-height: 1.7; margin: 6px 0 0; }
 .content-performance h3 { font-size: 14px; font-weight: 500; margin: 0; }
 .performance-filters { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }

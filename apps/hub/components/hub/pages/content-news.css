@@ -1,6 +1,6 @@
 .content-news { max-width: 1120px; padding: var(--section-gap); display: flex; flex-direction: column; gap: var(--gap); }
 .content-news-header, .content-news-results-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
-.content-news-header h2 { margin: 0; font-size: 20px; font-weight: 500; }
+.content-news-header h2 { margin: 0; font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1; }
 .content-news-header p, .content-news-results-head p, .content-news-hint, .content-news-footer { margin: 5px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
 .content-news-form { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .content-news-form > * { flex: 1 1 160px; min-width: 0; }

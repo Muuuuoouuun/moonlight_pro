@@ -1,6 +1,6 @@
 .daily-review-page { padding: var(--section-gap); max-width: 800px; width: 100%; margin: 0 auto; color: var(--fg); }
 .daily-review-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 28px; }
-.daily-review-header h2 { margin: 0; font-size: 20px; font-weight: 500; }
+.daily-review-header h2 { margin: 0; font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1; }
 .daily-review-header p { margin: 8px 0 0; font-size: 13px; line-height: 1.65; color: var(--fg-muted); }
 .daily-review-week { color: var(--fg); }
 .daily-review-week > svg { display: inline-block; vertical-align: -2px; margin-right: 4px; color: var(--fg-muted); }

@@ -1,7 +1,7 @@
 .discovery-page { max-width: 1180px; margin: 0 auto; padding: 28px 24px 64px; color: var(--fg); }
 .discovery-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
 .discovery-eyebrow { font-size: 11px; color: var(--fg-muted); letter-spacing: .06em; }
-.discovery-header h2 { margin: 8px 0; font-size: 20px; font-weight: 500; }
+.discovery-header h2 { margin: 8px 0; font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1; }
 .discovery-header p { margin: 0; font-size: 13px; color: var(--fg-muted); line-height: 1.6; }
 .discovery-toolbar, .discovery-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .discovery-toolbar > label { flex: 0 1 320px; }
@@ -52,7 +52,6 @@
 @media (max-width: 600px) {
   .discovery-page { padding: 20px 12px 48px; }
   .discovery-header { align-items: flex-start; flex-direction: column; gap: 16px; margin-bottom: 24px; }
-  .discovery-header h2 { font-size: 24px; }
   .discovery-header > button { min-height: 44px; }
   .discovery-toolbar { align-items: stretch; flex-direction: column; gap: 16px; }
   .discovery-toolbar > label { flex: none; }
@@ -68,7 +67,7 @@
 }
 
 /* Work-oriented discovery: one navigation, concise evidence and next action. */
-.discovery-header h2 { font-size: 20px; font-weight: 500; }
+.discovery-header h2 { font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1; }
 .discovery-workflow { margin-bottom: 24px; }
 .discovery-workflow p, .discovery-entry p, .discovery-review-strip > p { color: var(--fg-muted); font-size: 12px; line-height: 1.7; margin: 12px 0 0; }
 .discovery-entry { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; margin-bottom: 24px; background: var(--surface); }
@@ -86,7 +85,6 @@
 .discovery-summary-sections { display: grid; gap: 24px; }
 .discovery-section .discovery-summary-body { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg); font-size: 13px; line-height: 1.85; }
 @media (max-width: 600px) {
-  .discovery-header h2 { font-size: 20px; }
   .discovery-entry { flex-direction: column; align-items: flex-start; padding: 16px; }
   .discovery-search { flex: auto; width: 100%; }
   .discovery-search button { min-height: 44px; }

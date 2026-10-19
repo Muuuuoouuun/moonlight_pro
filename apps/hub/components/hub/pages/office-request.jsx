@@ -30,7 +30,7 @@ export function OfficeRequest({requestId,onNavigate}) {
   },[requestId,retry]);
   const shown=state.status==='ready'&&state.requestId!==requestId?.toLowerCase()?{status:'loading'}:state;
   return <div style={{padding:'var(--section-gap)',display:'grid',gap:16}}>
-    <h2 style={{margin:0,fontSize:20,fontWeight:500}}>오피스 요청</h2>
+    <h2 className="hub-page-title">오피스 요청</h2>
     <OfficeRequestReadState state={shown} onRetry={()=>setRetry(value=>value+1)} onNavigate={onNavigate}
       onLogin={()=>window.location.assign(`/login?next=${encodeURIComponent(`/dashboard/agents/office-request?request=${requestId}`)}`)} />
     {shown.status==='ready'&&<>

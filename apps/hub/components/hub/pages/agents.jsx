@@ -331,7 +331,7 @@ export function AgentsChat({ onNavigate }) {
           <Avatar name={persona.name} size={26} tone="moon" />
           <div style={{ flex: 1 }}>
             {/* §11: 페이지당 정확히 하나의 h2 페이지 타이틀(20px/500) — 채팅 메인 페인의 페르소나 스트립이 그 자리다. */}
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, lineHeight: 1.2 }}>코칭·대화</h2>
+            <h2 className="hub-page-title">코칭·대화</h2>
             <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{persona.name} · {persona.role}</div>
           </div>
           {/* "Pin to Brief"는 로컬 state만 뒤집고 "Pinned" 영수증을 내던 가짜 크로스-표면
@@ -863,7 +863,7 @@ export function AgentsCouncil({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>브랜드 자문</h2>
+          <h2 className="hub-page-title">브랜드 자문</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>
             브랜드 Council이 기록을 근거로 브리핑·결정에 자문을 제공합니다.
           </div>
@@ -913,7 +913,7 @@ export function AgentsOrders({ onNavigate }) {
   const requestedStatus = search.get('status') || 'proposed';
   const status = ORDER_FILTERS.some((option) => option.key === requestedStatus) ? requestedStatus : 'proposed';
   return <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-    <header><h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>작업·실행</h2>
+    <header><h2 className="hub-page-title">작업·실행</h2>
       <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.7, color: 'var(--fg-muted)' }}>작업 지시와 코드 작업의 현재 상태를 확인합니다.</p>
     </header>
     <SegmentedControl label="작업·실행 보기" options={[{ key: 'orders', label: '작업 지시' }, { key: 'jobs', label: '코드 작업' }]} value={view}

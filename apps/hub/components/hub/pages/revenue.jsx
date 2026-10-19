@@ -320,7 +320,7 @@ export function RevenueOverview({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Revenue overview</h2>
+          <h2 className="hub-page-title">Revenue overview</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {new Intl.DateTimeFormat('ko-KR', { month: 'long' }).format(new Date())} · 이번 달 요약<TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
@@ -748,7 +748,7 @@ export function Leads({ workspace }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Leads</h2>
+          <h2 className="hub-page-title">Leads</h2>
           {deleteNotice && (
             <div role={deleteNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: deleteNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)' }}>
               <span>{deleteNotice.label}</span>
@@ -2530,7 +2530,7 @@ export function Cases() {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Cases</h2>
+          <h2 className="hub-page-title">Cases</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             Support & account issues · {casesLoading || casesReadFailed ? '—' : cases.filter(c => c.status !== 'Resolved').length} open
             <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
@@ -3656,7 +3656,7 @@ export function Accounts({ workspace, onNavigate }) {
       {/* Header */}
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Accounts</h2>
+          <h2 className="hub-page-title">Accounts</h2>
           {accountsNotice && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{accountsNotice}</div>}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {ACCOUNTS.filter(a => a.type === 'company').length} companies · {ACCOUNTS.filter(a => a.type === 'personal').length} individuals

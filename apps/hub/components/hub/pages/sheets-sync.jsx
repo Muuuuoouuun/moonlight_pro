@@ -108,7 +108,7 @@ export function SheetsSync() {
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)", maxWidth: 1100 }}>
       <div className="hub-page-header" style={{ display: "flex", alignItems: "center" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>세일즈 시트 동기화</h2>
+          <h2 className="hub-page-title">세일즈 시트 동기화</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             구글시트 ↔ 세일즈 DB · 리드 import → 정규화·중복제거 → 라이브 뷰 push
             <SyncBadge state={syncState} />

@@ -2026,7 +2026,7 @@ export function Projects({ workspace }) {
       <div className="hub-projects-workspace-main" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className={`hub-page-header hub-project-page-header${openDetail ? ' hub-project-page-header--detail' : ''}`} style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div className="hub-project-header-context">
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
+            <h2 className="hub-page-title">Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
               {projectHeaderSummary} · {currentBrand.desc}
               <SyncBadge state={syncState} />

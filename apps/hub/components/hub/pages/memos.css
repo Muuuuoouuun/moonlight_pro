@@ -1,6 +1,6 @@
 .memos-page { padding: var(--section-gap) 24px; max-width: 1080px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px; }
 .memos-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.memos-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--fg); letter-spacing: -0.01em; }
+.memos-header h2 { margin: 0; color: var(--fg); font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1; }
 .memos-header p { margin: 4px 0 0; color: var(--fg-muted); font-size: 13px; line-height: 1.5; }
 .memos-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .memos-state, .memo-actions, .memo-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

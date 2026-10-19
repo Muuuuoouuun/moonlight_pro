@@ -128,7 +128,7 @@ export function BrandContentLog({ onNavigate }) {
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <div className="hub-page-header" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Content Log</h2>
+          <h2 className="hub-page-title">Content Log</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             전 브랜드 콘텐츠 기록 · <span className="num">{entries.length}</span>건
             <SyncBadge state={ledger.syncState} />

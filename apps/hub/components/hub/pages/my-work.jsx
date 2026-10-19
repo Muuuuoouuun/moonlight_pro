@@ -1722,7 +1722,7 @@ export function MyWork({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', maxWidth: 1080, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>내 작업</h2>
+          <h2 className="hub-page-title">내 작업</h2>
           {lens !== 'watch' && <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span>할 일<SyncBadge state={sources.tasks || (state === 'loading' ? 'loading' : 'error')} /></span>
             <span>딜<SyncBadge state={sources.deals || (state === 'loading' ? 'loading' : 'error')} /></span>

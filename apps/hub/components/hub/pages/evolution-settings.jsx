@@ -230,7 +230,7 @@ export function Evolution({ onNavigate }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Evolution</h2>
+            <h2 className="hub-page-title">Evolution</h2>
             <Badge tone="neutral" size="xs">Preview · 기록 미연결</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>시스템이 어떻게 변하고 있는지 · 바꾸는 법(Playbooks) · 실행하는 법(Commands) · 기록(Log)</div>
@@ -670,7 +670,7 @@ export function Settings({ onNavigate }) {
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 900, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Settings</h2>
+        <h2 className="hub-page-title">Settings</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Workspace · integrations · profile</div>
       </div>
 

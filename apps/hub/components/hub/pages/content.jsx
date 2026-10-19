@@ -158,7 +158,7 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
     <div className="hub-page content-queue" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: "wrap" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>콘텐츠</h2>
+          <h2 className="hub-page-title">콘텐츠</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>소재를 담고, 원고를 이어 쓰고, 발행 기록을 남깁니다. <SyncBadge state={ledger.syncState} /></div>
         </div>
         <div style={{ flex: 1 }} />
@@ -777,7 +777,7 @@ export function Campaigns() {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
+          <h2 className="hub-page-title">Campaigns</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room
             <SyncBadge state={ledger.syncState} />

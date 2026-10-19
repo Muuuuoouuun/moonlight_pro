@@ -1,6 +1,6 @@
 .research-inbox { padding: 24px; max-width: 1420px; margin: 0 auto; }
 .research-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
-.research-head h2 { margin: 0 0 4px; font-size: 20px; font-weight: 500; }
+.research-head h2 { margin: 0 0 4px; font-size: var(--hub-title-size); font-weight: var(--hub-title-weight); letter-spacing: -0.035em; line-height: 1.1; }
 .research-head p { margin: 0; color: var(--fg-muted); font-size: 12.5px; }
 .research-note { color: var(--fg-muted); font-size: 12px; margin-bottom: 17px; }
 .research-filters { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
@@ -61,7 +61,6 @@
 }
 @media (max-width: 600px) {
   .research-head { align-items: center; }
-  .research-head h2 { font-size: 20px; }
   .research-head .hub-btn { min-height: 44px; }
   .research-filters { flex-direction: column; align-items: stretch; }
   .research-filters .hub-field { max-width: none; width: 100%; }

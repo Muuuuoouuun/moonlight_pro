@@ -157,10 +157,10 @@ export const Button = React.forwardRef(function Button({ children, variant = 'gh
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
       whiteSpace: 'nowrap',
       // radius는 인라인으로 남긴다 — hover 전이 대상이 아니라 CSS 소유일 이유가 없고,
-      // IconButton과 같은 방식이다. (한때 `.hub-app :focus-visible`이 border-radius를 덮어
-      // CSS 소유 radius가 포커스 순간 2px로 튀었다 — 그 전역 덮어쓰기는 2026-09-16에 제거됐고
-      // focus-ring.test.mjs가 재발을 막는다.)
-      borderRadius: 'var(--r-sm)',
+      // IconButton과 같은 방식이다. 2026-10-19 첨부 스킨부터 pill(§15) — 그 전엔 이 인라인
+      // `--r-sm`이 hub-futura.css의 pill 규칙을 이겨 2026-09-19 (b) 결정이 렌더되지 않았다.
+      // (전역 `:focus-visible`의 radius 덮어쓰기는 2026-09-16에 제거, focus-ring.test.mjs가 막는다.)
+      borderRadius: 'var(--fx-pill)',
       ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
@@ -177,7 +177,7 @@ export const IconButton = React.forwardRef(function IconButton({ icon, onClick, 
     <button {...props} ref={ref} type="button" className={`hub-iconbtn${toneCls}${className ? ` ${className}` : ''}`} onClick={onClick} disabled={disabled} title={tooltip} aria-label={props['aria-label'] || tooltip} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size,
-      borderRadius: 'var(--r-sm)',
+      borderRadius: 'var(--fx-pill)',
       ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
@@ -383,16 +383,17 @@ export function Divider({ style }) {
 
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
   return (
-    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
+    // 2026-10-19 첨부 스킨: 밑줄 탭 대신 회색 트랙 위의 pill — 고른 탭만 흰 면 + 그림자로 뜬다.
+    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'inline-flex', flexWrap: 'wrap', alignSelf: 'flex-start', gap: 2, padding: 3, borderRadius: 'var(--fx-pill)', background: 'var(--surface-3)', ...style }}>
       {tabs.map(t => {
         const isActive = t.key === active;
         return (
           <button key={t.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
-            padding: '8px 12px', fontSize: 12.5, fontWeight: 500,
+            padding: '6px 14px', fontSize: 12.5, fontWeight: 500, borderRadius: 'var(--fx-pill)',
             color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
-            borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
-            marginBottom: -1,
-            transition: 'color var(--dur-hover) var(--ease-hub)',
+            background: isActive ? 'var(--surface)' : 'transparent',
+            boxShadow: isActive ? 'var(--shadow-card)' : 'none',
+            transition: 'color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub)',
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
             {t.label}
@@ -985,8 +986,8 @@ export function SyncBadge({ state, reason, style }) {
 // available width (segments stay side-by-side on mobile — never stacked). `size="md"` is
 // the lower-density scale for drafting surfaces (§4) — capture forms, not scan tables.
 const SEGMENT_SCALE = {
-  sm: { pad: '4px 10px', fs: 11.5, gap: 5, radius: 4 },
-  md: { pad: '9px 13px', fs: 12.5, gap: 6, radius: 5 },
+  sm: { pad: '4px 12px', fs: 11.5, gap: 5, radius: 'var(--fx-pill)' },
+  md: { pad: '9px 15px', fs: 12.5, gap: 6, radius: 'var(--fx-pill)' },
 };
 
 // 다중 선택 칩 토글 — Leads 과목 필터 줄과 EditDrawer chips 필드가 공유한다(§8.1 primitives-first).
@@ -1025,7 +1026,7 @@ export function SegmentedControl({ options, value, onChange, className, style, l
       role="group"
       aria-label={label}
       data-invalid={invalid ? '' : undefined}
-      style={{ display: 'flex', gap: 2, borderRadius: 'var(--r-sm)', padding: 2, ...style }}
+      style={{ display: 'flex', gap: 2, borderRadius: 'var(--fx-pill)', padding: 3, ...style }}
     >
       {options.map(o => {
         const isActive = o.key === value;
