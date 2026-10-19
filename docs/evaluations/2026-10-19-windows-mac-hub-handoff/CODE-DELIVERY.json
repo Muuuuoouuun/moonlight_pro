@@ -1,0 +1,25 @@
+{
+  "code_commit": "a48ed295ca009d3d95dbeb73ec5f9e0b9d0be405",
+  "base": "12103a76eadef632a57f0da151487d8076fcecdd",
+  "branch": "codex/windows-mac-hub-handoff-20261019",
+  "paths": [
+    "apps/desktop/hub-session-bridge.js",
+    "apps/desktop/hub-session-snapshot.test.js",
+    "apps/desktop/pet/main/pet-hub-cancellation.test.js",
+    "apps/desktop/pet/main/pet-hub-client.js",
+    "apps/desktop/pet/main/pet-hub-generation.test.js",
+    "apps/desktop/pet/main/pet-hub.js",
+    "apps/desktop/pet/renderer/model/envelope-view.js",
+    "apps/desktop/pet/renderer/modes/office.js",
+    "apps/desktop/pet/renderer/office-recovery.test.js",
+    "apps/hub/lib/office/engine-client-retry.test.mjs",
+    "apps/hub/lib/office/engine-client.js",
+    "prototypes/moonlight-pet-macos/Sources/MoonlightPetPreview/Support/HubTransport.swift",
+    "prototypes/moonlight-pet-macos/Tests/MoonlightPetPreviewTests/HubTransportTests.swift"
+  ],
+  "bundle": "verified-six-patches.bundle",
+  "bundle_bytes": 14703,
+  "bundle_sha256": "474dbf779cadbd6c02a4ee0d75493d81286ef67cae5a321ce94538accfa1fec2",
+  "bundle_verify_exit": 0,
+  "cumulative_patch_sha256": "cbe38eb1153836d00f2fdd81894b4ac3278fb369aa7761dffa64e96e978ecf10"
+}

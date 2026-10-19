@@ -1,0 +1,19 @@
+✔ contract — Unix logout marker is retained in-process and is cleared by login (15.40731ms)
+✔ reproduction — shell restart loses explicit logout marker (4.72488ms)
+ℹ {"beforeRestartSignedOut":true,"afterRestartSignedOut":false}
+✔ reproduction — in-flight cookie read can return valid old session with signedOut true (3.067646ms)
+ℹ Observed contradictory response: valid session retained after explicit logout notification. Swift syncDesktopSession prioritizes session before signedOut.
+✔ contract — one Unix socket request is handled once even when two lines arrive (2.550062ms)
+✔ contract — native old close preserves descriptor when replacement already exists (46.760404ms)
+✔ reproduction — native close can delete a replacement descriptor published after old descriptor read (8.099619ms)
+ℹ Replacement server is alive (200), but its discovery descriptor is absent (ENOENT). Requires overlapping bridge lifecycle.
+✔ characterization — native read keeps its start origin if origin changes during cookie lookup (10.386553ms)
+ℹ Snapshot response retains old origin; consumer must reject old generations. No cross-origin cookie pairing observed.
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 206.37646

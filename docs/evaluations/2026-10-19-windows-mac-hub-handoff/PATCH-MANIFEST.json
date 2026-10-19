@@ -1,0 +1,136 @@
+{
+  "utc": "2026-10-19T12:08:39.263515+00:00",
+  "base": "67eb1d9b316843f5acd70de513d5a7b8d823bfdc",
+  "patches": [
+    {
+      "id": "O1",
+      "patch": "patches/desktop-generation-guard.patch",
+      "sha256": "250da48139a7b1c4983766ed24bd7e1cfbbf3bc33b8d991d681d04b87ed4afcb",
+      "bytes": 3235,
+      "paths": [
+        "apps/desktop/pet/main/pet-hub-generation.test.js",
+        "apps/desktop/pet/main/pet-hub.js"
+      ],
+      "source_only": "source-only/desktop-generation-guard-source-only.patch",
+      "source_only_sha256": "3806da1f56b5a26069a75d62061aff7d58b54b17bbde035d210e4d0787080fcc",
+      "source_only_bytes": 949
+    },
+    {
+      "id": "O2",
+      "patch": "patches/hub-contract-retry-candidate.patch",
+      "sha256": "a6aeb9888c8273ae78b9aa40151fe8db36f7b3030f94e6eca4e11f2c3a5bfd23",
+      "bytes": 3687,
+      "paths": [
+        "apps/hub/lib/office/engine-client-retry.test.mjs",
+        "apps/hub/lib/office/engine-client.js"
+      ],
+      "source_only": "source-only/hub-contract-retry-candidate-source-only.patch",
+      "source_only_sha256": "0fc6dcdde9a06fb42a040ae26fdf52802e5dcf1d4603412384807690dbaca616",
+      "source_only_bytes": 1039
+    },
+    {
+      "id": "O3",
+      "patch": "patches/native-preflight-generation.patch",
+      "sha256": "75032dbd1045e6d63ebc502fec279761d249f2b524cff8c85906361140a32d31",
+      "bytes": 10632,
+      "paths": [
+        "prototypes/moonlight-pet-macos/Sources/MoonlightPetPreview/Support/HubTransport.swift",
+        "prototypes/moonlight-pet-macos/Tests/MoonlightPetPreviewTests/HubTransportTests.swift"
+      ],
+      "source_only": "source-only/native-preflight-generation-source-only.patch",
+      "source_only_sha256": "1f5d4e3d90f8755eb5b9234828b9ef0686c820d0ec488087e904b0f0911d3da8",
+      "source_only_bytes": 3731
+    },
+    {
+      "id": "D2",
+      "patch": "patches/office-definitive-rejection.patch",
+      "sha256": "c871bb9381e8ce56d22bd5bcb461dbd6d88680c1263b1991e69bb026236307a8",
+      "bytes": 12742,
+      "paths": [
+        "apps/desktop/pet/main/pet-hub-client.js",
+        "apps/desktop/pet/renderer/model/envelope-view.js",
+        "apps/desktop/pet/renderer/modes/office.js",
+        "apps/desktop/pet/renderer/office-recovery.test.js"
+      ],
+      "source_only": "source-only/office-definitive-rejection-source-only.patch",
+      "source_only_sha256": "e9be080b77bb22b8608f48149b2a6d866d40e41824cfd53197f32d597436a75f",
+      "source_only_bytes": 3727
+    },
+    {
+      "id": "D3",
+      "patch": "patches/desktop-queued-cancellation.patch",
+      "sha256": "a466754719e967b0386fe9f3e99a37471dbe4088275d649c1ac9b117d98caa7d",
+      "bytes": 10932,
+      "paths": [
+        "apps/desktop/pet/main/pet-hub.js",
+        "apps/desktop/pet/main/pet-hub-cancellation.test.js"
+      ],
+      "source_only": "source-only/desktop-queued-cancellation-source-only.patch",
+      "source_only_sha256": "5d5607ac54632319eeb59a189bfdce5b51e9d70afdac5a411bc402a67bbc5576",
+      "source_only_bytes": 2698
+    },
+    {
+      "id": "S2",
+      "patch": "patches/session-snapshot-consistency.patch",
+      "sha256": "f1464d693def09901a94594aa867c1d87bd30c6ded170b3d0825a4638d9960c8",
+      "bytes": 13742,
+      "paths": [
+        "apps/desktop/hub-session-bridge.js",
+        "apps/desktop/hub-session-snapshot.test.js"
+      ],
+      "source_only": "source-only/session-snapshot-consistency-source-only.patch",
+      "source_only_sha256": "f123359044f6a4bc47f04649c6c5d7247d81c2480552ceee5e6e40f185f345cd",
+      "source_only_bytes": 5013
+    }
+  ],
+  "recommended_order": [
+    "O1",
+    "O2",
+    "O3",
+    "D2",
+    "D3",
+    "S2"
+  ],
+  "cumulative_patch": {
+    "path": "patches/all-six-candidate.patch",
+    "sha256": "cbe38eb1153836d00f2fdd81894b4ac3278fb369aa7761dffa64e96e978ecf10",
+    "bytes": 54494,
+    "apply_check_exit": 0,
+    "base": "67eb1d9b316843f5acd70de513d5a7b8d823bfdc",
+    "changed_files": 13
+  },
+  "combined_validation": {
+    "desktop": {
+      "total": 408,
+      "pass": 405,
+      "fail": 0,
+      "skip": 3,
+      "exit": 0
+    },
+    "syntax": {
+      "files": 1780,
+      "issues": 0,
+      "exit": 0
+    },
+    "root_full_repeated": false,
+    "swift_compiled": false,
+    "native_executed": false
+  },
+  "preservation": {
+    "candidate": {
+      "head": "67eb1d9b316843f5acd70de513d5a7b8d823bfdc",
+      "status": ""
+    },
+    "locked-validation": {
+      "head": "67eb1d9b316843f5acd70de513d5a7b8d823bfdc",
+      "status": ""
+    },
+    "main": {
+      "head": "94a71abd78b958a137746f5ab90fc6791d0b2c58",
+      "status": ""
+    },
+    "input_zip": "10067542a9b7313039e081001778daa3848f34012bc1cc7b395a00ef6c9e587d",
+    "previous_evidence_zip": "a1f442ecfe9038a2de261c46b73c040feac98cd7565268898ff2a2b08ceb85ad"
+  },
+  "library": "Same-path read-only auth tools/list returned HTTP 401; upload not attempted in followup"
+}

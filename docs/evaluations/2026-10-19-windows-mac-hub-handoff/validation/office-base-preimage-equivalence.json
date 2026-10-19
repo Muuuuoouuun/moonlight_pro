@@ -1,0 +1,159 @@
+{
+  "verified_at_utc": "2026-10-19T12:55:26.831601+00:00",
+  "office_base_ref": "codex/office-connection-20261002",
+  "refs": {
+    "office": "12103a76eadef632a57f0da151487d8076fcecdd",
+    "candidate": "67eb1d9b316843f5acd70de513d5a7b8d823bfdc"
+  },
+  "patch": "all-six-candidate.patch",
+  "patch_sha256": "cbe38eb1153836d00f2fdd81894b4ac3278fb369aa7761dffa64e96e978ecf10",
+  "changed_path_count": 13,
+  "identical_existing_count": 8,
+  "both_absent_new_count": 5,
+  "all_identical": true,
+  "entries": [
+    {
+      "path": "apps/desktop/hub-session-bridge.js",
+      "office_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "234e2e1d405ba4f7dc112c31b547a76ea5270a30"
+      },
+      "candidate_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "234e2e1d405ba4f7dc112c31b547a76ea5270a30"
+      },
+      "identical": true
+    },
+    {
+      "path": "apps/desktop/pet/main/pet-hub-client.js",
+      "office_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "5cd0ddb40a0d3126e208dcdefc3acaa4bc9ff48c"
+      },
+      "candidate_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "5cd0ddb40a0d3126e208dcdefc3acaa4bc9ff48c"
+      },
+      "identical": true
+    },
+    {
+      "path": "apps/desktop/pet/main/pet-hub.js",
+      "office_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "d01b625bd9903cc8417eb8b68e2fd2712d9b30de"
+      },
+      "candidate_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "d01b625bd9903cc8417eb8b68e2fd2712d9b30de"
+      },
+      "identical": true
+    },
+    {
+      "path": "apps/desktop/pet/renderer/model/envelope-view.js",
+      "office_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "675de3347a2cd0f728dfa953d52fa2e73359d9b9"
+      },
+      "candidate_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "675de3347a2cd0f728dfa953d52fa2e73359d9b9"
+      },
+      "identical": true
+    },
+    {
+      "path": "apps/desktop/pet/renderer/modes/office.js",
+      "office_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "cff7a9aaf8ba37d2863ffd8d402485ef1e973c79"
+      },
+      "candidate_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "cff7a9aaf8ba37d2863ffd8d402485ef1e973c79"
+      },
+      "identical": true
+    },
+    {
+      "path": "apps/hub/lib/office/engine-client.js",
+      "office_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "db85b2e3afbc77f4a0c5ce4c6b1cf18dc94718e9"
+      },
+      "candidate_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "db85b2e3afbc77f4a0c5ce4c6b1cf18dc94718e9"
+      },
+      "identical": true
+    },
+    {
+      "path": "prototypes/moonlight-pet-macos/Sources/MoonlightPetPreview/Support/HubTransport.swift",
+      "office_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "54a94666840b91512ababe7b52b33a8799979ed3"
+      },
+      "candidate_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "54a94666840b91512ababe7b52b33a8799979ed3"
+      },
+      "identical": true
+    },
+    {
+      "path": "prototypes/moonlight-pet-macos/Tests/MoonlightPetPreviewTests/HubTransportTests.swift",
+      "office_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "2c1db90df09dcb5047c146a8c8889cf602c978c9"
+      },
+      "candidate_preimage": {
+        "mode": "100644",
+        "type": "blob",
+        "blob": "2c1db90df09dcb5047c146a8c8889cf602c978c9"
+      },
+      "identical": true
+    },
+    {
+      "path": "apps/desktop/hub-session-snapshot.test.js",
+      "office_preimage": null,
+      "candidate_preimage": null,
+      "identical": true
+    },
+    {
+      "path": "apps/desktop/pet/main/pet-hub-cancellation.test.js",
+      "office_preimage": null,
+      "candidate_preimage": null,
+      "identical": true
+    },
+    {
+      "path": "apps/desktop/pet/main/pet-hub-generation.test.js",
+      "office_preimage": null,
+      "candidate_preimage": null,
+      "identical": true
+    },
+    {
+      "path": "apps/desktop/pet/renderer/office-recovery.test.js",
+      "office_preimage": null,
+      "candidate_preimage": null,
+      "identical": true
+    },
+    {
+      "path": "apps/hub/lib/office/engine-client-retry.test.mjs",
+      "office_preimage": null,
+      "candidate_preimage": null,
+      "identical": true
+    }
+  ],
+  "limits": "Read-only local Git object comparison of file modes/types/blob IDs. Isolated apply/regression validation on office is the publishing agent responsibility. Candidate7ba object remains unavailable; no compatibility claim for it."
+}
