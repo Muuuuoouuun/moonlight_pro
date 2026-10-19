@@ -1,6 +1,6 @@
 // UI projection only: all costs and contracts come from the personal finance ledger.
 import { formatWon } from '@/lib/won-format';
-export const FINANCE_VIEWS = [{key:'flow',label:'흐름'},{key:'subscriptions',label:'구독·고정비'},{key:'claims',label:'회사 청구'}];
+export const FINANCE_VIEWS = [{key:'flow',label:'흐름'},{key:'personal',label:'개인 소비'},{key:'subscriptions',label:'구독·고정비'},{key:'claims',label:'회사 청구'}];
 export const PURPOSE_OPTIONS = [{value:'unclassified',label:'미분류'},{value:'personal',label:'개인'},{value:'business',label:'개인 사업'},{value:'company',label:'회사 업무'}];
 export const CLAIM_OPTIONS = [{value:'unknown',label:'미확인'},{value:'preparing',label:'준비'},{value:'submitted',label:'제출'},{value:'approved',label:'승인'},{value:'partial',label:'일부 승인'},{value:'rejected',label:'반려'},{value:'on_hold',label:'보류'}];
 export const CYCLE_OPTIONS = [{value:'',label:'주기 미확인'},{value:'monthly',label:'매월'},{value:'quarterly',label:'분기'},{value:'annual',label:'매년'}];
@@ -130,4 +130,111 @@ export function financeSubscriptionDates(record,entries) {
   }
   const renewalReviewDate=lastActivePayment && initialTerm ? addCalendarMonths(lastActivePayment,period) : null;
   return {...record,lastPaymentDate,nextScheduleDate:renewalReviewDate,scheduleKind:renewalReviewDate?'review':'unknown'};
+}
+
+// ── Bar gauges (2026-10 Claude Design handoff "Cashflow Gauges" 3a–3e) ──
+// Labels are a display projection over the ledger: company purpose → 회사 청구, an entry in a contract group → 구독,
+// personal/business purpose → 개인, everything else → 미분류. Nothing here is persisted.
+export const FINANCE_LABELS = [{key:'personal',label:'개인'},{key:'subscription',label:'구독'},{key:'company',label:'회사 청구'},{key:'unclassified',label:'미분류'}];
+export const FINANCE_QUICK_PURPOSES = PURPOSE_OPTIONS.filter(option=>option.value!=='unclassified');
+const LABEL_KEYS = FINANCE_LABELS.map(label=>label.key);
+const ratio = (value,base) => typeof value==='number' && typeof base==='number' && base>0 ? Math.max(0,Math.min(1,value/base)) : 0;
+const dayCount = month => new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),0)).getUTCDate();
+const dayDiff = (from,to) => Math.round((Date.parse(`${to}T00:00:00Z`)-Date.parse(`${from}T00:00:00Z`))/86400000);
+const previousMonth = month => { const d=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7))-2,1)); return d.toISOString().slice(0,7); };
+const emptyParts = () => Object.fromEntries(LABEL_KEYS.map(key=>[key,0]));
+
+export function financeSpendEntries(entries) {
+  return entries.filter(entry=>entry.type==='expense' && !entry.duplicateOf && typeof entry.netAmount==='number');
+}
+export function financeLabelOf(entry,subscriptionGroups) {
+  const purpose=entry.review?.purpose;
+  if (purpose==='company') return 'company';
+  if (entry.group && subscriptionGroups.has(entry.group)) return 'subscription';
+  if (purpose==='personal' || purpose==='business') return 'personal';
+  return 'unclassified';
+}
+export function financeSubscriptionGroups(subscriptions) {
+  return new Set(subscriptions.map(record=>record.group).filter(Boolean));
+}
+export function financeGaugeMonth(data,month) {
+  return month || (data.monthly||[]).map(row=>row.month).sort().at(-1) || '';
+}
+// How much of the month the ledger has observed. A month the coverage ends inside is partial.
+export function financeObservedDays(month,through) {
+  const days=dayCount(month);
+  if (through?.startsWith(month)) return {observed:Number(through.slice(8,10)),days,partial:true};
+  if (through && through.slice(0,7)<month) return {observed:0,days,partial:true};
+  return {observed:days,days,partial:false};
+}
+// Range gauge: the track ends at the series maximum; solid tick = average of the earlier months, dashed tick = previous month.
+export function financeRangeGauge(series,month) {
+  const known=series.filter(row=>typeof row.value==='number').sort((a,b)=>a.month.localeCompare(b.month));
+  const current=known.find(row=>row.month===month);
+  if (!current) return null;
+  const past=known.filter(row=>row.month<month).slice(-5);
+  const columns=[...past,current];
+  const max=Math.max(...columns.map(row=>row.value));
+  const avg=past.length ? Math.round(past.reduce((sum,row)=>sum+row.value,0)/past.length) : null;
+  const prev=past.at(-1) || null;
+  return {value:current.value,max,maxMonth:columns.find(row=>row.value===max).month,avg,prev,
+    fill:ratio(current.value,max),avgAt:avg==null?null:ratio(avg,max),prevAt:prev?ratio(prev.value,max):null,
+    columns:columns.map(row=>({month:row.month,value:row.value,height:ratio(row.value,max),current:row.month===month}))};
+}
+export function financeMonthlySeries(monthly) {
+  return monthly.map(row=>({month:row.month,value:row.net}));
+}
+export function financeLabelSeries(spend,months,labelOf,label) {
+  return months.map(month=>({month,value:spend.filter(entry=>entry.date?.startsWith(month) && labelOf(entry)===label).reduce((sum,entry)=>sum+entry.netAmount,0)}));
+}
+export function financeGrossBreakdown(row) {
+  if (!row || !(row.gross>0)) return null;
+  return [['net',row.net],['refund',row.refund],['duplicate',row.duplicate]].map(([key,value])=>({key,value,share:ratio(value,row.gross)}));
+}
+// Daily bars stacked by label, plus the running total up to the picked day against the previous month.
+export function financeDailyStacks(spend,month,labelOf,observed) {
+  const days=Array.from({length:dayCount(month)},(_,index)=>{
+    const date=`${month}-${String(index+1).padStart(2,'0')}`, parts=emptyParts();
+    for (const entry of spend) if (entry.date===date) parts[labelOf(entry)]+=entry.netAmount;
+    return {day:index+1,date,observed:index<observed,parts,total:LABEL_KEYS.reduce((sum,key)=>sum+parts[key],0)};
+  });
+  const max=Math.max(0,...days.map(day=>day.total));
+  return {days:days.map(day=>({...day,heights:Object.fromEntries(LABEL_KEYS.map(key=>[key,ratio(day.parts[key],max)]))})),max};
+}
+export function financeCumulative(spend,month,date,prevNet) {
+  const value=spend.filter(entry=>entry.date?.startsWith(month) && entry.date<=date).reduce((sum,entry)=>sum+entry.netAmount,0);
+  const day=Number(date.slice(8,10)), prevDays=dayCount(previousMonth(month));
+  const paceValue=typeof prevNet==='number' ? Math.round(prevNet*Math.min(day,prevDays)/prevDays) : null;
+  return {value,day,prevNet:typeof prevNet==='number'?prevNet:null,paceValue,fill:ratio(value,prevNet),paceAt:ratio(paceValue,prevNet)};
+}
+export function financeLabelProgress(spend,labelOf) {
+  const groups=Object.fromEntries(LABEL_KEYS.map(key=>[key,{count:0,amount:0}]));
+  for (const entry of spend) { const group=groups[labelOf(entry)]; group.count++; group.amount+=entry.netAmount; }
+  const total=spend.reduce((sum,entry)=>sum+entry.netAmount,0);
+  const cells=[...spend].sort((a,b)=>LABEL_KEYS.indexOf(labelOf(a))-LABEL_KEYS.indexOf(labelOf(b))).map(entry=>labelOf(entry));
+  return {groups,count:spend.length,done:spend.length-groups.unclassified.count,total,amountShare:ratio(total-groups.unclassified.amount,total),cells};
+}
+// Top places: one segment per payment, segment length = amount, bar length relative to the top place.
+export function financeTopMerchants(entries,limit=5) {
+  const byName=new Map();
+  for (const entry of entries) {
+    if (!(entry.netAmount>0)) continue;
+    const name=entry.merchant || '거래명 미확인', row=byName.get(name) || {name,payments:[],total:0};
+    row.payments.push(entry.netAmount); row.total+=entry.netAmount; byName.set(name,row);
+  }
+  const rows=[...byName.values()].sort((a,b)=>b.total-a.total || a.name.localeCompare(b.name,'ko')).slice(0,limit);
+  return rows.map(row=>({...row,width:ratio(row.total,rows[0].total)}));
+}
+// Monthly fixed cost: active, monthly, KRW contracts with a known amount. Annual contracts are excluded.
+export function financeFixedCosts(subscriptions) {
+  const rows=subscriptions.filter(record=>record.serviceStatus==='active' && record.cycle==='monthly' && record.currency==='KRW' && typeof record.amount==='number');
+  const total=rows.reduce((sum,record)=>sum+record.amount,0);
+  return {total,count:rows.length,segments:rows.sort((a,b)=>b.amount-a.amount).map((record,index)=>({index:index+1,id:record.id,name:record.name,amount:record.amount,share:ratio(record.amount,total),claim:record.purpose==='company'}))};
+}
+// Billing-cycle gauge: share of the time between the last payment and the next schedule that has passed by today.
+export function financeCycleGauge(record,today,soonDays=21) {
+  const last=record.lastPaymentDate, next=record.nextScheduleDate;
+  if (record.serviceStatus!=='active' || !last || !next || next<last || ['resume','review'].includes(record.scheduleKind)) return null;
+  const span=dayDiff(last,next), left=dayDiff(today,next);
+  return {span,left,elapsed:span?ratio(dayDiff(last,today),span):1,soon:left<=soonDays};
 }
