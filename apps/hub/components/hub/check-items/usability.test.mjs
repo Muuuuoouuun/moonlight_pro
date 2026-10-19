@@ -124,13 +124,18 @@ test('남은 목록: 접힌 채로, 지금 카드는 표시만, 긴급은 글리
   assert.match(html, /보류했던 것/);
   assert.match(html, /잡아 둔 시간/);
   assert.equal(renderToStaticMarkup(React.createElement(RemainingList, { deck: [deal], currentKey: deal.signalKey })), '');
+  // 홈 7g 왼쪽 목록은 접지 않는다 — 같은 행·같은 고르기, 껍데기만 nav.
+  const side = renderToStaticMarkup(React.createElement(RemainingList, { deck, currentKey: deck[0].signalKey, layout: 'side' }));
+  assert.match(side, /^<nav class="ci-remaining ci-remaining--side" aria-label="남은 확인할 것">/);
+  assert.doesNotMatch(side, /<details|<summary/);
+  assert.match(side, /aria-current="true" disabled="">/);
 });
 
 test('홈: 남은 목록에서 고르면 맨 앞으로, D로 결정, ?check= 딥링크는 한 번 열고 지운다, 보류는 토스트에서 되돌린다', () => {
   const home = read('../pages/home.jsx');
   const deckSource = read('./focus-card.jsx');
   assert.match(deckSource, /const focus = React\.useCallback\(\(key\) => \{\s*if \(!key\) return;\s*setPinned\(key\);/);
-  assert.match(home, /<RemainingList deck=\{deck\} currentKey=\{activeKey\} onFocus=\{focus\} \/>/);
+  assert.match(home, /<RemainingList deck=\{deck\} currentKey=\{activeKey\} onFocus=\{focus\} layout="side" \/>/);
   assert.match(home, /e\.key === 'd' \|\| e\.key === 'D'/);
   assert.match(home, /params\.get\('check'\)/);
   assert.match(home, /window\.history\.replaceState/);

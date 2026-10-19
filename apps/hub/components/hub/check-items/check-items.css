@@ -364,8 +364,36 @@
 .hub-app .ci-remaining__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-app .ci-remaining__meta { font-size: 11px; color: var(--fg-dim); }
 
+/* 홈 7g 분할 뷰 — 왼쪽 남은 목록(펼침) · 오른쪽 결정 카드. 목록이 없으면(1건 이하) 카드가 전폭을 쓴다. */
+.hub-app .home-triage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.hub-app .home-triage[data-split="true"] { grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); }
+.hub-app .home-triage .ci-column { max-width: none; }
+.hub-app .ci-remaining--side { display: flex; flex-direction: column; gap: 8px; }
+.hub-app .ci-remaining--side ol { margin: 0; }
+.hub-app .ci-remaining--side .ci-remaining__row {
+  grid-template-columns: 14px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  row-gap: 3px;
+  min-height: 52px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+}
+.hub-app .ci-remaining--side .ci-remaining__kind { grid-column: 2; grid-row: 1; }
+.hub-app .ci-remaining--side .ci-remaining__title { grid-column: 2; grid-row: 2; white-space: normal; }
+.hub-app .ci-remaining--side .ci-remaining__meta { display: none; }
+.hub-app .ci-remaining--side .ci-remaining__row > :first-child { grid-row: 1 / span 2; align-self: start; margin-top: 3px; }
+.hub-app .ci-remaining--side .ci-remaining__row[aria-current="true"] { background: var(--surface); box-shadow: var(--fx-shadow), inset 1px 0 0 var(--accent); }
+.hub-app .home-after { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.hub-app .home-after:empty { display: none; }
+
 @media (max-width: 900px) {
   .hub-app .ci-focus { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .hub-app .home-triage[data-split="true"], .hub-app .home-after { grid-template-columns: minmax(0, 1fr); }
   .hub-app .ci-card { padding: 20px; }
 }
 

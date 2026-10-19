@@ -561,9 +561,19 @@ function useDailyBriefLedger(refreshKey) {
 }
 
 
-function MetricCard({ m, onNavigate, compact }) {
+function MetricCard({ m, onNavigate, compact, inline }) {
   const target = m.target || METRIC_TARGETS[m.label];
   const clickable = Boolean(target && onNavigate);
+  // 7a 운영 지표 한 줄 — 카드 4장 대신 라벨·값만. 원본 기록 화면으로 가는 길은 그대로 둔다.
+  if (inline) {
+    const body = <>
+      <span className="daily-brief__metric-label">{m.label}</span>
+      <span className="num" style={{ color: m.value === '—' ? 'var(--fg-faint)' : 'var(--fg)', fontWeight: 600 }}>{m.value}</span>
+    </>;
+    return clickable
+      ? <button type="button" className="daily-brief__metric-inline hub-row" title={m.delta || undefined} onClick={() => onNavigate(target)}>{body}</button>
+      : <span className="daily-brief__metric-inline" title={m.delta || undefined}>{body}</span>;
+  }
   return (
     <div
       role={clickable ? 'button' : undefined}
@@ -1812,12 +1822,12 @@ function BriefClock({ signalCount, urgentCount, todayCount }) {
   }, []);
   return (
     <>
-      <div className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', display: 'inline-block' }} />
-        <span>{formatBriefDate(now)}</span>
+      {/* Futura 헤더(2026-10-19 7a) — eyebrow + 44px/300 제목. 이전 Daily Brief 히어로 스케일(clamp 26–32/700)을 대체한다. */}
+      <div className="fx-eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span>오늘 · {formatBriefDate(now)}</span>
       </div>
-      <h2 style={{ margin: 0, fontSize: 'clamp(26px, 3.2vw, 32px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.1 }}>오늘의 실행</h2>
-      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--fg-muted)' }}>
+      <h2 className="fx-page-title">오늘의 실행</h2>
+      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--fg-muted)' }}>
         <span>{greetingFor(now)}, 준혁</span>
         <span style={{ color: 'var(--line-strong)', opacity: 0.6 }}>·</span>
         <div className="daily-brief__intro-stats">
@@ -1980,18 +1990,12 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
   // danger 레일을 달고 화면 맨 위에 있으므로 헤더 "즉시"에는 반드시 포함된다(사용성 재감사 A).
   const focusUrgentCount = ledger.summary?.focusUrgentCount ?? (ledger.dailyFocus?.urgentKa?.item ? 1 : 0);
   const screenUrgentCount = urgentCount + focusUrgentCount;
-  // 접힌 헤더의 요약 — 0건을 굳이 말하지 않고(소음), read 실패는 0으로 뭉개지 않는다.
-  const approvalSummary = ledger.queue?.source === 'error'
-    ? '작업 지시 확인 불가'
-    : Number(ledger.queue?.pending) > 0
-      ? `승인 대기 ${ledger.queue.pending}건`
-      : null;
   const ranked = React.useMemo(() => rankSignals(ledger.signals), [ledger.signals]);
   const command = ranked[0] || null;
   const waiting = ranked.slice(1);
   return (
-    <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 'var(--section-gap)', maxWidth: 1160, margin: '0 auto', width: '100%' }}>
-      <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
+    <div className="hub-futura hub-page daily-brief">
+      <div className="hub-page-header daily-brief__intro fade-up fx-head">
         <div>
           <BriefClock signalCount={signalCount} urgentCount={screenUrgentCount} todayCount={todayCount} />
         </div>
@@ -2015,8 +2019,39 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
       {/* 하루 마무리(09-21 §5-4 → 2026-09-23 §4.3) — 저녁 18시 이후·다음 날 정오 전에만 말한다. 빠른 입력과 붙여 둔다. */}
       <DailyReviewCue />
 
-      <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
-      <GuidanceInlineTip variant="today" onNavigate={onNavigate} />
+      {/* 7a 실행 보드(2026-10-19 운영자 선택): 할 일 | 연락할 사람 | 오늘 일정·작업 지시·바로가기.
+          §7 fold 순서(빠른 입력 → 할 일 → 긴급 KA·집중 고객·일정 → 신호)는 그대로 — 세로로 쌓던 것을 한 줄에 놓는다. */}
+      <div className="daily-brief__board">
+        <div className="daily-brief__board-tasks">
+          <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
+          <GuidanceInlineTip variant="today" onNavigate={onNavigate} />
+        </div>
+        <div className="daily-brief__board-focus">
+          {/* 명명된 슬롯이 tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
+          <FocusSlots
+            dailyFocus={ledger.dailyFocus}
+            onNavigate={onNavigate}
+            onRecord={setRecordTarget}
+            navigation={[
+              <ApprovalQueueCard key="queue" onNavigate={onNavigate} />,
+              <BriefNavigation key="nav" taskToday={ledger.taskToday} onNavigate={onNavigate} />,
+            ]}
+          />
+          {/* 집중 데이터가 아직 없거나 읽지 못해도 같은 작업 지시·바로가기를 한 번 보여 준다. */}
+          {!ledger.dailyFocus && [
+            <ApprovalQueueCard key="queue" onNavigate={onNavigate} />,
+            <BriefNavigation key="nav" taskToday={ledger.taskToday} onNavigate={onNavigate} />,
+          ]}
+        </div>
+      </div>
+
+      {/* 운영 지표 — 7a는 카드 4장 대신 한 줄. 매출 pulse는 §2 첫 화면 판단축이라 접지 않고 상시 노출한다. */}
+      <div className="daily-brief__metric-line" aria-label="운영 지표">
+        <span className="fx-eyebrow">운영 지표</span>
+        {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} inline />)}
+        <span style={{ flex: 1 }} />
+        <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>현황에서 보기</Button>
+      </div>
 
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
       <WeeklyReportCard
@@ -2026,16 +2061,6 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-        {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
-            tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
-        <FocusSlots
-          dailyFocus={ledger.dailyFocus}
-          onNavigate={onNavigate}
-          onRecord={setRecordTarget}
-          navigation={<BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />}
-        />
-        {/* 집중 데이터가 아직 없거나 읽지 못해도 같은 바로가기를 한 번 보여 준다. */}
-        {!ledger.dailyFocus && <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />}
         {/* 저장된 사실이 있는 고객·거래에만 원문 기법을 잇는다(agent-layer-direction §2.1 ⑦).
             시간대로 도는 Guru 관점은 위의 한 줄 팁(GuidanceInlineTip)만 두고 카드로 늘리지 않는다 —
             이 목록은 act 추천이 있을 때만 그려지고, 없으면 아무것도 그리지 않는다. */}
@@ -2079,20 +2104,10 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
           </div>
         )}
 
-        {/* 매출 pulse는 §2 첫 화면 판단축 — 접힌 MoreDetail 뒤가 아니라 "지금 값"으로
-            상시 노출한다(2026-07-15 §2.2 QA 결정 B 유지 항목, system-eval B-11). */}
-        <div>
-          <SectionTitle right={<Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>현황에서 보기</Button>}>운영 지표</SectionTitle>
-          <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--gap)' }}>
-            {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
-          </div>
-        </div>
-
-        <MoreDetail title="보조 정보 · 리듬, 모닝 브리프, 승인" summary={approvalSummary}>
+        <MoreDetail title="보조 정보 · 리듬, 모닝 브리프, 검토 대기">
           <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
           <RhythmPanel onNavigate={onNavigate} />
           <MorningBriefCard brief={ledger.morningBrief} taskToday={ledger.taskToday} onNavigate={onNavigate} />
-          <ApprovalQueueCard onNavigate={onNavigate} />
           <ReviewWaitingList onNavigate={onNavigate} />
         </MoreDetail>
       </div>
