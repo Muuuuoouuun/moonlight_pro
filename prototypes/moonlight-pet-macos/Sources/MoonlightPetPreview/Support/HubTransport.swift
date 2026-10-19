@@ -249,15 +249,21 @@ actor HubTransport: HubTransporting {
         let url = try requestURL(path)
         let method = method.uppercased()
         guard ["GET", "POST", "PATCH", "DELETE"].contains(method) else { throw HubTransportError.rejectedURL }
-        if !desktopSessionAvailable, !(path.hasPrefix("/api/operator/session") && method != "GET"), let shared = await sharedSession(),
-           shared.origin == baseURL {
-            for cookie in cookies.cookies ?? [] where cookie.name == "com_moon_operator_session" {
-                cookies.deleteCookie(cookie)
+        if !desktopSessionAvailable, !(path.hasPrefix("/api/operator/session") && method != "GET") {
+            let shared = await sharedSession()
+            // A bridge read may finish after disconnect/sign-out. Reject it
+            // before importing its cookie or sending the original request.
+            guard generation == sessionGeneration else { throw CancellationError() }
+            try Task.checkCancellation()
+            if let shared, shared.origin == baseURL {
+                for cookie in cookies.cookies ?? [] where cookie.name == "com_moon_operator_session" {
+                    cookies.deleteCookie(cookie)
+                }
+                guard let value = shared.cookie else { throw HubTransportError.unauthorized }
+                let header = "com_moon_operator_session=\(value); Path=/; HttpOnly" + (baseURL.scheme == "https" ? "; Secure" : "")
+                cookies.setCookies(HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": header], for: baseURL),
+                                   for: baseURL, mainDocumentURL: baseURL)
             }
-            guard let value = shared.cookie else { throw HubTransportError.unauthorized }
-            let header = "com_moon_operator_session=\(value); Path=/; HttpOnly" + (baseURL.scheme == "https" ? "; Secure" : "")
-            cookies.setCookies(HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": header], for: baseURL),
-                               for: baseURL, mainDocumentURL: baseURL)
         }
         let selectedSession = sessionForRequest(path: path, method: method)
         var request = URLRequest(url: url, timeoutInterval: selectedSession.configuration.timeoutIntervalForRequest)
@@ -407,11 +413,15 @@ actor HubTransport: HubTransporting {
 
     private func syncDesktopSession() async throws {
         let generation = sessionGeneration
-        guard let shared = await desktopSession?.read(origin: origin), shared.origin == origin else {
+        let shared = await desktopSession?.read(origin: origin)
+        // Unavailable and foreign-origin reads are asynchronous too; neither
+        // may let an operation from a discarded connection continue.
+        guard generation == sessionGeneration else { throw CancellationError() }
+        try Task.checkCancellation()
+        guard let shared, shared.origin == origin else {
             desktopSessionAvailable = false
             return
         }
-        guard generation == sessionGeneration else { throw CancellationError() }
         desktopSessionAvailable = true
         if let saved = shared.session, saved.isValid {
             if cookies.cookies(for: baseURL)?.first(where: { $0.name == "com_moon_operator_session" })?.value != saved.value {

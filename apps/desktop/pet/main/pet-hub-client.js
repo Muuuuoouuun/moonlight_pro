@@ -203,7 +203,16 @@ function createHubClient(options = {}) {
       if (httpStatus === 401 || httpStatus === 403 || status === 'unauthorized' || status === 'forbidden') {
         throw fail('unauthorized', 'unauthorized', httpStatus);
       }
-      if (httpStatus === 409) throw fail('conflict', 'conflict', httpStatus);
+      if (httpStatus === 409) {
+        // These claim-RPC failures occur only after checking that this request ID
+        // has no existing turn. Other conflicts can refer to an accepted request.
+        const unclaimed = method === 'POST' && /^\/api\/hub\/office\/meetings\/[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}\/turns$/i.test(path)
+          && status === 'conflict' && envelope?.persisted === false
+          && ['meeting-revision-changed', 'meeting-closed'].includes(envelope.error)
+          && Object.keys(envelope).every(key => ['status', 'error', 'persisted', 'businessWrites'].includes(key))
+          && (envelope.businessWrites === undefined || envelope.businessWrites === false);
+        throw fail('conflict', unclaimed ? envelope.error : 'conflict', httpStatus);
+      }
       if (httpStatus < 200 || httpStatus >= 300 || status === 'error' || source === 'error') throw fail('error', 'server', httpStatus);
       if (!envelope && httpStatus !== 204) throw fail('invalid', 'invalid-response', httpStatus);
 

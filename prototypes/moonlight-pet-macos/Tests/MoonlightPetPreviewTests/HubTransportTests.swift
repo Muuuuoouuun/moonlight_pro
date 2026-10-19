@@ -192,6 +192,69 @@ struct HubTransportTests {
         _ = try await client.request(path: "/api/hub/tasks")
     }
 
+    func testSharedSessionPreflightCannotSendAfterDisconnectOrSignOut() async throws {
+        let origin = URL(string: "https://hub.example.test")!
+        let snapshots: [HubSharedSession?] = [nil,
+            HubSharedSession(origin: URL(string: "https://other.example.test")!, cookie: "other.signature"),
+            HubSharedSession(origin: origin, cookie: "previous.signature")]
+        for forget in [false, true] {
+            for snapshot in snapshots {
+                let gate = HeldSessionRead(snapshot)
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [TransportURLProtocol.self]
+                let client = try HubTransport(baseURL: origin, configuration: configuration,
+                    credentialStore: MemoryHubCredentials(), sharedSession: { await gate.read() })
+                var requests = 0
+                TransportURLProtocol.handler = { _, response in
+                    requests += 1
+                    response.respond(json: "{\"status\":\"live\"}")
+                }
+                let pending = Task { try await client.request(path: "/api/hub/journal", method: "POST", body: Data("{}".utf8)) }
+                while !(await gate.started) { await Task.yield() }
+                if forget { try await client.clearSession() } else { await client.disconnect() }
+                await gate.release()
+                do { _ = try await pending.value; recordFailure("An invalidated preflight must cancel before sending") }
+                catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
+                expectEqual(requests, 0)
+                TransportURLProtocol.handler = { request, response in
+                    expectNil(request.value(forHTTPHeaderField: "Cookie"))
+                    response.respond(json: "{\"status\":\"live\"}")
+                }
+                _ = try await client.request(path: "/api/hub/tasks")
+            }
+        }
+    }
+
+    func testDesktopPreflightCannotSendAfterDisconnectOrSignOut() async throws {
+        let origin = "https://hub.example.test"
+        let saved = HubSavedSession(value: "previous.signature", expiresAt: Date().timeIntervalSince1970 + 86400)
+        let snapshots: [HubDesktopSession?] = [nil,
+            HubDesktopSession(origin: "https://other.example.test", session: saved),
+            HubDesktopSession(origin: origin, session: saved)]
+        for forget in [false, true] {
+            for snapshot in snapshots {
+                let gate = HeldSessionRead(snapshot)
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [TransportURLProtocol.self]
+                let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
+                    credentialStore: MemoryHubCredentials(), desktopSession: HeldDesktopSession(gate: gate),
+                    sharedSession: { nil })
+                var requests = 0
+                TransportURLProtocol.handler = { _, response in
+                    requests += 1
+                    response.respond(json: "{\"status\":\"live\"}")
+                }
+                let pending = Task { try await client.request(path: "/api/hub/journal", method: "POST", body: Data("{}".utf8)) }
+                while !(await gate.started) { await Task.yield() }
+                if forget { try await client.clearSession() } else { await client.disconnect() }
+                await gate.release()
+                do { _ = try await pending.value; recordFailure("An invalidated desktop preflight must not send") }
+                catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
+                expectEqual(requests, 0)
+            }
+        }
+    }
+
     func testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials() async throws {
         for forget in [false, true] {
             let store = MemoryHubCredentials()
@@ -657,6 +720,30 @@ private final class TestFailures: @unchecked Sendable {
 }
 private let testFailures = TestFailures()
 
+private actor HeldSessionRead<Value: Sendable> {
+    private let snapshot: Value?
+    private var continuation: CheckedContinuation<Value?, Never>?
+    private var released = false
+    private(set) var started = false
+    init(_ snapshot: Value?) { self.snapshot = snapshot }
+    func read() async -> Value? {
+        if released { return nil }
+        started = true
+        return await withCheckedContinuation { continuation = $0 }
+    }
+    func release() {
+        released = true
+        continuation?.resume(returning: snapshot)
+        continuation = nil
+    }
+}
+
+private struct HeldDesktopSession: HubDesktopSessionSharing {
+    let gate: HeldSessionRead<HubDesktopSession>
+    func read(origin: String) async -> HubDesktopSession? { await gate.read() }
+    func write(_ session: HubSavedSession?, origin: String) async {}
+}
+
 private actor MemoryDesktopSession: HubDesktopSessionSharing {
     private var snapshot: HubDesktopSession?
     func set(_ value: HubDesktopSession?) { snapshot = value }
@@ -696,6 +783,8 @@ private struct HubTransportTestRunner {
             ("rejected credentials are neither saved nor retried forever", tests.testRejectedLoginNeverReplacesAcceptedCredentialsOrLoops),
             ("uncertain writes and model generation never replay", tests.testUncertainWritesAndModelGenerationAreNeverAutomaticallyReplayed),
             ("late responses cannot restore logout cookies", tests.testLateResponseCannotRestoreCookiesAfterSignOut),
+            ("shared bridge preflight cannot send after disconnect/sign-out", tests.testSharedSessionPreflightCannotSendAfterDisconnectOrSignOut),
+            ("desktop bridge preflight cannot send after disconnect/sign-out", tests.testDesktopPreflightCannotSendAfterDisconnectOrSignOut),
             ("disconnect cancels authentication without losing origin credentials", tests.testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials),
             ("concurrent reads share automatic login", tests.testSimultaneousReadsShareOneAutomaticLogin),
             ("expired session renews without changing memo", tests.testExpiredSessionAuthenticatesOnceAndReplaysIdenticalMemoCommand),

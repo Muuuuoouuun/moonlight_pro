@@ -54,28 +54,54 @@ async function startHubSessionBridge({ session, getHubUrl, directory = bridgeDir
         if (request.origin !== url.origin || !['read', 'write'].includes(request.action)) throw new Error('Rejected bridge request');
         const cookieUrl = `${url.origin}/`;
         if (request.action === 'write') {
-          if (request.session === null) {
-            signedOutOrigins.add(url.origin);
-            await session.cookies.remove(cookieUrl, COOKIE);
+          if (request.session !== null && !validSession(request.session)) throw new Error('Invalid session');
+          advanceSessionRevision(url.origin);
+          pendingSessionWrites.set(url.origin, (pendingSessionWrites.get(url.origin) || 0) + 1);
+          try {
+            if (request.session === null) {
+              signedOutOrigins.add(url.origin);
+              await session.cookies.remove(cookieUrl, COOKIE);
+            }
+            else {
+              signedOutOrigins.delete(url.origin);
+              await session.cookies.set({ url: cookieUrl, name: COOKIE, value: request.session.value,
+                expirationDate: request.session.expiresAt, path: '/', httpOnly: true,
+                secure: url.protocol === 'https:', sameSite: 'lax' });
+            }
+            await session.cookies.flushStore();
+          } finally {
+            const remaining = pendingSessionWrites.get(url.origin) - 1;
+            if (remaining) pendingSessionWrites.set(url.origin, remaining);
+            else pendingSessionWrites.delete(url.origin);
+            advanceSessionRevision(url.origin);
           }
-          else {
-            if (!validSession(request.session)) throw new Error('Invalid session');
-            signedOutOrigins.delete(url.origin);
-            await session.cookies.set({ url: cookieUrl, name: COOKIE, value: request.session.value,
-              expirationDate: request.session.expiresAt, path: '/', httpOnly: true,
-              secure: url.protocol === 'https:', sameSite: 'lax' });
-          }
-          await session.cookies.flushStore();
         }
-        const cookies = await session.cookies.get({ url: cookieUrl, name: COOKIE });
-        const cookie = cookies.find((item) => item.name === COOKIE && item.path === '/');
-        const saved = cookie ? { value: cookie.value, expiresAt: cookie.expirationDate } : null;
-        socket.end(`${JSON.stringify({ origin: url.origin, session: validSession(saved) ? saved : null,
-          signedOut: signedOutOrigins.has(url.origin) })}\n`);
+        socket.end(`${JSON.stringify(await readSessionSnapshot(url.origin, cookieUrl))}\n`);
       } catch { socket.end('{"error":"rejected"}\n'); }
     });
   });
   const signedOutOrigins = new Set();
+  const sessionRevisions = new Map();
+  const pendingSessionWrites = new Map();
+  const advanceSessionRevision = (origin) => sessionRevisions.set(origin, (sessionRevisions.get(origin) || 0) + 1);
+  async function readSessionSnapshot(origin, cookieUrl) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (signedOutOrigins.has(origin)) return { origin, session: null, signedOut: true };
+      if (pendingSessionWrites.has(origin)) throw new Error('Session write is still pending');
+      const revision = sessionRevisions.get(origin) || 0;
+      const cookies = await session.cookies.get({ url: cookieUrl, name: COOKIE });
+      // Explicit logout dominates any cookie snapshot captured before it.
+      if (signedOutOrigins.has(origin)) return { origin, session: null, signedOut: true };
+      if (pendingSessionWrites.has(origin)) throw new Error('Session write is still pending');
+      // A logout/login cycle may clear that marker while lookup is suspended.
+      // Re-read once rather than attaching an older cookie to the new state.
+      if (revision !== (sessionRevisions.get(origin) || 0)) continue;
+      const cookie = cookies.find((item) => item.name === COOKIE && item.path === '/');
+      const saved = cookie ? { value: cookie.value, expiresAt: cookie.expirationDate } : null;
+      return { origin, session: validSession(saved) ? saved : null, signedOut: false };
+    }
+    throw new Error('Session changed during bridge read');
+  }
   const onCookieChanged = (_event, cookie, cause, removed) => {
     if (cookie.name !== COOKIE) return;
     let origin;
@@ -83,6 +109,7 @@ async function startHubSessionBridge({ session, getHubUrl, directory = bridgeDir
     const host = new URL(origin).hostname;
     const domain = cookie.domain?.replace(/^\./, '');
     if (domain && host !== domain && !host.endsWith(`.${domain}`)) return;
+    advanceSessionRevision(origin);
     if (!removed) signedOutOrigins.delete(origin);
     else if (['explicit', 'expired-overwrite'].includes(cause)) signedOutOrigins.add(origin);
   };
