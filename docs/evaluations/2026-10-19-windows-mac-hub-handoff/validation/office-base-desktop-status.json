@@ -1,0 +1,6 @@
+{
+  "command": "npm --workspace @com-moon/desktop test",
+  "base": "12103a76eadef632a57f0da151487d8076fcecdd + preserved six patches",
+  "exit_code": 0,
+  "seconds": 13.537
+}

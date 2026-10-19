@@ -156,6 +156,7 @@ function createPetHub(input = {}) {
   let lastBadge = 0;
   let stopPollingFn = null;
   let pollInFlight = null;
+  let chatRequest = null; // Reserve a single send before connection preparation finishes.
 
   function emit(name, payload) {
     try {
@@ -205,6 +206,7 @@ function createPetHub(input = {}) {
     const previous = conn;
     conn = null;
     pollInFlight = null;
+    chatRequest = null;
     if (!origin) {
       chat.configure({ service: null, origin: null });
       const ready = activity.configure({ service: null, origin: null });
@@ -389,14 +391,26 @@ function createPetHub(input = {}) {
     // 'pet:chat-send' {ownerId, scope, message} → { turn, userTurn }
     async chatSend(input) {
       const current = conn;
-      if (current) await current.ready;
-      const envelope = await chat.send(payloadOf(input));
-      if (current && current === conn) setHubStatus(statusFromEnvelope(envelope));
-      return envelope;
+      if (chatRequest) return errorEnvelope(fail('error', 'busy'));
+      const ticket = {};
+      chatRequest = ticket;
+      try {
+        if (current) await current.ready;
+        if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
+        if (chatRequest !== ticket) return errorEnvelope(fail('error', 'cancelled'));
+        const envelope = await chat.send(payloadOf(input));
+        if (current && current === conn && chatRequest === ticket) setHubStatus(statusFromEnvelope(envelope));
+        return envelope;
+      } finally {
+        if (chatRequest === ticket) chatRequest = null;
+      }
     },
     // 'pet:chat-cancel' {} → { cancelled }
     chatCancel() {
-      return Promise.resolve(okEnvelope('live', { cancelled: chat.cancel() }));
+      const queued = chatRequest !== null;
+      chatRequest = null;
+      const active = chat.cancel();
+      return Promise.resolve(okEnvelope('live', { cancelled: queued || active }));
     },
     // 'pet:chat-session' {ownerId, scope, draft?} → { turns, draft, busy(이 대화가 보내는 중: boolean), sending(=busy), busyWith(보내는 대화 {ownerId,scope,message}|null), error }
     // 이 대화를 '보고 있음'으로 표시하고 그 대화의 답변 알림을 거둔다. 실제로 보이는지는 isChatVisible()(셸 ctx 면
@@ -463,6 +477,7 @@ function createPetHub(input = {}) {
       const current = conn;
       if (!current) return { skipped: true };
       await current.ready;
+      if (current !== conn) return { skipped: true };
       if (pollInFlight) return pollInFlight;
       const flight = (async () => {
         if (PROBE_ONLY_STATUSES.includes(hubStatus)) {
@@ -556,6 +571,7 @@ function createPetHub(input = {}) {
     },
     dispose() {
       hub.stopPolling();
+      chatRequest = null;
       chat.configure({ service: null, origin: null });
       activity.configure({ service: null, origin: null }).catch(() => {});
       conn = null;

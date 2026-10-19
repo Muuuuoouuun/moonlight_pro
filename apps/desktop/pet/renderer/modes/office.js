@@ -216,8 +216,11 @@
         if (!alive) return;
         if (ticket !== seq) { busy = false; render(); return; }
         busy = false; view = M.envelope.describeRead(res, 'Office 답변');
+        // Only the transport's verified preclaim failures prove this ID was not
+        // accepted. Keep the draft and require refresh plus another explicit send.
+        if (res.kind === 'conflict' && ['meeting-revision-changed', 'meeting-closed'].includes(res.error)) savePending(null);
         if (view.showData) { detail = res.data; reconcile(); synced = new Date(); }
-        // Timeout/conflict keeps both draft and command. Recovery is GET only.
+        // Ambiguous outcomes keep both draft and command. Recovery is GET only.
         render();
       }
       async function recoverCreate() {
