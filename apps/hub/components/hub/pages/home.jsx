@@ -307,7 +307,10 @@ export function Home({ onNavigate, onGuidanceAsk }) {
         <TruthBadge state="partial" reason="끝낸 기록을 읽지 못해 이미 끝낸 카드가 다시 보일 수 있습니다" />
       ) : null}
 
-      <div className="ci-focus">
+      {/* 7g(2026-10-19 운영자 선택): 남은 목록 | 결정 카드 → 멘토 한 줄 → 오늘의 시간표 → 잡아 둔 일·끝낸 것. */}
+      {live ? <CheckItemProgress finished={finishedToday} remaining={deck.length} scheduled={waitingCount} date={formatEyebrowDate(new Date())} /> : null}
+      <div className="home-triage" data-split={live && deck.length >= 2 ? 'true' : undefined}>
+        {live ? <RemainingList deck={deck} currentKey={activeKey} onFocus={focus} layout="side" /> : null}
         <div className="ci-column">
           {status === 'loading' ? (
             <Skeleton lines={7} />
@@ -317,8 +320,6 @@ export function Home({ onNavigate, onGuidanceAsk }) {
             <TruthBadge state="preview" reason="Supabase 연결 필요" />
           ) : (
             <>
-              <CheckItemProgress finished={finishedToday} remaining={deck.length} scheduled={waitingCount} date={formatEyebrowDate(new Date())} />
-              <RemainingList deck={deck} currentKey={activeKey} onFocus={focus} />
               {active ? (
                 <FocusCard
                   item={active}
@@ -352,19 +353,26 @@ export function Home({ onNavigate, onGuidanceAsk }) {
             </>
           )}
         </div>
+      </div>
 
-        <aside className="ci-rail" aria-label="오늘의 시간표, 잡아 둔 일과 끝낸 것">
-          <TodaySchedule onNavigate={onNavigate} schedule={schedule} onReload={reload} />
-          <ScheduledList blocks={scheduledBlocks} calendar={calendar} onChanged={scheduleChanged} onError={(message) => toast.error(message)} />
-          <FinishedTodayList receipts={finishedToday} state={checkItems?.state} onUndo={undo} />
-        </aside>
+      {/* 멘토 한 줄 — 지금 보는 카드가 고객·거래·콘텐츠면 그 분야의 Guru 카드를 고른다. 기록을 읽고 만든 조언은 아니다. */}
+      <GuidanceInlineTip
+        variant="home"
+        context={active?.subject?.type ? { type: active.subject.type, label: active.kindLabel } : null}
+        onNavigate={onNavigate}
+      />
+
+      <TodaySchedule onNavigate={onNavigate} schedule={schedule} onReload={reload} />
+
+      <div className="home-after" aria-label="잡아 둔 일과 끝낸 것">
+        <ScheduledList blocks={scheduledBlocks} calendar={calendar} onChanged={scheduleChanged} onError={(message) => toast.error(message)} />
+        <FinishedTodayList receipts={finishedToday} state={checkItems?.state} onUndo={undo} />
       </div>
 
       <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={onNavigate} onRetry={guruRecommendations.reload} />
       <PublishDue />
 
       <div className="home-morning-stack">
-        <GuidanceInlineTip variant="home" onNavigate={onNavigate} />
         {status !== 'unauthorized' && schedule.status !== 'unauthorized' ? <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} /> : null}
       </div>
 

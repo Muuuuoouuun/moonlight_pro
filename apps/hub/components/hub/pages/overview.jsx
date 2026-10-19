@@ -9,11 +9,12 @@ import "./overview-activity.css";
 import { Iconed } from "../hub-icons";
 import { BrandIcon } from "../brand-icons";
 import { GuidanceInlineTip } from "../guidance-inline-tip";
-import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress, Skeleton } from "../hub-primitives";
+import { Badge, Card, CertaintyBadge, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Progress, Skeleton } from "../hub-primitives";
 import {
   activitySeriesAvailability,
   buildAutomationMetricRows,
   buildOverviewKpiCards,
+  buildPeriodComparison,
   overviewDisclosureMessages,
   overviewPanelAvailability,
   overviewSyncState,
@@ -186,11 +187,13 @@ const PANEL_COPY = {
 // 이전에는 이 마크업이 6개 패널에 복붙돼 있었고(§8.1 primitives-first 위반) marginBottom도
 // 12/14로 이미 드리프트가 시작돼 있었다. availability는 overviewPanelAvailability()의
 // { state, showData, reason } 계약을 그대로 받는다.
-function PanelCard({ panel, availability, onOpen, openLabel = '열기', action, children }) {
+// headline(7e 운영 지도, 2026-10-19)은 영역마다 큰 숫자 하나 · 상태 한 줄 · 필요할 때만 다음 행동 하나다.
+// 값은 같은 패널의 원장 값에서만 만든다 — 읽지 못한 영역은 headline 없이 기존 빈/실패 상태를 그린다.
+function PanelCard({ panel, availability, onOpen, openLabel = '열기', action, headline, children }) {
   const copy = PANEL_COPY[panel];
   const [emptyTitle, emptyDescription] = copy[availability.reason] || copy.empty;
   return (
-    <Card>
+    <Card className="overview-panel">
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{copy.title}</div>
         <SyncBadge state={availability.state} />
@@ -204,7 +207,26 @@ function PanelCard({ panel, availability, onOpen, openLabel = '열기', action, 
           {availability.reason === 'partial' && copy.partialNotice && (
             <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>{copy.partialNotice}</div>
           )}
+          {headline && (
+            <div className="overview-tile__head">
+              <div className="overview-tile__figure">
+                <span className="stat overview-tile__value">{headline.value}</span>
+                {headline.unit && <span className="overview-tile__unit">{headline.unit}</span>}
+              </div>
+              {headline.status && (
+                <div className="overview-tile__status" data-danger={headline.danger ? 'true' : undefined}>
+                  {headline.danger && <Iconed name="flag" size={12} />}
+                  <span>{headline.status}</span>
+                </div>
+              )}
+            </div>
+          )}
           {children}
+          {headline?.action && (
+            <div style={{ marginTop: 14 }}>
+              <Button variant="outline" size="sm" iconRight="arrowRight" onClick={headline.action.onClick}>{headline.action.label}</Button>
+            </div>
+          )}
         </>
       ) : (
         <EmptyState icon={copy.icon} title={emptyTitle} description={emptyDescription} style={{ minHeight: 140 }} />
@@ -509,35 +531,48 @@ function SeriesRows({ series = [], label }) {
   );
 }
 
-function KpiCard({ k, onNavigate }) {
-  const clickable = Boolean(k.nav && onNavigate);
+// 현황 7f(2026-10-19 운영자 선택) — 이번 기간을 세 줄로 읽는다. 사실은 원장이 계산한 값,
+// 해석은 근거가 붙은 오피스 초안(이 화면은 아직 만들지 않는다), 판단은 운영자가 결정 일지에 남긴다.
+// 확실성은 §5.3 선 모양(실선·점선·점)으로만 나누고 색을 칠하지 않는다.
+const READOUT_FACTS = [['work', '작업'], ['decisions', '결정'], ['content', '발행']];
+const signedCount = (value) => (value > 0 ? `+${value}` : value < 0 ? `−${Math.abs(value)}` : '±0');
+
+function OverviewReadout({ cards, comparison, days, onNavigate }) {
+  const facts = READOUT_FACTS.map(([key, label], index) => {
+    const value = cards[index]?.value;
+    return { key, label, value, ok: typeof value === 'number' && Number.isFinite(value) };
+  });
+  const allMeasured = facts.every((fact) => fact.ok);
+  const comparisonText = !allMeasured
+    ? ''
+    : comparison
+      ? ` — 지난 ${days}일보다 ${facts.map((fact) => `${fact.label} ${signedCount(fact.value - comparison[fact.key])}`).join(', ')}`
+      : ` — 직전 ${days}일은 원장 범위(최근 30일) 밖이거나 비어 있는 날이 있어 비교하지 않습니다`;
+  const decisionHref = `dashboard/work/decisions?${new URLSearchParams({ new: 'decision', title: `최근 ${days}일 운영 판단 · ` })}`;
   return (
-    <div
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onClick={clickable ? () => onNavigate(k.nav) : undefined}
-      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(k.nav); } } : undefined}
-      className="hub-metric-card"
-      style={{
-        padding: 'var(--card-pad)',
-        cursor: clickable ? 'pointer' : 'default',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 500 }}>{k.label}</div>
-        {clickable && <Iconed name="chevronR" size={12} style={{ color: 'var(--fg-faint)', marginLeft: 'auto' }} />}
+    <section className="overview-readout overview-panel" aria-label="이번 기간 읽기">
+      <div className="overview-readout__row">
+        <CertaintyBadge state="confirmed" label="사실" />
+        <p className="overview-readout__text">
+          {facts.map((fact, index) => (
+            <React.Fragment key={fact.key}>
+              {index > 0 ? ' · ' : ''}{fact.label} {fact.ok ? <strong className="num">{fact.value}</strong> : <span className="overview-readout__missing">확인 필요</span>}
+            </React.Fragment>
+          ))}
+          {comparisonText}
+        </p>
+        <span className="overview-readout__meta">원장 계산</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 10 }}>
-        <div className="stat" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.1 }}>{k.value}</div>
-        <div style={{ flex: 1 }} />
-        {k.spark && k.spark.some((v) => v > 0) && (
-          <Sparkline values={k.spark} tone="moon" width={56} height={20} />
-        )}
+      <div className="overview-readout__row">
+        <CertaintyBadge state="recommended" label="해석" />
+        <p className="overview-readout__text overview-readout__text--muted">아직 해석 초안이 없습니다. 월·목 아침 주간 정리에서 오피스가 근거와 함께 씁니다.</p>
       </div>
-      {/* §5.2: hint labels classify the metric (기획·발행 등) — category text stays neutral;
-          only a real blocker keeps the danger channel. */}
-      <div style={{ marginTop: 6, fontSize: 11, color: k.tone === 'danger' ? 'var(--danger)' : 'var(--fg-faint)' }}>{k.hint}</div>
-    </div>
+      <div className="overview-readout__row">
+        <CertaintyBadge state="unknown" label="판단 · 미정" />
+        <p className="overview-readout__text overview-readout__text--muted">이번 기간을 어떻게 볼지 결정 일지에 남깁니다.</p>
+        <Button variant="outline" size="sm" icon="pencil" onClick={() => onNavigate?.(decisionHref)}>판단 적기</Button>
+      </div>
+    </section>
   );
 }
 
@@ -640,13 +675,47 @@ function OverviewSummary({ onNavigate }) {
     days: Number(period),
   });
 
+  // 7f 사실 줄과 7e 타일 머리(2026-10-19) — 같은 원장 값에서만 만든다.
+  const comparison = buildPeriodComparison(ledger.activitySeries || [], Number(period));
+  const blockedCount = Number.isFinite(Number(kpis.blockedProjects)) ? Number(kpis.blockedProjects) : null;
+  const pipelineCount = (contentSummary?.pipelineSeries || []).reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+  const dealCount = stageSeries.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+  const dealSum = stageSeries.reduce((sum, item) => sum + (Number(item.sum) || 0), 0);
+  const automationValue = (key) => automationMetrics.find((metric) => metric.key === key)?.value;
+  const runsToday = automationValue('runs');
+  const failuresToday = automationValue('failures');
+  const publishedValue = kpiCards[2]?.value;
+  const headlines = {
+    projects: Number.isFinite(Number(kpis.activeProjects)) ? {
+      value: Number(kpis.activeProjects),
+      unit: '진행 중',
+      status: blockedCount == null ? '막힘 수 확인 필요' : blockedCount > 0 ? `${blockedCount}건 막힘` : '막힌 프로젝트 없음',
+      danger: blockedCount > 0,
+      action: blockedCount > 0 ? { label: '막힌 프로젝트 보기', onClick: () => onNavigate?.('dashboard/work/projects') } : null,
+    } : null,
+    content: typeof publishedValue === 'number' ? {
+      value: publishedValue,
+      unit: `발행 · 최근 ${period}일`,
+      status: `파이프라인 ${pipelineCount}건`,
+    } : null,
+    revenue: hasPipelineValue ? { value: fmtMoney(dealSum), unit: '파이프라인 합계', status: `거래 ${dealCount}건` } : null,
+    automations: typeof runsToday === 'number' ? {
+      value: runsToday,
+      unit: '오늘 실행',
+      status: typeof failuresToday === 'number' ? (failuresToday > 0 ? `실패 ${failuresToday}건` : '실패 없음') : '실패 수 확인 필요',
+      danger: typeof failuresToday === 'number' && failuresToday > 0,
+      action: typeof failuresToday === 'number' && failuresToday > 0 ? { label: '실패한 실행 보기', onClick: () => onNavigate?.('dashboard/automations/runs') } : null,
+    } : null,
+  };
+
   return (
-    <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
+    <div className="hub-futura hub-page overview-page">
+      <div className="hub-page-header fx-head">
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>현황</h2>
-          <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-            최근 작업과 기획 흐름을 정리합니다<SyncBadge state={syncState} />
+          <div className="fx-eyebrow">현황 · 최근 {period}일</div>
+          <h2 className="fx-page-title">현황</h2>
+          <div className="fx-page-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            작업·기획 흐름과 영역별 상태를 한 화면에서 봅니다<SyncBadge state={syncState} />
           </div>
           {disclosureMessages.map((message) => (
             <div key={message.kind} role="status" style={{ marginTop: 5, fontSize: 11.5, color: 'var(--fg-muted)' }}>
@@ -657,10 +726,12 @@ function OverviewSummary({ onNavigate }) {
         <SegmentedControl className="hub-page-actions" label="기간" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
       </div>
 
+      <OverviewReadout cards={kpiCards} comparison={comparison} days={Number(period)} onNavigate={onNavigate} />
+
       {/* OKR·KPI — 추적 본체는 내 작업 › OKR·KPI. 현황에는 핵심 지표만 띄운다(2026-09-23). */}
       <OkrSummaryCard />
 
-      <Card>
+      <Card className="overview-panel">
         <div className="activity-chart__head"><strong>작업·기획 활동 추이</strong><span className="activity-chart__unit">일별 · 건</span></div>
         {ledger.activitySeries?.length ? (
           <ActivityChart
@@ -689,15 +760,15 @@ function OverviewSummary({ onNavigate }) {
           1열로 접힌다. */}
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
         <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--gap)' }}>
-          <PanelCard panel="projects" availability={projectPanel} onOpen={() => onNavigate?.('dashboard/work/projects')}>
+          <PanelCard panel="projects" availability={projectPanel} headline={headlines.projects} onOpen={() => onNavigate?.('dashboard/work/projects')}>
             <DonutChart series={pms?.projectStatusSeries || []} centerLabel="프로젝트" />
           </PanelCard>
 
-          <PanelCard panel="content" availability={contentPanel} onOpen={() => onNavigate?.('dashboard/content/queue')}>
+          <PanelCard panel="content" availability={contentPanel} headline={headlines.content} onOpen={() => onNavigate?.('dashboard/content/queue')}>
             <SeriesRows series={contentSummary?.pipelineSeries || []} label="콘텐츠 파이프라인 분포" />
           </PanelCard>
 
-          <PanelCard panel="revenue" availability={revenuePanel} onOpen={() => onNavigate?.('dashboard/revenue/overview')} openLabel="Revenue 열기">
+          <PanelCard panel="revenue" availability={revenuePanel} headline={headlines.revenue} onOpen={() => onNavigate?.('dashboard/revenue/overview')} openLabel="매출 열기">
             {/* 딜 단계도 콘텐츠와 같은 퍼널이므로 같은 표현을 쓴다 — 이전에는 세그먼트 바 +
                 별도 범례라 같은 성격의 두 패널을 나란히 두고도 비교가 안 됐다. */}
             <SeriesRows
@@ -706,7 +777,7 @@ function OverviewSummary({ onNavigate }) {
             />
           </PanelCard>
 
-          <PanelCard panel="automations" availability={automationPanel} onOpen={() => onNavigate?.('dashboard/automations/runs')} openLabel="Runs 열기">
+          <PanelCard panel="automations" availability={automationPanel} headline={headlines.automations} onOpen={() => onNavigate?.('dashboard/automations/runs')} openLabel="실행 기록 열기">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {automationMetrics.map((metric) => (
                 <div key={metric.key} style={{ padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
@@ -731,7 +802,7 @@ function OverviewSummary({ onNavigate }) {
 
           <div>
             <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 이동</span>}>최근 활동</SectionTitle>
-            <Card>
+            <Card className="overview-panel">
               {!recentActivityTruth.complete && (
                 <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px dashed var(--line)', borderRadius: 'var(--r-sm)', color: 'var(--fg-muted)', fontSize: 11.5 }}>
                   {recentActivityTruth.reason === 'preview'
@@ -767,9 +838,6 @@ function OverviewSummary({ onNavigate }) {
         </div>
       </div>
 
-      <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
-        {kpiCards.map((k) => <KpiCard key={k.label} k={k} onNavigate={onNavigate} />)}
-      </div>
     </div>
   );
 }

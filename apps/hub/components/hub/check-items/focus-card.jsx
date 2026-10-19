@@ -69,11 +69,16 @@ export function CheckItemProgress({ finished = [], remaining = 0, scheduled = 0,
 // ── 남은 목록 ───────────────────────────────────────────────────
 // 한 장씩이 기본이지만, 무엇이 남았는지 한눈에 보고 바로 고를 수 있어야 한다(§13). 접힌 채로 둔다 — 표면 예산.
 // 고르면 그 카드가 맨 앞에 온다(차례를 바꾸는 것뿐, 아무것도 저장하지 않는다).
-export function RemainingList({ deck = [], currentKey = null, onFocus }) {
+// layout="side"는 홈 7g(2026-10-19 운영자 선택)의 왼쪽 목록이다 — 접지 않고 결정 카드 옆에 펼쳐 둔다.
+export function RemainingList({ deck = [], currentKey = null, onFocus, layout = 'collapsed' }) {
   if (deck.length < 2) return null;
+  const side = layout === 'side';
+  const Wrap = side ? 'nav' : 'details';
   return (
-    <details className="ci-remaining">
-      <summary>남은 <span className="mono">{deck.length}</span>건 한눈에 보기 · 골라서 먼저 보기</summary>
+    <Wrap className={side ? 'ci-remaining ci-remaining--side' : 'ci-remaining'} aria-label={side ? '남은 확인할 것' : undefined}>
+      {side
+        ? <span className="fx-eyebrow">남은 <span className="mono">{deck.length}</span>건 · 골라서 먼저 보기</span>
+        : <summary>남은 <span className="mono">{deck.length}</span>건 한눈에 보기 · 골라서 먼저 보기</summary>}
       <ol>
         {deck.map((item) => {
           const key = item.signalKey || item.id;
@@ -97,7 +102,7 @@ export function RemainingList({ deck = [], currentKey = null, onFocus }) {
           );
         })}
       </ol>
-    </details>
+    </Wrap>
   );
 }
 

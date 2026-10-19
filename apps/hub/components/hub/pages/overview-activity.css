@@ -49,3 +49,39 @@
 @media(max-width:600px) {
   .activity-chart__layout { grid-template-columns:24px minmax(0,1fr); gap:8px; }
 }
+
+/* 현황 7e·7f(2026-10-19 운영자 선택) — Futura 면과 이번 기간 읽기 띠, 영역 타일 머리. */
+.hub-app .overview-page .overview-panel {
+  border-color: transparent !important;
+  box-shadow: var(--fx-shadow) !important;
+}
+.overview-readout {
+  display: flex;
+  flex-direction: column;
+  padding: 6px var(--fx-card-pad);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+.overview-readout__row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  padding: 10px 0;
+}
+.overview-readout__row + .overview-readout__row { border-top: 1px solid var(--line-soft); }
+.overview-readout__row > [data-certainty] { justify-self: start; }
+.overview-readout__text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+.overview-readout__text--muted { color: var(--fg-muted); }
+.overview-readout__missing { color: var(--fg-dim); }
+.overview-readout__meta { font-size: 11px; color: var(--fg-dim); white-space: nowrap; }
+.overview-tile__head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.overview-tile__figure { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.overview-tile__value { font-size: 30px; font-weight: 300; line-height: 1.1; color: var(--fg); }
+.overview-tile__unit { font-size: 12px; color: var(--fg-dim); }
+.overview-tile__status { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--fg-muted); }
+.overview-tile__status[data-danger="true"] { color: var(--danger); }
+@media (max-width: 600px) {
+  .overview-readout__row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+}

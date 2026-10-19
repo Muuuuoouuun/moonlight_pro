@@ -124,6 +124,9 @@ svg.ic { flex-shrink: 0; display: block; }
 .cap ul b { color: var(--fg); font-weight: 500; }
 .stage { width: 100%; overflow-x: auto; overflow-y: hidden; border-radius: 28px; }
 .stage-inner { width: 1440px; height: 900px; transform-origin: 0 0; }
+.held { border-top: 1px solid var(--line); padding-top: 20px; }
+.held summary { cursor: pointer; font-size: 13px; color: var(--fg-muted); padding: 6px 0; }
+.held summary:hover { color: var(--fg); }
 .sample-note { font-size: 11.5px; color: var(--fg-faint); }
 
 /* ── 프레임 ── */
@@ -293,9 +296,9 @@ button.kpi:hover { transform: translateY(-2px); }
 <div class="doc">
   <header class="doc-head">
     <div>
-      <div class="doc-eyebrow">07 · 오늘 · 현황 디벨롭</div>
-      <h1>오늘 · 현황 — 각 3안</h1>
-      <div class="doc-sub">기준: Moonlight Components 5a(패널·버튼 입체감, 먹색 선택 슬라이드)와 06 화면 시안 6c·6d(오늘)·6e·6f(현황). 실제 허브의 슬롯 순서(빠른 입력 → 오늘 할 일 → 긴급 KA·일정 → 신호)와 DESIGN.md 상태 문법(빨강은 진짜 긴급만, 확실성은 선 모양, 상태는 글리프 + 글)을 다시 맞췄습니다. 모든 시안은 클릭에 반응합니다. 숫자·이름은 전부 <b>예시 값</b>입니다.</div>
+      <div class="doc-eyebrow">08 · 오늘 · 현황 — 선택안과 변주</div>
+      <h1>오늘 7a · 7g / 현황 7e · 7f</h1>
+      <div class="doc-sub">기준: Moonlight Components 5a(패널·버튼 입체감, 먹색 선택 슬라이드)와 06 화면 시안 6c·6d(오늘)·6e·6f(현황). 실제 허브의 슬롯 순서(빠른 입력 → 오늘 할 일 → 긴급 KA·일정 → 신호)와 DESIGN.md 상태 문법(빨강은 진짜 긴급만, 확실성은 선 모양, 상태는 글리프 + 글)을 다시 맞췄습니다. 모든 시안은 클릭에 반응합니다. 숫자·이름은 전부 <b>예시 값</b>입니다.<br>운영자가 고른 7a · 7e · 7f를 선택안으로 올리고, 홈 트리아지 화면 사이에 멘토 한 줄을 넣은 변주 7g를 더했습니다. 보류한 7b · 7c · 7d는 각 섹션 아래에 접어 두었습니다.</div>
     </div>
     <div class="doc-tools">
       <div class="seg" data-docseg="theme" role="group" aria-label="테마">
@@ -320,7 +323,7 @@ button.kpi:hover { transform: translateY(-2px); }
     <div class="option">
       <div class="cap">
         <div>
-          <div class="cap-title"><span class="tag">7a</span><b>실행 보드</b><span class="from">6c 패널 그리드에서</span></div>
+          <div class="cap-title"><span class="tag">7a</span><span class="cert cert--ok" style="height: 22px;">● 선택</span><b>실행 보드</b><span class="from">6c 패널 그리드에서</span></div>
           <p class="cap-lede">한 화면 안에 할 일 · 사람 · 시간을 세 칸으로. 매일 여는 사람이 스크롤 없이 “적고 → 체크하고 → 연락하는” 화면.</p>
         </div>
         <ul>
@@ -333,6 +336,24 @@ button.kpi:hover { transform: translateY(-2px); }
       <div class="stage"><div class="stage-inner"><div class="frame" id="f7a"></div></div></div>
     </div>
 
+    <div class="option">
+      <div class="cap">
+        <div>
+          <div class="cap-title"><span class="tag">7g</span><span class="cert cert--rec" style="height: 22px;">◇ 새 변주</span><b>트리아지 + 멘토 한 줄</b><span class="from">홈 “5건 남았습니다” 화면에서</span></div>
+          <p class="cap-lede">첨부한 홈 트리아지(왼쪽 목록 · 오른쪽 결정 카드 · 오늘의 시간표)를 7a · 7e · 7f의 입체 패널 질감으로 옮기고, 결정 카드와 시간표 사이에 Guru 한 줄을 넣었습니다.</p>
+        </div>
+        <ul>
+          <li>멘토 한 줄은 카드가 아니라 <b>안으로 파인 띠 한 줄</b> — 누르면 코칭·대화의 카드 상세로 갑니다(오늘·현황엔 한 줄 팁만, §15 2026-09-25).</li>
+          <li>왼쪽에서 고른 항목에 따라 관점이 바뀝니다 — 매출 거래는 실행 조건(Voss), 콘텐츠는 리서치 우선(Ogilvy), 나머지는 이번 시간대 관점.</li>
+          <li>문구는 저장소 Guru 카드의 <b>Moonlight 재구성 요약</b>이라 “자료 요약”으로 표시합니다. 원문 인용처럼 따옴표를 달지 않았습니다.</li>
+          <li>결정 버튼(또는 숫자키 1·2·3)을 누르면 진행 줄이 차고 다음 항목으로 넘어갑니다. REVENUE 빨강 · CONTENT 금색 · AUTOMATION 초록 같은 분류 색은 중립 글리프로, ₩18.0M은 1,800만원으로, NOW는 시계 + 진행 중으로 바꿨습니다.</li>
+        </ul>
+      </div>
+      <div class="stage"><div class="stage-inner"><div class="frame" id="f7g"></div></div></div>
+    </div>
+
+    <details class="held"><summary>보류한 안 · 7b 지금 → 다음 · 7c 집중 스택</summary>
+    <div style="display: flex; flex-direction: column; gap: 44px; padding-top: 28px;">
     <div class="option">
       <div class="cap">
         <div>
@@ -364,6 +385,7 @@ button.kpi:hover { transform: translateY(-2px); }
       </div>
       <div class="stage"><div class="stage-inner"><div class="frame" id="f7c"></div></div></div>
     </div>
+    </div></details>
   </section>
 
   <section class="group" style="display: flex; flex-direction: column; gap: 44px;">
@@ -372,6 +394,39 @@ button.kpi:hover { transform: translateY(-2px); }
       <p>6e는 차트가 화면 절반을 차지했지만 “그래서 뭘 하라는지”가 없었고, 6f는 칩 색(초록·하늘·빨강)으로 단계를 칠했습니다. 세 안 모두 모든 숫자 옆에 <b>상태 또는 다음 행동</b>을 붙이고, 계열은 Moonstone 명도 + 빗금으로 구분합니다. 기간(7·14·30일)을 바꾸면 값이 같이 바뀝니다.</p>
     </div>
 
+    <div class="option">
+      <div class="cap">
+        <div>
+          <div class="cap-title"><span class="tag">7e</span><span class="cert cert--ok" style="height: 22px;">● 선택</span><b>운영 지도</b><span class="from">지금 현황의 분포 패널에서</span></div>
+          <p class="cap-lede">프로젝트 · 콘텐츠 · 매출 · 자동화 네 영역을 같은 모양의 타일로. 타일마다 큰 숫자 하나, 상태 한 줄, 다음 행동 하나.</p>
+        </div>
+        <ul>
+          <li>지금 코드는 패널 7개가 같은 무게로 늘어서 위계가 없습니다 — 네 영역을 2×2로 묶고 <b>행동 버튼</b>을 붙였습니다.</li>
+          <li>타일을 누르면 오른쪽 드로어에 그 영역의 항목이 열립니다(ESC로 닫기).</li>
+          <li>금액은 <b>만·억 표기</b>(10-06 확정), 실패·막힘만 빨강 글자.</li>
+          <li>오른쪽 레일에 리듬(이번 주 루틴)과 최근 활동, 아래에 브랜드별 활동 막대.</li>
+        </ul>
+      </div>
+      <div class="stage"><div class="stage-inner"><div class="frame" id="f7e"></div></div></div>
+    </div>
+
+    <div class="option">
+      <div class="cap">
+        <div>
+          <div class="cap-title"><span class="tag">7f</span><span class="cert cert--ok" style="height: 22px;">● 선택</span><b>기록 밀도 · 주간 해석</b><span class="from">6f 기록 밀도에서</span></div>
+          <p class="cap-lede">맨 위에 이번 기간을 세 줄로 읽어 줍니다 — <b>사실</b>(코드 계산) · <b>해석</b>(AI 초안, 근거 필수) · <b>판단</b>(운영자 확정). 리포트 허브 목업의 3층 규칙을 현황에 먼저 씁니다.</p>
+        </div>
+        <ul>
+          <li>해석은 <b>◇ 권장</b>(점선), 판단은 <b>○ 미정</b>(점) → 적으면 <b>● 확정</b>(실선)으로.</li>
+          <li>히트맵은 한 색의 명도 5단계, 오늘 칸만 Moonstone 테두리. 30일로 바꾸면 칸이 늘어납니다.</li>
+          <li>지난 기간 비교는 이번(채움) / 지난(점선 테두리) 짝 막대.</li>
+          <li>프로젝트 상태는 칩 색 대신 ◐ 진행 · ⏸ 대기 · 막힘(팔각 글리프 + 1px 레일 + 이유).</li>
+        </ul>
+      </div>
+      <div class="stage"><div class="stage-inner"><div class="frame" id="f7f"></div></div></div>
+    </div>
+    <details class="held"><summary>보류한 안 · 7d 판단 대시보드</summary>
+    <div style="display: flex; flex-direction: column; gap: 44px; padding-top: 28px;">
     <div class="option">
       <div class="cap">
         <div>
@@ -388,37 +443,7 @@ button.kpi:hover { transform: translateY(-2px); }
       <div class="stage"><div class="stage-inner"><div class="frame" id="f7d"></div></div></div>
     </div>
 
-    <div class="option">
-      <div class="cap">
-        <div>
-          <div class="cap-title"><span class="tag">7e</span><b>운영 지도</b><span class="from">지금 현황의 분포 패널에서</span></div>
-          <p class="cap-lede">프로젝트 · 콘텐츠 · 매출 · 자동화 네 영역을 같은 모양의 타일로. 타일마다 큰 숫자 하나, 상태 한 줄, 다음 행동 하나.</p>
-        </div>
-        <ul>
-          <li>지금 코드는 패널 7개가 같은 무게로 늘어서 위계가 없습니다 — 네 영역을 2×2로 묶고 <b>행동 버튼</b>을 붙였습니다.</li>
-          <li>타일을 누르면 오른쪽 드로어에 그 영역의 항목이 열립니다(ESC로 닫기).</li>
-          <li>금액은 <b>만·억 표기</b>(10-06 확정), 실패·막힘만 빨강 글자.</li>
-          <li>오른쪽 레일에 리듬(이번 주 루틴)과 최근 활동, 아래에 브랜드별 활동 막대.</li>
-        </ul>
-      </div>
-      <div class="stage"><div class="stage-inner"><div class="frame" id="f7e"></div></div></div>
-    </div>
-
-    <div class="option">
-      <div class="cap">
-        <div>
-          <div class="cap-title"><span class="tag">7f</span><b>기록 밀도 · 주간 해석</b><span class="from">6f 기록 밀도에서</span></div>
-          <p class="cap-lede">맨 위에 이번 기간을 세 줄로 읽어 줍니다 — <b>사실</b>(코드 계산) · <b>해석</b>(AI 초안, 근거 필수) · <b>판단</b>(운영자 확정). 리포트 허브 목업의 3층 규칙을 현황에 먼저 씁니다.</p>
-        </div>
-        <ul>
-          <li>해석은 <b>◇ 권장</b>(점선), 판단은 <b>○ 미정</b>(점) → 적으면 <b>● 확정</b>(실선)으로.</li>
-          <li>히트맵은 한 색의 명도 5단계, 오늘 칸만 Moonstone 테두리. 30일로 바꾸면 칸이 늘어납니다.</li>
-          <li>지난 기간 비교는 이번(채움) / 지난(점선 테두리) 짝 막대.</li>
-          <li>프로젝트 상태는 칩 색 대신 ◐ 진행 · ⏸ 대기 · 막힘(팔각 글리프 + 1px 레일 + 이유).</li>
-        </ul>
-      </div>
-      <div class="stage"><div class="stage-inner"><div class="frame" id="f7f"></div></div></div>
-    </div>
+    </div></details>
   </section>
 </div>
 
@@ -1199,6 +1224,115 @@ frames.f7f = {
   },
 };
 
+/* 7g 트리아지 + 멘토 한 줄 (홈 Futura 트리아지의 변주) */
+const GURU = {
+  voss: { kind: 'GURU', person: 'Chris Voss · 실행 조건', text: '좋다는 반응을 시작 약속으로 해석하지 마세요. 실제 진행에 필요한 조건을 상대의 말로 확인합니다.' },
+  ogilvy: { kind: 'GURU', person: 'David Ogilvy · 리서치 우선', text: '표현을 쓰기 전에 고객이 실제로 쓴 말, 현재 제공할 수 있는 사실, 아직 모르는 것을 따로 모으세요.' },
+  hill: { kind: 'GURU', person: 'Napoleon Hill · 목적 설정', text: '결과 목표 대신 이번에 내가 확인할 사실 한 가지를 먼저 적으세요.' },
+};
+const triageSeed = () => [
+  { id: 'q1', kind: '매출', icon: 'navRevenue', title: '클래스인 — 봄 코호트 계약서 회신 2일째 지연', meta: '거래 · 1,800만원 · 구매 검토', ref: 'DEAL-031', urgent: true, guru: 'voss',
+    desc: '계약 단계 회신이 평소보다 48시간 늦습니다. 다음 단계로 넘어갈 가능성이 낮아지는 중입니다.', opts: ['리마인드 메일 초안 만들기', '담당 임원에게 올리기', '24시간 더 기다리기'] },
+  { id: 'q2', kind: '콘텐츠', icon: 'navContent', title: '뉴스레터 #47 발행 예정 — 초안 상태, 4시간 남음', meta: '발행 · 18:30 마감 · 시나브로', ref: 'PUB-047', guru: 'ogilvy',
+    desc: '본문 초안은 있고 제목과 첫 문단이 비어 있습니다. 18:30 전에 검수까지 마쳐야 예약 발행이 됩니다.', opts: ['마무리 블록 1시간 잡기', '발행 하루 미루기', '지난 호 형식 재사용'] },
+  { id: 'q3', kind: '자동화', icon: 'navAI', title: 'Gmail → CRM 자동 연결, 지난밤 17건 처리', meta: '실행 기록 · 실패 0', ref: 'RUN-1188', guru: 'hill',
+    desc: '새 문의 17건이 고객 기록에 붙었습니다. 그중 3건은 기존 고객과 이름만 같아 확인이 필요합니다.', opts: ['겹치는 3건 확인', '그대로 두기'] },
+  { id: 'q4', kind: '오피스', icon: 'navAI', title: '오피스가 다음 주 로드맵 초안을 제안했습니다', meta: '초안 · 검토 전', ref: 'DRAFT-22', guru: 'hill',
+    desc: '이번 주 결정 5건과 막힌 프로젝트 1건을 근거로 다음 주 우선순위 3개를 제안했습니다. 확정 전까지는 초안입니다.', opts: ['초안 검토 열기', '다음 주 월요일로 넘기기'] },
+  { id: 'q5', kind: '리듬', icon: 'clock', title: '금요일 주간 리뷰 아직 시작 안 됨', meta: '루틴 · 주 1회', ref: 'RHY-W', guru: 'hill',
+    desc: '이번 주 하루 리뷰는 3/5일 했습니다. 주간 리뷰는 15분이면 끝납니다.', opts: ['지금 15분 시작', '19:00 하루 리뷰에 붙이기'] },
+];
+const schedule7g = [
+  { s: 9 * 60, title: 'Daily Brief 리뷰', kind: '루틴' },
+  { s: 10 * 60, title: '클래스인 김 대표 — 발굴 미팅', kind: '미팅' },
+  { s: 14 * 60, e: 15 * 60 + 30, title: 'Moonlight Web 랜딩 개선', kind: '집중 작업' },
+  { s: 16 * 60, title: '개인 코칭 — 지훈', kind: '미팅' },
+  { s: 18 * 60 + 30, title: '뉴스레터 #47 마감', kind: '마감' },
+  { s: 19 * 60, title: '하루 리뷰', kind: '루틴' },
+];
+frames.f7g = {
+  nav: 1,
+  state: { items: triageSeed(), sel: 'q1', done: {} },
+  render(s) {
+    const total = s.items.length;
+    const doneN = Object.keys(s.done).length;
+    const left = total - doneN;
+    const cur = s.items.find((x) => x.id === s.sel);
+    const g = GURU[cur?.guru || 'voss'];
+    const linked = cur && cur.guru !== 'hill';
+    return `
+    <header class="hd">
+      <div>
+        <div class="hd-date">오늘 · 10월 16일 (금) · <span class="mono">14:20</span></div>
+        <h3>${left ? `${left}건 남았습니다` : '오늘 확인할 것을 다 봤습니다'}</h3>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; width: 260px;">
+        <div class="track" style="flex: 1;" role="img" aria-label="확인 ${doneN}/${total}"><i style="width: ${(doneN / total) * 100}%"></i></div>
+        <span class="mono" style="font-size: 12px; color: var(--fg-muted);">${doneN}/${total}</span>
+      </div>
+    </header>
+    <div style="display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 20px; height: 352px; flex-shrink: 0;">
+      <div style="display: flex; flex-direction: column; gap: 4px; min-height: 0;" role="listbox" aria-label="확인할 것">
+        ${s.items.map((x) => { const on = x.id === s.sel; const dn = s.done[x.id]; return `<button role="option" aria-selected="${on}" data-act="pick" data-id="${x.id}" style="text-align: left; border: 0; padding: 12px 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 6px; background: ${on ? 'var(--panel-solid)' : 'transparent'}; box-shadow: ${on ? 'var(--panel-shadow)' + (x.urgent && !dn ? ', inset 1px 0 0 var(--danger)' : '') : (x.urgent && !dn ? 'inset 1px 0 0 var(--danger)' : 'none')}; transition: background-color 160ms, box-shadow 160ms;">
+          <span style="font-size: 11.5px; font-weight: 500; letter-spacing: 0.02em; display: inline-flex; gap: 6px; align-items: center; color: ${x.urgent && !dn ? 'var(--danger)' : 'var(--fg-dim)'};">${ic(dn ? 'check' : x.urgent ? 'bell' : x.icon, 12)}${x.kind}${dn ? ` · ${dn}` : ''}</span>
+          <span style="font-size: 13.5px; ${dn ? 'text-decoration: line-through; color: var(--fg-dim);' : on ? 'font-weight: 500;' : ''}">${x.title}</span>
+        </button>`; }).join('')}
+      </div>
+      ${cur ? `<section class="panel fade-up" style="padding: 28px 32px; gap: 0;" data-key="7g-card">
+        <div style="display: flex; justify-content: space-between; gap: 12px;"><span class="mono" style="font-size: 11.5px; color: ${cur.urgent && !s.done[cur.id] ? 'var(--danger)' : 'var(--fg-dim)'}; letter-spacing: 0.06em;">${cur.kind} <span style="color: var(--fg-dim);">· ${cur.meta}</span></span><span class="mono t3">${cur.ref}</span></div>
+        <div style="font-size: 30px; font-weight: 300; letter-spacing: -0.025em; line-height: 1.25; margin-top: 18px; max-width: 520px; text-wrap: balance;">${cur.title}</div>
+        <div style="font-size: 13.5px; color: var(--fg-muted); line-height: 1.7; margin-top: 14px; max-width: 560px;">${cur.desc}</div>
+        <div class="grow"></div>
+        ${s.done[cur.id] ? `<div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--fg-muted);">${ic('doneCircle', 16)}처리함 · ${s.done[cur.id]}<button class="linkbtn" data-act="undo" data-id="${cur.id}">되돌리기</button></div>` : `
+        <div class="t3" style="margin-bottom: 10px;">결정</div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          ${cur.opts.map((o, k) => `<button class="btn ${k === 0 ? 'btn--ink' : 'btn--raised'}" data-act="decide" data-v="${esc(o)}" style="height: 40px;">${o}<span class="mono" style="font-size: 10.5px; opacity: 0.6;">${k + 1}</span></button>`).join('')}
+          <button class="btn" data-act="decide" data-v="보류" style="height: 40px; background: transparent; box-shadow: none;">보류</button>
+        </div>`}
+      </section>` : '<section class="panel"></section>'}
+    </div>
+    <button class="fade-up" data-act="toast" data-msg="코칭·대화 › 카드 상세로 이동" aria-label="${g.kind} 자료 요약 · ${g.person} · ${g.text} · 상세 보기" style="flex-shrink: 0; border: 0; text-align: left; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 18px; align-items: center; padding: 14px 20px 14px 22px; border-radius: 20px; background: var(--side-bg); box-shadow: var(--inset);" key="${cur?.guru}">
+      <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 11.5px; font-weight: 500; color: var(--fg-dim);"><span class="mono" style="letter-spacing: 0.12em;">${g.kind}</span> · 자료 요약</span><span style="font-size: 11px; color: var(--fg-faint);">${linked ? `지금 보는 ${cur.kind} 항목과 연결` : '이번 시간대 관점'}</span></span>
+      <span style="font-size: 16px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.5; color: var(--fg);">${g.text}</span>
+      <span style="font-size: 12px; color: var(--fg-muted); white-space: nowrap;">${g.person}</span>
+      <span style="color: var(--fg-dim);">${ic('arrowR', 15)}</span>
+    </button>
+    <section style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px;"><span class="t3" style="font-weight: 500;">오늘의 시간표</span><button class="linkbtn">캘린더 ${ic('arrowR', 12)}</button></div>
+      <div class="panel" style="padding: 6px 22px; gap: 0; flex: 1;">
+        ${schedule7g.map((e, k) => { const end = e.e || e.s + 60; const now = today.nowMin >= e.s && today.nowMin < end; const past = today.nowMin >= end; return `<div style="display: flex; align-items: center; gap: 18px; height: 40px; ${k ? 'border-top: 1px solid var(--line);' : ''}">
+          <span class="mono" style="font-size: 12px; width: 44px; color: ${past ? 'var(--fg-faint)' : now ? 'var(--fg)' : 'var(--fg-muted)'}; ${now ? 'font-weight: 600;' : ''}">${hm(e.s)}</span>
+          <span style="font-size: 13.5px; white-space: nowrap; ${past ? 'text-decoration: line-through; color: var(--fg-dim);' : now ? 'font-weight: 500;' : ''}">${e.title}</span>
+          ${now ? `<span class="chip chip--ink">${ic('clock', 12)}진행 중</span>` : ''}
+          <span style="flex: 1; border-top: 1px dotted var(--line-strong); opacity: ${past ? 0.5 : 1};"></span>
+          <span class="mono" style="font-size: 11px; color: var(--fg-faint);">${e.kind}</span>
+        </div>`; }).join('')}
+      </div>
+    </section>`;
+  },
+  on(act, d, s, el, fr) {
+    if (act === 'pick') s.sel = d.id;
+    if (act === 'decide') {
+      s.done[s.sel] = d.v;
+      const next = s.items.find((x) => !s.done[x.id]);
+      toast(fr, d.v === '보류' ? '보류 · 목록에 남김' : `${d.v} · 결정 기록(목업)`);
+      if (next) s.sel = next.id;
+    }
+    if (act === 'undo') { delete s.done[d.id]; toast(fr, '되돌림'); }
+    if (act === 'toast') toast(fr, d.msg);
+  },
+};
+document.addEventListener('keydown', (e) => {
+  if (!document.activeElement?.closest?.('#f7g') || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  const s = frames.f7g.state; const cur = s.items.find((x) => x.id === s.sel);
+  const k = Number(e.key);
+  if (cur && !s.done[cur.id] && k >= 1 && k <= cur.opts.length) {
+    e.preventDefault();
+    frames.f7g.on('decide', { v: cur.opts[k - 1] }, s, null, document.getElementById('f7g'));
+    mount('f7g'); document.querySelector('#f7g [data-key="7g-card"] button')?.focus();
+  }
+});
+
 /* ── 마운트·이벤트 ── */
 function toast(fr, msg) {
   fr.querySelectorAll('.toast').forEach((t) => t.remove());
@@ -1281,6 +1415,7 @@ function applyFit() {
 document.querySelectorAll('[data-theme-btn]').forEach((b) => b.addEventListener('click', () => setTheme(b.dataset.themeBtn)));
 document.querySelectorAll('[data-fit-btn]').forEach((b) => b.addEventListener('click', () => { fitMode = b.dataset.fitBtn; docSeg('fit', fitMode === 'fit' ? 0 : 1); applyFit(); }));
 window.addEventListener('resize', applyFit);
+document.querySelectorAll('details.held').forEach((d) => d.addEventListener('toggle', applyFit));
 (function init() {
   let t = null;
   try { t = localStorage.getItem('ml-mock-theme'); } catch (_) {}

@@ -22,7 +22,7 @@ export function OkrSummaryView({ model }) {
   const readable = model.status === "live" || model.status === "partial";
   const summary = React.useMemo(() => goalSummary(model), [model.objectives, model.metrics, model.observations, model.links, model.failedSources, model.truncatedSources, model.status]);
 
-  return <Card>
+  return <Card className="overview-panel">
     <div className="okr-summary__head">
       <div><div className="okr-summary__title">OKR·KPI</div><div className="okr-summary__sub">{readable ? <>진행 중 목표 <span className="num">{summary.activeCount}</span> · 결과와 이번 주 행동</> : "목표와 지킬 선의 현재 상태"}</div></div>
       <div className="okr-summary__actions">

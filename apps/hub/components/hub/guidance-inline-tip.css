@@ -20,12 +20,34 @@
   font: inherit;
 }
 
+/* 홈 7g — 결정 카드와 시간표 사이의 안으로 파인 띠 한 줄(2026-10-19). 카드처럼 뜨지 않고 면 한 단계로만 가라앉는다. */
 .hub-app .guidance-inline-tip--home {
+  gap: 18px;
   border: 0;
-  border-bottom: 1px solid var(--line-soft);
-  border-radius: 0;
-  background: transparent;
-  padding: 10px 0 14px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: inset 0 1px 2px color-mix(in oklch, var(--fg) 8%, transparent);
+  padding: 14px 20px;
+}
+
+.hub-app .guidance-inline-tip--home .guidance-inline-tip__kind {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hub-app .guidance-inline-tip--home .guidance-inline-tip__copy {
+  font-size: 15px;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.guidance-inline-tip__context {
+  color: var(--fg-faint);
+  font-size: 11px;
+  letter-spacing: 0;
 }
 
 .guidance-inline-tip__kind {

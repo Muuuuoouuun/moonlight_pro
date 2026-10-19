@@ -654,3 +654,138 @@
 /* 세그먼트 컨트롤 — pill */
 .hub-app .hub-seg { border-radius: var(--fx-pill); }
 .hub-app .hub-seg__btn { border-radius: var(--fx-pill); }
+
+/* ═══ 깊이감 레이어 — 뉴모피즘 (2026-10-19 운영자 지시) ═══════════════
+ * Claude Design "Moonlight Components" 5a(라이트) · 8a(다크) 질감. 바닥 면 위로 사이드바·패널·
+ * 버튼이 볼록하게 떠 있고, 입력·세그먼트 트랙은 안으로 파이고, 현재 위치(내비·세그먼트 선택·
+ * 주요 버튼)는 잉크 pill로 반전된다 — 라이트에선 먹색, 다크에선 밝은 면. 색 의미(§5.2)는 그대로이고
+ * 이 레이어는 면의 높낮이만 바꾼다. 값은 이 블록의 --nm-* 토큰 한 곳에만 둔다.
+ */
+.hub-app {
+  --nm-base: oklch(0.955 0.006 255);
+  --nm-shell: -6px -6px 16px oklch(1 0 0 / 0.85), 10px 12px 28px -6px oklch(0.45 0.03 250 / 0.28), inset 0 1px 0 oklch(1 0 0);
+  --nm-panel: 0 1px 2px oklch(0.3 0.02 250 / 0.05), 0 18px 40px -22px oklch(0.3 0.03 250 / 0.32), inset 0 1px 0 oklch(1 0 0);
+  --nm-panel-lift: 0 2px 4px oklch(0.3 0.02 250 / 0.06), 0 24px 48px -22px oklch(0.3 0.03 250 / 0.38), inset 0 1px 0 oklch(1 0 0);
+  --nm-panel-edge: oklch(1 0 0 / 0.9);
+  --nm-raise: -3px -3px 7px oklch(1 0 0 / 0.9), 3px 3px 8px oklch(0.5 0.02 250 / 0.2), inset 0 1px 0 oklch(1 0 0 / 0.6);
+  --nm-raise-hover: -4px -4px 10px oklch(1 0 0 / 0.95), 5px 6px 14px oklch(0.5 0.02 250 / 0.26), inset 0 1px 0 oklch(1 0 0 / 0.6);
+  --nm-press: inset 2px 2px 5px oklch(0.5 0.02 250 / 0.2), inset -2px -2px 5px oklch(1 0 0 / 0.9);
+  --nm-inset-sm: inset 1px 1px 2px oklch(0.5 0.02 250 / 0.18), inset -1px -1px 2px oklch(1 0 0 / 0.9);
+  --nm-ink: linear-gradient(180deg, oklch(0.31 0.012 250), oklch(0.20 0.008 250));
+  --nm-ink-hover: linear-gradient(180deg, oklch(0.36 0.012 250), oklch(0.24 0.008 250));
+  --nm-on-ink: oklch(0.985 0.003 250);
+  --nm-ink-shadow: -2px -2px 5px oklch(1 0 0 / 0.7), 3px 4px 9px -2px oklch(0.25 0.05 250 / 0.45), inset 0 1px 0 oklch(1 0 0 / 0.16);
+}
+
+.hub-app[data-theme="dark"] {
+  --nm-base: oklch(0.215 0.01 255);
+  --nm-shell: -6px -6px 18px oklch(1 0 0 / 0.07), 11px 13px 31px -7px oklch(0 0 0 / 0.65), inset 0 1px 0 oklch(1 0 0 / 0.075);
+  --nm-panel: inset 0 1px 0 oklch(1 0 0 / 0.07), inset 0 0 0 1px oklch(1 0 0 / 0.025), 0 0 0 1px oklch(0 0 0 / 0.35), -6px -6px 18px oklch(1 0 0 / 0.03), 0 2px 3px oklch(0 0 0 / 0.3), 0 12px 24px -8px oklch(0 0 0 / 0.45), 0 32px 60px -24px oklch(0 0 0 / 0.5);
+  --nm-panel-lift: inset 0 1px 0 oklch(1 0 0 / 0.08), 0 0 0 1px oklch(0 0 0 / 0.4), 0 4px 8px oklch(0 0 0 / 0.3), 0 24px 48px -12px oklch(0 0 0 / 0.6);
+  --nm-panel-edge: transparent;
+  --nm-raise: inset 0 1px 0 oklch(1 0 0 / 0.08), 0 0 0 1px oklch(0 0 0 / 0.3), -3px -3px 8px oklch(1 0 0 / 0.025), 0 1px 2px oklch(0 0 0 / 0.35), 0 6px 14px -6px oklch(0 0 0 / 0.5);
+  --nm-raise-hover: inset 0 1px 0 oklch(1 0 0 / 0.1), 0 0 0 1px oklch(0 0 0 / 0.3), -4px -4px 10px oklch(1 0 0 / 0.03), 0 2px 4px oklch(0 0 0 / 0.35), 0 14px 26px -10px oklch(0 0 0 / 0.6);
+  --nm-press: inset 0 1px 0 oklch(0 0 0 / 0.3), inset 0 2px 6px oklch(0 0 0 / 0.45), 0 0 0 1px oklch(0 0 0 / 0.3), 0 1px 0 oklch(1 0 0 / 0.05);
+  --nm-inset-sm: inset 0 1px 2px oklch(0 0 0 / 0.5), inset 0 0 0 1px oklch(0 0 0 / 0.25), 0 1px 0 oklch(1 0 0 / 0.05);
+  --nm-ink: linear-gradient(180deg, oklch(0.97 0.004 250), oklch(0.86 0.008 250));
+  --nm-ink-hover: linear-gradient(180deg, oklch(0.99 0.003 250), oklch(0.90 0.007 250));
+  --nm-on-ink: oklch(0.17 0.008 250);
+  --nm-ink-shadow: inset 0 1px 0 oklch(1 0 0 / 0.6), inset 0 -1px 0 oklch(0 0 0 / 0.12), 0 0 0 1px oklch(0 0 0 / 0.25), 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 18px -6px oklch(0 0 0 / 0.55);
+}
+
+/* 사이드바 — 데스크톱에서는 바닥에서 12px 떠 있는 둥근 면. 900px 이하 드로어는 기존 그대로. */
+.hub-app .hub-sidebar-futura { background: var(--nm-base); }
+@media (min-width: 901px) {
+  .hub-app .hub-sidebar-futura {
+    margin: 12px 0 12px 12px;
+    border-radius: 22px;
+    border-right-color: transparent !important;
+    box-shadow: var(--nm-shell);
+  }
+  .hub-app .hub-sidebar-futura .hub-sidebar-utilities { border-top-color: transparent !important; }
+}
+
+/* 현재 위치 — 잉크 pill. 다크 전용 밝은 면 규칙(위)을 이 레이어가 대신한다. */
+.hub-app .hub-nav-item[aria-current="page"],
+.hub-app:not([data-theme="light"]) .hub-nav-item[aria-current="page"],
+.hub-app .hub-nav-indicator,
+.hub-app:not([data-theme="light"]) .hub-nav-indicator {
+  background: var(--nm-ink);
+  box-shadow: var(--nm-ink-shadow);
+  border-radius: var(--fx-pill);
+}
+.hub-app .hub-nav-item[aria-current="page"],
+.hub-app [data-indicator="on"] > .hub-nav-item[aria-current="page"] { color: var(--nm-on-ink); }
+.hub-app .hub-nav-item { border-radius: var(--fx-pill); }
+
+/* 검색 · 사용자 카드 — 볼록한 작은 면 */
+.hub-app .fx-shell-card,
+.hub-app:not([data-theme="light"]) .fx-shell-card {
+  background: var(--nm-base);
+  border-radius: var(--fx-pill);
+  box-shadow: var(--nm-raise);
+}
+
+/* pill 모서리 — §15 2026-09-19 (b)가 확정했지만 primitive의 인라인 radius(--r-sm)에 져서 렌더되지 않던 것을
+ * 이 레이어에서 실제로 그린다. 글쓰기 입력(.hub-input · 텍스트 영역)은 §15 2026-09-21대로 작은 모서리를 지킨다. */
+.hub-app .hub-btn,
+.hub-app .hub-iconbtn,
+.hub-app .hub-seg,
+.hub-app .hub-seg__btn { border-radius: var(--fx-pill) !important; }
+
+/* 세그먼트 — 파인 트랙 위에 잉크 선택 */
+.hub-app .hub-seg {
+  background: var(--nm-base);
+  border-color: transparent;
+  box-shadow: var(--nm-press);
+}
+.hub-app .hub-seg__btn[aria-pressed="true"] {
+  color: var(--nm-on-ink);
+  background: var(--nm-ink);
+  box-shadow: var(--nm-ink-shadow);
+}
+
+/* 버튼 — 주요는 잉크, 나머지는 볼록, 누르면 파인다 */
+.hub-app .hub-btn--primary {
+  color: var(--nm-on-ink);
+  background: var(--nm-ink);
+  border-color: transparent;
+  box-shadow: var(--nm-ink-shadow);
+}
+.hub-app .hub-btn--primary:hover:not(:disabled) { background: var(--nm-ink-hover); border-color: transparent; }
+.hub-app .hub-btn--primary:disabled { color: var(--fg-dim); background: var(--nm-base); box-shadow: var(--nm-inset-sm); }
+.hub-app .hub-btn--secondary,
+.hub-app .hub-btn--outline {
+  background: var(--nm-base);
+  border-color: transparent;
+  box-shadow: var(--nm-raise);
+}
+.hub-app .hub-btn--secondary:hover:not(:disabled),
+.hub-app .hub-btn--outline:hover:not(:disabled) { background: var(--nm-base); box-shadow: var(--nm-raise-hover); }
+.hub-app .hub-btn:not(.hub-btn--ghost):active:not(:disabled) { box-shadow: var(--nm-press); }
+
+/* 입력 — 접근성 경계(--line-control, 3:1)는 남기고 안으로 살짝 판다 */
+.hub-app .hub-input,
+.hub-app .hub-field { box-shadow: var(--nm-inset-sm); }
+
+/* 패널 — Futura 면 전체가 깊은 그림자 + 윗변 하이라이트로 뜬다 */
+.hub-app .fx-card,
+.hub-app .hub-futura .hub-card,
+.hub-app .hub-futura .ci-card,
+.hub-app .hub-futura .overview-panel,
+.hub-app .hub-futura.overview-page .overview-panel,
+.hub-app .hub-futura.daily-brief .daily-brief__panel {
+  border: 1px solid var(--nm-panel-edge) !important;
+  box-shadow: var(--nm-panel) !important;
+  border-radius: 24px;
+}
+.hub-app .fx-card--lift:hover { box-shadow: var(--nm-panel-lift); }
+.hub-app .fx-pill-btn { background: var(--nm-base); box-shadow: var(--nm-raise); }
+.hub-app .fx-pill-btn:hover { box-shadow: var(--nm-raise-hover); }
+.hub-app .fx-pill-btn--primary { background: var(--nm-ink); color: var(--nm-on-ink); box-shadow: var(--nm-ink-shadow); }
+.hub-app .fx-pill-btn--ghost,
+.hub-app .fx-pill-btn--ghost:hover { background: transparent; box-shadow: none; }
+
+/* 홈 7g 남은 목록의 지금 보는 행 · 멘토 띠 — 떠 있는 행 / 파인 띠 */
+.hub-app .ci-remaining--side .ci-remaining__row[aria-current="true"] { background: var(--surface); box-shadow: var(--nm-raise), inset 1px 0 0 var(--accent); }
+.hub-app .guidance-inline-tip--home { background: var(--nm-base); box-shadow: var(--nm-press); }

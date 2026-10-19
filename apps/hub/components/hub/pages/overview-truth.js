@@ -317,6 +317,22 @@ export function recentActivityAvailability(sources = [], status) {
   };
 }
 
+// 현황 7f 사실 줄(2026-10-19) — 지금 기간과 같은 길이의 직전 기간 합계. 원장 창(activitySeries)이
+// 두 기간을 다 덮고 모든 날이 측정됐을 때만 비교한다. 못 하면 null — 0으로 뭉개지 않는다.
+export function buildPeriodComparison(activitySeries = [], days = 7) {
+  const series = Array.isArray(activitySeries) ? activitySeries : [];
+  const windowDays = Number(days);
+  if (!Number.isInteger(windowDays) || windowDays <= 0 || series.length < windowDays * 2) return null;
+  const previous = series.slice(-2 * windowDays, -windowDays);
+  const totals = {};
+  for (const key of ["work", "decisions", "content"]) {
+    const values = previous.map((row) => row?.[key]);
+    if (!values.every(isAvailableValue)) return null;
+    totals[key] = values.reduce((sum, value) => sum + Number(value), 0);
+  }
+  return totals;
+}
+
 export function buildAutomationMetricRows(summary = {}, state = "error") {
   const metric = (key) => isAvailableValue(summary?.[key]) ? Number(summary[key]) : "—";
   const failures = metric("failuresToday");
