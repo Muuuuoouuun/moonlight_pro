@@ -25,7 +25,23 @@
   border-bottom: 1px solid var(--line-soft);
   border-radius: 0;
   background: transparent;
-  padding: 10px 0 14px;
+  padding: 14px 0 18px;
+  gap: 16px;
+}
+
+/* 홈 한 줄 팁은 아침 브리핑 위 단독 줄이라 한 단계 크게 읽힌다(운영자 요청 2026-10-21). */
+.guidance-inline-tip--home .guidance-inline-tip__kind {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.guidance-inline-tip--home .guidance-inline-tip__copy {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.guidance-inline-tip--home .guidance-inline-tip__person {
+  font-size: 12.5px;
 }
 
 .guidance-inline-tip__kind {
