@@ -59,6 +59,7 @@ import { LEAD_SUBJECTS, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { CUSTOMER_LABEL_MISSING, customerGenreOptions, customerRegionOptions, matchesCustomerLabels, normalizeGenreLabels } from "@/lib/sales-os/customer-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { isTemplateNextAction } from "@/lib/sales-os/lead-enrichment";
+import { linkLabel } from "@/lib/sales-os/web-enrichment";
 import { RECORD_LAYOUT_QUERIES, RECORD_TABS, addSavedNoteRow, applyReceiptEvent, recordReceipt, recordTab, recordWindowLayout } from "@/lib/sales-os/contact-record";
 import { ACTIVITY_ICON as ACT_ICON, memoStreamRows, recordContextTruth, recordRowKind, upsertSavedMemo } from "@/lib/sales-os/record-context";
 import {
@@ -191,6 +192,7 @@ function toRows(ledger) {
       brand: l.brand,
       type: l.type,
       deals: mergedDeals,
+      webEnrichment: l.webEnrichment || null,
       raw: l, // 스코어 요약(LeadEnrichmentPanel)이 원본 enrichment 필드를 쓴다
     };
   });
@@ -236,6 +238,7 @@ function toRows(ledger) {
       brand: a.brand,
       type: a.type,
       deals: (a.companyId && dealsByCompany.get(a.companyId)) || [],
+      webEnrichment: a.webEnrichment || null,
       raw: null,
     };
   });
@@ -718,6 +721,66 @@ function QuickContactActions({ row, onCopied }) {
       {row.phone && <Button variant="outline" size="sm" icon="copy" onClick={copy}>카톡용 번호 복사</Button>}
       {row.email && <Button variant="outline" size="sm" icon="email" onClick={() => window.location.assign(`mailto:${row.email}`)}>메일</Button>}
     </div>
+  );
+}
+
+// 웹 보강 정보 — companies.meta.enrichment_web을 읽기만 한다(편집·저장 경로 없음). 표시 모델은
+// lib/sales-os/web-enrichment.js가 만들고(빈 값 제거 · http(s) 링크만), 데이터가 없으면 섹션째 숨는다.
+// 표면 예산: 정보처럼 접힌 섹션 하나로만 선다.
+function ExternalLinks({ hrefs }) {
+  return (
+    <span className="customer-web__links">
+      {hrefs.map(href => (
+        <a key={href} href={href} target="_blank" rel="noopener noreferrer" className="customer-web__link">{linkLabel(href)}</a>
+      ))}
+    </span>
+  );
+}
+
+function WebEnrichmentSection({ data }) {
+  if (!data) return null;
+  return (
+    <details className="customer-sec">
+      <summary>
+        <h3 className="fx-eyebrow customer-eyebrow">웹 보강 정보</h3>
+        <span className="customer-sec__hint">
+          {[data.matchStatusLabel, data.researchedAt ? `조사일 ${data.researchedAt}` : null].filter(Boolean).join(" · ")}
+        </span>
+        <span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span>
+      </summary>
+      <div className="customer-sec__in">
+        <div className="customer-kv__row">
+          {data.confidenceLabel && <CertaintyBadge state={data.confidenceCertainty} label={data.confidenceLabel} />}
+          {data.researchedAt && <span className="customer-web__meta">조사일 <span className="mono">{data.researchedAt}</span></span>}
+          {data.matchedName && <span className="customer-web__meta">검색 결과 이름 · {data.matchedName}</span>}
+        </div>
+        <dl className="customer-kv">
+          {data.address && (
+            <>
+              <dt>주소</dt>
+              <dd>
+                {data.address}
+                {data.mapHref && <> <a href={data.mapHref} target="_blank" rel="noopener noreferrer" className="customer-web__link">네이버 지도</a></>}
+              </dd>
+            </>
+          )}
+          {(data.region || data.area) && <><dt>지역</dt><dd>{[data.region, data.area].filter(Boolean).join(" · ")}</dd></>}
+          {data.phone && (
+            <>
+              <dt>대표전화</dt>
+              <dd className="mono">{data.phoneHref ? <a href={data.phoneHref} className="customer-web__link">{data.phone}</a> : data.phone}</dd>
+            </>
+          )}
+          {data.links.length > 0 && <><dt>사이트·블로그</dt><dd><ExternalLinks hrefs={data.links} /></dd></>}
+          {data.subjectsLine && <><dt>과목·대상</dt><dd>{data.subjectsLine}</dd></>}
+          {data.sizeNote && <><dt>규모</dt><dd>{data.sizeNote}</dd></>}
+          {data.brandType && <><dt>브랜드 구분</dt><dd>{data.brandType}</dd></>}
+          {data.avSignal && <><dt>전자칠판 신호</dt><dd>{data.avSignal}</dd></>}
+          {data.note && <><dt>메모</dt><dd>{data.note}</dd></>}
+          {data.sources.length > 0 && <><dt>출처</dt><dd><ExternalLinks hrefs={data.sources} /></dd></>}
+        </dl>
+      </div>
+    </details>
   );
 }
 
@@ -1331,6 +1394,9 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
               </div>
             </div>
           </details>
+
+          {/* 웹 보강 정보 — 공개 검색으로 채운 주소·전화·출처 (읽기 전용, 없으면 숨김) */}
+          <WebEnrichmentSection data={row.webEnrichment} />
 
           {/* 도움 받기 — 답장 초안·코칭은 필요할 때만 (표면 예산) */}
           <details className="customer-sec">

@@ -1658,3 +1658,18 @@ test("drawer memo query uses a limit the journal search route accepts (3 or 40)"
   assert.ok(all.length > 0, "memo query present");
   for (const value of [...limits, ...all]) assert.ok(["3", "40"].includes(value), `limit=${value}`);
 });
+
+test("웹 보강 정보 is a read-only folded section after 정보 and hides without data", () => {
+  const section = slice("function WebEnrichmentSection", "function Customer360Drawer");
+  assert.match(section, /if \(!data\) return null;/);
+  assert.match(section, /<details className="customer-sec">/);
+  assert.match(section, />웹 보강 정보<\/h3>/);
+  assert.match(section, /<CertaintyBadge state=\{data\.confidenceCertainty\}/);
+  assert.match(section, /rel="noopener noreferrer"/);
+  // 읽기 전용 — 입력·저장 경로가 없다.
+  assert.doesNotMatch(section, /saveRevenueRecord|TextField|onChange|<input|<Button/);
+  const drawer = slice("function Customer360Drawer", "// ── 새 고객 등록");
+  const order = [">정보</h3>", "<WebEnrichmentSection data={row.webEnrichment} />", ">도움 받기</h3>"].map((mark) => drawer.indexOf(mark));
+  order.forEach((index) => assert.ok(index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+});

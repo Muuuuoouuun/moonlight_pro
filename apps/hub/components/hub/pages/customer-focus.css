@@ -165,6 +165,12 @@
 .hub-app .customer-kv dd.mono { font-size: 12.5px; }
 .hub-app .customer-kv__label { margin: 0; font-size: 12px; font-weight: 400; color: var(--fg-dim); }
 .hub-app .customer-kv__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* 웹 보강 정보(읽기 전용) — 링크는 줄바꿈되는 칩 없는 텍스트 링크 */
+.hub-app .customer-web__meta { font-size: 12px; color: var(--fg-dim); }
+.hub-app .customer-web__links { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.hub-app .customer-web__link { color: var(--fg-muted); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.hub-app .customer-web__link:hover { color: var(--fg); }
+@media (pointer: coarse) { .hub-app .customer-web__link { display: inline-flex; align-items: center; min-height: 44px; } }
 .hub-app .customer-danger-zone { display: flex; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
 /* 라벨 편집(과목·지역·장르) */
