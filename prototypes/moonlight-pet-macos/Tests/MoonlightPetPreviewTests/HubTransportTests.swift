@@ -1137,11 +1137,225 @@ private func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: St
     do { _ = try expression(); recordFailure("Expected an error", file: file, line: line) } catch { check(error) }
 }
 
+// Opt-in Track D audit. Only URLProtocol and in-memory doubles are used.
+// Native execution is intentionally separate from the established default suite.
+private enum TrackDAudit {
+    static let origin = "https://hub.example.test"
+    static let epoch = "synthetic-current-epoch"
+    static let old = HubSavedSession(value: "rejected.signature", expiresAt: 4102444800)
+    static let freshValue = "accepted.signature"
+    static func snapshot(session: HubSavedSession? = TrackDAudit.old, origin: String = TrackDAudit.origin,
+                         epoch: String = TrackDAudit.epoch, signedOut: Bool = false) -> HubDesktopSession {
+        var result = HubDesktopSession(origin: origin, session: session, signedOut: signedOut,
+            automaticLoginBlocked: signedOut, sessionEpoch: epoch)
+        if signedOut {
+            result.logoutIntent = HubDesktopLogoutIntent(id: "synthetic-intent", installationId: "synthetic-installation",
+                accountScope: "unknown/currentconnection", persistence: "persisted", localSession: "cleared",
+                companion: "unconfirmed", ownedKeychain: "not-requested", remoteSession: "not-requested")
+        }
+        return verifiedSnapshot(result)
+    }
+    static var freshSnapshot: HubDesktopSession {
+        snapshot(session: HubSavedSession(value: freshValue, expiresAt: 4102444800))
+    }
+    static func client(_ bridge: TrackDDesktopSession) throws -> (HubTransport, MemoryHubCredentials) {
+        let store = MemoryHubCredentials()
+        try store.save(HubCredentials(username: "operator", password: "synthetic-only"), origin: origin)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        return (try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
+            credentialStore: store, desktopSession: bridge, sharedSession: { nil }), store)
+    }
+    static func awaitGate(_ gate: HeldSessionRead<HubDesktopSession>) async -> Bool {
+        let deadline = Date().addingTimeInterval(3)
+        while !(await gate.started), Date() < deadline { await Task.yield() }
+        return await gate.started
+    }
+    static func expectPreserved(_ store: MemoryHubCredentials) throws {
+        expectEqual(try store.load(origin: origin), HubCredentials(username: "operator", password: "synthetic-only"))
+    }
+}
+
+private enum TrackDPublicationReply: String, CaseIterable, Sendable {
+    case echo, missing, wrongCookie, wrongEpoch, logout, wrongOrigin
+}
+
+private actor TrackDDesktopSession: HubDesktopSessionSharing {
+    nonisolated let supportsLogoutIntent = true
+    private let followup: HubDesktopSession?
+    private let readGate: HeldSessionRead<HubDesktopSession>?
+    private let publicationGate: HeldSessionRead<HubDesktopSession>?
+    private let publicationReply: TrackDPublicationReply
+    private(set) var reads = 0
+    private(set) var published: [HubSavedSession] = []
+    private(set) var publishedEpochs: [String?] = []
+    init(followup: HubDesktopSession?, readGate: HeldSessionRead<HubDesktopSession>? = nil,
+         publicationGate: HeldSessionRead<HubDesktopSession>? = nil,
+         publicationReply: TrackDPublicationReply = .echo) {
+        self.followup = followup; self.readGate = readGate; self.publicationGate = publicationGate
+        self.publicationReply = publicationReply
+    }
+    func read(origin: String) async -> HubDesktopSession? {
+        reads += 1
+        if reads == 1 { return TrackDAudit.snapshot() }
+        if reads == 2, let readGate { return await readGate.read() }
+        return followup
+    }
+    func write(_ session: HubSavedSession?, origin: String) async { recordFailure("Audit must use acknowledged publication") }
+    func publishSession(_ session: HubSavedSession, origin: String, epoch: String?) async -> HubDesktopSession? {
+        published.append(session); publishedEpochs.append(epoch)
+        if let publicationGate { return await publicationGate.read() }
+        switch publicationReply {
+        case .missing: return nil
+        case .wrongCookie:
+            let wrong = HubSavedSession(value: "different.signature", expiresAt: session.expiresAt)
+            return verifiedSnapshot(HubDesktopSession(origin: origin, session: wrong, signedOut: false, sessionEpoch: epoch))
+        case .wrongEpoch:
+            return verifiedSnapshot(HubDesktopSession(origin: origin, session: session, signedOut: false, sessionEpoch: "different-epoch"))
+        case .wrongOrigin:
+            return verifiedSnapshot(HubDesktopSession(origin: "https://other.example.test", session: session, signedOut: false, sessionEpoch: epoch))
+        case .logout: return TrackDAudit.snapshot(session: nil, signedOut: true)
+        case .echo:
+            return verifiedSnapshot(HubDesktopSession(origin: origin, session: session, signedOut: false, sessionEpoch: epoch))
+        }
+    }
+}
+
+private final class TrackDHTTP: @unchecked Sendable {
+    private let lock = NSLock()
+    private var loginCount = 0
+    private var cookies: [String?] = []
+    var logins: Int { lock.lock(); defer { lock.unlock() }; return loginCount }
+    var readCookies: [String?] { lock.lock(); defer { lock.unlock() }; return cookies }
+    func handle(_ request: URLRequest, _ response: TransportURLProtocol) {
+        guard request.url?.host == "hub.example.test" else {
+            recordFailure("Audit attempted a foreign HTTP destination")
+            response.respond(status: 403, json: "{\"status\":\"forbidden\"}"); return
+        }
+        if request.url?.path == "/api/operator/session", request.httpMethod == "POST" {
+            lock.lock(); loginCount += 1; lock.unlock()
+            response.respond(json: "{\"status\":\"authenticated\"}", headers: [
+                "Set-Cookie": "com_moon_operator_session=accepted.signature; Path=/; Max-Age=3600; Secure; HttpOnly"])
+        } else {
+            let cookie = request.value(forHTTPHeaderField: "Cookie")
+            lock.lock(); cookies.append(cookie); lock.unlock()
+            if cookie == "com_moon_operator_session=accepted.signature" { response.respond(json: "{\"status\":\"live\"}") }
+            else { response.respond(status: 401, json: "{\"status\":\"unauthorized\"}") }
+        }
+    }
+}
+
+private func testTrackDUnchangedIntentPublishesFreshCookie() async throws {
+    let bridge = TrackDDesktopSession(followup: TrackDAudit.snapshot())
+    let (client, store) = try TrackDAudit.client(bridge), http = TrackDHTTP()
+    TransportURLProtocol.handler = { http.handle($0, $1) }
+    do { expectEqual(try await client.request(path: "/api/hub/tasks").status, "live") }
+    catch { recordFailure("Unchanged verified intent must retain the accepted fresh cookie: \(error)") }
+    expectEqual(http.logins, 1)
+    expectEqual(http.readCookies, ["com_moon_operator_session=rejected.signature", "com_moon_operator_session=accepted.signature"])
+    expectEqual(await bridge.published.map(\.value), [TrackDAudit.freshValue])
+    expectEqual(await bridge.publishedEpochs, [TrackDAudit.epoch])
+    try TrackDAudit.expectPreserved(store)
+    print("TRACE Track D unchanged intent: old=rejected.signature, expected fresh=accepted.signature, published=\(await bridge.published.map(\.value))")
+}
+
+private func testTrackDChangedIntentBlocksPublication() async throws {
+    let cases: [(String, HubDesktopSession?, HubTransportError?)] = [
+        ("logout", TrackDAudit.snapshot(session: nil, epoch: "synthetic-logout-epoch", signedOut: true), nil),
+        ("epoch", TrackDAudit.snapshot(epoch: "synthetic-replacement-epoch"), nil),
+        ("origin", TrackDAudit.snapshot(origin: "https://other.example.test"), .desktopSessionUnavailable),
+        ("unavailable", nil, .desktopSessionUnavailable),
+    ]
+    for (name, snapshot, expected) in cases {
+        let bridge = TrackDDesktopSession(followup: snapshot)
+        let (client, store) = try TrackDAudit.client(bridge), http = TrackDHTTP()
+        TransportURLProtocol.handler = { http.handle($0, $1) }
+        do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("\(name) must reject restoration") }
+        catch is CancellationError { expectNil(expected) }
+        catch {
+            if let expected { expectEqual(error as? HubTransportError, expected) }
+            else { recordFailure("\(name) expected cancellation, got \(error)") }
+        }
+        expectEqual(http.logins, 1)
+        expectEqual(http.readCookies.count, 1) // The protected read is never replayed.
+        expectEqual(await bridge.published.count, 0)
+        try TrackDAudit.expectPreserved(store)
+        print("TRACE Track D \(name): publication count=\(await bridge.published.count)")
+    }
+}
+
+private func testTrackDPublicationAcknowledgementMustMatch() async throws {
+    // A matching fresh follow-up snapshot isolates publication fences from the
+    // stale-cookie hypothesis; no acceptance condition is relaxed.
+    for reply in TrackDPublicationReply.allCases where reply != .echo {
+        let name = reply.rawValue
+        let bridge = TrackDDesktopSession(followup: TrackDAudit.freshSnapshot, publicationReply: reply)
+        let (client, store) = try TrackDAudit.client(bridge), http = TrackDHTTP()
+        TransportURLProtocol.handler = { http.handle($0, $1) }
+        do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("\(name) publication must fail closed") }
+        catch { expectEqual(error as? HubTransportError, .desktopSessionUnavailable) }
+        expectEqual(await bridge.published.map(\.value), [TrackDAudit.freshValue])
+        expectEqual(http.logins, 1); expectEqual(http.readCookies.count, 1)
+        try TrackDAudit.expectPreserved(store)
+    }
+}
+
+private func testTrackDDisconnectDiscardsLateIntentRead() async throws {
+    let gate = HeldSessionRead(TrackDAudit.snapshot())
+    let bridge = TrackDDesktopSession(followup: TrackDAudit.snapshot(), readGate: gate)
+    let (client, store) = try TrackDAudit.client(bridge), http = TrackDHTTP()
+    TransportURLProtocol.handler = { http.handle($0, $1) }
+    let pending = Task { try await client.request(path: "/api/hub/tasks") }
+    expectTrue(await TrackDAudit.awaitGate(gate))
+    await client.disconnect()
+    await gate.release()
+    do { _ = try await pending.value; recordFailure("Disconnected intent lookup must cancel") }
+    catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
+    expectEqual(await bridge.published.count, 0)
+    expectEqual(http.logins, 1); expectEqual(http.readCookies.count, 1)
+    try TrackDAudit.expectPreserved(store)
+}
+
+private func testTrackDDisconnectDiscardsLatePublicationReply() async throws {
+    let gate = HeldSessionRead(TrackDAudit.freshSnapshot)
+    let bridge = TrackDDesktopSession(followup: TrackDAudit.freshSnapshot, publicationGate: gate)
+    let (client, store) = try TrackDAudit.client(bridge), http = TrackDHTTP()
+    TransportURLProtocol.handler = { http.handle($0, $1) }
+    let pending = Task { try await client.request(path: "/api/hub/tasks") }
+    expectTrue(await TrackDAudit.awaitGate(gate))
+    await client.disconnect()
+    await gate.release()
+    do { _ = try await pending.value; recordFailure("Disconnected publication reply must cancel") }
+    catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
+    expectEqual(await bridge.published.map(\.value), [TrackDAudit.freshValue])
+    expectEqual(http.readCookies.count, 1)
+    try TrackDAudit.expectPreserved(store)
+}
+
+private func testTrackDCallerCancellationDoesNotReturnProtectedData() async throws {
+    let gate = HeldSessionRead(TrackDAudit.freshSnapshot)
+    let bridge = TrackDDesktopSession(followup: TrackDAudit.freshSnapshot, readGate: gate)
+    let (client, store) = try TrackDAudit.client(bridge), http = TrackDHTTP()
+    TransportURLProtocol.handler = { http.handle($0, $1) }
+    let pending = Task { try await client.request(path: "/api/hub/tasks") }
+    expectTrue(await TrackDAudit.awaitGate(gate))
+    pending.cancel()
+    await gate.release()
+    do { _ = try await pending.value; recordFailure("A canceled caller must not receive protected data") }
+    catch is CancellationError {} catch { recordFailure("Expected caller cancellation, got \(error)") }
+    // Automatic login is coalesced across callers. This case does not invent a
+    // policy that canceling one waiter cancels authentication needed by another.
+    for session in await bridge.published { expectEqual(session.value, TrackDAudit.freshValue) }
+    expectEqual(http.logins, 1)
+    try TrackDAudit.expectPreserved(store)
+    print("TRACE Track D canceled caller: publications=\(await bridge.published.count), protected HTTP reads=\(http.readCookies.count)")
+}
+
 @main
 private struct HubTransportTestRunner {
     static func main() async {
         let tests = HubTransportTests()
-        let cases: [(String, () async throws -> Void)] = [
+        let baselineCases: [(String, () async throws -> Void)] = [
             ("held session fixture resumes every waiter", testHeldSessionReadResumesEveryWaiter),
             ("peer capability requires exact version and flag", { try tests.testPeerCapabilityRequiresExactVersionAndFlag() }),
             ("unsupported peer preserves manual standalone login", tests.testUnsupportedPeerHoldsAutomaticRestoreButPreservesManualStandaloneLogin),
@@ -1182,6 +1396,18 @@ private struct HubTransportTestRunner {
             ("malformed authentication responses", tests.testMalformedAndUnauthenticatedSuccessEnvelopesAreRejected),
             ("offline logout clears session", tests.testLogoutClearsPrivateCookiesEvenWhenServerIsOffline),
         ]
+        let auditCases: [(String, () async throws -> Void)] = [
+            ("Track D unchanged intent publishes only fresh cookie", testTrackDUnchangedIntentPublishesFreshCookie),
+            ("Track D changed logout/epoch/origin blocks publication", testTrackDChangedIntentBlocksPublication),
+            ("Track D publication acknowledgement matches cookie/epoch/origin", testTrackDPublicationAcknowledgementMustMatch),
+            ("Track D disconnect discards late intent read", testTrackDDisconnectDiscardsLateIntentRead),
+            ("Track D disconnect discards late publication reply", testTrackDDisconnectDiscardsLatePublicationReply),
+            ("Track D caller cancellation cannot return protected data", testTrackDCallerCancellationDoesNotReturnProtectedData),
+            ("Track D explicit failure never falls back; restart retries once", tests.testRejectedLoginNeverReplacesAcceptedCredentialsOrLoops),
+            ("Track D late HTTP response cannot restore sign-out cookies", tests.testLateResponseCannotRestoreCookiesAfterSignOut),
+            ("Track D disconnect cancels pending auth without replay", tests.testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials),
+        ]
+        let cases = CommandLine.arguments.contains("--audit-stale-cookie") ? auditCases : baselineCases
         for (name, test) in cases {
             let previousFailures = testFailures.all.count
             do { try await test() } catch { recordFailure("\(name): unexpected \(error)") }

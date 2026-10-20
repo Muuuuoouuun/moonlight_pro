@@ -9,7 +9,7 @@ on:
 
 jobs:
   windows-desktop:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/office-connection-20261002' && github.event.repository.private == false
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/codex/office-connection-20261002' || github.ref == 'refs/heads/codex/moonlight-r18-review-20261020') && github.event.repository.private == false
     runs-on: windows-2025
     timeout-minutes: 25
     permissions:
@@ -95,6 +95,7 @@ jobs:
 
   macos-pet:
     runs-on: macos-26
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,6 +109,11 @@ jobs:
           ./script/test_office_meeting_pages.sh
           ./script/test_office_meeting_transport.sh
           node script/test_native_session_bridge.mjs
+
+      - name: Native stale-cookie and session-intent audit
+        timeout-minutes: 5
+        working-directory: prototypes/moonlight-pet-macos
+        run: ./script/test_hub_transport.sh --audit-stale-cookie
 
       - name: Build and verify signed Mac pet bundle
         working-directory: prototypes/moonlight-pet-macos
