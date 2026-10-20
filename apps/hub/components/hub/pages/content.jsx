@@ -111,13 +111,13 @@ function ContentTagTrendPanel({ tagTrends, syncState }) {
         </div>
       )}
       {tagTrends.map((entry) => (
-        <div key={entry.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 84px) 1fr 22px 30px', alignItems: 'center', gap: 8 }}>
+        <div key={entry.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 84px) minmax(0, 1fr) minmax(22px, max-content) 30px', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{entry.tag}</span>
           <span style={{ height: 5, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
             <span style={{ display: 'block', height: '100%', width: `${Math.round((entry.count / maxCount) * 100)}%`, background: 'var(--moon-300)', borderRadius: 3 }} />
           </span>
-          <span className="num" style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right' }}>{entry.count}</span>
-          <span style={{ fontSize: entry.trend === 'new' ? 8.5 : 11, fontWeight: entry.trend === 'new' ? 600 : 400, color: entry.trend === 'new' ? 'var(--accent)' : 'var(--fg-faint)', textAlign: 'center' }}>{TAG_TREND_GLYPH[entry.trend]}</span>
+          <span className="num" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{entry.count}</span>
+          <span style={{ fontSize: entry.trend === 'new' ? 10.5 : 11, fontWeight: entry.trend === 'new' ? 600 : 400, color: entry.trend === 'new' ? 'var(--accent)' : 'var(--fg-faint)', textAlign: 'center' }}>{TAG_TREND_GLYPH[entry.trend]}</span>
         </div>
       ))}
     </div>
@@ -864,7 +864,7 @@ export function Campaigns() {
                   <div style={{ marginTop: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{cScorecard ? `Weekly · ${cScorecard.metric}` : `Goal · ${c.goal || '미설정'}`}</span>
-                      <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>
+                      <span className="mono" style={{ fontSize: 12, color: 'var(--fg)', whiteSpace: 'nowrap' }}>
                         {cScorecard ? (cScorecard.actual ?? '—') : c.current}
                         <span style={{ color: 'var(--fg-faint)' }}> / {cScorecard?.target ?? String(c.goal || '').match(/\d+/)?.[0] ?? '—'}</span>
                       </span>

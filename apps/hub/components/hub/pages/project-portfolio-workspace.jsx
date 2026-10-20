@@ -16,6 +16,7 @@ import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics
 import { selectUrgentProjectItems } from '@/lib/project-urgent-items';
 import { buildCurrentMonthProjectPreview } from '@/lib/project-monthly-preview';
 import { projectIndexDoneState } from '@/lib/project-index-order';
+import { canReviewProjectCompletion, resolveProjectNextAction } from '@/lib/project-action-state';
 
 const DONE_SPARKS = 6;
 
@@ -141,7 +142,7 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
         {genreLabel && <span className={indexStyles.srOnly}>{`장르 ${genreLabel}`}</span>}
         {done && <span className={indexStyles.doneMark} title="할 일 모두 처리 · 결과 확인 전">
           <Iconed name="check" size={13} />
-          <span className={indexStyles.srOnly}>완료됨</span>
+          <span className={indexStyles.srOnly}>결과 확인 대기</span>
           {celebrating && Array.from({ length: DONE_SPARKS }, (_, index) => <i key={index} className={indexStyles.spark} aria-hidden="true" />)}
         </span>}
         <span className="mono">{progress === null ? "—" : `${progress}%`}</span>
@@ -310,9 +311,7 @@ export function ProjectPortfolioWorkspace({
     focusTask(focusTaskId, focusCheckId);
   }, [project?.id, projectTasks, focusTaskId, focusCheckId, focusTask]);
   const openTasks = projectTasks.filter((task) => !task.done);
-  const allTasksDone = projectTasks.length > 0 && openTasks.length === 0
-    && !failedSources.includes('tasks') && !project?.displayProgress?.partial;
-  const canReviewCompletion = allTasksDone && !['completed', 'archived'].includes(project?.statusKey);
+  const canReviewCompletion = canReviewProjectCompletion({ project, tasks: projectTasks, sourceState, failedSources });
   const datedTasks = projectTasks.flatMap(task => [
     ...(task.dueAt ? [{ ...task, scheduleKey: task.id, parentTask: task }] : []),
     ...readTaskChecklist(task).filter(item => item.dueAt).map(item => ({
@@ -363,9 +362,8 @@ export function ProjectPortfolioWorkspace({
     setShowMobilePicker(false);
     onSelectProject?.(projectId);
   };
-  const nextAction = project?.displayNextAction || project?.projectNextAction || nextTask?.title;
-  const actionTask = nextAction ? openTasks.find(task => task.title.trim() === nextAction.trim()) : null;
-  const nextActionSource = actionTask ? '연결된 할 일' : nextAction ? (project?.projectNextAction === nextAction ? '프로젝트 기록' : '최근 업데이트') : '미정';
+  const nextActionTarget = resolveProjectNextAction(project, projectTasks, nextTask);
+  const nextAction = nextActionTarget.title;
   const lowerBound = Boolean(projectCorePartial || sourceState === "partial");
 
   return (
@@ -442,7 +440,7 @@ export function ProjectPortfolioWorkspace({
               ...(doneProjects.length > 0 ? [
                 <button key="done-group-heading" type="button" className={indexStyles.doneHead}
                   data-celebrate={celebratingIds.size ? 'true' : undefined}
-                  aria-label={`완료됨 ${doneProjects.length}개 · 할 일 모두 처리 · 결과 확인 전`}
+                  aria-label={`결과 확인 대기 ${doneProjects.length}개 · 할 일 모두 처리 · 프로젝트 완료 전`}
                   aria-expanded={!indexControls.doneCollapsed} onClick={() => {
                     if (!indexControls.doneCollapsed) setCelebratingIds({ key: indexStorageKey, ids: new Set() });
                     indexControls.toggleDoneCollapsed();
@@ -450,7 +448,7 @@ export function ProjectPortfolioWorkspace({
                   <span className={indexStyles.doneChevron} style={{ transform: indexControls.doneCollapsed ? 'rotate(-90deg)' : 'none' }}>
                     <Iconed name="chevronD" size={12} />
                   </span>
-                  <span>완료됨</span><span className="num">{doneProjects.length}</span>
+                  <span>결과 확인 대기</span><span className="num">{doneProjects.length}</span>
                   <span className={indexStyles.doneHint}>할 일 모두 처리 · 결과 확인 전</span>
                 </button>
               ] : []),
@@ -562,9 +560,16 @@ export function ProjectPortfolioWorkspace({
                   <strong>{canReviewCompletion ? '할 일을 모두 처리했습니다. 이제 결과를 확인하세요.' : nextAction || '첫 할 일을 적고 바로 시작하세요'}</strong>
                   {canReviewCompletion
                     ? <Button variant="outline" size="sm" icon="arrowRight" onClick={() => onReviewCompletion?.(project)}>완료 검토</Button>
-                    : <Button variant="outline" size="sm" icon="arrowRight" onClick={() => actionTask ? focusTask(actionTask.id) : workListRef.current?.focusNewTask(nextAction || '')}>
-                      {actionTask ? '목록에서 보기' : nextAction ? '할 일로 추가' : '할 일 추가'}
+                    : <Button variant="outline" size="sm" icon="arrowRight" onClick={() => nextActionTarget.taskId ? focusTask(nextActionTarget.taskId)
+                      : nextActionTarget.kind === 'ambiguous' ? workListRef.current?.focusList()
+                      : workListRef.current?.focusNewTask(nextAction)}>
+                      {nextActionTarget.kind === 'done-task' ? '처리한 할 일 확인' : nextActionTarget.kind === 'ambiguous' ? '같은 제목 · 목록에서 선택'
+                        : nextActionTarget.taskId ? '목록에서 보기' : nextAction ? '새 할 일 초안' : '할 일 추가'}
                     </Button>}
+                  {!canReviewCompletion && nextActionTarget.kind === 'new' && nextAction && <>
+                    <span>연결된 할 일을 찾지 못했어요. 제목을 바꾼 할 일이 있는지 먼저 확인하세요.</span>
+                    <Button variant="ghost" size="sm" onClick={() => workListRef.current?.focusList()}>기존 목록 확인</Button>
+                  </>}
                 </div>
                 <div className={workStyles.progressSummary}>
                   <div><strong className="stat">{progress === null ? '—' : <>{progress}<small>%</small></>}</strong><span>{evidenceDetail}</span></div>

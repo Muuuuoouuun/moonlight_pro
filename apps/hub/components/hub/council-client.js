@@ -3,6 +3,8 @@
 // the content/project ledger context and forwards to the Engine. Reused by the Studio editor,
 // the Brand Projects advisory panel, and the Council chat session.
 
+import { projectCouncilIssue } from "@/lib/project-council-context";
+
 export const COUNCIL_MODE_LABEL = {
   "content-critique": "콘텐츠 검토",
   "brand-strategy": "브랜드 전략",
@@ -32,9 +34,20 @@ export async function requestCouncilAdvice({
   knowledge = null,
   guidanceId = null,
   createWorkOrder = undefined,
+  contextType = null,
+  scope = null,
 } = {}) {
   try {
     const body = { mode, ref, draft };
+    if (scope != null && scope !== "personal") {
+      return { state: "error", note: projectCouncilIssue({ ref, scope }) };
+    }
+    if (scope != null) body.scope = scope;
+    if (contextType === "project") {
+      const issue = projectCouncilIssue({ ref, scope });
+      if (issue) return { state: "error", note: issue };
+      body.contextType = "project";
+    }
     if (Array.isArray(legendIds) && legendIds.length > 0) body.legendIds = legendIds;
     if (directives && typeof directives === "object") body.directives = directives;
     if (values && typeof values === "object") body.values = values;

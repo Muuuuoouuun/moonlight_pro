@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
 import * as order from '../../../lib/project-index-order.js';
+import * as actionState from '../../../lib/project-action-state.js';
 import * as metrics from './project-pms-metrics.js';
 import { readTaskChecklist } from '../../../lib/task-checklist.js';
 import { selectUrgentProjectItems } from '../../../lib/project-urgent-items.js';
@@ -43,7 +44,7 @@ function mounted(kind, initial, { storage = new Map(), reduced = false } = {}) {
     useEffect: effect, useLayoutEffect: effect,
   };
   const styles = new Proxy({}, { get: (_, key) => key });
-  const scope = { React, localStorage, window: browser, document, globalThis: { window: browser, document }, ...order, ...metrics,
+  const scope = { React, localStorage, window: browser, document, globalThis: { window: browser, document }, ...order, ...metrics, ...actionState,
     styles, indexStyles: styles, workStyles: styles, deliveryStyles: styles,
     Button: 'Button', Badge: 'Badge', Drawer: 'Drawer', EmptyState: 'EmptyState', IconButton: 'IconButton', Input: 'Input', SegmentedControl: 'SegmentedControl', Iconed: 'Iconed', BrandMark: 'BrandMark', ProjectWorkList: 'ProjectWorkList', ProjectDeliverySummary: 'ProjectDeliverySummary',
     projectGenreLabel: () => '', projectGenreTint: () => undefined, projectStatusLabel: value => value,
@@ -235,4 +236,44 @@ test('project group uses token motion, 44px touch controls and reduced-motion fi
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/);
   assert.doesNotMatch(css, /\d+(?:ms|s)\b/);
   assert.doesNotMatch(workspaceSource, /DONE_CELEBRATION_MS|setTimeout\([^]*DONE/);
+});
+
+test('all-task-done group truthfully awaits results and stale snapshots do not promote review', () => {
+  const p = project('a', 1, 1), tasks = [{ id: 'one', title: '데모', done: true }];
+  const props = baseProps([p], { todosByProject: new Map([['a', tasks]]) });
+  const view = mounted('workspace', props);
+  assert.match(text(heading(view.output)), /결과 확인 대기/);
+  assert.doesNotMatch(text(heading(view.output)), /완료됨/);
+  assert.ok(nodes(view.output, n => n.type === 'Button' && text(n) === '완료 검토').length);
+  for (const sourceState of ['error', 'loading', 'preview']) {
+    view.render({ ...props, sourceState });
+    assert.equal(nodes(view.output, n => n.type === 'Button' && text(n) === '완료 검토').length, 0);
+  }
+  view.unmount();
+});
+
+test('next-action callbacks focus existing tasks, disambiguate duplicates and keep unmatched text an explicit draft', () => {
+  const cases = [
+    { title: '제안서 전달', tasks: [{ id: 'a', title: '제안서  전달', done: false }], label: '목록에서 보기', expect: ['task', 'a'] },
+    { title: '촬영', tasks: [{ id: 'a', title: '촬영', done: true }, { id: 'b', title: '검토', done: false }], label: '처리한 할 일 확인', expect: ['task', 'a'] },
+    { title: '고객 확인', tasks: [{ id: 'a', title: '고객 확인', done: false }, { id: 'b', title: '고객 확인', done: false }], label: '같은 제목 · 목록에서 선택', expect: ['list'] },
+    // F6: renaming a task does not create a guessed ID relationship to old project text.
+    { title: '고객 데모 준비', tasks: [{ id: 'a', title: '고객 데모 자료·계정 준비', done: false }], label: '새 할 일 초안', expect: ['draft', '고객 데모 준비'] },
+  ];
+  for (const item of cases) {
+    const p = { ...project('p'), displayNextAction: item.title };
+    const view = mounted('workspace', baseProps([p], { todosByProject: new Map([['p', item.tasks]]) }));
+    const calls = [];
+    nodes(view.output, node => node.type === 'ProjectWorkList')[0].props.ref.current = {
+      focusTask: id => calls.push(['task', id]), focusList: () => calls.push(['list']), focusNewTask: title => calls.push(['draft', title]),
+    };
+    nodes(view.output, node => node.type === 'Button' && text(node) === item.label)[0].props.onClick();
+    assert.deepEqual(calls, [item.expect]);
+    if (item.label === '새 할 일 초안') {
+      assert.match(text(view.output), /제목을 바꾼 할 일이 있는지/);
+      nodes(view.output, node => node.type === 'Button' && text(node) === '기존 목록 확인')[0].props.onClick();
+      assert.deepEqual(calls.at(-1), ['list']);
+    }
+    view.unmount();
+  }
 });

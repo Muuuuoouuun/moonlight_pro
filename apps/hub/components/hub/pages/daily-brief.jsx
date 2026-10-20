@@ -661,12 +661,12 @@ function DistributionRows({ series = [], label }) {
       {series.map((item) => {
         const value = Number(item.value) || 0;
         return (
-          <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '48px minmax(0, 1fr) 24px', gap: 8, alignItems: 'center' }}>
+          <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '48px minmax(0, 1fr) minmax(24px, max-content)', gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>{item.label}</span>
             <span style={{ height: 5, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
               <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 8 : 0, Math.round((value / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--moon-300)' : 'var(--moon-500)' }} />
             </span>
-            <span className="mono" style={{ fontSize: 10.5, color: value ? 'var(--fg)' : 'var(--fg-faint)', textAlign: 'right' }}>{value}</span>
+            <span className="mono" style={{ fontSize: 12, color: value ? 'var(--fg)' : 'var(--fg-faint)', textAlign: 'right', whiteSpace: 'nowrap' }}>{value}</span>
           </div>
         );
       })}
@@ -1018,7 +1018,7 @@ function BriefNavigation({ taskToday, onNavigate }) {
       <nav aria-label="Daily Brief 빠른 이동" className="daily-brief__nav">
         <div className="daily-brief__card-head" style={{ borderBottom: '1px solid var(--line-soft)' }}>
           <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Iconed name="lightning" size={13} style={{ color: 'var(--moon-300)' }} />
+            <Iconed name="bolt" size={13} style={{ color: 'var(--moon-300)' }} />
             <span>빠른 바로가기</span>
           </span>
           <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -1659,8 +1659,8 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
               {isClassInGuruFocus(ka.item) && (
                 <IconButton
                   icon="sparkle"
-                  label="Guru 세일즈 코칭"
-                  size="sm"
+                  tooltip="Guru 세일즈 코칭"
+                  size={28}
                   tone="moon"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1741,8 +1741,8 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
                 {/* 기록은 어디서 열어도 같은 폼이다 — 첫 화면에서 바로 남기고 하던 일로 돌아간다. */}
                 <IconButton
                   icon="edit"
-                  label="연락 기록 남기기"
-                  size="sm"
+                  tooltip="연락 기록 남기기"
+                  size={28}
                   onClick={(e) => {
                     e.stopPropagation();
                     onRecord?.({ kind: 'lead', id: item.id, name: item.name, companyId: item.companyId });
@@ -1752,8 +1752,8 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
                 {isClassInGuruFocus(item) && (
                   <IconButton
                     icon="sparkle"
-                    label="Guru 세일즈 코칭"
-                    size="sm"
+                    tooltip="Guru 세일즈 코칭"
+                    size={28}
                     tone="moon"
                     onClick={(e) => {
                       e.stopPropagation();

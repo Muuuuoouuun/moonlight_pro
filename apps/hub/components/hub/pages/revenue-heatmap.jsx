@@ -86,7 +86,7 @@ function RegionDetail({ row, offMap = false, onJump }) {
                 }}
               >
                 <span style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
-                <span className="num" style={{ fontSize: 11, fontWeight: 600, color: "var(--moon-200)" }}>{fmtMoney(c.expected)}</span>
+                <span className="num" style={{ fontSize: 12, fontWeight: 600, color: "var(--moon-200)" }}>{fmtMoney(c.expected)}</span>
                 {jumpable
                   ? <Iconed name="chevronR" size={11} style={{ color: "var(--fg-faint)", alignSelf: "center" }} />
                   : <span style={{ width: 11 }} />}
@@ -127,10 +127,10 @@ const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, ma
       style={{
         display: "grid", gridTemplateColumns: "18px minmax(0,1.2fr) minmax(0,1fr) 62px 26px",
         gap: 8, alignItems: "center", padding: "6px 6px", borderRadius: 4, cursor: "pointer",
-        ...(isTop ? { borderLeft: "2px solid #ffd166", paddingLeft: 4, background: "rgba(255, 209, 102, 0.04)" } : {}),
+        ...(isTop ? { borderLeft: "2px solid var(--moon-300)", paddingLeft: 4, background: "var(--surface-2)" } : {}),
       }}
     >
-      <span className="mono" style={{ fontSize: 10.5, color: isTop ? "#ffd166" : "var(--fg-faint)", fontWeight: isTop ? 700 : 400 }}>
+      <span className="mono" style={{ fontSize: 10.5, color: isTop ? "var(--fg)" : "var(--fg-faint)", fontWeight: isTop ? 700 : 400 }}>
         {String(rank).padStart(2, "0")}
       </span>
       <div style={{ minWidth: 0 }}>
@@ -143,9 +143,9 @@ const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, ma
                 fontWeight: 700,
                 padding: "0 4px",
                 borderRadius: 3,
-                background: "rgba(255, 209, 102, 0.15)",
-                color: "#ffd166",
-                border: "1px solid rgba(255, 209, 102, 0.35)",
+                background: "var(--surface-3)",
+                color: "var(--fg)",
+                border: "1px solid var(--line)",
                 lineHeight: "14px",
                 flexShrink: 0,
               }}
@@ -161,13 +161,13 @@ const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, ma
           style={{
             height: "100%",
             width: `${pct}%`,
-            background: isTop ? "linear-gradient(90deg, var(--moon-300), #ffd166)" : heatFill(value, max),
+            background: isTop ? "linear-gradient(90deg, var(--moon-500), var(--moon-200))" : heatFill(value, max),
             borderRadius: 999,
             transition: "width var(--dur-enter) var(--ease-hub)",
           }}
         />
       </div>
-      <span className="num" style={{ fontSize: 11, fontWeight: 600, textAlign: "right", color: isTop ? "#ffd166" : "var(--moon-200)", fontVariantNumeric: "tabular-nums" }}>
+      <span className="num" style={{ fontSize: 12, fontWeight: 600, textAlign: "right", color: isTop ? "var(--fg)" : "var(--moon-200)", fontVariantNumeric: "tabular-nums" }}>
         {fmtMoney(value)}
       </span>
       {customer.jumpKey && onJump ? (

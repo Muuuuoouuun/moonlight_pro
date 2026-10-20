@@ -8,6 +8,7 @@ import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
 import { OFFICE_MENTOR_DRAFT_LIMIT } from "@/components/hub/office-mentor-client";
 import { isValidBrandGuruConversationHistory } from "@/lib/guru-chat-history";
+import { projectCouncilIssue } from "@/lib/project-council-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -191,6 +192,21 @@ export async function POST(req) {
   const values = input.values && typeof input.values === "object" ? input.values : undefined;
   const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
   const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
+  const selectedProject = input.contextType === "project";
+  if (selectedProject) {
+    const issue = projectCouncilIssue({ ref, scope: input.scope });
+    if (issue || mode === "open-question" || mode === "office-review") {
+      return NextResponse.json(
+        { status: "error", error: issue || "프로젝트 자문 요청 형식을 확인해 주세요." },
+        { status: 400 },
+      );
+    }
+  } else if ((input.contextType != null && input.contextType !== "content")
+    || (mode !== "office-review" && input.scope != null && input.scope !== "personal")) {
+    // Existing personal-brand/Guru/Office callers remain on their original path.
+    // Explicit company/unknown scope is never silently treated as personal.
+    return NextResponse.json({ status: "error", error: "Council은 개인 범위 자문만 지원합니다." }, { status: 400 });
+  }
   const officeSource = mode === "office-review" ? parseOfficeSource(input.officeSource) : null;
   if (input.history !== undefined && (
     mode !== "open-question"
@@ -214,7 +230,23 @@ export async function POST(req) {
     return NextResponse.json({ status: "error", error: "질문과 마케팅·콘텐츠 카드 출처를 확인해 주세요." }, { status: 400 });
   }
 
-  const context = await assembleBrandContext({ mode, ref, draft, guidanceId });
+  const context = await assembleBrandContext({
+    mode, ref, draft, guidanceId,
+    ...(selectedProject ? { contextType: "project", scope: input.scope, workspace: "brand" } : {}),
+  });
+  if (selectedProject && (
+    ["preview", "error"].includes(context?.source)
+    || context?.scope !== input.scope
+    || context?.focus?.found !== true
+    || context.focus.kind !== "project"
+    || context.focus.entity?.id !== ref
+    || context.focus.entity?.orgScope !== input.scope
+  )) {
+    return NextResponse.json(
+      { status: "error", error: context?.error || "선택한 개인 프로젝트를 현재 원장에서 확인할 수 없습니다." },
+      { status: 409 },
+    );
+  }
   if ((mode === "open-question" || mode === "office-review") && ["preview", "error"].includes(context?.source)) {
     return NextResponse.json(
       { status: context.source, error: context.error || "브랜드 자료를 읽을 수 없습니다." },

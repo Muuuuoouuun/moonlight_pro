@@ -79,6 +79,9 @@ export function Card({ children, style, pad = true, interactive = false, classNa
       padding: pad ? 'var(--card-pad)' : 0,
       ...(interactive && { cursor: 'pointer' }),
       ...style,
+      // A conditional caller override often supplies undefined. Keep panel
+      // depth in that case, but respect deliberate none/null/custom shadows.
+      boxShadow: style?.boxShadow === undefined ? 'var(--shadow-card)' : style.boxShadow,
     }}>{children}</div>
   );
 }

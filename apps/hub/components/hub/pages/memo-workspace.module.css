@@ -87,7 +87,7 @@
   overflow-wrap: anywhere;
 }
 .workspace .row[aria-pressed="true"] {
-  background: rgba(82, 116, 168, 0.14);
+  background: var(--accent-soft);
   box-shadow: inset 1px 0 var(--accent);
 }
 .row strong {

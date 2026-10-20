@@ -383,3 +383,14 @@ test('a task from a merged GitHub PR shows its source and completes through the 
   view.render({ tasks: [task()] });
   assert.equal(view.find(node => node.type === 'GitHubPrMark').props.pr, undefined);
 });
+
+test('ambiguous next-action navigation focuses the list and reveals completed candidates without writing', () => {
+  const view = mount({ tasks: [{ id: 'done', title: '완료 후보', done: true }], onCreate: () => { throw new Error('navigation must not write'); } });
+  let focuses = 0;
+  view.find(node => node.type === 'section').props.ref.current = { focus() { focuses++; } };
+  view.handle.current.focusList(); view.render(); view.flushFrames();
+  assert.equal(focuses, 1);
+  assert.equal(view.find(node => node.type === 'section').props.tabIndex, -1);
+  assert.ok(view.find(node => node.props['data-task-id'] === 'done'));
+  assert.deepEqual(view.store.drafts, {});
+});

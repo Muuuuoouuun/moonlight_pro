@@ -28,8 +28,6 @@ const BASELINE = {
   "components/hub/celebration-fx.jsx": 6,
   "components/hub/hub-tokens.css": 13,
   "components/hub/pages/overview.jsx": 4,
-  // 차트 색계열 — §5.3(Moonstone 명도 + 패턴)으로 재설계 필요
-  "components/hub/pages/revenue-heatmap.jsx": 8,
 };
 
 // 정확히 3·4·6·8자리만 색으로 본다 — `#55296`(테스트 픽스처의 번호)이 5자리라 걸리면 오탐이다.

@@ -51,7 +51,7 @@ function mount(dailyFocus) {
   return { render, findAll, text };
 }
 
-const guruButtons = (app, node) => app.findAll((n) => n.type === 'IconButton' && n.props.label === 'Guru 세일즈 코칭', node);
+const guruButtons = (app, node) => app.findAll((n) => n.type === 'IconButton' && n.props.tooltip === 'Guru 세일즈 코칭', node);
 const widget = (app) => app.findAll((n) => n.type === 'FloatingMentorWidget')[0];
 const focusRow = (app, id) => app.findAll((n) => n.props?.className === 'hub-row daily-brief__customer-row' && n.props.key === id)[0];
 const kaRow = (app) => app.findAll((n) => n.props?.className === 'hub-row daily-brief__customer-row' && n.props.key === undefined)[0];
@@ -94,7 +94,7 @@ test('focus customers offer ✦ Guru only when the record itself is confirmed Cl
   assert.deepEqual(offered, ['classin', 'legacy-company', 'classin-brand']);
   // 기록 남기기는 소속과 무관하게 그대로다 — Guru만 닫는다.
   for (const item of items) {
-    assert.equal(app.findAll((n) => n.type === 'IconButton' && n.props.label === '연락 기록 남기기', focusRow(app, item.id)).length, 1, item.id);
+    assert.equal(app.findAll((n) => n.type === 'IconButton' && n.props.tooltip === '연락 기록 남기기', focusRow(app, item.id)).length, 1, item.id);
   }
   assert.equal(widget(app).props.isOpen, false);
 });

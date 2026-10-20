@@ -417,7 +417,7 @@ function BrandActivityBars({ brands = [] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {brands.map((b) => (
-        <div key={b.key} style={{ display: 'grid', gridTemplateColumns: '22px 1fr 28px', gap: 10, alignItems: 'center' }}>
+        <div key={b.key} style={{ display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) minmax(28px, max-content)', gap: 10, alignItems: 'center' }}>
           <BrandIcon brand={{ key: b.key, name: b.label }} size={18} style={{ color: 'var(--fg-muted)', margin: '0 auto' }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, marginBottom: 4, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</div>
@@ -425,7 +425,7 @@ function BrandActivityBars({ brands = [] }) {
               <div style={{ width: `${Math.max(6, Math.round((b.count / max) * 100))}%`, height: '100%', background: 'var(--moon-500)', transition: 'width var(--dur-enter) var(--ease-hub)' }} />
             </div>
           </div>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right' }}>{b.count}</span>
+          <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{b.count}</span>
         </div>
       ))}
     </div>
@@ -501,12 +501,12 @@ function SeriesRows({ series = [], label }) {
         const available = item.value !== null && item.value !== undefined && Number.isFinite(Number(item.value));
         const value = available ? Number(item.value) : null;
         return (
-          <div key={item.key} style={{ display: 'grid', gridTemplateColumns: `56px minmax(0, 1fr) ${hasMeta ? 'auto' : '26px'}`, gap: 8, alignItems: 'center' }}>
+          <div key={item.key} style={{ display: 'grid', gridTemplateColumns: `56px minmax(0, 1fr) ${hasMeta ? 'auto' : 'minmax(26px, max-content)'}`, gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>
             <span style={{ height: 6, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
               <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 6 : 0, Math.round(((value || 0) / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--danger)' : 'var(--moon-500)', transition: 'width var(--dur-enter) var(--ease-hub)' }} />
             </span>
-            <span className="mono" style={{ fontSize: 11, textAlign: 'right', whiteSpace: 'nowrap' }}>
+            <span className="mono" style={{ fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap' }}>
               <span style={{ color: value ? 'var(--fg)' : 'var(--fg-faint)' }}>{available ? value : '—'}</span>
               {item.meta && <span style={{ color: 'var(--fg-faint)' }}> · {item.meta}</span>}
             </span>

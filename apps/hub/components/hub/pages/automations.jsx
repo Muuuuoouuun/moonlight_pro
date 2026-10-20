@@ -154,7 +154,7 @@ export function AutomationsIndex({ onNavigate }) {
 
         <Card pad style={{
           padding: '12px 16px',
-          boxShadow: failuresTodayCount > 0 ? 'inset 1px 0 0 var(--danger-line)' : undefined,
+          boxShadow: failuresTodayCount > 0 ? 'inset 1px 0 0 var(--danger-line), var(--shadow-card)' : undefined,
         }}>
           <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>과거 실행 실패</div>
           <div className="stat" style={{
@@ -581,7 +581,7 @@ export function Runs({ onNavigate } = {}) {
 
         <Card pad style={{
           padding: '12px 16px',
-          boxShadow: failureRuns.length > 0 ? 'inset 1px 0 0 var(--danger-line)' : undefined,
+          boxShadow: failureRuns.length > 0 ? 'inset 1px 0 0 var(--danger-line), var(--shadow-card)' : undefined,
         }}>
           <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>오류 / 실패</div>
           <div className="stat" style={{
@@ -712,24 +712,29 @@ export function Runs({ onNavigate } = {}) {
           )}
           {displayRows.map((r, i) => {
             const isSelected = selectedRunId === r.id;
+            const detailId = `hub-run-detail-${encodeURIComponent(String(r.id))}`;
             return (
               <React.Fragment key={r.id}>
-                <div
-                  onClick={() => setSelectedRunId(isSelected ? null : r.id)}
+                <button
+                  type="button"
+                  className="hub-row"
+                  aria-expanded={isSelected}
+                  aria-controls={isSelected ? detailId : undefined}
+                  onClick={() => setSelectedRunId(current => current === r.id ? null : r.id)}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '140px 24px 170px 65px 1fr 20px',
+                    width: '100%',
+                    font: 'inherit',
+                    textAlign: 'left',
                     padding: '6px 8px',
                     borderRadius: 'var(--r-sm)',
                     borderBottom: i < displayRows.length - 1 && !isSelected ? '1px dashed var(--line-soft)' : 'none',
                     alignItems: 'center',
                     gap: 10,
                     cursor: 'pointer',
-                    background: isSelected ? 'var(--surface-2)' : 'transparent',
-                    transition: 'background var(--dur-hover) ease',
+                    background: isSelected ? 'var(--surface-2)' : undefined,
                   }}
-                  onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface)'; }}
-                  onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                 >
                   <span style={{ color: 'var(--fg-faint)' }} title={r.dateLabel}>
                     {r.dateLabel || r.at}
@@ -743,9 +748,9 @@ export function Runs({ onNavigate } = {}) {
                   <span style={{ color: 'var(--fg-faint)', textAlign: 'center', fontSize: 10.5 }}>
                     <Iconed name={isSelected ? 'chevronD' : 'chevronR'} size={11} />
                   </span>
-                </div>
+                </button>
                 {isSelected && (
-                  <div style={{
+                  <div id={detailId} style={{
                     padding: '12px 14px',
                     margin: '2px 8px 8px',
                     background: 'var(--surface)',

@@ -1296,7 +1296,8 @@ export function Decisions({ onNavigate, scope }) {
           isOpen={Boolean(councilDecision)}
           onClose={() => setCouncilDecision(null)}
           agent="council"
-          contextType="project"
+          contextType="general"
+          unavailableReason="결정의 회사·개인 범위를 확인할 수 없어 Council 자문을 요청할 수 없습니다. 기존 메모·검토 흐름을 이용해 주세요."
           contextTitle={councilDecision.title || "결정 검증"}
           contextData={{
             title: councilDecision.title,

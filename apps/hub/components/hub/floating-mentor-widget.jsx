@@ -9,6 +9,7 @@ import { requestGuruCoaching } from "./guru-client";
 import { requestPersonaChat, GURU_LENS_MAP, GURU_LENS_CHIPS } from "./persona-client";
 import { createAdviceTaskWriter } from "@/lib/ai-workflow-client";
 import { collectGuruConversationHistory } from "@/lib/guru-chat-history";
+import { projectCouncilIssue } from "@/lib/project-council-context";
 
 function renderAdviceWithCallouts(text) {
   if (!text || typeof text !== "string") return null;
@@ -82,11 +83,18 @@ export function FloatingMentorWidget({
   contextType = "content", // 'content' | 'project' | 'deal' | 'customer' | 'sales' | 'weekly' | 'general'
   contextTitle = "",
   contextData = {},
+  unavailableReason = "",
   initialTab = "quick",
   onApplyText,
   onCreateTask,
 }) {
   const isGuru = agent ? agent === "guru" : ["deal", "customer", "sales"].includes(contextType);
+  const isProjectCouncil = !isGuru && contextType === "project";
+  const projectScope = isProjectCouncil ? contextData?.orgScope : null;
+  const projectIssue = isProjectCouncil
+    ? projectCouncilIssue({ ref: contextData?.id, scope: projectScope })
+    : null;
+  const contextIssue = unavailableReason || projectIssue;
   // Guru resolves its record by exact id only (2026-09-25). A display name can match another
   // customer's deal in the Hub context assembler and shares memory across same-name customers,
   // so it never stands in for `ref`. A linked deal id wins because the deal is the coaching
@@ -94,8 +102,9 @@ export function FloatingMentorWidget({
   const linkedDealId = contextData?.dealId || (contextType === "deal" ? contextData?.id || contextData?.ref || null : null);
   const recordRef = isGuru
     ? linkedDealId || contextData?.id || contextData?.ref || null
+    : isProjectCouncil ? contextData?.id || null
     : contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
-  const contextKey = JSON.stringify([agent, contextType, contextData?.id || contextData?.ref || contextTitle, guidanceId, initialQuestion]);
+  const contextKey = JSON.stringify([agent, contextType, contextData?.id || contextData?.ref || contextTitle, projectScope, unavailableReason, guidanceId, initialQuestion]);
   const [minimized, setMinimized] = useState(false);
   const defaultTab = initialTab || (contextData?.mode === "critique" ? "critique" : "quick");
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -180,15 +189,25 @@ export function FloatingMentorWidget({
       if (contextData?.body) parts.push(`본문 초안:\n${contextData.body}`);
     } else if (contextType === "project") {
       parts.push(`[현재 프로젝트 맥락]`);
+      parts.push(`프로젝트 ID: ${recordRef || "확인 필요"} · 범위: ${projectScope || "확인 필요"}`);
       if (contextData?.title) parts.push(`프로젝트명: ${contextData.title}`);
       if (contextData?.status) parts.push(`진행상태: ${contextData.status}`);
       if (contextData?.desc) parts.push(`목표/설명: ${contextData.desc}`);
       if (Array.isArray(contextData?.todos) && contextData.todos.length) {
-        parts.push(`체크리스트:\n${contextData.todos.map(t => `- [${t.done ? 'x' : ' '}] ${t.title}`).join('\n')}`);
+        parts.push(`할 일 및 세부 체크:\n${contextData.todos.map(t => [
+          `- [${t.done || t.status === "done" ? "x" : " "}] ${t.title}${t.status ? ` · 상태: ${t.status}` : ""}`,
+          t.nextAction ? `  다음 행동: ${t.nextAction}` : "",
+          ...(Array.isArray(t.checklist) ? t.checklist.map(item => `  - [${item.done ? "x" : " "}] ${item.title}`) : []),
+        ].filter(Boolean).join("\n")).join("\n")}`);
       }
       if (Array.isArray(contextData?.updates) && contextData.updates.length) {
         parts.push(`최근 업데이트: ${contextData.updates.slice(0, 3).map(u => u.title).join(' / ')}`);
       }
+    } else if (contextType === "general") {
+      // Decisions are free-form review material, not selected project records.
+      if (contextData?.title || contextTitle) parts.push(`검토 제목: ${contextData?.title || contextTitle}`);
+      if (contextData?.status) parts.push(`상태: ${contextData.status}`);
+      if (contextData?.desc) parts.push(`검토 내용:\n${contextData.desc}`);
     }
     if (selectedLens && GURU_LENS_MAP[selectedLens]) {
       parts.push(`[적용 렌즈: ${GURU_LENS_MAP[selectedLens].name} 관점 적용]`);
@@ -201,6 +220,7 @@ export function FloatingMentorWidget({
 
   // Run advice, critique, sparring, or weekly-review
   const handleRequest = async (mode, customDraft = "") => {
+    if (contextIssue) { setStatusNote(contextIssue); return; }
     if (requestPending.current) return;
     requestPending.current = true;
     const epoch = requestEpoch.current;
@@ -225,13 +245,13 @@ export function FloatingMentorWidget({
         message: customDraft || null,
         context: isGuru
           ? { source: "operator-provided", scope: ref ? "selected-record" : "unscoped" }
-          : contextData,
-        conversationOnly: isGuru,
+          : isProjectCouncil ? { ...contextData, source: "operator-provided", scope: projectScope } : contextData,
+        conversationOnly: isGuru || isProjectCouncil,
       });
     } else {
       res = isGuru
         ? await requestGuruCoaching({ mode, draft, ref, guidanceId: selectedGuidanceId })
-        : await requestCouncilAdvice({ mode, draft, ref });
+        : await requestCouncilAdvice({ mode, draft, ref, ...(isProjectCouncil ? { contextType: "project", scope: projectScope } : {}) });
     }
 
     if (epoch !== requestEpoch.current) return;
@@ -260,6 +280,7 @@ export function FloatingMentorWidget({
   // Run chat message
   const handleSendChat = async (e) => {
     e?.preventDefault();
+    if (contextIssue) { setStatusNote(contextIssue); return; }
     const text = chatInput.trim();
     if (!text || requestPending.current) return;
     requestPending.current = true;
@@ -297,8 +318,8 @@ export function FloatingMentorWidget({
         message: text,
         context: isGuru
           ? { source: "operator-provided", scope: ref ? "selected-record" : "unscoped" }
-          : undefined,
-        conversationOnly: isGuru,
+          : isProjectCouncil ? { ...contextData, source: "operator-provided", scope: projectScope } : undefined,
+        conversationOnly: isGuru || isProjectCouncil,
       });
     } else {
       res = isGuru
@@ -313,6 +334,7 @@ export function FloatingMentorWidget({
             mode: activeTab === "sparring" ? "sparring" : "brand-strategy",
             draft,
             ref,
+            ...(isProjectCouncil ? { contextType: "project", scope: projectScope } : {}),
           });
     }
 
@@ -609,6 +631,11 @@ export function FloatingMentorWidget({
         </div>
       )}
 
+      {contextIssue && (
+        <div role="status" style={{ padding: "8px 14px", fontSize: 12, color: "var(--fg-muted)" }}>
+          {contextIssue}
+        </div>
+      )}
       {/* 1.5 Recent Advice History Dropdown */}
       {showHistory && visibleAdviceHistory.length > 0 && (
         <div

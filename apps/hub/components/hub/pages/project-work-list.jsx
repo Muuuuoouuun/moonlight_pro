@@ -93,6 +93,10 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
   const focusInput = key => requestAnimationFrame(() => inputs.current.get(key)?.focus());
 
   React.useImperativeHandle(ref, () => ({
+    focusList() {
+      setShowDone(previous => ({ ...previous, [projectId]: true }));
+      requestAnimationFrame(() => root.current?.focus());
+    },
     focusNewTask(title = '') {
       const draft = draftsRef.current[projectKey] || EMPTY_DRAFT;
       if (!draft.request && !draft.title) updateDraft(projectKey, { title, itemType: 'task' });
@@ -213,7 +217,7 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
     </div>;
   }
 
-  return <section ref={root} className={styles.workList} aria-label="프로젝트 할 일">
+  return <section ref={root} tabIndex={-1} className={styles.workList} aria-label="프로젝트 할 일">
     <header className={styles.listHeader}><h2>할 일 <span className="num">{openTasks.length}</span></h2><span>{doneTasks.length}/{tasks.length} 완료</span></header>
     {!tasks.length && <p className={styles.empty}>첫 할 일을 적어보세요. 제목만 입력하면 바로 시작할 수 있습니다.</p>}
     {openTasks.map(row)}

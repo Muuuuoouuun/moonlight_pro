@@ -11,6 +11,7 @@ import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import { filterBrandsByWorkspace } from "@/components/hub/workspace-map";
+import { projectCouncilIssue, projectCouncilScope } from "@/lib/project-council-context";
 
 const COUNCIL_AGENT = "council";
 const BRAND_GURU_AGENT = "guru.brand";
@@ -74,13 +75,57 @@ function selectFocusBrand(brands, ownKeys, ref, strict = false) {
 
 const strictFocusMode = (mode) => mode === "open-question" || mode === "office-review";
 
-export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, guidanceId = null, workspace = "brand" } = {}) {
+function selectedProjectContext({ projectLedger, content, runsRes, ref, scope, missing }) {
+  const fail = (error) => ({ source: "error", scope, error, focus: { found: false, kind: "project" }, missing });
+  if (!projectLedger) return fail("선택한 프로젝트 원장을 읽을 수 없습니다. 다시 불러온 뒤 시도해 주세요.");
+  const project = (projectLedger.projects || []).find(row => row.id === ref);
+  if (!project) return fail("선택한 프로젝트를 현재 원장에서 확인할 수 없습니다. 프로젝트를 다시 선택해 주세요.");
+  if (projectCouncilScope(project) !== scope) {
+    return fail("선택한 프로젝트의 회사·개인 범위가 요청과 다릅니다. 프로젝트를 다시 선택해 주세요.");
+  }
+  // A selected project is not a request for its entire brand portfolio. Attach
+  // only that project's records and its explicitly linked personal brand voice.
+  const brand = (content?.brands || []).find(row => row.key === project.brand && row.orgScope === scope);
+  const tasks = (projectLedger.todos || []).filter(task => task.project === ref);
+  if (tasks.length > 50) missing.push({ source: "project-tasks", reason: "task-context-truncated", loaded: 50, total: tasks.length });
+  const todos = trim(tasks, 50).map(task => ({
+    id: task.id, title: task.title, status: task.status, done: task.done === true,
+    nextAction: task.nextAction || "", checklist: task.checklist || [],
+  }));
+  const entity = {
+    id: project.id, name: project.name, brand: project.brand, orgScope: scope,
+    status: project.status, progress: project.progress, due: project.due,
+    tasks: project.tasks, done: project.done, tasksPartial: project.tasksPartial === true,
+    nextAction: project.nextAction || "", summary: project.summary || "", todos,
+    todosPartial: project.tasksPartial === true || tasks.length > todos.length,
+  };
+  return {
+    source: missing.length ? "partial" : projectLedger.source,
+    scope,
+    contextBoundary: "선택한 개인 프로젝트와 연결된 할 일만 전달했습니다. 다른 프로젝트·브랜드의 기록은 이 프로젝트의 근거가 아닙니다.",
+    brand: brandGuardrail(brand),
+    brands: brand ? [{ key: brand.key, name: brand.name, kind: brand.kind, voice: brand.voice }] : [],
+    projects: [entity],
+    focus: { found: true, kind: "project", entity },
+    memory: { recent_runs: trim((runsRes?.runs || []).filter(run => run.agent === COUNCIL_AGENT && run.ref === ref), 5) },
+    missing,
+  };
+}
+
+export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, guidanceId = null, workspace = "brand", contextType = null, scope = null } = {}) {
   const missing = [];
+  const selectedProject = contextType === "project";
+  if (selectedProject) {
+    const issue = projectCouncilIssue({ ref, scope });
+    if (issue || workspace !== "brand") return {
+      source: "error", scope, error: issue || "프로젝트 자문 범위를 확인해 주세요.", focus: { found: false, kind: "project" }, missing,
+    };
+  }
   const unscopedCardQuestion = mode === "open-question" && guidanceId && !ref;
   const memoryAgent = mode === "open-question" ? BRAND_GURU_AGENT : COUNCIL_AGENT;
   let [content, projectLedger, runsRes] = await Promise.all([
     settled(getContentLedger(), "content-ledger", missing),
-    settled(getProjectLedger(), "operating-ledger", missing),
+    settled(getProjectLedger(selectedProject ? { projectId: ref } : undefined), "operating-ledger", missing),
     unscopedCardQuestion
       ? Promise.resolve(null)
       : settled(getRecentAgentRuns({ agent: memoryAgent, ref, ...(mode === "open-question"
@@ -124,6 +169,8 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
       failedSources: Array.isArray(projectLedger.failedSources) ? projectLedger.failedSources : [],
     });
   }
+
+  if (selectedProject) return selectedProjectContext({ projectLedger, content, runsRes, ref, scope, missing });
 
   if (!content && !projectLedger) {
     return {
