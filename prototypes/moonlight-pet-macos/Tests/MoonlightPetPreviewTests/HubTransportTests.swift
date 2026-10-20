@@ -983,19 +983,21 @@ private let testFailures = TestFailures()
 
 private actor HeldSessionRead<Value: Sendable> {
     private let snapshot: Value?
-    private var continuation: CheckedContinuation<Value?, Never>?
+    private var continuations: [CheckedContinuation<Value?, Never>] = []
     private var released = false
     private(set) var started = false
+    var pendingReadCount: Int { continuations.count }
     init(_ snapshot: Value?) { self.snapshot = snapshot }
     func read() async -> Value? {
         if released { return nil }
         started = true
-        return await withCheckedContinuation { continuation = $0 }
+        return await withCheckedContinuation { continuations.append($0) }
     }
     func release() {
         released = true
-        continuation?.resume(returning: snapshot)
-        continuation = nil
+        let waiting = continuations
+        continuations.removeAll()
+        for continuation in waiting { continuation.resume(returning: snapshot) }
     }
 }
 
@@ -1003,6 +1005,24 @@ private struct HeldDesktopSession: HubDesktopSessionSharing {
     let gate: HeldSessionRead<HubDesktopSession>
     func read(origin: String) async -> HubDesktopSession? { await gate.read() }
     func write(_ session: HubSavedSession?, origin: String) async {}
+    // Only the request preflight is held. The protocol default reads again after
+    // writing logout, which would wait for a release scheduled after clearSession.
+    func recordLogout(origin: String) async -> HubDesktopSession? {
+        HubDesktopSession(origin: origin, session: nil, signedOut: true)
+    }
+}
+
+private func testHeldSessionReadResumesEveryWaiter() async {
+    let gate = HeldSessionRead("held")
+    let first = Task { await gate.read() }
+    let second = Task { await gate.read() }
+    while await gate.pendingReadCount < 2 { await Task.yield() }
+    await gate.release()
+    expectEqual(await first.value, "held")
+    expectEqual(await second.value, "held")
+    expectEqual(await gate.pendingReadCount, 0)
+    await gate.release() // Releasing twice must not resume any continuation twice.
+    expectNil(await gate.read())
 }
 
 private struct HeldLogoutDesktopSession: HubDesktopSessionSharing {
@@ -1109,6 +1129,7 @@ private struct HubTransportTestRunner {
     static func main() async {
         let tests = HubTransportTests()
         let cases: [(String, () async throws -> Void)] = [
+            ("held session fixture resumes every waiter", testHeldSessionReadResumesEveryWaiter),
             ("peer capability requires exact version and flag", { try tests.testPeerCapabilityRequiresExactVersionAndFlag() }),
             ("unsupported peer preserves manual standalone login", tests.testUnsupportedPeerHoldsAutomaticRestoreButPreservesManualStandaloneLogin),
             ("verified peer rejects downgraded begin", tests.testVerifiedPeerCannotDowngradeDuringExplicitBegin),
