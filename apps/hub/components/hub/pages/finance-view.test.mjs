@@ -37,7 +37,7 @@ test('only confirmed saved responses close a review and conflicts retain the dra
 });
 
 test("inner view choices use the canonical SegmentedControl key contract", () => {
-  assert.deepEqual(FINANCE_VIEWS.map(v=>v.key), ["flow","subscriptions","claims"]);
+  assert.deepEqual(FINANCE_VIEWS.map(v=>v.key), ["flow","personal","subscriptions","claims"]);
 });
 test('company review includes newly classified expenses and keeps wallet movements separate',async()=>{
  const {financeClaimEntries}=await import('./finance-view.js');
@@ -158,4 +158,68 @@ test('monthly estimates need active status and positive nonduplicate expense evi
  const entry={group:'provider',type:'expense',date:'2099-01-01',grossAmount:10,netAmount:10};
  for(const serviceStatus of ['unknown','paused','cancelled',undefined]) assert.equal(financeSubscriptionDates({...record,serviceStatus},[entry]).nextScheduleDate,null);
  for(const rows of [[],[{...entry,netAmount:0}],[{...entry,duplicateOf:'another'}],[{...entry,type:'movement'}]]) assert.equal(financeSubscriptionDates(record,rows).nextScheduleDate,null);
+});
+
+test('gauge labels: company purpose wins, contract groups read as subscription, unknown stays unclassified',async()=>{
+ const {financeLabelOf,financeSpendEntries}=await import('./finance-view.js');
+ const groups=new Set(['gpt']);
+ assert.equal(financeLabelOf({group:'gpt',review:{purpose:'company'}},groups),'company');
+ assert.equal(financeLabelOf({group:'gpt',review:{purpose:'unclassified'}},groups),'subscription');
+ assert.equal(financeLabelOf({review:{purpose:'business'}},groups),'personal');
+ assert.equal(financeLabelOf({review:{}},groups),'unclassified');
+ const rows=[{type:'expense',netAmount:5},{type:'movement',netAmount:0},{type:'expense',duplicateOf:'x',netAmount:5},{type:'expense',netAmount:null}];
+ assert.equal(financeSpendEntries(rows).length,1);
+});
+test('observed days mark the month the coverage ends inside as partial',async()=>{
+ const {financeObservedDays}=await import('./finance-view.js');
+ assert.deepEqual(financeObservedDays('2099-10','2099-10-17'),{observed:17,days:31,partial:true});
+ assert.deepEqual(financeObservedDays('2099-09','2099-10-17'),{observed:30,days:30,partial:false});
+ assert.equal(financeObservedDays('2099-11','2099-10-17').observed,0);
+});
+test('range gauge ends at the series max with average and previous-month ticks, and never invents a current month',async()=>{
+ const {financeRangeGauge}=await import('./finance-view.js');
+ const series=[['2099-05',100],['2099-06',200],['2099-07',400],['2099-08',null],['2099-09',300],['2099-10',150]].map(([month,value])=>({month,value}));
+ const gauge=financeRangeGauge(series,'2099-10');
+ assert.equal(gauge.max,400);assert.equal(gauge.maxMonth,'2099-07');
+ assert.equal(gauge.avg,250);assert.equal(gauge.prev.month,'2099-09');
+ assert.equal(gauge.fill,0.375);assert.equal(gauge.prevAt,0.75);
+ assert.equal(gauge.columns.length,5);assert.equal(gauge.columns.at(-1).current,true);
+ assert.equal(financeRangeGauge(series,'2099-12'),null);
+});
+test('daily stacks split by label and the running total paces against the previous month',async()=>{
+ const {financeDailyStacks,financeCumulative}=await import('./finance-view.js');
+ const spend=[{date:'2099-10-01',netAmount:30,l:'personal'},{date:'2099-10-01',netAmount:10,l:'company'},{date:'2099-10-03',netAmount:20,l:'unclassified'}];
+ const daily=financeDailyStacks(spend,'2099-10',e=>e.l,3);
+ assert.equal(daily.days.length,31);assert.equal(daily.max,40);
+ assert.deepEqual([daily.days[0].parts.personal,daily.days[0].parts.company,daily.days[0].total],[30,10,40]);
+ assert.equal(daily.days[3].observed,false);
+ const cum=financeCumulative(spend,'2099-10','2099-10-01',300);
+ assert.equal(cum.value,40);assert.equal(cum.paceValue,10);
+ assert.equal(financeCumulative(spend,'2099-10','2099-10-03',null).paceValue,null);
+});
+test('label progress counts amount and cells, and top places keep one segment per payment',async()=>{
+ const {financeLabelProgress,financeTopMerchants}=await import('./finance-view.js');
+ const spend=[{netAmount:60,l:'personal'},{netAmount:40,l:'unclassified'}];
+ const progress=financeLabelProgress(spend,e=>e.l);
+ assert.equal(progress.done,1);assert.equal(progress.amountShare,0.6);assert.deepEqual(progress.cells,['personal','unclassified']);
+ const top=financeTopMerchants([{merchant:'A',netAmount:5},{merchant:'B',netAmount:20},{merchant:'A',netAmount:5},{merchant:'C',netAmount:-3}]);
+ assert.deepEqual(top.map(row=>[row.name,row.payments.length,row.width]),[['B',1,1],['A',2,0.5]]);
+});
+test('fixed cost counts only active monthly KRW contracts with a confirmed amount',async()=>{
+ const {financeFixedCosts}=await import('./finance-view.js');
+ const fixed=financeFixedCosts([
+  {id:'a',name:'A',serviceStatus:'active',cycle:'monthly',currency:'KRW',amount:100,purpose:'company'},
+  {id:'b',name:'B',serviceStatus:'active',cycle:'annual',currency:'KRW',amount:500},
+  {id:'c',name:'C',serviceStatus:'paused',cycle:'monthly',currency:'KRW',amount:50},
+  {id:'d',name:'D',serviceStatus:'active',cycle:'monthly',currency:'KRW',amount:null},
+ ]);
+ assert.equal(fixed.total,100);assert.equal(fixed.count,1);assert.equal(fixed.segments[0].claim,true);
+});
+test('billing cycle gauge needs an active contract with both dates and marks payments within three weeks',async()=>{
+ const {financeCycleGauge}=await import('./finance-view.js');
+ const gauge=financeCycleGauge({serviceStatus:'active',lastPaymentDate:'2099-10-15',nextScheduleDate:'2099-11-15',scheduleKind:'estimate'},'2099-10-18');
+ assert.deepEqual([gauge.span,gauge.left,gauge.soon],[31,28,false]);
+ assert.equal(financeCycleGauge({serviceStatus:'active',lastPaymentDate:'2099-10-08',nextScheduleDate:'2099-11-08',scheduleKind:'estimate'},'2099-10-18').soon,true);
+ assert.equal(financeCycleGauge({serviceStatus:'paused',lastPaymentDate:'2099-10-09',nextScheduleDate:'2099-11-09'},'2099-10-18'),null);
+ assert.equal(financeCycleGauge({serviceStatus:'active',lastPaymentDate:'2099-10-09',nextScheduleDate:null},'2099-10-18'),null);
 });
