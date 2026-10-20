@@ -191,12 +191,14 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <div className="calendar-outcome__header" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
         <Checkbox checked={record?.done} onChange={done => outcome.save(done)} disabled={state !== 'live' || saving || Boolean(conflict)} label={`${title} 완료`} size={18} />
-        {whenLabel && <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', padding: '2px 6px', borderRadius: 'var(--r-xs)', flexShrink: 0 }}>{whenLabel}</span>}
-        <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: record?.done ? 'var(--fg-muted)' : 'var(--fg)', textDecoration: record?.done ? 'line-through' : undefined, overflowWrap: 'anywhere' }}>{title}</span>
-        {record?.done && <LifecycleBadge state="done" />}
-        <Button ref={editButtonRef} variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} onClick={outcome.toggleOpen} disabled={saving}>{outcome.editLabel}</Button>
+        <div className="calendar-outcome__summary" style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+          {whenLabel && <span className="mono calendar-outcome__when" style={{ fontSize: 12, color: 'var(--fg-muted)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', padding: '2px 6px', borderRadius: 'var(--r-xs)', maxWidth: '100%', boxSizing: 'border-box', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{whenLabel}</span>}
+          <span className="calendar-outcome__title" style={{ flex: '1 1 10rem', minWidth: 0, fontSize: 13, color: record?.done ? 'var(--fg-muted)' : 'var(--fg)', textDecoration: record?.done ? 'line-through' : undefined, overflowWrap: 'anywhere' }}>{title}</span>
+          {record?.done && <LifecycleBadge state="done" />}
+        </div>
+        <Button ref={editButtonRef} variant="ghost" size="xs" style={{ flexShrink: 0 }} aria-expanded={open} aria-controls={detailsId} onClick={outcome.toggleOpen} disabled={saving}>{outcome.editLabel}</Button>
       </div>
       {state === 'loading' && <Skeleton width="45%" height={12} />}
       {!open && record?.note && <div style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.6, paddingLeft: 26 }}>{record.note}</div>}
