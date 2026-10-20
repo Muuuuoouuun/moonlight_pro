@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import "./hub-futura.css";
+import "./hub-depth.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 import { DailyReviewProvider } from "./daily-review-provider";
 import { GOAL_WORK_BASE, goalHref, goalView } from "@/lib/goal-client";
@@ -652,7 +653,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const sidebarCollapsed = collapsed && !isMobileViewport;
 
   return (
-    <div ref={rootRef} className="hub-app" data-theme={theme}>
+    <div ref={rootRef} className="hub-app" data-theme={theme} data-visual-system="depth-b">
       <ToastProvider>
         <OfficeSessionProvider key={memoDraftContext}>
           <OfficeWorkflowSessionProvider>

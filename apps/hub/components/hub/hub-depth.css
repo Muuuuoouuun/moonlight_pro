@@ -1,0 +1,88 @@
+/* Approved depth B: dashboard panels carry depth; controls stay flat.
+ * The explicit marker is intentional. Login shares the base primitives and
+ * must remain unchanged even when this stylesheet survives client navigation.
+ * Palette, typography scales, layout, focus rings and motion stay canonical. */
+.hub-app[data-visual-system="depth-b"] {
+  --shadow-panel:
+    0 1px 0 oklch(1 0 0 / .10) inset,
+    -4px -4px 16px oklch(1 0 0 / .025),
+    6px 10px 28px -10px oklch(0 0 0 / .55);
+  --shadow-nav:
+    0 1px 0 oklch(1 0 0 / .10) inset,
+    0 5px 16px -7px oklch(0 0 0 / .45);
+  --shadow-control: none;
+  /* Menus and the mobile revenue drawer keep their pre-B overlay depth. */
+  --shadow-card-legacy:
+    0 1px 0 0 oklch(1 0 0 / .04) inset,
+    0 8px 24px -12px oklch(0 0 0 / .4);
+  --shadow-card: var(--shadow-panel);
+  --shadow-soft: var(--shadow-panel);
+  --fx-shadow: var(--shadow-panel);
+  --fx-shadow-lift: var(--shadow-panel);
+  /* JetBrains has no Hangul: use the bundled UI face before OS fallbacks. */
+  --font-mono: 'JetBrains Mono', 'SUIT Variable', 'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+.hub-app[data-visual-system="depth-b"][data-theme="light"] {
+  --shadow-panel:
+    0 1px 0 oklch(1 0 0 / .8) inset,
+    -4px -4px 14px oklch(1 0 0),
+    5px 9px 24px -12px oklch(0 0 0 / .17);
+  --shadow-nav:
+    0 1px 0 oklch(1 0 0 / .8) inset,
+    0 5px 16px -7px oklch(0 0 0 / .45);
+  --shadow-card-legacy:
+    0 1px 0 0 oklch(1 0 0 / .8) inset,
+    0 8px 24px -14px oklch(.3 .01 250 / .1);
+}
+
+/* Local aliases preserve the existing dark outline and the indicator-ready
+ * rule that removes the selected row's own shadow. Never draw two pills. */
+.hub-app[data-visual-system="depth-b"] .hub-nav-indicator,
+.hub-app[data-visual-system="depth-b"] .hub-nav-item[aria-current="page"] {
+  --fx-shadow: var(--shadow-nav);
+}
+
+/* Futura supporting actions have more-specific selectors than .hub-btn.
+ * Split their local shadow tokens rather than fighting that specificity.
+ * Expanded Check Items retain their separate inset selection ring. */
+.hub-app[data-visual-system="depth-b"] .hub-btn,
+.hub-app[data-visual-system="depth-b"] .fx-pill-btn,
+.hub-app[data-visual-system="depth-b"] .fx-tab,
+.hub-app[data-visual-system="depth-b"] .ci-outcome {
+  --fx-shadow: var(--shadow-control);
+  --fx-shadow-lift: var(--shadow-control);
+}
+.hub-app[data-visual-system="depth-b"] .hub-btn {
+  box-shadow: var(--shadow-control);
+}
+.hub-app[data-visual-system="depth-b"] .fx-pill-btn,
+.hub-app[data-visual-system="depth-b"] .fx-pill-btn:hover,
+.hub-app[data-visual-system="depth-b"] .ci-outcome,
+.hub-app[data-visual-system="depth-b"] .ci-outcome:hover {
+  transform: none;
+}
+.hub-app[data-visual-system="depth-b"] .fx-pill-btn:hover:not(:disabled):not(.fx-pill-btn--primary):not(.fx-pill-btn--ghost),
+.hub-app[data-visual-system="depth-b"] .ci-outcome:hover:not(:disabled):not(.ci-outcome--primary) {
+  background: var(--surface-3);
+}
+.hub-app[data-visual-system="depth-b"] .fx-pill-btn--primary:hover:not(:disabled),
+.hub-app[data-visual-system="depth-b"] .ci-outcome--primary:hover:not(:disabled) {
+  background: var(--moon-50);
+}
+
+/* Today owns a distinct panel token, not a distinct depth system. Its links
+ * keep their existing neutral color/border feedback without a raised button. */
+.hub-app[data-visual-system="depth-b"] .daily-brief {
+  --brief-panel-shadow: var(--shadow-panel);
+  --brief-panel-shadow-hover: var(--shadow-panel);
+}
+.hub-app[data-visual-system="depth-b"] .daily-brief__jump {
+  box-shadow: var(--shadow-control);
+  transform: none;
+}
+
+.hub-app[data-visual-system="depth-b"] .personal-revenue-drawer,
+.hub-app[data-visual-system="depth-b"] .hub-project-portfolio-mobile-manage > div {
+  box-shadow: var(--shadow-card-legacy);
+}
