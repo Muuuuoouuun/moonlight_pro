@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Badge, Button, Drawer, EmptyState, IconButton, Input, SegmentedControl } from "../hub-primitives";
+import { Badge, Button, Drawer, EmptyState, IconButton, Input, SegmentedControl, Skeleton } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import { readTaskChecklist } from '@/lib/task-checklist';
 import { ProjectWorkList } from './project-work-list';
@@ -297,7 +297,11 @@ export function ProjectPortfolioWorkspace({
   const selectedProject = selectedProjectRecord || projects.find((project) => project.id === selectedProjectId);
   const locallyFocused = projects.find((project) => project.id === focusProjectId);
   const project = locallyFocused || selectedProject || (!selectedProjectId ? projects[0] : null) || null;
-  const missingSelection = Boolean(selectedProjectId && !selectedProject && !locallyFocused && sourceState !== 'loading');
+  const projectReadPending = sourceState === 'loading';
+  const projectReadFailed = sourceState === 'error' || failedSources.includes('projects');
+  const projectReadIncomplete = projectReadPending || projectReadFailed || projectCorePartial;
+  const missingSelection = Boolean(selectedProjectId && !selectedProject && !locallyFocused
+    && ['live', 'partial'].includes(sourceState) && !projectReadIncomplete);
   React.useEffect(() => setFocusProjectId(null), [selectedProjectId]);
   const projectTasks = project ? (todosByProject.get(project.id) || []) : [];
   const urgentItems = React.useMemo(() => selectUrgentProjectItems(projectTasks), [projectTasks]);
@@ -382,7 +386,9 @@ export function ProjectPortfolioWorkspace({
         <div className="hub-project-portfolio-index__header">
           <div>
             <strong>프로젝트 선택</strong>
-            <span className="mono" aria-label={`프로젝트 ${projects.length}개 표시, 전체 ${portfolioProjects.length}개${projectCorePartial ? " 이상" : ""}`}>{query || activeFilter ? `${projects.length} / ` : ""}{portfolioProjects.length}{projectCorePartial ? "+" : ""}</span>
+            <span className="mono" aria-label={projectReadPending || projectReadFailed ? '프로젝트 수 미확인' : `프로젝트 ${projects.length}개 표시, 전체 ${portfolioProjects.length}개${projectCorePartial ? " 이상" : ""}`}>
+              {projectReadPending || projectReadFailed ? '—' : <>{query || activeFilter ? `${projects.length} / ` : ""}{portfolioProjects.length}{projectCorePartial ? "+" : ""}</>}
+            </span>
             <Button className={indexStyles.sort} variant="ghost" size="xs" iconRight="chevronD" aria-label={`프로젝트 정렬: ${indexControls.sortLabel}`}
               aria-haspopup="menu" aria-expanded={indexControls.menu?.kind === 'sort'} onClick={event => indexControls.openMenu(event, 'sort')}>{indexControls.sortLabel}</Button>
             <button type="button" className="hub-project-portfolio-index__close" onClick={() => setShowMobilePicker(false)}>닫기</button>
@@ -421,10 +427,17 @@ export function ProjectPortfolioWorkspace({
           <IconButton icon="x" size={24} tooltip="목록 알림 닫기" onClick={indexControls.dismissNotice} />
         </div>}
         <div ref={indexControls.listRef} className={`hub-project-portfolio-index__list scroll-y ${indexStyles.list}`} data-sorting={indexControls.drag ? 'true' : undefined}>
-          {projects.length === 0 ? (
+          {projects.length === 0 && projectReadPending ? (
+            <Skeleton lines={3} label="프로젝트 목록 확인 중" />
+          ) : projects.length === 0 && projectReadIncomplete ? (
+            <EmptyState icon="flag" title="프로젝트 목록 확인 필요"
+              description="전체 목록을 확인하지 못했습니다. 프로젝트가 없는지는 아직 알 수 없습니다."
+              action={<Button variant="outline" size="xs" onClick={onReload}>다시 시도</Button>}
+              style={{ padding: '24px 12px' }} />
+          ) : projects.length === 0 ? (
             <EmptyState icon={query || activeFilter ? 'search' : 'projects'}
-              title={query || activeFilter ? '조건에 맞는 프로젝트 없음' : '프로젝트 없음'}
-              description={query || activeFilter ? '검색어나 필터를 바꿔보세요.' : '프로젝트를 추가해 시작하세요.'}
+              title={sourceState === 'preview' ? 'Preview · 실제 프로젝트 없음' : query || activeFilter ? '조건에 맞는 프로젝트 없음' : '프로젝트 없음'}
+              description={sourceState === 'preview' ? '실제 프로젝트 기록이 연결되지 않았습니다.' : query || activeFilter ? '검색어나 필터를 바꿔보세요.' : '프로젝트를 추가해 시작하세요.'}
               action={query || activeFilter
                 ? <Button variant="outline" size="xs" onClick={() => { onQueryChange(''); onFilterChange(null); }}>검색·필터 해제</Button>
                 : <Button variant="outline" size="xs" onClick={onCreateProject}>프로젝트 추가</Button>}
@@ -540,7 +553,7 @@ export function ProjectPortfolioWorkspace({
           {sourceState === "error" && (
             <div className="hub-project-portfolio-truth" role="alert" data-state="error">
               <Iconed name="flag" size={15} />
-              <span><strong>프로젝트 기록을 읽지 못했습니다.</strong>{readError || "연결 상태를 확인한 뒤 다시 시도하세요."}</span>
+              <span><strong>프로젝트 기록을 읽지 못했습니다.</strong>{readError || "연결 상태를 확인한 뒤 다시 시도하세요."}{project && ' 이전에 읽은 프로젝트 내용을 표시합니다.'}</span>
               <Button variant="outline" size="sm" onClick={onReload}>다시 시도</Button>
             </div>
           )}
@@ -650,12 +663,17 @@ export function ProjectPortfolioWorkspace({
                   )}
               </section>
             </>
+          ) : projectReadPending ? (
+            <Skeleton lines={3} label="프로젝트 기록 확인 중" />
+          ) : projectReadIncomplete ? (
+            <EmptyState icon="flag" title="프로젝트 목록 확인 필요"
+              description="프로젝트 기록을 다시 읽은 뒤 선택하거나 검색 결과를 확인하세요." />
           ) : (
             <div className="hub-project-portfolio-stage__empty">
               <Iconed name={query || activeFilter ? "search" : "projects"} size={28} />
-              <h2>{sourceState === "loading" ? "프로젝트 기록 확인 중" : missingSelection ? "요청한 프로젝트를 찾을 수 없습니다" : query || activeFilter ? "조건에 맞는 프로젝트가 없습니다" : sourceState === "preview" ? "Preview · 실제 프로젝트 없음" : "첫 프로젝트를 시작하세요"}</h2>
-              <p>{sourceState === "loading" ? "기록 상태를 확인하고 있습니다." : missingSelection ? "접근 가능한 소속과 프로젝트 상태를 확인한 뒤 다시 선택하세요." : query || activeFilter ? "왼쪽 검색 또는 포트폴리오 필터를 해제하면 전체 프로젝트가 돌아옵니다." : sourceState === "preview" ? "Supabase가 연결되면 예시 데이터 없이 실제 프로젝트만 표시합니다." : "프로젝트를 만들면 진척, 다음 행동, 체크리스트와 일정을 한 화면에서 관리할 수 있습니다."}</p>
-              {sourceState === "loading" ? null : missingSelection ? (
+              <h2>{missingSelection ? "요청한 프로젝트를 찾을 수 없습니다" : sourceState === "preview" ? "Preview · 실제 프로젝트 없음" : query || activeFilter ? "조건에 맞는 프로젝트가 없습니다" : "첫 프로젝트를 시작하세요"}</h2>
+              <p>{missingSelection ? "접근 가능한 소속과 프로젝트 상태를 확인한 뒤 다시 선택하세요." : sourceState === "preview" ? "Supabase가 연결되면 예시 데이터 없이 실제 프로젝트만 표시합니다." : query || activeFilter ? "왼쪽 검색 또는 포트폴리오 필터를 해제하면 전체 프로젝트가 돌아옵니다." : "프로젝트를 만들면 진척, 다음 행동, 체크리스트와 일정을 한 화면에서 관리할 수 있습니다."}</p>
+              {missingSelection ? (
                 projects[0] ? <Button variant="outline" size="sm" onClick={() => selectProject(projects[0].id)}>프로젝트 선택</Button> : null
               ) : query || activeFilter ? (
                 <Button variant="outline" size="sm" onClick={() => { onQueryChange(""); onFilterChange(null); }}>검색·필터 지우기</Button>

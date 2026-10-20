@@ -238,7 +238,7 @@ export function Projects({ workspace }) {
   const [mobileDetail, setMobileDetail] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(true);
   const [containerPickerOpen, setContainerPickerOpen] = React.useState(false);
-  const [syncState, setSyncState] = React.useState(cachedProjects ? cachedProjects.syncState : 'preview');
+  const [syncState, setSyncState] = React.useState(cachedProjects ? cachedProjects.syncState : 'loading');
   const [readError, setReadError] = React.useState(null);
   const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
   const taskStatusPendingRef = React.useRef(new Set());
@@ -547,7 +547,7 @@ export function Projects({ workspace }) {
   }, []);
 
   // ?project= 딥링크가 "기록 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
-  // 기록한다 — syncState 초기값이 'preview'라서 상태만으로는 로드 전/후를 구분 못 한다.
+  // 기록한다 — 캐시가 있으면 live/partial로 시작하므로 상태만으로는 로드 전/후를 구분 못 한다.
   const initialLoadDoneRef = React.useRef(false);
   React.useEffect(() => {
     loadLedger({ initial: true }).finally(() => { initialLoadDoneRef.current = true; });
