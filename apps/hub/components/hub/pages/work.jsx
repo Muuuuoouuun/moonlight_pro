@@ -2,6 +2,8 @@
 
 import React from "react";
 import { CalendarOutcome } from "../calendar-outcome";
+import { CalendarAgenda } from "../calendar-agenda";
+import { resolveCalendarView, useCalendarCompactView } from "../calendar-view";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { topNavigationForRoute } from "../hub-nav";
@@ -17,7 +19,7 @@ import { linkDecision, saveDecisionWithFollowup } from "../decision-actions";
 import { todayKey } from "../check-items/check-item-actions";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
-import { calendarEventWhenLabel, mapGoogleEventsToGrid } from "@/lib/calendar-event-view";
+import { calendarEventCardGeometry, calendarEventWhenLabel, calendarGridRange, mapGoogleEventsToGrid } from "@/lib/calendar-event-view";
 import {
   buildRoadmapItemAriaLabel,
   buildRoadmapProjection,
@@ -438,7 +440,9 @@ export function Calendar({ onNavigate }) {
   const pathname = usePathname();
   const [now, setNow] = React.useState(() => new Date());
   const [selectedDate, setSelectedDate] = React.useState(() => new Date());
-  const [viewMode, setViewMode] = React.useState('week');
+  const [viewChoice, setViewMode] = React.useState(null);
+  const compactCalendar = useCalendarCompactView();
+  const viewMode = resolveCalendarView(viewChoice, compactCalendar);
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
   const [creating, setCreating] = React.useState(false);
@@ -573,7 +577,13 @@ export function Calendar({ onNavigate }) {
     }
   }
 
-  const gcalLabel = calendarData.source === 'multi' && isLive
+  const gcalLabel = calendarData.status === 'error'
+    ? '● 캘린더 읽기 실패'
+    : calendarData.status === 'loading'
+    ? '● 일정 확인 중'
+    : calendarData.status === 'partial'
+    ? '● 일부 일정만 확인'
+    : calendarData.source === 'multi' && isLive
     ? '● Personal + Company live · read only'
     : calendarData.source === 'ical' && isLive
     ? '● iCal live · read only'
@@ -588,17 +598,19 @@ export function Calendar({ onNavigate }) {
     : gcalStatus === 'error'
     ? '● Connect failed'
     : '● Not connected';
-  const gcalColor = isLive || gcalStatus === 'connected'
+  const gcalColor = calendarData.status === 'error'
+    ? 'var(--danger)'
+    : isLive || gcalStatus === 'connected'
     ? 'var(--fg-muted)'
     : gcalStatus === 'error'
     ? 'var(--danger)'
     : 'var(--fg-faint)';
 
-  const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
   const selectedWeek = buildCalendarWeek(selectedDate);
-  const visibleDays = viewMode === 'day' ? [selectedDate] : selectedWeek.days;
+  const singleDayView = viewMode !== 'week';
+  const visibleDays = singleDayView ? [selectedDate] : selectedWeek.days;
   const dayLabels = visibleDays.map((date) => `${['일','월','화','수','목','금','토'][date.getDay()]} ${date.getDate()}`);
-  const periodLabel = viewMode === 'day'
+  const periodLabel = singleDayView
     ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(selectedDate)
     : selectedWeek.weekLabel;
   const todayIndex = visibleDays.findIndex((date) => sameDate(date, now));
@@ -606,6 +618,8 @@ export function Calendar({ onNavigate }) {
   const gridEvents = calendarCapabilities.shouldShowEvents
     ? mapGoogleEventsToGrid(calendarData.events, visibleDays)
     : [];
+  const gridRange = calendarGridRange(gridEvents);
+  const hours = gridRange.hours;
   const gridTasks = mapTasksToCalendar(taskData.tasks, visibleDays);
   const baseDayWidth = viewMode === 'day' ? 320 : 120;
   // Keep each overlapping card at least 44px wide, plus 4px gaps/insets and the day border.
@@ -628,7 +642,7 @@ export function Calendar({ onNavigate }) {
     });
   };
   const movePeriod = (direction) => {
-    setSelectedDate((date) => addDays(date, direction * (viewMode === 'day' ? 1 : 7)));
+    setSelectedDate((date) => addDays(date, direction * (singleDayView ? 1 : 7)));
   };
   const selectDay = (date) => {
     setSelectedDate(new Date(date));
@@ -664,8 +678,14 @@ export function Calendar({ onNavigate }) {
             <span className="mono" style={{ color: taskData.status === 'error' ? 'var(--danger)' : 'var(--fg-dim)' }}>{taskStateLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
-            <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
-              {gcalStatus === 'connecting'
+            <Button variant="ghost" size="xs"
+              onClick={calendarData.status === 'error' ? calendarData.refetch : connectGoogleCalendar}
+              disabled={calendarData.status === 'loading' || (calendarData.status !== 'error' && gcalStatus === 'connecting')}>
+              {calendarData.status === 'error'
+                ? '일정 다시 불러오기'
+                : calendarData.status === 'loading'
+                ? '일정 확인 중'
+                : gcalStatus === 'connecting'
                 ? 'Connecting…'
                 : isReadOnly
                 ? 'Enable editing'
@@ -674,39 +694,41 @@ export function Calendar({ onNavigate }) {
                 : 'Connect Google Calendar'}
             </Button>
           </div>
-          {(createError || gcalMessage || calendarData.message || taskData.message) && (
+          {(createError || gcalMessage || calendarData.status === 'error' || calendarData.message || taskData.message) && (
             <div
               className="mono"
-              role={createError || calendarData.message === 'calendar-read-failed' ? 'alert' : undefined}
-              style={{ fontSize: 11, color: createError || calendarData.message === 'calendar-read-failed' ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}
+              role={createError || calendarData.status === 'error' ? 'alert' : undefined}
+              style={{ fontSize: 11, color: createError || calendarData.status === 'error' ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}
             >
               {/* 머신 토큰을 운영자 카피로 — reason 슬러그가 그대로 노출되지 않게(6차 재감사 S) */}
               {createError
-                || gcalMessage
-                || (calendarData.message === 'calendar-read-failed'
-                  ? '캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.'
-                  : calendarData.message)
+                || (calendarData.status === 'error'
+                  ? '캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다. 일정 다시 불러오기로 재시도하세요.'
+                  : gcalMessage || calendarData.message)
                 || taskData.message}
             </div>
           )}
         </div>
         <div style={{ flex: 1 }} />
         <div className="hub-toolbar" style={{ display: 'flex', gap: 6 }}>
-          <IconButton icon="chevronL" tooltip={viewMode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => movePeriod(-1)} />
+          <IconButton icon="chevronL" tooltip={singleDayView ? 'Previous day' : 'Previous week'} onClick={() => movePeriod(-1)} />
           <Button variant="secondary" size="sm" onClick={() => setSelectedDate(new Date(now))}>Today</Button>
-          <IconButton icon="chevronR" tooltip={viewMode === 'day' ? 'Next day' : 'Next week'} onClick={() => movePeriod(1)} />
+          <IconButton icon="chevronR" tooltip={singleDayView ? 'Next day' : 'Next week'} onClick={() => movePeriod(1)} />
         </div>
         <SegmentedControl
           className="hub-toolbar"
           label="캘린더 보기"
-          options={[{ key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }]}
+          options={[{ key: 'agenda', label: 'Agenda' }, { key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }]}
           value={viewMode}
           onChange={setViewMode}
         />
         <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating || !calendarCapabilities.canCreate}>Event</Button>
       </div>
 
-      <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <Card pad={false} className="hub-table-card" style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {viewMode === 'agenda' ? (
+          <CalendarAgenda events={gridEvents} tasks={gridTasks} calendarState={calendarData.status} taskState={taskData.status} onSelectEvent={setSelectedEvent} onNavigate={onNavigate} onRetry={calendarData.refetch} />
+        ) : (<>
         <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)' }}>
           <div />
           {dayLabels.map((d, i) => (
@@ -764,7 +786,7 @@ export function Calendar({ onNavigate }) {
           })}
         </div>
         <div className="scroll-y" style={{ flex: 1, minWidth: 56 + dayWidths.reduce((width, dayWidth) => width + dayWidth, 0) }}>
-          <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative' }}>
+          <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative', minHeight: gridRange.height }}>
             <div>
               {hours.map(h => (
                 <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10.5, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
@@ -774,30 +796,26 @@ export function Calendar({ onNavigate }) {
               <div key={date.toISOString()} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
                 {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
                 {gridEvents.filter(e => e.day === di).map((e) => {
-                  // Multi-day segments may cover midnight to midnight; keep them inside this grid's 08–20 window.
-                  const start = e.multiDay ? Math.max(8, e.start) : e.start;
-                  const end = e.multiDay ? Math.min(20, e.end) : e.end;
-                  if (end <= start) return null;
-                  const top = (start - 8) * 52;
-                  const height = (end - start) * 52 - 2;
+                  const { top, height } = calendarEventCardGeometry(e, gridRange.startHour);
+                  const whenLabel = calendarEventWhenLabel(e);
                   const columns = e.overlapColumns || 1;
                   const width = columns === 1 ? 'calc(100% - 8px)' : `calc(${100 / columns}% - ${4 + 4 / columns}px)`;
                   const left = !e.overlapColumn ? 4 : `calc(${100 * e.overlapColumn / columns}% + ${4 - 4 * e.overlapColumn / columns}px)`;
                   return (
-                    <button key={e.segmentKey} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title}`} onClick={() => setSelectedEvent(e)} style={{
+                    <button key={e.segmentKey} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title} · ${whenLabel}`} title={`${e.title} · ${whenLabel}`} onClick={() => setSelectedEvent(e)} style={{
                       textAlign: 'left', width,
                       position: 'absolute', top, left, right: 4, height,
                       background: toneBg[e.tone], color: toneFg[e.tone],
                       border: `1px solid ${toneBd[e.tone]}`,
                       borderLeft: `1px solid ${toneBd[e.tone]}`,
-                      borderRadius: 6, padding: '6px 8px',
+                      borderRadius: 6, padding: height < 50 ? '4px 6px' : '6px 8px',
                       fontSize: 11, fontWeight: 500, overflow: 'hidden',
                     }}>
-                      {e.sourceLabel && (
-                        <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85, marginRight: 4 }}>[{e.sourceLabel}]</span>
-                      )}
-                      {e.title}
-                      <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
+                      <span style={{ display: 'block', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {e.sourceLabel && <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85, marginRight: 4 }}>[{e.sourceLabel}]</span>}
+                        {e.title}
+                      </span>
+                      <div className="mono" style={{ fontSize: 10.5, lineHeight: '14px', opacity: 0.7, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{whenLabel}</div>
                     </button>
                   );
                 })}
@@ -805,6 +823,7 @@ export function Calendar({ onNavigate }) {
             ))}
           </div>
         </div>
+        </>)}
       </Card>
       {selectedEvent && (
         <Drawer title="일정 기록" subtitle="완료와 특이사항을 Moonlight에 남깁니다." onClose={() => { if (!outcomeSaving) setSelectedEvent(null); }} width="min(440px, 94vw)">

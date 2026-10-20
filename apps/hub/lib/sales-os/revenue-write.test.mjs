@@ -254,11 +254,11 @@ test("persistRevenueRecord create inserts with workspace_id and returns the real
   const result = await persistRevenueRecord({
     table: "leads",
     op: "create",
-    payload: { name: "새 리드", stage: "New", type: "company" },
+    payload: { createId: "00000000-0000-4000-8000-000000000002", name: "새 리드", stage: "New", type: "company" },
     build: buildLeadWrite,
   });
   assert.equal(result.status, "saved");
-  assert.equal(result.id, "real-id-123");
+  assert.equal(result.id, "00000000-0000-4000-8000-000000000002");
   const post = calls.find(c => c.method === "POST");
   assert.ok(post, "expected an insert");
   assert.equal(post.body.workspace_id, WORKSPACE_ID);

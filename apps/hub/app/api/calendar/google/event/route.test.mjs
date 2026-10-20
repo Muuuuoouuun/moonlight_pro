@@ -17,7 +17,7 @@ export async function readHubWriteJson() { return { data: globalThis.__calendarR
       '@/lib/google-calendar': `export async function deleteGoogleCalendarEvent(input) { globalThis.__calendarRoute.deletes.push(input); return globalThis.__calendarRoute.deleteResult; }
 export async function recordGoogleCalendarSync(entry) { globalThis.__calendarRoute.syncs.push(entry); }
 export async function createOrUpdateGoogleCalendarEvent() { return { ok: false, reason: 'unused' }; }
-export async function readCombinedGoogleCalendarEvents() { return { ok: false, items: [], sources: [] }; }`,
+export async function readCombinedGoogleCalendarEvents() { return globalThis.__calendarRoute.read || { ok: false, items: [], sources: [] }; }`,
     };
     if (stubs[specifier]) return { url: `data:text/javascript,${encodeURIComponent(stubs[specifier])}`, shortCircuit: true };
     return nextResolve(specifier, context);
@@ -25,6 +25,17 @@ export async function readCombinedGoogleCalendarEvents() { return { ok: false, i
 });
 
 const route = await import('./route.js');
+
+test('GET carries partial OAuth coverage and never presents an incomplete empty window as live', async () => {
+  const coverage = { complete: false, returnedCount: 0, totalCount: null, truncated: true };
+  globalThis.__calendarRoute.read = { ok: true, source: 'oauth', reason: 'partial-source-failure', items: [], sources: [], coverage };
+  const response = await route.GET(new Request('http://hub.test/api/calendar/google/event'));
+  const body = await response.json();
+  assert.equal(body.status, 'partial');
+  assert.deepEqual(body.coverage, coverage);
+  assert.match(body.message, /전체 건수는 확인하지 못했습니다/);
+  globalThis.__calendarRoute.read = null;
+});
 
 async function del(body, deleteResult) {
   globalThis.__calendarRoute.body = body;

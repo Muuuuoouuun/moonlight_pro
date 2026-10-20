@@ -29,7 +29,7 @@ export async function getTaskLedger() {
 }
 `;
 const calendarStub = `
-export async function readCombinedGoogleCalendarEvents() { return { ok: true, items: [] }; }
+export async function readCombinedGoogleCalendarEvents() { return globalThis.__attentionReadState.calendar || { ok: true, items: [] }; }
 `;
 const inquiriesStub = `
 export async function getInquiriesLedger() { return { status: "live", rows: [], unreadCount: 0 }; }
@@ -69,6 +69,7 @@ beforeEach((t) => {
   state.gate = null;
   state.deadlineReset = null;
   state.todos = [];
+  state.calendar = null;
   state.rows = {
     leads: [{ id: "lead-1", score: "87.5", name: "Lead", meta: {} }],
     deals: [
@@ -91,6 +92,16 @@ beforeEach((t) => {
     contacts: [{ id: "contact-1", name: "Contact" }],
     workspaces: [{ id: "workspace-1", meta: { contact_tracking_started_at: "2026-09-20T00:00:00.000Z" } }],
   };
+});
+
+test("calendar partial coverage stays partial in attention and carries its failure reason", async () => {
+  state.calendar = { ok: true, reason: "partial-source-failure", items: [], coverage: { complete: false, totalCount: null } };
+  const result = await getAttentionLedger({ includeRaw: true });
+  assert.equal(result.sources.calendar, "partial");
+  assert.ok(result.failedSources.includes("calendar"));
+  assert.equal(result.calendarReason, "partial-source-failure");
+  assert.equal(result.calendarCoverage.totalCount, null);
+  assert.equal(result.raw.calendar, state.calendar);
 });
 
 test("an acknowledged old deal deadline remains visible without an overdue alert", async () => {

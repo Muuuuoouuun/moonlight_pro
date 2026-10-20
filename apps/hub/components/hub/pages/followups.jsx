@@ -694,6 +694,8 @@ export function Followups({ onNavigate }) {
           <h2 className="fx-page-title today-contact__title">
             {live && peopleCount > 0 ? (
               <>오늘 챙길 사람 <span className="stat">{peopleCount}</span>명</>
+            ) : syncState === "partial" ? (
+              "오늘 약속을 모두 확인하지 못했어요"
             ) : live ? (
               "오늘 챙길 약속이 없어요"
             ) : (
@@ -703,6 +705,7 @@ export function Followups({ onNavigate }) {
           <p className="fx-page-sub today-contact__sub">
             {live && (
               <>
+                {syncState === "partial" && <span>확인한 기록 · </span>}
                 <span className={missedLive.length > 0 ? "today-contact__missed num" : "num"}>놓친 약속 {missedLive.length}</span>
                 <span aria-hidden="true">·</span>
                 <span className="num">오늘 약속 {todayLive.length}</span>
@@ -784,11 +787,11 @@ export function Followups({ onNavigate }) {
                 ) : (
                   <EmptyState
                     icon="rhythm"
-                    title="오늘 연락하기로 한 고객이 없어요"
-                    description={more.upcoming.length > 0
+                    title={syncState === "partial" ? "오늘 약속을 모두 확인하지 못했습니다" : "오늘 연락하기로 한 고객이 없어요"}
+                    description={syncState === "partial" ? "읽힌 목록이 비어 있어도 실제 연락 약속이 있을 수 있습니다. 다시 읽어 확인해 주세요." : more.upcoming.length > 0
                       ? `다가오는 약속 ${more.upcoming.length}건은 아래 접힌 목록에 있어요. 다른 고객은 위 검색으로 찾으세요.`
                       : "기록을 남기면 다음 약속이 날짜에 맞춰 여기 모여요."}
-                    action={<Button variant="outline" size="sm" icon="leads" onClick={() => onNavigate?.("dashboard/revenue/customers")}>고객 보기</Button>}
+                    action={syncState === "partial" ? <Button variant="outline" size="sm" onClick={reload}>다시 읽기</Button> : <Button variant="outline" size="sm" icon="leads" onClick={() => onNavigate?.("dashboard/revenue/customers")}>고객 보기</Button>}
                     style={{ minHeight: 140 }}
                   />
                 )}

@@ -1,5 +1,14 @@
 export function resolveCalendarCapabilities({ status, source, readOnly }) {
-  const isLive = status === "live" || (status === "partial" && source === "multi");
+  if (status === "partial") {
+    return {
+      isLive: true,
+      // Read completeness and the connected source's write capability differ.
+      canCreate: source === "oauth" && !readOnly,
+      shouldShowEvents: true,
+      badge: source === "multi" ? "Personal/Company · 일부 연결" : "Google Calendar · 일부 일정만 확인",
+    };
+  }
+  const isLive = status === "live";
 
   if (isLive && source === "multi") {
     return {
@@ -32,6 +41,6 @@ export function resolveCalendarCapabilities({ status, source, readOnly }) {
     isLive: false,
     canCreate: false,
     shouldShowEvents: false,
-    badge: status === "loading" ? "syncing" : "connection required",
+    badge: status === "loading" ? "syncing" : status === "error" ? "read failed" : "connection required",
   };
 }

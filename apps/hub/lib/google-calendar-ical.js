@@ -1,8 +1,30 @@
 import ical from "node-ical";
+import { kstDayKey } from "./kst-day.js";
+import { CALENDAR_READ_LIMITS, calendarItemBytes, calendarCoverage } from "./calendar-read-coverage.js";
 
 const GOOGLE_CALENDAR_ICAL_HOSTS = new Set(["calendar.google.com", "www.google.com"]);
 const MAX_ICAL_BYTES = 5 * 1024 * 1024;
 const ICAL_FETCH_TIMEOUT_MS = 8_000;
+const DAY_MS = 86_400_000;
+const MAX_ICAL_WINDOW_DAYS = 366;
+const MAX_ICAL_EXPANSION_CANDIDATES = 2000;
+const MAX_ICAL_COMPONENTS = 2000;
+
+// node-ical expands a whole RRULE before returning. A small feed can therefore
+// generate huge arrays. Conservatively refuse expensive rules before expansion;
+// this is a disclosed partial read, never a silently shortened recurrence.
+function recurrenceWorkEstimate(component, min, max) {
+  const options = component.rrule.options;
+  const duration = Math.max(0, Number(component.end) - Number(component.start)) || 0;
+  const days = Math.ceil((max - min + duration) / DAY_MS) + 3;
+  if (days > MAX_ICAL_WINDOW_DAYS + 3) return Infinity;
+  const hours = ["HOURLY", "MINUTELY", "SECONDLY"].includes(options.freq) ? 24 : options.byHour?.length || 1;
+  const minutes = ["MINUTELY", "SECONDLY"].includes(options.freq) ? 60 : options.byMinute?.length || 1;
+  const seconds = options.freq === "SECONDLY" ? 60 : options.bySecond?.length || 1;
+  // COUNT rules can enumerate from DTSTART before filtering the window. Do not
+  // mistake a short requested window for bounded historical COUNT work.
+  return Math.max(options.count || 0, days * hours * minutes * seconds);
+}
 
 function asDate(value) {
   const date = value instanceof Date ? value : new Date(value);
@@ -107,42 +129,77 @@ export function hasGoogleCalendarIcalUrl() {
   }
 }
 
-export function parseGoogleCalendarIcal(text, { timeMin, timeMax, maxResults = 60 }) {
+function parseGoogleCalendarIcalWindow(text, { timeMin, timeMax }) {
   const { min, max } = normalizeWindow({ timeMin, timeMax });
-  const limit = Math.max(1, Math.min(Number(maxResults) || 60, 250));
   const parsed = ical.sync.parseICS(String(text || ""));
   const items = [];
+  let retainedBytes = 2, work = 0, components = 0, partialReason = "";
 
   for (const component of Object.values(parsed)) {
     if (component?.type !== "VEVENT" || String(component.status || "").toUpperCase() === "CANCELLED") {
       continue;
     }
 
-    const instances = ical.expandRecurringEvent(component, {
-      from: min,
-      to: max,
-      includeOverrides: true,
-      excludeExdates: true,
-      expandOngoing: true,
-    });
+    if (++components > MAX_ICAL_COMPONENTS) {
+      partialReason = "ical-component-budget";
+      break;
+    }
+    if (component.rrule) {
+      const estimate = recurrenceWorkEstimate(component, min, max);
+      if (work + estimate > MAX_ICAL_EXPANSION_CANDIDATES) {
+        partialReason = "ical-recurrence-budget";
+        continue;
+      }
+      work += estimate;
+    }
+    let instances;
+    try {
+      const allDay = Boolean(component.start?.dateOnly || component.datetype === "date");
+      // node-ical's date-only API uses host-local calendar dates. Supply KST date
+      // keys as local midnights, then enforce the exact KST-exclusive bounds below.
+      instances = ical.expandRecurringEvent(component, {
+        from: allDay ? new Date(`${kstDayKey(min)}T00:00:00`) : min,
+        to: allDay ? new Date(`${kstDayKey(max)}T00:00:00`) : max,
+        includeOverrides: true, excludeExdates: true, expandOngoing: true,
+      });
+    } catch {
+      partialReason = "ical-recurrence-unreadable";
+      continue;
+    }
 
     for (const instance of instances) {
-      const start = asDate(instance.start);
-      const end = asDate(instance.end || instance.start);
-      if (!start || !end || start >= max || end <= min) continue;
-
       const mapped = mapInstance(instance, component);
-      if (mapped) items.push(mapped);
+      if (!mapped) continue;
+      const start = asDate(mapped.start.dateTime || `${mapped.start.date}T00:00:00+09:00`);
+      const end = asDate(mapped.end.dateTime || `${mapped.end.date}T00:00:00+09:00`);
+      if (!start || !end || start >= max || end <= min) continue;
+      const bytes = calendarItemBytes(mapped) + (items.length ? 1 : 0);
+      if (items.length >= CALENDAR_READ_LIMITS.maxItems || retainedBytes + bytes > CALENDAR_READ_LIMITS.maxBytes) {
+        partialReason = "ical-retained-budget";
+        break;
+      }
+      items.push(mapped);
+      retainedBytes += bytes;
     }
+    if (partialReason === "ical-retained-budget") break;
   }
 
-  return items
-    .sort((a, b) => {
-      const aStart = a.start.dateTime || `${a.start.date}T00:00:00`;
-      const bStart = b.start.dateTime || `${b.start.date}T00:00:00`;
-      return aStart.localeCompare(bStart) || a.id.localeCompare(b.id);
-    })
-    .slice(0, limit);
+  items.sort((a, b) => {
+    const aStart = Date.parse(a.start.dateTime || `${a.start.date}T00:00:00+09:00`);
+    const bStart = Date.parse(b.start.dateTime || `${b.start.date}T00:00:00+09:00`);
+    return aStart - bStart || a.id.localeCompare(b.id);
+  });
+  return { items, coverage: calendarCoverage(items, !partialReason, {
+    truncated: Boolean(partialReason), reason: partialReason || "ok", retainedBytes,
+    limits: { ...CALENDAR_READ_LIMITS, maxWindowDays: MAX_ICAL_WINDOW_DAYS, maxExpansionCandidates: MAX_ICAL_EXPANSION_CANDIDATES },
+  }) };
+}
+
+// Retain the array-only parser's bounded compatibility API. Actual read envelopes
+// use the explicit coverage envelope below, never this legacy projection.
+export function parseGoogleCalendarIcal(text, { timeMin, timeMax, maxResults = 60 }) {
+  return parseGoogleCalendarIcalWindow(text, { timeMin, timeMax }).items
+    .slice(0, Math.max(1, Math.min(Number(maxResults) || 60, 250)));
 }
 
 export async function listGoogleCalendarIcalEvents({
@@ -180,12 +237,14 @@ export async function listGoogleCalendarIcalEvents({
       throw new Error("Google Calendar iCal feed is too large.");
     }
 
+    controller.signal.throwIfAborted();
+    const read = parseGoogleCalendarIcalWindow(body, { timeMin, timeMax });
     return {
       ok: true,
-      reason: "ok",
+      reason: read.coverage.complete ? "ok" : "partial-source-failure",
       source: "ical",
       readOnly: true,
-      items: parseGoogleCalendarIcal(body, { timeMin, timeMax, maxResults }),
+      ...read,
     };
   } finally {
     clearTimeout(timeout);
@@ -207,13 +266,14 @@ export function resolveGoogleCalendarSources() {
     try {
       return { id, label, icalUrl: validateGoogleCalendarIcalUrl(raw) };
     } catch {
-      return null;
+      // A configured but invalid feed is a failed source, not an absent source.
+      return { id, label, icalUrl: null };
     }
   }).filter(Boolean);
 }
 
 function mergedItemSortKey(item) {
-  return item.start.dateTime || `${item.start.date}T00:00:00`;
+  return Date.parse(item.start.dateTime || `${item.start.date}T00:00:00+09:00`);
 }
 
 export async function listMergedGoogleCalendarSourceEvents({
@@ -241,7 +301,8 @@ export async function listMergedGoogleCalendarSourceEvents({
         return {
           id: source.id,
           label: source.label,
-          status: "live",
+          status: read.coverage.complete ? "live" : "partial",
+          coverage: read.coverage,
           items: read.items.map((item) => ({ ...item, source: source.id, sourceLabel: source.label })),
         };
       } catch (error) {
@@ -257,15 +318,16 @@ export async function listMergedGoogleCalendarSourceEvents({
   );
 
   const liveCount = results.filter((result) => result.status === "live").length;
+  const readableCount = results.filter((result) => result.status !== "error").length;
   const items = results
     .flatMap((result) => result.items)
-    .sort((a, b) => mergedItemSortKey(a).localeCompare(mergedItemSortKey(b)) || a.id.localeCompare(b.id))
-    .slice(0, maxResults);
+    .sort((a, b) => mergedItemSortKey(a) - mergedItemSortKey(b) || a.id.localeCompare(b.id));
 
   return {
-    ok: liveCount > 0,
-    status: liveCount === 0 ? "error" : liveCount === results.length ? "live" : "partial",
+    ok: readableCount > 0,
+    status: readableCount === 0 ? "error" : liveCount === results.length ? "live" : "partial",
     items,
+    coverage: calendarCoverage(items, liveCount === results.length, { truncated: results.some(result => result.coverage?.truncated) }),
     sources: results.map(({ id, label, status, detail }) => ({
       id,
       label,

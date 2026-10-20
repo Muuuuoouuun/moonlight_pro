@@ -39,7 +39,7 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
     // Revenue 생성 딥링크(22차) — TopBar New와 같은 ?new= 착지를 팔레트에서도 잇는다.
     flat.push({ kind: 'Action', label: 'New Lead', path: 'dashboard/revenue/leads?new=lead', icon: 'leads', keywords: ['리드', '고객'] });
     flat.push({ kind: 'Action', label: 'New Deal', path: 'dashboard/revenue/deals?new=deal', icon: 'deals', keywords: ['딜', '영업'] });
-    flat.push({ kind: 'Action', label: 'New Account', path: 'dashboard/revenue/accounts?new=account', icon: 'accounts', keywords: ['계정'] });
+    flat.push({ kind: 'Action', label: '고객사·거래처 계정 추가', path: 'dashboard/revenue/accounts?new=account', icon: 'accounts', keywords: ['New Account', '계정', '고객사', '거래처'] });
     flat.push({ kind: 'Action', label: 'New Case', path: 'dashboard/revenue/cases?new=case', icon: 'cases', keywords: ['케이스', '이슈'] });
     // 하루 리뷰 팝업 직행(2026-09-23 지속 루프 설계 §4.2) — 셸 Provider가 ?review=를 1회 소비한다.
     flat.push({ kind: 'Action', label: '하루 리뷰 쓰기', path: 'dashboard/work/daily-review?review=today', icon: 'brief', keywords: ['하루', '리뷰', '회고', '에너지', '마무리', 'daily review'] });

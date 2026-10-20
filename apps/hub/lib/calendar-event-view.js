@@ -1,4 +1,29 @@
-const MIN_EVENT_MS = 15 * 60 * 1000;
+const HOUR_HEIGHT = 52;
+const MIN_CARD_HEIGHT = 44;
+const CARD_GAP = 2;
+
+// Visual markers may be taller than their duration. Allocation and rendering
+// must use the same rectangle, including the mobile/coarse-pointer touch floor.
+export function calendarEventCardGeometry(event, startHour = 8) {
+  return {
+    top: (event.start - startHour) * HOUR_HEIGHT,
+    height: Math.max(MIN_CARD_HEIGHT, (event.end - event.start) * HOUR_HEIGHT - CARD_GAP),
+  };
+}
+
+// Retain the normal working-day range, extending only for received timed rows.
+// The last touch marker gets trailing room without inventing a 25:00 hour label.
+export function calendarGridRange(events) {
+  const valid = (Array.isArray(events) ? events : []).filter(event => event && Number.isFinite(event.start) && Number.isFinite(event.end) && event.end > event.start);
+  const timed = valid.filter(event => !event.allDay);
+  const startHour = Math.max(0, Math.floor(Math.min(8, ...timed.map(event => event.start))));
+  const endHour = Math.min(24, Math.ceil(Math.max(20, ...timed.map(event => event.end))));
+  const height = Math.max((endHour - startHour) * HOUR_HEIGHT, ...valid.map(event => {
+    const box = calendarEventCardGeometry(event, startHour);
+    return box.top + box.height + CARD_GAP;
+  }));
+  return { startHour, endHour, height, hours: Array.from({ length: endHour - startHour }, (_, index) => startHour + index) };
+}
 
 function localDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -59,8 +84,9 @@ export function mapGoogleEventsToGrid(events, days) {
 
     const start = new Date(event.start), rawEnd = new Date(event.end || event.start);
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(rawEnd.getTime()) || rawEnd < start) return [];
-    // Preserve the existing minimum marker for events whose provider omits a duration.
-    const end = rawEnd > start ? rawEnd : new Date(start.getTime() + MIN_EVENT_MS);
+    // A missing/zero duration needs a point marker, not an invented 15-minute
+    // event that can spill into the next day. Visual height is handled separately.
+    const end = rawEnd > start ? rawEnd : new Date(start.getTime() + 1);
     const multiDay = localDateKey(start) !== localDateKey(end);
     return visible.flatMap(day => {
       const from = Math.max(start.getTime(), day.start.getTime());
@@ -90,18 +116,19 @@ export function calendarEventWhenLabel(event) {
   return `${localDateKey(start)} ${clockLabel(start)} – ${localDateKey(end)} ${clockLabel(end)}`;
 }
 
-/** Allocate non-overlapping columns for each day's visible intervals.
- * Adjacent events share a column; hidden overnight portions consume no column.
- * Preserve input order and original identifiers/times for the outcome drawer.
+/** Allocate non-overlapping columns for each day's actual clickable rectangles.
+ * Short adjacent events may need separate columns because a 44px marker outlives
+ * its duration. Preserve identifiers/times; visual size never changes the event.
  */
 export function layoutCalendarEventSegments(events) {
   if (!Array.isArray(events)) return [];
   const placement = events.map(() => ({ overlapColumn: 0, overlapColumns: 1 }));
   const days = new Map();
   events.forEach((event, index) => {
-    const start = Math.max(8, event.start);
-    const end = Math.min(20, event.end);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+    if (!Number.isFinite(event.start) || !Number.isFinite(event.end) || event.end <= event.start) return;
+    const geometry = calendarEventCardGeometry(event, 0);
+    const start = geometry.top;
+    const end = start + geometry.height + CARD_GAP;
     if (!days.has(event.day)) days.set(event.day, []);
     days.get(event.day).push({ index, start, end });
   });

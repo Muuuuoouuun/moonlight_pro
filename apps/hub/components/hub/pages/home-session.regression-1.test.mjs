@@ -61,6 +61,13 @@ test('confirmed empty reads retain their real empty state', () => {
   assert.doesNotMatch(html, /로그인이 필요합니다/);
 });
 
+test('partial empty calendar does not claim there are no appointments', () => {
+  const { Home } = surface({status:'live',signals:[]}, {status:'partial',events:[]});
+  const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
+  assert.match(html, /오늘 일정이 없다고 확정할 수 없습니다/);
+  assert.doesNotMatch(html, /오늘 잡힌 일정이 없습니다/);
+});
+
 test('login recovery redirects only after explicit action and returns to Home', () => {
   const { LoginRequired } = surface({status:'unauthorized',signals:[]}, {status:'unauthorized',events:[]});
   const prior = globalThis.window;
@@ -72,4 +79,21 @@ test('login recovery redirects only after explicit action and returns to Home', 
     element.props.action.props.onClick();
     assert.deepEqual(visits, ['/login?next=%2Fdashboard%2Fhome']);
   } finally { globalThis.window = prior; }
+});
+
+test('partial empty signal deck never reports all checks finished and retains explicit read retry', () => {
+  const { Home } = surface({status:'partial',signals:[],reload:()=>{}}, {status:'live',events:[]});
+  const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
+  assert.match(html, /확인할 것을 모두 읽지 못했습니다/);
+  assert.match(html, /실제로 확인할 일이 있을 수 있습니다/);
+  assert.match(html, /다시 불러오기/);
+  assert.doesNotMatch(html, /오늘 확인할 것을 다 봤습니다|확인할 것을 다 봤습니다/);
+});
+
+test('loading, preview and error signal reads stay distinct from verified empty', () => {
+  for (const status of ['loading', 'preview', 'error']) {
+    const { Home } = surface({status,signals:[],reload:()=>{}}, {status:'live',events:[]});
+    const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
+    assert.doesNotMatch(html, /오늘 확인할 것을 다 봤습니다|확인할 것을 다 봤습니다/);
+  }
 });

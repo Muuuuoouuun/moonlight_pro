@@ -14,7 +14,7 @@ export async function POST(req) {
     if (parsed.error) return parsed.error;
 
     const payload = parsed.data || {};
-    const op = payload.op === "create" ? "create" : payload.op === "delete" ? "delete" : "update";
+    const op = payload.op === "confirm-create" ? "confirm-create" : payload.op === "create" ? "create" : payload.op === "delete" ? "delete" : "update";
 
     const result = await persistRevenueRecord({
       table: "deals",
@@ -24,7 +24,7 @@ export async function POST(req) {
       build: buildDealWrite,
     });
 
-    // saved 200 · conflict 409 · error(입력) 400 · failed 502 · preview/noop 202
+    // unknown 202 (outcome unconfirmed; no automatic retry) · saved 200 · conflict 409 · error(입력) 400 · failed 502 · preview/noop 202
     const httpStatus = result.status === "saved" ? 200
       : result.status === "conflict" ? 409
       : result.status === "error" ? 400

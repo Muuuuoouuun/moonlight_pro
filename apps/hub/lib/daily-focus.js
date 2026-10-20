@@ -6,6 +6,7 @@
 import { filterOperatorOwnedRevenue, selectOperatorFocusLeads } from "./operator-revenue-scope.js";
 // KST 날짜 경계는 kst-day.js가 정본 — attention-ledger·고객 연락 큐와 같은 함수를 쓴다.
 import { diffKstDays, kstDayKey } from "./kst-day.js";
+import { calendarCoverage, calendarReadIsPartial } from "./calendar-read-coverage.js";
 
 const TIME_ZONE = "Asia/Seoul";
 
@@ -18,6 +19,30 @@ function timeLabel(value) {
     minute: "2-digit",
     hour12: false,
   }).format(date);
+}
+
+// A day's calendar includes supplied spans that began earlier. Provider end
+// dates/instants are exclusive; a missing/equal end remains a start-day marker,
+// never an invented duration. This is day membership, not an "ongoing" claim.
+function calendarEventOverlapsDay(event, todayKey) {
+  const start = event?.start?.dateTime || event?.start?.date || "";
+  if (!start) return false;
+  const allDay = Boolean(event?.start?.date && !event?.start?.dateTime);
+  if (allDay) {
+    const end = event?.end?.date;
+    const validDate = value => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
+      const date = new Date(`${value}T00:00:00Z`);
+      return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    };
+    if (!validDate(start)) return false;
+    return start <= todayKey && (validDate(end) && end > start ? todayKey < end : todayKey === start);
+  }
+  const from = Date.parse(start), until = Date.parse(event?.end?.dateTime || "");
+  if (!Number.isFinite(from)) return false;
+  if (!Number.isFinite(until) || until <= from) return kstDayKey(start) === todayKey;
+  const dayStart = Date.parse(`${todayKey}T00:00:00+09:00`);
+  return from < dayStart + 86400000 && until > dayStart;
 }
 
 // 레코드 자신의 소속 태그(revenue-ledger의 type·workspace·brand). 첫 화면 ✦ Guru(ClassIn
@@ -121,18 +146,24 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
   const focusLeads = revenueReadable ? selectOperatorFocusLeads(revenue, { limit: 5, now }) : [];
   const todayKey = kstDayKey(now);
   const calendarOk = Boolean(calendar?.ok);
+  const calendarPartial = calendarReadIsPartial(calendar);
   const events = calendarOk && Array.isArray(calendar.items) ? calendar.items : [];
 
+  // The timeline owns disclosure, not the read projection. A first-eight cap
+  // loses the next appointment after a busy morning (or several all-day rows).
+  // Keep every supplied row intersecting today, including carry-over spans;
+  // this does not assert provider completeness.
   const agendaItems = events
     .map((event, index) => {
       const start = event?.start?.dateTime || event?.start?.date || "";
-      if (!start || kstDayKey(start) !== todayKey) return null;
+      if (!calendarEventOverlapsDay(event, todayKey)) return null;
       const allDay = Boolean(event?.start?.date && !event?.start?.dateTime);
+      const startDay = kstDayKey(start);
       return {
         id: event?.id || String(index),
         title: event?.summary || "(제목 없는 일정)",
         whenAt: start,
-        whenLabel: allDay ? "종일" : timeLabel(start),
+        whenLabel: allDay ? "종일" : startDay === todayKey ? timeLabel(start) : `${startDay} ${timeLabel(start)} 시작`,
         allDay,
         calendarLink: event?.htmlLink || null,
         outcomeKey: event?.outcomeKey || null,
@@ -143,8 +174,7 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
       // 종일 일정이 맨 위(하루의 컨텍스트), 나머지는 시작 시각순.
       if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
       return new Date(a.whenAt).getTime() - new Date(b.whenAt).getTime();
-    })
-    .slice(0, 8);
+    });
 
   return {
     urgentKa: {
@@ -189,12 +219,15 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
     todayAgenda: {
       // 미연결 계열(missing-*)만 preview — 그 외(read 실패·타임아웃·토큰 만료)는 error.
       state: calendarOk
-        ? "live"
+        ? calendarPartial ? "partial" : "live"
         : ["calendar-not-connected", "missing-connection", "missing-access-token", "missing-config"].includes(calendar?.reason || "calendar-not-connected")
           ? "preview"
           : "error",
-      reason: calendarOk ? "" : calendar?.reason || "calendar-not-connected",
+      reason: calendarOk ? calendarPartial ? "partial-source-failure" : "" : calendar?.reason || "calendar-not-connected",
       items: agendaItems,
+      coverage: calendarCoverage(agendaItems, calendarOk && !calendarPartial, {
+        truncated: Boolean(calendar?.coverage?.truncated),
+      }),
     },
   };
 }

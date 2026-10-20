@@ -1120,8 +1120,22 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
   );
 }
 
-// Calm state when nothing is urgent — the brief still answers "what matters" with "nothing on fire".
-function CommandClear({ signalCount }) {
+// Empty signals are not an all-clear until the full brief read is verified.
+// A narrow task refresh has its own truth and must not rewrite signal coverage.
+function CommandClear({ signalCount, state }) {
+  const readState = state?.briefSyncState ?? state?.syncState;
+  const verified = !state?.authRequired && readState === 'live';
+  const loading = readState === 'syncing' || readState === 'loading';
+  const title = verified ? '확인할 신호가 없습니다'
+    : state?.authRequired ? '로그인 후 확인할 것을 읽어 주세요'
+    : loading ? '확인할 것을 읽고 있습니다'
+    : readState === 'partial' || readState === 'mixed' ? '확인할 것을 모두 읽지 못했습니다'
+    : readState === 'error' ? '확인할 것을 읽지 못했습니다'
+    : '기록 연결 후 확인할 것을 표시합니다';
+  const detail = verified
+    ? signalCount > 0 ? `${signalCount}건은 아래 확인할 것에서 여유 있게 보세요.` : '새 신호가 들어오면 여기 가장 먼저 올라옵니다.'
+    : loading ? '읽기가 끝나기 전에는 일이 없는 것으로 판단하지 않습니다.'
+    : '목록이 비어 보여도 실제로 확인할 일이 있을 수 있습니다.';
   return (
     <div className="daily-brief__panel" style={{
       background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)',
@@ -1129,12 +1143,12 @@ function CommandClear({ signalCount }) {
     }}>
       {/* all-clear도 중립 체크 — 녹색 완료 상태 금지(§5.3 done = neutral, not green). */}
       <span style={{ width: 36, height: 36, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', flexShrink: 0 }}>
-        <Iconed name="check" size={18} />
+        <Iconed name={verified ? "check" : "signal"} size={18} />
       </span>
-      <div>
-        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)' }}>지금 급한 것은 없습니다</div>
+      <div role="status" aria-live="polite">
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)' }}>{title}</div>
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', marginTop: 3 }}>
-          {signalCount > 0 ? `${signalCount}건은 아래 확인할 것에서 여유 있게 보세요.` : '새 신호가 들어오면 여기 가장 먼저 올라옵니다.'}
+          {detail}
         </div>
       </div>
     </div>
@@ -2030,7 +2044,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
           {command ? (
             <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} onAdvisorOpen={setAdvisorSignal} />
           ) : (
-            <CommandClear signalCount={signalCount} />
+            <CommandClear signalCount={signalCount} state={ledger} />
           )}
         </div>
 

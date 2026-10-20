@@ -22,8 +22,9 @@ test("Windows packaging is limited to the approved review pushes on the public r
   assert.match(workflow, /npm --workspace @com-moon\/desktop run build -- --publish never/);
 });
 
-test("Mac stale-cookie audit is bounded and supplements the ordinary native contracts", () => {
+test("Mac safety-blocked audit stays skipped without disabling ordinary native contracts", () => {
   assert.match(workflow, /macos-pet:\n\s+runs-on: macos-26\n\s+timeout-minutes: 30/);
   assert.match(workflow, /^\s+\.\/script\/test_hub_transport\.sh$/m);
-  assert.match(workflow, /name: Native stale-cookie and session-intent audit\n\s+timeout-minutes: 5\n\s+working-directory: prototypes\/moonlight-pet-macos\n\s+run: \.\/script\/test_hub_transport\.sh --audit-stale-cookie/);
+  assert.match(workflow, /name: Native stale-cookie audit \(safety-blocked, not passed\)\n\s+if: \$\{\{ false \}\}\n\s+timeout-minutes: 5\n\s+working-directory: prototypes\/moonlight-pet-macos\n\s+run: \.\/script\/test_hub_transport\.sh --audit-stale-cookie/);
+  assert.match(workflow, /unresolved stale-cookie defect at 34debac2/);
 });

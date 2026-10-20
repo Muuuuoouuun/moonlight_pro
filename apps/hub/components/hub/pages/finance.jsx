@@ -8,7 +8,7 @@ import {SortHead} from './revenue-core';
 import './finance.css';
 
 const GROUP_LABELS = {gpt:'GPT',claude:'Claude 공동 관측',grok:'Grok',naver_plus:'Naver Plus',youtube:'YouTube',gemini:'Gemini',gabia:'Gabia',telecom:'통신비'};
-const REVIEW_LABELS = {purpose:"사용 목적",claimStatus:"신청 상태",approvedAmount:"승인액",recoveredAmount:"실제 회수액",note:"검토 메모",amount:"약정액",currency:"통화",cycle:"주기",nextDate:"다음 청구일",accountAlias:"계정 별칭",usageNote:"사용 근거",serviceStatus:"이용 상태",resumeDate:"재개 예정일"};
+const REVIEW_LABELS = {purpose:"사용 목적",claimStatus:"신청 상태",approvedAmount:"승인액",recoveredAmount:"실제 회수액",note:"검토 메모",amount:"약정액",currency:"통화",cycle:"주기",nextDate:"다음 청구일",accountAlias:"서비스 계정 별칭",usageNote:"사용 근거",serviceStatus:"이용 상태",resumeDate:"재개 예정일"};
 const compareValue = (key,value) => value === "" || value == null ? "미확인" : key === "purpose" ? financeOptionLabel(PURPOSE_OPTIONS,value) : key === "claimStatus" ? financeOptionLabel(CLAIM_OPTIONS,value) : key === "cycle" ? financeOptionLabel(CYCLE_OPTIONS,value) : key === "serviceStatus" ? financeOptionLabel(SERVICE_OPTIONS,value) : String(value);
 const SOURCE_LABELS = {'shinhan-card-settled':'신한카드 확정 거래','naverpay-purchase':'네이버페이 결제','naverpay-money':'네이버 머니 이동'};
 const sourceLabel = source => SOURCE_LABELS[source] || source;
@@ -173,7 +173,8 @@ export function Finance({onNavigate}) {
       <section className="finance-section"><div className="finance-section-head"><h3>머니 이동</h3><span className="finance-muted">소비 합계에서 제외 · 잔액 아님</span></div><MonthlyTable rows={wallet} wallet /></section></div></details>
     </>}
     {available && filters.view==='subscriptions' && <>
-      <section className="finance-section"><div className="finance-section-head"><h3>구독·고정비 계약</h3><span className="finance-muted num">{subscriptions.length}개 · 최근 결제일은 수집 전체 기간 기준</span></div><SubscriptionRows records={subscriptions} onReview={openReview} onClear={clearFilters} /></section>
+      <p className="finance-muted">사용하는 서비스의 계정 별칭과 구독·고정비 계약입니다. 고객사·거래처 계정과 별도로 관리합니다.</p>
+      <section className="finance-section"><div className="finance-section-head"><h3>서비스·구독 계정</h3><span className="finance-muted num">{subscriptions.length}개 · 최근 결제일은 수집 전체 기간 기준</span></div><SubscriptionRows records={subscriptions} onReview={openReview} onClear={clearFilters} /></section>
       <p className="finance-muted">이용 상태는 운영자 입력 기준 · 행에서 수정 · 중단·해지는 과거 결제 유지 · 재개 예정은 직접 입력 · 월결제 예상은 최근 결제 +1개월</p>
       <details className="finance-supporting"><summary>월별 구독 결제 <span className="finance-muted">날짜·금액 대조</span></summary><section className="finance-section"><p className="finance-muted">결제일 기준 월별 · 환불·중복 차감 · 같은 Claude 공동 결제는 한 번만 합산 · 결제를 눌러 내역 확인</p><SubscriptionPaymentTable table={payments} onReview={(cell,row)=>setPaymentDetail({...cell,label:GROUP_LABELS[row.group]||row.names.join(' · ')})} /></section></details>
     </>}
@@ -202,7 +203,7 @@ export function Finance({onNavigate}) {
           <SelectField label="약정 통화" options={[{value:'',label:'통화 미확인'},{value:'KRW',label:'원 (KRW)'}]} value={draft.currency} onChange={event=>changeDraft('currency',event.target.value)} />
           <SelectField label="약정 주기" options={CYCLE_OPTIONS} value={draft.cycle} onChange={event=>changeDraft('cycle',event.target.value)} />
           <TextField label="다음 청구일" type="date" value={draft.nextDate} onChange={event=>changeDraft('nextDate',event.target.value)} />
-          <TextField label="계정 별칭" value={draft.accountAlias} hint="비밀번호·계좌번호 대신 구분할 이름" maxLength={120} onChange={event=>changeDraft('accountAlias',event.target.value)} />
+          <TextField label="서비스 계정 별칭" value={draft.accountAlias} hint="비밀번호·계좌번호 대신 구분할 이름" maxLength={120} onChange={event=>changeDraft('accountAlias',event.target.value)} />
           <SelectField label="사용 목적" options={PURPOSE_OPTIONS} value={draft.purpose} onChange={event=>changeDraft('purpose',event.target.value)} />
           <TextAreaField label="사용 근거" value={draft.usageNote} hint="최근 기간·사용한 일·계속 쓸 이유. 빈칸은 사용 미확인입니다." maxLength={4000} onChange={event=>changeDraft('usageNote',event.target.value)} />
         </>}

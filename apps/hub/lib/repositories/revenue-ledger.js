@@ -203,7 +203,7 @@ export function mapLead(row, companyById, contactById, trackingStartedAt = null,
     companyName: company?.name || null,
     contactName: contact?.name || null,
     contactEmail: contact?.email || null,
-    contactPhone: contact?.phone || null,
+    contactPhone: contact?.phone || row.phone || null,
     contactTitle: contact?.title || null,
     // record_contact_outcome_v1이 남기는 마지막 반응 — 첫 화면 집중 고객 행이 서로 다른
     // 말을 하게 만드는 유일한 사실이다(0c). 없으면 null.
@@ -347,6 +347,7 @@ function resolveHealth(score, status) {
 
 function mapCase(row, accountById) {
   const account = row.customer_account_id ? accountById.get(row.customer_account_id) : null;
+  const accountLabel = typeof row.meta?.account_label === "string" ? row.meta.account_label.trim() : "";
   const type = account ? resolveType(account) : resolveType(row);
   const statusKey = String(row.status || "active").toLowerCase();
   const priorityRaw = String(row.priority || "medium").toLowerCase();
@@ -356,7 +357,7 @@ function mapCase(row, accountById) {
   return {
     id: row.id,
     title: row.title || "Untitled case",
-    account: account?.name || "—",
+    account: account?.name || accountLabel || "—",
     type,
     status: CASE_STATUS_LABEL[statusKey] || "Open",
     priority: priorityDisplay,

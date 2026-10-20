@@ -10,6 +10,8 @@ import { monthKeyOf, normalizeTargetAmount, targetForMonth } from '../../lib/rev
 import { planBaselineFor } from '../../lib/deal-payments.js';
 import { buildMoneyModel } from '../../lib/deal-money.js';
 import { buildDealWrite, persistRevenueRecord } from '../../lib/sales-os/revenue-write.js';
+import { newRevenueCreateId } from '../../lib/sales-os/revenue-create-command.js';
+import { pendingRevenueCreates, rememberRevenueDraft, hasPendingRevenueCreate, mergeRevenueDrafts, notifyRevenueSaveFailure } from './pages/revenue-create-client.js';
 import { mapDeal } from '../../lib/repositories/revenue-ledger.js';
 
 // Regression: ISSUE-001 — column moves unmount the drag source before dragend.
@@ -42,6 +44,7 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
     useMemo: fn => fn(), useCallback: fn => fn, useEffect: () => {},
   };
   const dependencies = {
+    newRevenueCreateId, pendingRevenueCreates, rememberRevenueDraft, hasPendingRevenueCreate, mergeRevenueDrafts, notifyRevenueSaveFailure,
     React, setTimeout: fn => { timers.push(fn); }, clearTimeout: () => {},
     useToast: () => ({ success() {}, error: (...args) => errors.push(args), info() {} }),
     useRevenueLedger: () => ({ ledger: { deals: records, stages: DEAL_STAGES }, syncState: state, reload: () => { reloads++; } }),
@@ -443,8 +446,11 @@ test('account detail does not open a deal review using an ambiguous account name
   const React = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
     useState: initial => [initial, () => {}],
+    useRef: initial => ({ current: initial }),
   };
-  const deps = { React, fmt: String };
+  const hookSource = source.slice(source.indexOf('function useDetailDraft('), source.indexOf('function LogComposer('));
+  const useDetailDraft = new Function('React', `${hookSource}; return useDetailDraft;`)(React);
+  const deps = { React, fmt: String, accountKey: account => account?.id || account?.createId || null, useDetailDraft };
   for (const name of ['Avatar', 'Badge', 'Iconed', 'IconButton', 'Button', 'HealthDot', 'QuickActions', 'Tabs', 'GoalLinks', 'LogComposer']) deps[name] = name;
   const DetailPanel = new Function(...Object.keys(deps), `${detailJs}; return DetailPanel;`)(...Object.values(deps));
   const findAll = (node, predicate) => {

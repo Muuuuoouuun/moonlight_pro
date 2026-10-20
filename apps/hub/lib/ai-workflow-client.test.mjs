@@ -101,6 +101,40 @@ test("daily briefing does not pass failed task or signal reads as current facts"
   assert.deepEqual(context.signals, []);
 });
 
+test("AI agenda retains a next start beyond eight and distinguishes prompt omission from source incompleteness", () => {
+  const items = Array.from({ length: 9 }, (_, i) => ({
+    id: `item-${i}`, whenAt: `2026-10-20T${String(i + 9).padStart(2, "0")}:00:00+09:00`,
+  }));
+  for (const state of ["live", "partial"]) {
+    const agenda = buildDailyDispatchContext({
+      now: new Date("2026-10-20T16:30:00+09:00"),
+      dailyFocus: { todayAgenda: { state, items, coverage: { complete: state === "live" } } },
+    }).todayAgenda;
+    assert.equal(agenda.items.length, 8);
+    assert.equal(agenda.items.at(-1), items.at(-1), "next supplied start survives the context cap");
+    assert.equal(agenda.state, "partial", "omission is never a complete agenda");
+    assert.equal(agenda.omittedCount, 1);
+    assert.equal(agenda.suppliedCount, 9);
+    assert.equal(agenda.totalCount, state === "live" ? 9 : null);
+    assert.equal(agenda.sourceComplete, state === "live");
+  }
+});
+
+test("AI agenda handles many all-day entries and partial empty reads without inventing a next start or total", () => {
+  const all = Array.from({ length: 12 }, (_, i) => ({ id: `all-${i}`, allDay: true, whenAt: "2026-10-20" }));
+  const next = { id: "next", whenAt: "2026-10-20T17:00:00+09:00" };
+  const context = buildDailyDispatchContext({
+    now: new Date("2026-10-20T16:30:00+09:00"),
+    dailyFocus: { todayAgenda: { state: "live", items: [...all, next] } },
+  });
+  assert.equal(context.todayAgenda.items.at(-1), next);
+  assert.equal(context.todayAgenda.omittedCount, 5);
+  const partial = buildDailyDispatchContext({ dailyFocus: { todayAgenda: { state: "partial", items: [] } } }).todayAgenda;
+  assert.equal(partial.totalCount, null);
+  assert.equal(partial.sourceComplete, false);
+  assert.deepEqual(partial.items, []);
+});
+
 test("buildWeeklySummaryText builds structured fact summary for personal and company scopes", () => {
   const personalReport = {
     periodStart: "2026-09-14",

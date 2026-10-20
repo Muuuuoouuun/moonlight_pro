@@ -14,6 +14,7 @@ import { kstDayKey } from "../kst-day.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
 import { listRecentActivities } from "./crm-activities.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
+import { calendarReadIsPartial } from "../calendar-read-coverage.js";
 import { filterOperatorOwnedRevenue } from "../operator-revenue-scope.js";
 import { findUnrecordedMeetings } from "../sales-os/calendar-touchpoints.js";
 import { persistRevenueRecord } from "../sales-os/revenue-write.js";
@@ -107,7 +108,7 @@ export async function getRecordCandidates({ now = Date.now() } = {}) {
   const revenueOk = revenue?.source === "supabase";
   const phoneOk = Array.isArray(phoneRows);
   const activitiesOk = Array.isArray(activities);
-  const calendarFailed = !calendar?.ok && !CALENDAR_NOT_CONNECTED.has(calendar?.reason || "");
+  const calendarFailed = calendarReadIsPartial(calendar) || (!calendar?.ok && !CALENDAR_NOT_CONNECTED.has(calendar?.reason || ""));
   if (!revenueOk && !phoneOk) {
     return { status: "error", failedSources: ["revenue", "phone"], candidates: [], message: "기록 후보를 불러오지 못했어요." };
   }

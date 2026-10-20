@@ -6,6 +6,8 @@
 // display model can't faithfully reverse (owner_id, expected_close_at from a free-text
 // close label) are intentionally left untouched — best-effort, never clobbered.
 
+import { confirmRevenueCreate, insertRevenueCreate } from "./revenue-create.js";
+import { REVENUE_CREATE_TABLES } from "./revenue-create-command.js";
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
 import { dealStageLabel, STAGE_ALIASES } from "../deal-stages.js";
 import { recordActivity } from "../repositories/crm-activities.js";
@@ -457,11 +459,18 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
     return res.persisted ? { status: "saved", id } : persistFailure(res);
   }
 
+  if (op === "confirm-create") {
+    if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
+    if (!REVENUE_CREATE_TABLES.has(table)) return { status: "error", reason: "unsupported-create-confirmation" };
+    return confirmRevenueCreate({ table, workspaceId, payload });
+  }
+
   const { columns, metaPatch } = build(payload);
   const hasMeta = Object.keys(metaPatch).length > 0;
 
   if (op === "create") {
     if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
+    if (REVENUE_CREATE_TABLES.has(table)) return insertRevenueCreate({ table, workspaceId, payload, columns, metaPatch });
     const record = {
       ...columns,
       workspace_id: workspaceId,

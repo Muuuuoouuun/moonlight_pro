@@ -1,4 +1,7 @@
 "use client";
+import { newRevenueCreateId } from '@/lib/sales-os/revenue-create-command';
+import { pendingRevenueCreates, rememberRevenueDraft, hasPendingRevenueCreate, mergeRevenueDrafts, notifyRevenueSaveFailure } from './revenue-create-client';
+import { accountKey, accountCreateScope, resolveAccountReference, queueAccountRename } from './account-identity';
 import { GoalLinks } from '../goal-links';
 
 import React from "react";
@@ -83,7 +86,9 @@ function useScopeFilter(searchParams) {
     lastScopeRef.current = queryScope;
     setFilter((current) => resolveScopeFilter({ queryScope, previousQueryScope, current }));
   }, [queryScope]);
-  return [filter, setFilter];
+  // Query-only navigation and its deep-link effects share this render. Expose
+  // the new scope immediately, before the effect commits it to local state.
+  return [resolveScopeFilter({ queryScope, previousQueryScope: lastScopeRef.current, current: filter }), setFilter];
 }
 
 // Parse a display amount ("120만원", "1억 2,000만원", legacy "₩1.2M", or a raw number) to a
@@ -443,7 +448,7 @@ export function Leads({ workspace }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const [localLeads, setLocalLeads] = React.useState([]);
+  const [localLeads, setLocalLeads] = React.useState(() => pendingRevenueCreates('lead').filter(row => String(row.id).startsWith('local-lead-')));
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
@@ -468,7 +473,7 @@ export function Leads({ workspace }) {
   // 파생 목록 memo(re-audit 속도 #4) — 이전에는 드로어·검색 키스트로크마다 120행
   // merge + 10필드 searchText 조립 + sort가 전부 재실행됐다.
   const mergedLeads = React.useMemo(
-    () => [...localLeads, ...ledger.leads]
+    () => mergeRevenueDrafts(ledger.leads, localLeads)
       .filter(l => !deletedLeadIds.has(l.id))
       .map(l => (leadEdits[l.id] ? { ...l, ...leadEdits[l.id] } : l)),
     [localLeads, ledger.leads, deletedLeadIds, leadEdits],
@@ -481,6 +486,7 @@ export function Leads({ workspace }) {
   const leadsReadFailed = syncState === 'error' && LEADS.length === 0;
   const showLeadTable = !wsEmpty && !leadsLoading && !leadsReadFailed;
   const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
+  React.useEffect(() => { if (editingLead) rememberRevenueDraft('lead', editingLead); }, [editingLead]);
   // 드로어 필드 라벨 옆 확정도 배지 (spec §4) — 값이 있고 출처가 알려진 경우만.
   // operator=확정(실선), derived/searched=권장(파선 ◇). 출처 미상(기존 값)은 배지 없음.
   const labelCertainty = (field) => {
@@ -550,10 +556,11 @@ export function Leads({ workspace }) {
   // Clickable column header. Reserves the caret's width even when inactive so sorting never
   // shifts the header layout; active column brightens and shows the direction.
   const createLead = () => {
-    const id = `local-lead-${Date.now()}`;
+    const createId = newRevenueCreateId();
+    const id = `local-lead-${createId}`;
     const now = new Date().toISOString();
     setLocalLeads(prev => [{
-      id,
+      id, createId,
       name: '새 리드',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       source: 'Manual',
@@ -605,7 +612,7 @@ export function Leads({ workspace }) {
       }
       toast.success(isNew ? '새 리드를 저장했습니다.' : '리드 정보를 저장했습니다.');
     } else {
-      toast.error(r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '리드 저장에 실패했습니다.');
+      notifyRevenueSaveFailure(toast, r, r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '리드 저장에 실패했습니다.');
     }
     return r;
   };
@@ -617,6 +624,7 @@ export function Leads({ workspace }) {
     if (!editLeadId) return { ok: false };
     const id = editLeadId;
     const isLocal = String(id).startsWith('local-lead-');
+    if (isLocal && hasPendingRevenueCreate('lead', editingLead)) return { ok: false, status: 'unknown', message: '등록 결과를 먼저 확인하세요. 입력은 유지됩니다.' };
     setLocalLeads(prev => prev.filter(l => l.id !== id));
     setDeletedLeadIds(prev => new Set(prev).add(id));
     if (isLocal) {
@@ -1536,7 +1544,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   };
   const DEAL_STAGES = ledger.stages;
   const ledgerUnavailable = syncState === 'loading' || syncState === 'error';
-  const [deals, setDeals] = React.useState(ledger.deals);
+  const [deals, setDeals] = React.useState(() => mergeRevenueDrafts(ledger.deals, pendingRevenueCreates('deal')));
   const [drag, setDrag] = React.useState(null);
   const [filter, setFilter] = useScopeFilter(searchParams);
   const [showHidden, setShowHidden] = React.useState(false);
@@ -1572,7 +1580,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
 
   // Sync local deals state when live data arrives
   React.useEffect(() => {
-    setDeals(ledger.deals);
+    setDeals(previous => mergeRevenueDrafts(ledger.deals, previous.filter(row => String(row.id).toLowerCase().startsWith('local-'))));
   }, [ledger.deals]);
 
   // 드로어 편집은 드래프트 오버레이로 격리 — 이전에는 키스트로크마다 setDeals(전체 배열
@@ -1596,6 +1604,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   const editingDeal = editingBase
     ? (dealDrafts[editDealId] ? { ...editingBase, ...dealDrafts[editDealId] } : editingBase)
     : null;
+  React.useEffect(() => { if (editingDeal) rememberRevenueDraft('deal', editingDeal); }, [editingDeal]);
   // 기록 기반 추천(agent-layer-direction §2.1 ⑦) — 드로어가 열린 동안만 읽는다. 저장된 사실만
   // 근거로 쓰므로 편집 중인 초안 값이 아니라 원장에 있는 딜 id로 찾는다.
   const guruRecommendations = useGuruRecommendations({ enabled: Boolean(editingBase && !String(editingBase.id).toLowerCase().startsWith('local-')) });
@@ -1824,9 +1833,10 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   // creating where you're looking needs no follow-up drag. Falls back to the first stage.
   const createDeal = (stage) => {
     if (ledgerUnavailable) return;
-    const id = `LOCAL-${Date.now().toString().slice(-4)}`;
+    const createId = newRevenueCreateId();
+    const id = `LOCAL-${createId}`;
     setDeals(prev => [{
-      id,
+      id, createId,
       name: '새 딜',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       stage: (typeof stage === 'string' && stage) || DEAL_STAGES[0]?.key || 'consult',
@@ -1862,7 +1872,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       if (isNew && r.id) setEditDealId(realId);
       toast.success(isNew ? '새 딜을 저장했습니다.' : '딜 정보를 저장했습니다.');
     } else {
-      if (!showDealConflict(r)) toast.error(r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '딜 저장에 실패했습니다.');
+      if (isNew || !showDealConflict(r)) notifyRevenueSaveFailure(toast, r, r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '딜 저장에 실패했습니다.');
     }
     return r;
   };
@@ -1873,6 +1883,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
     const id = editDealId;
     const removed = deals.find(d => d.id === id) || null;
     const isLocal = String(id).toLowerCase().startsWith('local-');
+    if (isLocal && hasPendingRevenueCreate('deal', editingDeal)) return { ok: false, status: 'unknown', message: '등록 결과를 먼저 확인하세요. 입력은 유지됩니다.' };
     setDeals(ds => ds.filter(d => d.id !== id));
     if (isLocal) {
       toast.info('미저장 딜을 삭제했습니다.');
@@ -2294,6 +2305,12 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
         onSave={persistDeal}
         onDelete={deleteDeal}
         onClose={() => {
+          if (hasPendingRevenueCreate('deal', editingDeal)) {
+            rememberRevenueDraft('deal', editingDeal);
+            setDeals(rows => rows.map(row => row.id === editDealId ? editingDeal : row));
+            setEditDealId(null);
+            return;
+          }
           // 닫기 = 미저장 드래프트 폐기(EditDrawer의 dirty confirm이 이미 실수를 막는다).
           setDealDrafts(prev => { if (!editDealId || !prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
           if (String(editDealId).toLowerCase().startsWith('local-')) {
@@ -2413,17 +2430,18 @@ export function Cases() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const [localCases, setLocalCases] = React.useState([]);
+  const [localCases, setLocalCases] = React.useState(() => pendingRevenueCreates('case'));
   const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
   const ledgerCases = Array.isArray(ledger.cases) ? ledger.cases : [];
-  const mergedCases = [...localCases, ...ledgerCases]
+  const mergedCases = mergeRevenueDrafts(ledgerCases, localCases)
     .filter(c => !deletedCaseIds.has(c.id))
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
   const cases = sortCases(mergedCases, sort);
   const editingCase = editCaseId ? mergedCases.find(c => c.id === editCaseId) : null;
+  React.useEffect(() => { if (editingCase) rememberRevenueDraft('case', editingCase); }, [editingCase]);
   // 첫 로드 중에 "케이스가 없습니다"를, 읽기 실패에 "케이스 추가"를 그리지 않는다(§5.3 · Leads와 같은 계약).
   const casesLoading = syncState === 'loading' && cases.length === 0;
   const casesReadFailed = syncState === 'error' && cases.length === 0;
@@ -2435,9 +2453,10 @@ export function Cases() {
   const sTone = { Open: 'neutral', Waiting: 'neutral', Resolved: 'neutral' };
   const pTone = { high: 'danger', med: 'neutral', low: 'neutral' };
   const createCase = () => {
-    const id = `CASE-${Date.now()}`;
+    const createId = newRevenueCreateId();
+    const id = `CASE-${createId}`;
     setLocalCases(prev => [{
-      id,
+      id, createId,
       title: '새 운영 케이스',
       account: '미지정',
       type: 'company',
@@ -2495,7 +2514,7 @@ export function Cases() {
       }
       toast.success(isNew ? '새 케이스를 저장했습니다.' : '케이스 정보를 저장했습니다.');
     } else {
-      toast.error(r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '케이스 저장에 실패했습니다.');
+      notifyRevenueSaveFailure(toast, r, r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '케이스 저장에 실패했습니다.');
     }
     return r;
   };
@@ -2505,6 +2524,7 @@ export function Cases() {
     if (!editCaseId) return { ok: false };
     const id = editCaseId;
     const isLocal = String(id).startsWith('CASE-');
+    if (isLocal && hasPendingRevenueCreate('case', editingCase)) return { ok: false, status: 'unknown', message: '등록 결과를 먼저 확인하세요. 입력은 유지됩니다.' };
     setLocalCases(prev => prev.filter(c => c.id !== id));
     setDeletedCaseIds(prev => new Set(prev).add(id));
     if (isLocal) {
@@ -2725,13 +2745,30 @@ function ContactMenu({ onAction }) {
 // canned message with no way to enter real details. `preset.seq` is a bump counter so clicking
 // the same quick action twice in a row (e.g. "Schedule meeting" again before saving) still
 // re-applies the preset and re-focuses, even though type/text otherwise look unchanged.
-function LogComposer({ onLog, preset }) {
-  const [type, setType] = React.useState('note');
-  const [text, setText] = React.useState('');
+// Account detail can remount on selection without moving or losing its unsent
+// note/log text. The cache belongs to the Accounts instance, keyed only by ID.
+function useDetailDraft(cache, key, field, initial) {
+  const [value, update] = React.useState(cache?.current.get(key)?.[field] ?? initial);
+  const setValue = (next) => update(previous => {
+    const resolved = typeof next === 'function' ? next(previous) : next;
+    if (cache && key) cache.current.set(key, { ...cache.current.get(key), [field]: resolved });
+    return resolved;
+  });
+  return [value, setValue];
+}
+
+function LogComposer({ onLog, preset, draftCache, draftKey }) {
+  const [type, setType] = useDetailDraft(draftCache, draftKey, 'logType', 'note');
+  const [text, setText] = useDetailDraft(draftCache, draftKey, 'logText', '');
   const textRef = React.useRef(null);
 
   React.useEffect(() => {
     if (!preset) return;
+    if (draftCache && draftKey) {
+      const previous = draftCache.current.get(draftKey);
+      if (previous?.logPresetSeq === preset.seq) return;
+      draftCache.current.set(draftKey, { ...previous, logPresetSeq: preset.seq });
+    }
     setType(preset.type || 'note');
     setText(preset.text || '');
     textRef.current?.focus();
@@ -2993,16 +3030,24 @@ function LeadActivityPanel({ lead, onCountChange }) {
   );
 }
 
-function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate, activityError, deleteNotice, onRename }) {
+function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate, activityError, deleteNotice, onRename, draftCache }) {
+  const draftKey = accountKey(account);
   const [renaming, setRenaming] = React.useState(false);
-  const [tab, setTab] = React.useState('activity');
-  const [noteText, setNoteText] = React.useState('');
+  const renameFinished = React.useRef(true);
+  const finishRename = (value, commit = true) => {
+    if (renameFinished.current) return;
+    renameFinished.current = true;
+    if (commit) onRename?.(value);
+    setRenaming(false);
+  };
+  const [tab, setTab] = useDetailDraft(draftCache, draftKey, 'tab', 'activity');
+  const [noteText, setNoteText] = useDetailDraft(draftCache, draftKey, 'noteText', '');
   // Quick actions (ContactMenu/QuickActions — "Schedule meeting" etc.) used to write a
   // canned message straight to crm_activities with no way to enter real details. Now they
   // switch to Activity and seed LogComposer instead — the click chooses the type + a starter
   // draft, the operator still has to type and hit Save. `seq` forces LogComposer to re-apply
   // the preset even if type/text look unchanged from the last click.
-  const [composerPreset, setComposerPreset] = React.useState({ type: 'note', text: '', seq: 0 });
+  const [composerPreset, setComposerPreset] = useDetailDraft(draftCache, draftKey, 'composerPreset', { type: 'note', text: '', seq: 0 });
   const handleQuickAction = (kind, contactName) => {
     const type = kind;
     const starters = {
@@ -3052,17 +3097,17 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                   defaultValue={account.name}
                   aria-label="계정 이름 변경"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') { onRename?.(e.currentTarget.value); setRenaming(false); }
-                    if (e.key === 'Escape') { e.stopPropagation(); setRenaming(false); }
+                    if (e.key === 'Enter') { e.preventDefault(); finishRename(e.currentTarget.value); }
+                    if (e.key === 'Escape') { e.stopPropagation(); finishRename('', false); }
                   }}
-                  onBlur={(e) => { onRename?.(e.currentTarget.value); setRenaming(false); }}
+                  onBlur={(e) => finishRename(e.currentTarget.value)}
                   style={{ fontSize: 17, fontWeight: 500, background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', padding: '2px 8px', minWidth: 160 }}
                 />
               ) : (
                 <div style={{ fontSize: 17, fontWeight: 500 }}>{account.name}</div>
               )}
               {onRename && !renaming && (
-                <IconButton icon="edit" size={22} iconSize={12} tooltip="이름 변경" onClick={() => setRenaming(true)} />
+                <IconButton icon="edit" size={22} iconSize={12} tooltip="이름 변경" onClick={() => { renameFinished.current = false; setRenaming(true); }} />
               )}
               <Badge tone="neutral" size="xs" variant="outline">
                 <Iconed name={account.type === 'personal' ? 'user' : 'building'} size={9} />
@@ -3127,7 +3172,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                 <Button variant="ghost" size="xs" onClick={deleteNotice.undo}>되돌리기</Button>
               </div>
             )}
-            <LogComposer onLog={onLog} preset={composerPreset} />
+            <LogComposer onLog={onLog} preset={composerPreset} draftCache={draftCache} draftKey={draftKey} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {d.activity.length === 0 && (
                 <div style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '12px 0' }}>아직 기록이 없습니다.</div>
@@ -3288,12 +3333,34 @@ export function Accounts({ workspace, onNavigate }) {
   const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
-  const [localAccounts, setLocalAccounts] = React.useState([]);
+  const [localAccounts, setLocalAccounts] = React.useState(() => pendingRevenueCreates('account'));
+  const pendingAccountCreateRef = React.useRef(new Map());
+  const accountDraftsRef = React.useRef(new Map());
+  const accountRenameQueueRef = React.useRef(new Map());
+  const accountRenameIntentRef = React.useRef(new Map());
+  const [accountNameEdits, setAccountNameEdits] = React.useState({});
   const ledgerAccounts = Array.isArray(ledger.accounts) ? ledger.accounts : [];
+  // A later normal ledger refresh also retires a confirmed optimistic label.
+  // Unresolved creates/renames still own their current input and are not replaced.
+  React.useEffect(() => {
+    const freshByKey = new Map(ledgerAccounts.map(row => [accountKey(row), row]));
+    const canReconcile = row => row?.id && !accountRenameQueueRef.current.has(accountKey(row))
+      && !hasPendingRevenueCreate('account', { createId: accountKey(row) });
+    setAccountNameEdits(prev => {
+      const next = { ...prev };
+      for (const [key, row] of freshByKey) if (canReconcile(row)) delete next[key];
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+    setLocalAccounts(prev => prev.map(row => {
+      const fresh = freshByKey.get(accountKey(row));
+      return fresh && canReconcile(row) && row.name !== fresh.name ? { ...row, name: fresh.name } : row;
+    }));
+  }, [ledgerAccounts]);
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
   // The ledger hook only exposes API-backed records; scoping never mixes sources.
   const ws = getWorkspace(workspace);
-  const ACCOUNTS = filterAccountsByWorkspace([...localAccounts, ...ledgerAccounts], workspace);
+  const ACCOUNTS = filterAccountsByWorkspace(mergeRevenueDrafts(ledgerAccounts, localAccounts), workspace)
+    .map(account => Object.hasOwn(accountNameEdits, accountKey(account)) ? { ...account, name: accountNameEdits[accountKey(account)] } : account);
   const wsEmpty = Boolean(ws) && ACCOUNTS.length === 0;
   // 첫 로드·읽기 실패는 빈 목록과 다른 사실이다(§5.3) — 워크스페이스 여부와 무관하게 먼저 가른다.
   const accountsLoading = syncState === 'loading' && ACCOUNTS.length === 0;
@@ -3313,7 +3380,7 @@ export function Accounts({ workspace, onNavigate }) {
     const map = new Map();
     ACCOUNTS.forEach((a) => {
       const relationship = buildAccountRelationshipDetail(a, ledger);
-      map.set(a.name, [
+      map.set(accountKey(a), [
         a.name,
         a.nextAction,
         a.dormant ? '기약 없음 휴면' : null,
@@ -3324,7 +3391,7 @@ export function Accounts({ workspace, onNavigate }) {
     return map;
   }, [ACCOUNTS, ledger]);
   const searched = React.useMemo(
-    () => ACCOUNTS.filter(a => (filter === 'all' || a.type === filter) && (!term || (accountSearchText.get(a.name) || '').includes(term))),
+    () => ACCOUNTS.filter(a => (filter === 'all' || a.type === filter) && (!term || (accountSearchText.get(accountKey(a)) || '').includes(term))),
     [ACCOUNTS, accountSearchText, filter, term],
   );
   // asc → desc → 해제(기록 순) 3단 토글 — Leads·Cases와 같은 §8.1 계약. health는
@@ -3358,33 +3425,40 @@ export function Accounts({ workspace, onNavigate }) {
 
   // Keep selection valid across filter changes
   React.useEffect(() => {
-    if (view === 'detail' && !filtered.find(a => a.name === selected)) {
-      setSelected(filtered[0]?.name ?? null);
+    if (syncState === 'loading' || syncState === 'error') return;
+    if (view === 'detail' && !filtered.find(a => accountKey(a) === selected)) {
+      setSelected(accountKey(filtered.find(a => accountKey(a))));
     }
-  }, [view, filtered, selected]);
+  }, [view, filtered, selected, syncState]);
 
   const getDetail = (account) => {
     if (!account) return emptyDetail();
     const linked = buildAccountRelationshipDetail(account, ledger);
-    const stored = details[account.name] || emptyDetail();
+    const stored = details[accountKey(account)] || emptyDetail();
     return { ...stored, contacts: linked.contacts, deals: linked.deals };
   };
-  const [activityError, setActivityError] = React.useState(null); // { name, message, body? }
-  const [deleteNotice, setDeleteNotice] = React.useState(null); // { key, name, label, undo }
+  const [activityErrors, setActivityErrors] = React.useState({});
+  const [deleteNotices, setDeleteNotices] = React.useState({});
+  const setActivityError = (key, update) => setActivityErrors(prev => ({ ...prev,
+    [key]: typeof update === 'function' ? update(prev[key]) : update,
+  }));
+  const setDeleteNotice = (key, update) => setDeleteNotices(prev => ({ ...prev,
+    [key]: typeof update === 'function' ? update(prev[key]) : update,
+  }));
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
   // 활동·노트는 crm_activities 기록으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
   // 낙관적 로컬 행만 유지 — preview 상태로 정직하게 남긴다.
-  const persistActivity = (name, entry, { alsoNote = false } = {}) => {
-    const acc = ACCOUNTS.find(a => a.name === name);
+  const persistActivity = (key, entry, { alsoNote = false } = {}) => {
+    const acc = ACCOUNTS.find(a => accountKey(a) === key);
     const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const localRow = { id: tempId, at: '방금', who: 'Me', pinned: false, ...entry };
 
     setDetails(prev => {
-      const cur = prev[name] || emptyDetail();
+      const cur = prev[key] || emptyDetail();
       return {
         ...prev,
-        [name]: {
+        [key]: {
           ...cur,
           activity: [localRow, ...cur.activity],
           ...(alsoNote
@@ -3396,7 +3470,7 @@ export function Accounts({ workspace, onNavigate }) {
 
     if (!acc?.id) {
       // 아직 저장 안 된 로컬 계정 — 기록이 저장소에 남지 않는다는 사실을 표시한다.
-      setActivityError({ name, message: '계정을 먼저 저장해야 기록이 저장소에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
+      setActivityError(key, { accountKey: key, message: '계정을 먼저 저장해야 기록이 저장소에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
       return;
     }
     saveRevenueRecord('activity', 'create', {
@@ -3408,57 +3482,57 @@ export function Accounts({ workspace, onNavigate }) {
       if (!r.ok || !r.id) {
         // 무음 소실 금지(re-audit S4): 실패한 낙관 행을 걷어내고 입력을 에러에 실어 복원한다.
         setDetails(prev => {
-          const cur = prev[name];
+          const cur = prev[key];
           if (!cur) return prev;
           const drop = row => row.id !== tempId;
-          return { ...prev, [name]: { ...cur, activity: cur.activity.filter(drop), notes: cur.notes.filter(drop) } };
+          return { ...prev, [key]: { ...cur, activity: cur.activity.filter(drop), notes: cur.notes.filter(drop) } };
         });
-        setActivityError({
-          name,
+        setActivityError(key, {
+          accountKey: key,
           message: r.status === 'preview' ? 'Supabase 미설정 — 기록이 저장되지 않았습니다.' : '기록 저장에 실패했습니다. 다시 시도하세요.',
           body: entry.msg,
         });
         return;
       }
-      setActivityError(null);
+      setActivityError(key, current => current?.accountKey === key ? null : current);
       // 임시 id → 실제 id 치환 (pinned 토글이 서버 행을 가리키도록)
       setDetails(prev => {
-        const cur = prev[name];
+        const cur = prev[key];
         if (!cur) return prev;
         const swap = row => (row.id === tempId ? { ...row, id: r.id } : row);
-        return { ...prev, [name]: { ...cur, activity: cur.activity.map(swap), notes: cur.notes.map(swap) } };
+        return { ...prev, [key]: { ...cur, activity: cur.activity.map(swap), notes: cur.notes.map(swap) } };
       });
     });
   };
 
-  const pushActivity = (name, entry) => persistActivity(name, entry);
+  const pushActivity = (key, entry) => persistActivity(key, entry);
 
-  const handleLog = (name) => ({ type, msg }) => {
-    pushActivity(name, { type, msg });
+  const handleLog = (key) => ({ type, msg }) => {
+    pushActivity(key, { type, msg });
   };
 
   // 삭제는 3.5초 지연 쓰기 + 되돌리기(공유 undo 계약) — 이전엔 확인도 되돌리기도 없이
   // 즉시 hard delete였고 쓰기 결과도 확인하지 않았다(2026-08-05 재감사 L). 창 안에 되돌리면
   // 서버 왕복 없이 진짜 취소, 창이 지나면 실행하고 실패 시 행 복원 + 에러 명명.
-  const handleDeleteActivity = (name) => (activity) => {
+  const handleDeleteActivity = (key) => (activity) => {
     const match = row => (activity.id ? row.id === activity.id : row === activity);
     let removedActivity = [];
     let removedNotes = [];
     setDetails(prev => {
-      const cur = prev[name];
+      const cur = prev[key];
       if (!cur) return prev;
       removedActivity = cur.activity.filter(match);
       removedNotes = cur.notes.filter(match);
       return {
         ...prev,
-        [name]: { ...cur, activity: cur.activity.filter(row => !match(row)), notes: cur.notes.filter(row => !match(row)) },
+        [key]: { ...cur, activity: cur.activity.filter(row => !match(row)), notes: cur.notes.filter(row => !match(row)) },
       };
     });
     const restoreRows = () => setDetails(prev => {
-      const cur = prev[name] || emptyDetail();
+      const cur = prev[key] || emptyDetail();
       return {
         ...prev,
-        [name]: {
+        [key]: {
           ...cur,
           activity: [...removedActivity, ...cur.activity],
           notes: [...removedNotes, ...cur.notes],
@@ -3466,32 +3540,32 @@ export function Accounts({ workspace, onNavigate }) {
       };
     });
     if (!activity.id || String(activity.id).startsWith('local-')) return; // 로컬 행은 클라이언트 드롭으로 끝
-    const key = `activity-delete-${activity.id}`;
-    scheduleUndoable(key, () => {
-      setDeleteNotice(cur => (cur?.key === key ? null : cur));
+    const undoKey = `activity-delete-${activity.id}`;
+    scheduleUndoable(undoKey, () => {
+      setDeleteNotice(key, cur => (cur?.key === undoKey ? null : cur));
       saveRevenueRecord('activity', 'delete', { id: activity.id }).then((r) => {
         if (r.ok) return;
         restoreRows();
-        setActivityError({ name, message: `기록 삭제 실패 (${r.status}) — 행을 복원했습니다.` });
+        setActivityError(key, { accountKey: key, message: `기록 삭제 실패 (${r.status}) — 행을 복원했습니다.` });
       });
     });
     const undoDelete = () => {
-      if (cancelUndoable(key)) restoreRows();
-      setDeleteNotice(null);
+      if (cancelUndoable(undoKey)) restoreRows();
+      setDeleteNotice(key, current => current?.key === undoKey ? null : current);
       toast.info('기록 삭제를 취소했습니다.');
     };
-    setDeleteNotice({ key, name, label: '기록 삭제됨', undo: undoDelete });
+    setDeleteNotice(key, { key: undoKey, accountKey: key, label: '기록 삭제됨', undo: undoDelete });
     toast.info('기록을 삭제했습니다.', { action: { label: '되돌리기', onClick: undoDelete } });
   };
 
-  const handlePinNote = (name) => (note) => {
+  const handlePinNote = (key) => (note) => {
     const nextPinned = !note.pinned;
     const flipTo = (pinned) => setDetails(prev => {
-      const cur = prev[name] || emptyDetail();
+      const cur = prev[key] || emptyDetail();
       const flip = n => ((note.id ? n.id === note.id : n === note) ? { ...n, pinned } : n);
       return {
         ...prev,
-        [name]: { ...cur, notes: cur.notes.map(flip), activity: cur.activity.map(flip) },
+        [key]: { ...cur, notes: cur.notes.map(flip), activity: cur.activity.map(flip) },
       };
     });
     flipTo(nextPinned);
@@ -3499,21 +3573,22 @@ export function Accounts({ workspace, onNavigate }) {
       saveRevenueRecord('activity', 'update', { id: note.id, pinned: nextPinned }).then((r) => {
         if (r.ok) return;
         flipTo(!nextPinned); // 실패한 핀 토글은 명시적으로 되돌린다 — 무언 리버트 금지
-        setActivityError({ name, message: `핀 저장 실패 (${r.status})` });
+        setActivityError(key, { accountKey: key, message: `핀 저장 실패 (${r.status})` });
       });
     }
   };
 
-  const handleAddNote = (name) => (body) => {
-    persistActivity(name, { type: 'note', msg: body }, { alsoNote: true });
+  const handleAddNote = (key) => (body) => {
+    persistActivity(key, { type: 'note', msg: body }, { alsoNote: true });
   };
 
-  const selectedAcc = filtered.find(a => a.name === selected) || null;
+  const selectedAcc = selected ? filtered.find(a => accountKey(a) === selected) || null : null;
 
   // Detail 뷰 진입/계정 전환 시 crm_activities에서 활동·노트를 로드한다.
   React.useEffect(() => {
     if (view !== 'detail' || !selectedAcc?.id) return;
     const acc = selectedAcc;
+    const key = accountKey(acc);
     let alive = true;
     const query = acc.companyId
       ? `companyId=${encodeURIComponent(acc.companyId)}`
@@ -3524,18 +3599,18 @@ export function Accounts({ workspace, onNavigate }) {
         if (!alive) return;
         if (!ok || !data || data.status === 'error') {
           // 읽기 실패로 보이던 기록을 []로 갈아치우지 않는다 — 표시 유지 + 에러 명명.
-          setActivityError({ name: acc.name, message: '활동 기록을 읽지 못했습니다 — 다시 열면 재시도합니다.' });
+          setActivityError(key, { accountKey: key, message: '활동 기록을 읽지 못했습니다 — 다시 열면 재시도합니다.' });
           return;
         }
         const rows = Array.isArray(data.activities) ? data.activities : [];
         setDetails(prev => {
-          const cur = prev[acc.name] || emptyDetail();
+          const cur = prev[key] || emptyDetail();
           // 서버 행 + 아직 저장 안 된 로컬 행(local- 접두)만 병합 — 중복 없이 기록이 정본
           const localOnly = cur.activity.filter(a => String(a.id).startsWith('local-'));
           const activity = [...localOnly, ...rows];
           return {
             ...prev,
-            [acc.name]: {
+            [key]: {
               ...cur,
               activity,
               notes: activity
@@ -3546,17 +3621,18 @@ export function Accounts({ workspace, onNavigate }) {
         });
       })
       .catch(() => {
-        if (alive) setActivityError({ name: acc.name, message: '활동 기록을 읽지 못했습니다 — 다시 열면 재시도합니다.' });
+        if (alive) setActivityError(key, { accountKey: key, message: '활동 기록을 읽지 못했습니다 — 다시 열면 재시도합니다.' });
       });
     return () => { alive = false; };
   }, [view, selectedAcc?.id, selectedAcc?.companyId]);
 
-  const openDetail = (name) => {
-    setSelected(name);
+  const openDetail = (key) => {
+    if (!key) return;
+    setSelected(key);
     setView('detail');
   };
 
-  // 딥링크: ?account=<name> — 기록 로드 후 1회만 열고 쿼리 소거(§8.1). Revenue 표면 중
+  // 딥링크: ?account=<id> (고유한 이전 이름 링크도 호환) — 기록 로드 후 1회만 열고 쿼리 소거(§8.1). Revenue 표면 중
   // 유일하게 딥링크가 없던 표면이었다(system-eval U-S3).
   const accountSearchParams = useSearchParams();
   const accountRouter = useRouter();
@@ -3564,13 +3640,24 @@ export function Accounts({ workspace, onNavigate }) {
   const accountParam = accountSearchParams?.get('account') || null;
   const consumedAccountRef = React.useRef(null);
   React.useEffect(() => {
-    if (!accountParam || consumedAccountRef.current === accountParam) return;
-    if (!ACCOUNTS.some(a => a.name === accountParam)) return;
+    if (!accountParam) { consumedAccountRef.current = null; return; }
+    if (consumedAccountRef.current === accountParam) return;
+    const match = resolveAccountReference(ACCOUNTS.filter(a => filter === 'all' || a.type === filter), accountParam);
+    if (match.status === 'missing') return;
     consumedAccountRef.current = accountParam;
-    setSelected(accountParam);
-    setView('detail');
-    if (accountPathname) accountRouter.replace(accountPathname);
-  }, [accountParam, ACCOUNTS, accountPathname, accountRouter]);
+    if (match.status === 'ambiguous') {
+      setAccountsNotice('같은 이름의 계정이 여러 개입니다. 목록에서 계정을 직접 선택하세요.');
+    } else {
+      setSearch('');
+      setSelected(accountKey(match.account));
+      setView('detail');
+    }
+    if (accountPathname) {
+      const params = new URLSearchParams(accountSearchParams.toString());
+      params.delete('account');
+      accountRouter.replace(params.size ? `${accountPathname}?${params}` : accountPathname);
+    }
+  }, [accountParam, ACCOUNTS, filter, accountSearchParams, accountPathname, accountRouter]);
 
   // 키보드 계층(§8.1 표준): j/k 이동 · e 상세 · n 생성 · / 검색 — 다른 Revenue 표면과 동일.
   const accountSearchRef = React.useRef(null);
@@ -3580,12 +3667,12 @@ export function Accounts({ workspace, onNavigate }) {
     const id = setTimeout(() => setAccountsNotice(null), 8000);
     return () => clearTimeout(id);
   }, [accountsNotice]);
-  const accountKbRows = React.useMemo(() => filtered.map(a => ({ id: a.name })), [filtered]);
+  const accountKbRows = React.useMemo(() => filtered.map(a => ({ id: accountKey(a) })).filter(a => a.id), [filtered]);
   const accountSelection = useCrmSelection(accountKbRows);
   useCrmKeyboard({
     selection: accountSelection,
     onNew: () => createAccount(),
-    onEditSelected: (name) => openDetail(name),
+    onEditSelected: (key) => openDetail(key),
     onSearchFocus: () => accountSearchRef.current?.focus(),
   });
   // j/k 커서를 화면 안에 유지 — cards 뷰는 그리드라 리스트식 scrollIntoView가 없다.
@@ -3596,35 +3683,37 @@ export function Accounts({ workspace, onNavigate }) {
   // 생성은 즉시 영속 — 이전에는 로컬 전용 '새 계정' 팬텀(저장 경로·이름 변경 없음,
   // 새로고침 시 증발, 기록 시도 시 "먼저 저장해야" 안내만)이었다(2026-08-05 재감사 L).
   const createAccount = async () => {
-    const name = `새 계정 ${new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date())}`;
-    const type = filter === 'personal' || filter === 'company' ? filter : 'company';
-    setLocalAccounts(prev => [{
-      name,
-      type,
-      health: 'ok',
-      value: 0,
-      deals: 0,
-      last: '방금',
-      owner: 'Me',
-      lastAt: '방금',
-      // Tag in-workspace creates so the scoped view doesn't silently drop them.
-      ...(ws ? { workspace } : {}),
-    }, ...prev]);
-    setSelected(name);
-    setView('detail');
-    const r = await saveRevenueRecord('account', 'create', { name, type, ...(ws ? { workspace } : {}) });
-    if (r.ok && r.id) {
-      setLocalAccounts(prev => prev.map(a => (a.name === name ? { ...a, id: r.id } : a)));
-      toast.success('새 계정을 생성했습니다.');
-    } else if (r.status !== 'preview') {
-      // 라이브 백엔드 거부 — 팬텀을 남기지 않고 제거 + 명명 (preview=미구성만 로컬 유지 정당).
-      // activityError는 detail 패널 전용이라 목록 복귀 후엔 보이지 않는다 — 페이지 알림 사용
-      // (5차 재감사: 무언 실패로 남던 유일한 생성 경로).
-      setLocalAccounts(prev => prev.filter(a => a.name !== name));
-      setView('list');
-      setAccountsNotice(`계정 생성 실패 (${r.status}) — 다시 시도하세요.`);
-      toast.error(`계정 생성 실패 (${r.status}) — 다시 시도하세요.`);
+    // A second explicit click resumes the unresolved command, not a fresh insert.
+    const createType = filter === 'personal' ? 'personal' : 'company';
+    const createScope = accountCreateScope({ workspace: ws ? workspace : null, type: createType });
+    let record = pendingRevenueCreates('account').find(row => accountCreateScope(row) === createScope)
+      || pendingAccountCreateRef.current.get(createScope);
+    if (!record) {
+      const name = `새 계정 ${new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date())}`;
+      record = { createId: newRevenueCreateId(), name,
+        type: createType,
+        health: 'ok', value: 0, deals: 0, last: '방금', owner: 'Me', lastAt: '방금',
+        ...(ws ? { workspace } : {}) };
+      pendingAccountCreateRef.current.set(createScope, record);
+      setLocalAccounts(prev => [record, ...prev]);
     }
+    setSelected(accountKey(record)); setView('detail');
+    const r = await saveRevenueRecord('account', 'create', record);
+    if (r.ok && r.id) {
+      setLocalAccounts(prev => prev.map(a => a.createId === record.createId ? { ...a, id: r.id } : a));
+      pendingAccountCreateRef.current.delete(createScope);
+      setAccountsNotice(null);
+      toast.success('새 계정을 생성했습니다.');
+    } else {
+      // Uncertainty is neither a failed insert nor permission to discard a draft.
+      if (['error', 'failed', 'preview'].includes(r.status)) {
+        pendingAccountCreateRef.current.delete(createScope);
+        if (r.status !== 'preview') setLocalAccounts(prev => prev.filter(a => a.createId !== record.createId));
+      }
+      setAccountsNotice(r.message || `계정 생성 실패 (${r.status}) — 다시 시도하세요.`);
+      notifyRevenueSaveFailure(toast, r, `계정 생성 실패 (${r.status}) — 다시 시도하세요.`);
+    }
+    return r;
   };
 
   // ?new=account — TopBar New·⌘K 생성 딥링크 1회 소비(§8.1 생성·연계, Leads와 동일 계약).
@@ -3634,31 +3723,49 @@ export function Accounts({ workspace, onNavigate }) {
     if (createdAccountFromQueryRef.current) return;
     createdAccountFromQueryRef.current = true;
     createAccount();
-    if (accountPathname) accountRouter.replace(accountPathname);
+    if (accountPathname) {
+      const params = new URLSearchParams(accountSearchParams.toString());
+      params.delete('new');
+      accountRouter.replace(params.size ? `${accountPathname}?${params}` : accountPathname);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountSearchParams]);
 
-  // 이름 변경 — 상세 헤더 연필 버튼. details/selected가 이름 키라 네 곳을 함께 옮긴다.
+  // Labels can change; identity, selection and detail caches must not.
   const renameAccount = async (account, nextNameRaw) => {
     const nextName = String(nextNameRaw || '').trim();
-    if (!nextName || nextName === account.name) return;
-    const prevName = account.name;
-    const applyName = (from, to) => {
-      setLocalAccounts(prev => prev.map(a => (a.name === from ? { ...a, name: to } : a)));
-      setDetails(prev => {
-        if (!prev[from]) return prev;
-        const next = { ...prev, [to]: prev[from] };
-        delete next[from];
-        return next;
-      });
-      setSelected(cur => (cur === from ? to : cur));
+    const key = accountKey(account);
+    if (!key || !nextName || nextName === account.name) return;
+    const applyName = (name) => {
+      setAccountNameEdits(prev => ({ ...prev, [key]: name }));
+      setLocalAccounts(prev => prev.map(a => accountKey(a) === key ? { ...a, name } : a));
     };
-    applyName(prevName, nextName);
-    if (!account.id) return; // 미영속(preview) 행은 로컬 이름만
-    const r = await saveRevenueRecord('account', 'update', { id: account.id, name: nextName });
+    const intent = Symbol('account-rename');
+    accountRenameIntentRef.current.set(key, intent);
+    applyName(nextName);
+    if (hasPendingRevenueCreate('account', account)) {
+      const edited = { ...account, name: nextName };
+      rememberRevenueDraft('account', edited);
+      pendingAccountCreateRef.current.set(accountCreateScope(account), edited);
+      setAccountsNotice('이름 변경을 유지했습니다. 등록 결과를 확인한 뒤 같은 기록에 저장하세요.');
+      return;
+    }
+    if (!account.id) return; // preview drafts have a createId but no persisted row
+    const r = await queueAccountRename(accountRenameQueueRef.current, key, account.name, nextName,
+      name => saveRevenueRecord('account', 'update', { id: account.id, name }));
+    if (!r.current) return; // another explicit rename owns the current input
     if (!r.ok) {
-      applyName(nextName, prevName);
-      setActivityError({ name: prevName, message: `이름 변경 실패 (${r.status})` });
+      applyName(r.confirmedName);
+      setActivityError(key, { accountKey: key, message: `이름 변경 실패 (${r.status})` });
+    }
+    // Replace the optimistic label with a fresh row, without a late refresh
+    // erasing a newer rename. Other account fields remain ledger-owned.
+    const snapshot = await reloadLedger();
+    if (accountRenameIntentRef.current.get(key) !== intent) return;
+    const fresh = snapshot?.ledger?.accounts?.find(row => accountKey(row) === key);
+    if (fresh) {
+      setAccountNameEdits(prev => { const next = { ...prev }; delete next[key]; return next; });
+      setLocalAccounts(prev => prev.map(row => accountKey(row) === key ? { ...row, name: fresh.name } : row));
     }
   };
 
@@ -3683,7 +3790,7 @@ export function Accounts({ workspace, onNavigate }) {
           value={view}
           onChange={(k) => {
             setView(k);
-            if (k === 'detail' && !selected) setSelected(filtered[0]?.name ?? null);
+            if (k === 'detail' && !selected) setSelected(accountKey(filtered.find(a => accountKey(a))));
           }}
         />
 
@@ -3712,23 +3819,23 @@ export function Accounts({ workspace, onNavigate }) {
       {/* Content by view */}
       {!wsEmpty && accountsSettled && view === 'cards' && (
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
-          {filtered.map(a => (
+          {filtered.map((a, i) => (
             <Card
-              key={a.name}
+              key={accountKey(a) || `unidentified-${i}`}
               interactive
-              data-kb-selected={accountSelection.selectedId === a.name ? 'true' : undefined}
+              data-kb-selected={accountSelection.selectedId === accountKey(a) ? 'true' : undefined}
               style={{
                 cursor: 'pointer',
                 // j/k 커서 — 기본 뷰(cards)에서도 선택 위치가 보이게 (§8.1; 재감사 M)
-                ...(accountSelection.selectedId === a.name
+                ...(accountSelection.selectedId === accountKey(a)
                   ? { outline: '1px solid var(--moon-300)', outlineOffset: 2 }
                   : {}),
               }}>
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => openDetail(a.name)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
+                onClick={() => openDetail(accountKey(a))}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(accountKey(a)); } }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <Avatar name={a.name} size={36} tone="neutral" />
@@ -3794,13 +3901,13 @@ export function Accounts({ workspace, onNavigate }) {
             <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead><span>Type</span><SortHead k="health" sort={sort} onToggle={toggleSort}>Health</SortHead><SortHead k="value" sort={sort} onToggle={toggleSort}>Value</SortHead><SortHead k="deals" sort={sort} onToggle={toggleSort}>Deals</SortHead><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
           </div>
           {filtered.map((a, i) => (
-            <div key={a.name} className="hub-row hub-table-min"
+            <div key={accountKey(a) || `unidentified-${i}`} className="hub-row hub-table-min"
               role="button"
               tabIndex={0}
-              data-account-row={a.name}
-              data-kb-selected={accountSelection.selectedId === a.name ? 'true' : undefined}
-              onClick={() => openDetail(a.name)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
+              data-account-row={accountKey(a)}
+              data-kb-selected={accountSelection.selectedId === accountKey(a) ? 'true' : undefined}
+              onClick={() => openDetail(accountKey(a))}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(accountKey(a)); } }}
               style={{
                 display: 'grid',
                 gridTemplateColumns: '32px 1.6fr 110px 70px 110px 70px 120px 100px 100px',
@@ -3808,7 +3915,7 @@ export function Accounts({ workspace, onNavigate }) {
                 padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center',
                 borderBottom: i < filtered.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 cursor: 'pointer',
-                outline: accountSelection.selectedId === a.name ? '1px solid var(--moon-300)' : undefined,
+                outline: accountSelection.selectedId === accountKey(a) ? '1px solid var(--moon-300)' : undefined,
                 outlineOffset: -1,
               }}
             >
@@ -3855,20 +3962,20 @@ export function Accounts({ workspace, onNavigate }) {
               {filtered.length} accounts
             </div>
             <div className="scroll-y" style={{ flex: 1, minHeight: 0 }}>
-              {filtered.map(a => {
-                const isSel = a.name === selected;
+              {filtered.map((a, i) => {
+                const isSel = accountKey(a) === selected;
                 return (
-                  <div key={a.name} className="hub-row"
+                  <div key={accountKey(a) || `unidentified-${i}`} className="hub-row"
                     role="button"
                     tabIndex={0}
                     aria-pressed={isSel}
-                    data-kb-selected={accountSelection.selectedId === a.name ? 'true' : undefined}
-                    onClick={() => setSelected(a.name)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(a.name); } }}
+                    data-kb-selected={accountSelection.selectedId === accountKey(a) ? 'true' : undefined}
+                    onClick={() => setSelected(accountKey(a))}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(accountKey(a)); } }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 14px', cursor: 'pointer',
-                      outline: accountSelection.selectedId === a.name ? '1px solid var(--moon-300)' : undefined,
+                      outline: accountSelection.selectedId === accountKey(a) ? '1px solid var(--moon-300)' : undefined,
                       outlineOffset: -1,
                       borderLeft: `1px solid ${isSel ? 'var(--moon-300)' : 'transparent'}`,
                       // Selected row pins its fill inline; unselected rows leave background
@@ -3905,15 +4012,17 @@ export function Accounts({ workspace, onNavigate }) {
           </div>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <DetailPanel
+              key={accountKey(selectedAcc)}
               account={selectedAcc}
+              draftCache={accountDraftsRef}
               detail={selectedAcc ? getDetail(selectedAcc) : null}
-              onLog={selectedAcc ? handleLog(selectedAcc.name) : () => {}}
-              onDeleteActivity={selectedAcc ? handleDeleteActivity(selectedAcc.name) : () => {}}
-              onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}
-              onAddNote={selectedAcc ? handleAddNote(selectedAcc.name) : () => {}}
+              onLog={selectedAcc ? handleLog(accountKey(selectedAcc)) : () => {}}
+              onDeleteActivity={selectedAcc ? handleDeleteActivity(accountKey(selectedAcc)) : () => {}}
+              onPinNote={selectedAcc ? handlePinNote(accountKey(selectedAcc)) : () => {}}
+              onAddNote={selectedAcc ? handleAddNote(accountKey(selectedAcc)) : () => {}}
               onNavigate={onNavigate}
-              activityError={activityError && selectedAcc && activityError.name === selectedAcc.name ? activityError : null}
-              deleteNotice={deleteNotice && selectedAcc && deleteNotice.name === selectedAcc.name ? deleteNotice : null}
+              activityError={selectedAcc ? activityErrors[accountKey(selectedAcc)] : null}
+              deleteNotice={selectedAcc ? deleteNotices[accountKey(selectedAcc)] : null}
               onRename={selectedAcc ? (next) => renameAccount(selectedAcc, next) : null}
             />
           </div>

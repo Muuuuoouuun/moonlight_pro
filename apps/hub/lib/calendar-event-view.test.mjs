@@ -107,3 +107,13 @@ test('all-day date-only placement is stable both west and east of UTC', () => {
     assert.equal(run.stdout, '[0,1]', timezone);
   }
 });
+
+test('a missing or zero duration at 23:55 never fabricates a next-day segment', () => {
+  for (const end of [undefined, '2026-10-05T23:55:00']) {
+    const rows = mapGoogleEventsToGrid([event({ start: '2026-10-05T23:55:00', end })], week());
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].day, 0);
+    assert.equal(rows[0].end, 24, 'rendering marker is bounded at the real day edge');
+    assert.equal(calendarEventWhenLabel(rows[0]), '23:55 – 23:55');
+  }
+});

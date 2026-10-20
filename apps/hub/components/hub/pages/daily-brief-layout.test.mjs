@@ -7,6 +7,7 @@ import ts from 'typescript';
 import { brandInWorkspace } from '../workspace-map.js';
 import { collapsedTodayAgendaRows, todayAgendaRows } from './workflow-reading.js';
 import { REACTION_LABEL } from '../../../lib/sales-os/followup-scoring.js';
+import { buildDailyFocus } from '../../../lib/daily-focus.js';
 
 // Run the production JSX, with read hooks and unrelated widgets replaced by local
 // boundaries. No API, browser effect, model, customer record or save is executed.
@@ -57,7 +58,7 @@ function components(runtime, getLedger, html = false) {
       className, 'aria-label': props['aria-label'],
     }, children);
     deps.Button = ({ children, onClick }) => runtime.createElement('button', { type: 'button', onClick }, children);
-    deps.CalendarOutcome = ({ title }) => runtime.createElement('span', null, title);
+    deps.CalendarOutcome = ({ title, whenLabel }) => runtime.createElement('span', null, whenLabel, ' ', title);
   }
   return new Function(...Object.keys(deps), `${compiled}; return { DailyBrief, FocusSlots };`)(...Object.values(deps));
 }
@@ -200,6 +201,22 @@ test('real React server render retains the accessible nav for every read state',
     assert.equal((html.match(/class="daily-brief__jump"/g) || []).length, routes.length);
     assert.match(html, /aria-label="내 작업: 5건 확인"/);
   }
+});
+
+test('carry-over projection reaches Today with original dated start, not false live-empty copy', () => {
+  const focus = buildDailyFocus({ now: new Date('2026-10-20T07:00:00+09:00'), calendar: { ok: true, items: [
+    { id: 'trip', summary: '합성 출장', start: { date: '2026-10-19' }, end: { date: '2026-10-22' }, outcomeKey: 'trip-key' },
+    { id: 'travel', summary: '합성 이동', start: { dateTime: '2026-10-19T23:00:00+09:00' }, end: { dateTime: '2026-10-20T07:30:00+09:00' }, outcomeKey: 'travel-key' },
+  ] } });
+  const outcomes = findAll(mount(focus).render(), node => node.type === 'CalendarOutcome');
+  assert.deepEqual(outcomes.map(node => [node.props.eventKey, node.props.whenLabel]), [
+    ['trip-key', '종일'], ['travel-key', '2026-10-19 23:00 시작'],
+  ]);
+  const { DailyBrief } = components(React, () => ledgerOf(focus), true);
+  const html = renderToStaticMarkup(React.createElement(DailyBrief, { onNavigate() {} }));
+  assert.match(html, /2026-10-19 23:00 시작/);
+  assert.match(html, /종일/);
+  assert.doesNotMatch(html, /오늘 예정된 일정이 없습니다|진행 중/);
 });
 
 test('desktop shortcuts are visible while touch hitboxes and mobile input floors remain intact', () => {

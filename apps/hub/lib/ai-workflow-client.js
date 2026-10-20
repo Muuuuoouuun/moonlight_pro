@@ -64,15 +64,34 @@ export function buildDailyDispatchContext({ dailyFocus, taskToday, signals = [],
   const ka = dailyFocus?.urgentKa;
   const customers = dailyFocus?.focusCustomers;
   const agenda = dailyFocus?.todayAgenda;
+  const agendaItems = Array.isArray(agenda?.items) ? agenda.items : [];
+  // Keep the prompt bounded, but never trade away the next supplied start for
+  // eight old/all-day entries. Expose omission and source truth separately.
+  const next = agendaItems.filter(item => !item.allDay && Date.parse(item.whenAt) >= new Date(now).getTime())
+    .sort((a, b) => Date.parse(a.whenAt) - Date.parse(b.whenAt))[0];
+  const selected = new Set(agendaItems.slice(0, 8));
+  if (next && !selected.has(next)) {
+    selected.delete([...selected].at(-1));
+    selected.add(next);
+  }
+  const contextAgenda = agendaItems.filter(item => selected.has(item));
+  const omittedCount = agendaItems.length - contextAgenda.length;
+  const sourceComplete = agenda?.state === "live" && agenda?.coverage?.complete !== false;
   return {
     sourceState,
     hour,
     isEvening: hour >= 17,
     timeZone: "Asia/Seoul",
-    limitations: "error/preview/loading은 없음이 아니라 미확인입니다. 태스크는 열린 항목 중 일부이며 완료 항목의 제목과 내일 일정은 조회하지 않았습니다. 누락된 사실은 추정하지 마세요.",
+    limitations: "error/preview/loading은 없음이 아니라 미확인입니다. 태스크는 열린 항목 중 일부이며 완료 항목의 제목과 내일 일정은 조회하지 않았습니다. 일정은 최대 8건이며 omittedCount는 읽힌 일정 중 생략 수, sourceComplete=false이면 실제 전체 건수와 다음 일정도 확정할 수 없습니다. 누락된 사실은 추정하지 마세요.",
     urgentKa: slice(ka, { item: ka?.item || null }),
     focusCustomers: slice(customers, { items: (customers?.items || []).slice(0, 5) }),
-    todayAgenda: slice(agenda, { items: (agenda?.items || []).slice(0, 8) }),
+    todayAgenda: readable(agenda) ? {
+      state: sourceComplete && !omittedCount ? "live" : "partial",
+      sourceState: agenda.state, sourceComplete,
+      suppliedCount: agendaItems.length, omittedCount,
+      totalCount: sourceComplete ? agendaItems.length : null,
+      items: contextAgenda,
+    } : slice(agenda, {}),
     tasks: slice(taskToday, {
       items: (taskToday?.items || []).slice(0, 8).map(task => ({ title: task.title, status: task.status, lane: task.lane, dueAt: task.dueAt, priority: task.priority })),
       counts: taskToday?.counts,

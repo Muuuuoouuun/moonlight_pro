@@ -119,6 +119,13 @@ test("live read merges calendar and phone candidates newest first with today's d
   assert.ok(phoneRead.params.some(([k, v]) => k === "source" && v === "eq.phone-capture"));
 });
 
+test("partial calendar source never makes the candidate read complete", async () => {
+  state.calendar = { ...state.calendar, ok: true, reason: "partial-source-failure", coverage: { complete: false } };
+  const result = await repo.getRecordCandidates({ now: NOW });
+  assert.equal(result.status, "partial");
+  assert.ok(result.failedSources.includes("calendar"));
+});
+
 test("read failures are named, never shown as an empty list", async () => {
   failTables.add("webhook_events");
   const partial = await repo.getRecordCandidates({ now: NOW });
