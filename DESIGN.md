@@ -717,6 +717,8 @@ Build order when adding a new surface:
 
 ## 15. Decisions Log
 
+2026-10-18 OKR·KPI 첨부안 적용: 운영자가 **전체 개인·회사 OKR/KPI에 첨부 구조 적용**, **이 탭은 첨부 디자인 우선**, **콘텐츠 퍼널·주간 발행은 KR별 진행률·주간 기록 현황으로 변경**을 확정했다. `dashboard/work/goals`의 `.goals-page--reference` 안에서만 은은한 청록·파랑·라일락·코랄 카드, 쿨 그레이 바탕, 입체 그림자를 허용한다. 이 범위에서는 §4·§5.2의 카드 색·그림자 제한보다 이 결정을 우선한다. 전용 `--goal-dash-*` 토큰은 `goal-dashboard.css`에서 두 테마를 정의하며 전역 토큰·다른 화면으로 넓히지 않는다. 종합 게이지는 **조회된 측정 KR의 바닥 진행률 평균**이며 미측정 수를 밝힌다. KPI는 기존 선 안·밖 판정을 유지하고, 주간 차트는 서울 시간 월요일 기준 **관측 기록 건수**로 표시한다. 주간 성과값이나 전환율로 해석하지 않는다. 상세·체크인·채점·주간 실측·기존 현황 경로는 같은 계약을 유지한다. 운영 데이터 변경·배포는 이 디자인 결정에 포함되지 않는다.
+
 | Date | Decision | Status | Rationale |
 | --- | --- | --- | --- |
 | 2026-07-19 | Separate interaction, urgency, certainty, lifecycle, and source truth into distinct visual channels | confirmed | Prevents semantic color drift while keeping urgent work immediately scannable |

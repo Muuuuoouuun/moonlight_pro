@@ -66,23 +66,24 @@ function KpiMeter({ row, today }) {
   </div>;
 }
 
-export function KpiStrip({ rows, today, kpiHref, railBudget, readState = 'live' }) {
+export function KpiStrip({ rows, today, kpiHref, railBudget, readState = 'live', hrefFor, onOpen, onRecord, limit }) {
   const outside = rows.filter(row => row.health === 'outside').length;
   const railed = outside > 0 && outside <= railBudget;
   return <section className="goal-kpi-strip" aria-label="지킬 선 · KPI">
-    <div className="goal-section-head"><h3 className="goal-section-title">지킬 선 · KPI</h3><Link className="goal-section-link hub-row" href={kpiHref}>KPI 자세히 →</Link></div>
-    {rows.length ? <ul className="goal-kpi-tiles">{rows.map(row => {
+    <div className="goal-section-head"><h3 className="goal-section-title">지킬 선 · KPI</h3><Link className="goal-section-link hub-row" href={kpiHref}>KPI 자세히 →{limit && rows.length > limit ? ` (${rows.length}개 중 ${limit}개 표시)` : ''}</Link></div>
+    {rows.length ? <ul className="goal-kpi-tiles">{(limit ? rows.slice(0, limit) : rows).map(row => {
       const { metric, objective, health, freshness } = row;
       const zero = isZeroKeep(metric);
       const { previous } = kpiBulletReading(metric, row.observations);
       const meta = zero ? '0건 유지' : kpiThresholdLabel(metric);
       const when = freshness;
       return <li key={metric.id} className={`goal-kpi-tile${health === 'outside' && railed ? ' goal-kpi-tile--outside' : ''}`}>
-        <div className="goal-kpi-tile__head"><span className="goal-kpi-tile__name">{metric.name}</span><TonePill tone={KPI_HEALTH_TONE[health]} small>{KPI_HEALTH_GLYPH[health]} {KPI_HEALTH_LABEL[health]}</TonePill></div>
+        <div className="goal-kpi-tile__head">{hrefFor ? <Link className="goal-kpi-tile__name hub-row" data-goal-id={objective.id} href={hrefFor(objective)} onClick={onOpen}>{metric.name}</Link> : <span className="goal-kpi-tile__name">{metric.name}</span>}<TonePill tone={KPI_HEALTH_TONE[health]} small>{KPI_HEALTH_GLYPH[health]} {KPI_HEALTH_LABEL[health]}</TonePill></div>
         <KpiValue metric={metric} />
         <KpiMeter row={row} today={new Intl.DateTimeFormat('en-CA', { timeZone: objective.timezone || 'Asia/Seoul' }).format(new Date())} />
         <span className="goal-muted">{objective.title} · {objective.periodStart}–{objective.periodEnd}</span>
         <div className="goal-kpi-tile__meta mono"><span>{meta}</span><span>{previous !== null ? `지난 ${number(previous)} · ` : ''}{when}</span></div>
+        {onRecord && metric.sourceKey === 'manual' && objective.status === 'active' && <Button size="xs" variant="outline" data-record-metric={metric.id} aria-label={`${metric.name} 실제값 기록`} onClick={event => onRecord(event, objective, metric)}>실제값 기록</Button>}
       </li>;
     })}</ul> : readState !== 'live' ? <p role="status" className="goal-muted">KPI 목록을 모두 확인하지 못했습니다. 다시 불러온 뒤 지킬 선을 확인하세요.</p> : <p className="goal-muted">지킬 선(KPI)이 아직 없습니다. 목표를 이루면서도 무너지면 안 되는 선을 <Link className="hub-row" href={kpiHref}>KPI 보기</Link>에서 정하세요.</p>}
   </section>;
