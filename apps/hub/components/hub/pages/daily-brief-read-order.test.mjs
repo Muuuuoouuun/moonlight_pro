@@ -28,7 +28,7 @@ async function harness(t) {
   const brief = await import(`../daily-brief-signals.js?read-order=${++moduleId}`);
   const now = new Date(), task = { id: 'isolated-order', title: 'isolated task', status: 'todo', dueAt: now.toISOString(), createdAt: now.toISOString() };
   const doneTask = { ...task, status: 'done', completedAt: now.toISOString() };
-  const fullData = (done, marker) => ({ status: 'live', generatedAt: marker, taskToday: taskModel.buildTaskToday([done ? doneTask : task], { now }) });
+  const fullData = (done, marker) => ({ status: 'live', generatedAt: marker, taskToday: { ...taskModel.buildTaskToday([done ? doneTask : task], { now }), state: 'live' } });
   await brief.readDailyBrief({ fetchImpl: async () => reply(fullData(false, 'cached')) });
   const full = [], narrow = [], scheduled = new Map();
   t.mock.method(globalThis, 'fetch', (url, options) => {
@@ -103,7 +103,11 @@ test('a newer full 401 rejects an older narrow success', async t => {
 
 test('a task read settling after unmount cannot update the old hook or start another refresh', async t => {
   const h = await harness(t); h.ledger(); h.resolveFull(0); await settle();
-  const before = h.ledger(), pending = before.refreshTasks(); h.unmount(); h.resolveNarrow(0); assert.equal(await pending, false);
-  assert.equal(h.ledger().taskToday, before.taskToday);
+  const before = h.ledger(), pending = before.refreshTasks();
+  const waiting = h.ledger();
+  assert.deepEqual(waiting.taskToday.items, before.taskToday.items);
+  assert.equal(waiting.taskToday.stale, true);
+  h.unmount(); h.resolveNarrow(0); assert.equal(await pending, false);
+  assert.equal(h.ledger().taskToday, waiting.taskToday);
   assert.equal(await before.refreshTasks(), false); assert.equal(h.narrow.length, 1);
 });

@@ -1778,7 +1778,8 @@
 }
 
 @media (max-width: 900px) {
-  .hub-app {
+  /* Match the explicit theme root so dark mode cannot retain desktop spacing. */
+  .hub-app, .hub-app[data-theme] {
     --section-gap: 16px;
     --card-pad: 16px;
   }
@@ -2287,7 +2288,7 @@
 }
 
 @media (max-width: 560px) {
-  .hub-app {
+  .hub-app, .hub-app[data-theme] {
     --section-gap: 12px;
     --card-pad: 14px;
   }

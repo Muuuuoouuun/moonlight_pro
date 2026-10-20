@@ -368,8 +368,12 @@ export function Home({ onNavigate, onGuidanceAsk }) {
         {status !== 'unauthorized' && schedule.status !== 'unauthorized' ? <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} /> : null}
       </div>
 
-      <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기 · <Kbd>T</Kbd> 시간 잡기 · <Kbd>D</Kbd> 결정 · <Kbd>J</Kbd> 건너뛰기 · <Kbd>K</Kbd> 이전
+      <footer className="fx-eyebrow" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>T</Kbd> 시간 잡기</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>D</Kbd> 결정</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>J</Kbd> 건너뛰기</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>K</Kbd> 이전</span>
       </footer>
 
       {recordTarget && (

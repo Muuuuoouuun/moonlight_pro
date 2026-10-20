@@ -267,6 +267,17 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     }
   }
 
+  // Absent fields and incomplete zeroes are unknown, not an all-clear. Local
+  // streak storage has no read/date provenance and cannot establish these counts.
+  const taskState = taskToday?.state || 'preview';
+  const observed = taskState === 'live' || taskState === 'partial';
+  const observedState = taskToday?.stale ? taskToday.observedState ?? taskState : taskState;
+  const count = (value) => observed && Number.isInteger(value) && value >= 0
+    && (observedState === 'live' || value > 0) ? value : '—';
+  const showStreak = observed && observedState === 'live' && Number.isInteger(taskToday?.streak?.streak)
+    && taskToday.streak.streak >= 0 && Number.isInteger(taskToday?.streak?.todayDoneCount)
+    && taskToday.streak.todayDoneCount >= 0;
+
   // §5.2: missed is the only immediate-loss lane; today/inbox are ordinary stages → neutral.
   // focus = 운영자가 고른 "현재" 선택 → Moonstone(§5.2 selected 의미), 라벨 "오늘 3개"와 함께.
   const laneTone = {
@@ -281,37 +292,38 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     <div aria-label="오늘 할 일">
       <SectionTitle right={(
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-          <BurningStreakBadge
+          {showStreak && <BurningStreakBadge
             compact
             streak={currentStreak}
             todayCompleted={currentTodayDone}
             isBurning={isBurning}
             isPopping={isPopping}
-          />
-          <Badge tone="moon" size="xs" variant="outline">오늘 3개 {focusSummary.done}/{focusSummary.picked}</Badge>
-          <Badge tone={(counts.missed || 0) > 0 ? 'danger' : 'neutral'} size="xs">놓침 {counts.missed || 0}</Badge>
-          <Badge tone="neutral" size="xs">오늘 {counts.today || 0}</Badge>
+          />}
+          {(taskState !== 'live' || taskToday?.stale) && <TruthBadge state={taskToday?.stale ? 'partial' : taskState} label={taskToday?.stale ? '이전 값 · 다시 확인 필요' : taskState === 'partial' ? '일부 확인' : undefined} />}
+          <Badge tone="moon" size="xs" variant="outline">오늘 3개 {count(taskToday?.focus?.done)}/{count(taskToday?.focus?.picked)}</Badge>
+          <Badge tone={observed && counts.missed > 0 ? 'danger' : 'neutral'} size="xs">놓침 {count(counts.missed)}</Badge>
+          <Badge tone="neutral" size="xs">오늘 {count(counts.today)}</Badge>
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>모두 보기</Button>
         </div>
       )}>오늘 할 일</SectionTitle>
       <Card pad={false} className="daily-brief__panel">
         <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
-          <BurningStreakBadge
+          {showStreak ? <BurningStreakBadge
             streak={currentStreak}
             todayCompleted={currentTodayDone}
             isBurning={isBurning}
             recentDays={recentDays}
             isPopping={isPopping}
             title="오늘 할 일 연속 완주"
-          />
+          /> : ['loading', 'syncing'].includes(taskState) ? <Skeleton lines={1} label="할 일 집계 확인 중" /> : <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>연속 기록 확인 필요</span>}
         </div>
-        {focusSummary.picked === 0 && items.length > 0 && (
+        {count(taskToday?.focus?.picked) === 0 && items.length > 0 && (
           <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Iconed name="star" size={12} style={{ color: 'var(--moon-300)' }} />
             <span>오늘 반드시 끝낼 핵심 3개 항목의 별표(★)를 눌러 집중 모드로 지정해 보세요.</span>
           </div>
         )}
-        {items.length ? (
+        {['loading', 'syncing'].includes(taskState) ? <Skeleton lines={3} label="오늘 할 일 확인 중" style={{ padding: 14 }} /> : items.length ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {items.map((task, index) => (
               <div
@@ -385,8 +397,8 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
         ) : (
           <EmptyState
             icon="check"
-            title={taskToday?.state === 'live' ? '오늘 할 일이 비었습니다' : '할 일 기록 확인 대기'}
-            description={taskToday?.state === 'live' ? '위의 빠른 캡처(Enter)로 바로 추가하거나 내 작업에서 계획하세요.' : 'tasks 기록이 live가 되면 실제 항목만 표시합니다.'}
+            title={taskToday?.stale ? '이전 조회에서 표시할 할 일이 없었습니다' : taskToday?.state === 'live' ? '오늘 할 일이 비었습니다' : '할 일 기록 확인 대기'}
+            description={taskToday?.stale ? '마지막으로 확인한 목록입니다. 최신 할 일은 다시 확인해야 합니다.' : taskToday?.state === 'live' ? '위의 빠른 캡처(Enter)로 바로 추가하거나 내 작업에서 계획하세요.' : taskToday?.state === 'partial' ? '일부 기록만 확인했습니다. 오늘 할 일이 없다고 확정할 수 없습니다.' : 'tasks 기록이 live가 되면 실제 항목만 표시합니다.'}
             action={taskToday?.state === 'live' ? <Button variant="outline" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>내 작업 열기</Button> : undefined}
             style={{ minHeight: 150 }}
           />
@@ -416,7 +428,7 @@ const EMPTY_DAILY_BRIEF_STATE = {
   summary: null,
   metrics: [],
   operatorHome: null,
-  taskToday: { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
+  taskToday: { state: 'loading', items: [], counts: {}, hiddenCount: 0 },
   contentBrands: null,
   signals: [],
   dailyFocus: null,
@@ -441,6 +453,14 @@ function signedOutBriefState() {
   };
 }
 
+// Preserve the last observed snapshot, including a genuine zero, while making
+// its age explicit. An incomplete snapshot still cannot establish zero.
+function pendingTaskState(previous, state = 'loading') {
+  return ['live', 'partial'].includes(previous?.state)
+    ? { ...previous, state: state === 'loading' ? previous.state : 'partial', stale: true, observedState: previous.observedState ?? previous.state }
+    : { ...EMPTY_DAILY_BRIEF_STATE.taskToday, state };
+}
+
 // /api/hub/daily-brief 응답 → 이 화면의 상태. 공유 캐시에서 첫 그림을 만들 때도 같은 함수를 쓴다.
 function briefStateFromData(data) {
   const liveCount = Number(data.summary?.liveCount || 0);
@@ -456,6 +476,8 @@ function briefStateFromData(data) {
   return {
     inquiries: data.inquiries || { status: 'error', rows: [], unreadCount: null },
     syncState: nextSyncState,
+    briefStale: false,
+    briefObservedState: nextSyncState,
     authRequired: false,
     generatedAt: data.generatedAt || null,
     sources: Array.isArray(data.sources) ? data.sources : [],
@@ -474,9 +496,15 @@ function briefStateFromData(data) {
 // 이 화면의 캐시가 없어도 홈·위젯이 5분 안에 같은 응답을 읽어 뒀으면 그것으로 먼저 그린다.
 function servableBriefState() {
   if (dailyBriefCache && dailyBriefCache.authVersion !== getDailyBriefAuthVersion()) dailyBriefCache = null;
-  if (dailyBriefCache && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_SERVABLE_MS) return dailyBriefCache.state;
   const shared = peekDailyBrief();
-  return shared?.ok && shared.data ? briefStateFromData(shared.data) : null;
+  const cached = dailyBriefCache && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_SERVABLE_MS
+    ? dailyBriefCache.state : shared?.ok && shared.data ? briefStateFromData(shared.data) : null;
+  // A served snapshot is useful, but not a newly confirmed read.
+  return cached ? {
+    ...cached,
+    briefStale: ['live', 'partial', 'mixed'].includes(cached.briefSyncState ?? cached.syncState),
+    taskToday: ['live', 'partial'].includes(cached.taskToday?.state) ? pendingTaskState(cached.taskToday) : cached.taskToday,
+  } : null;
 }
 
 function useDailyBriefLedger(refreshKey) {
@@ -507,7 +535,8 @@ function useDailyBriefLedger(refreshKey) {
 
   React.useEffect(() => {
     let active = true;
-    const hasServableCache = Boolean(servableBriefState());
+    const cached = servableBriefState();
+    const hasServableCache = ['live', 'partial', 'mixed'].includes(cached?.briefObservedState ?? cached?.briefSyncState ?? cached?.syncState);
     const force = !Object.is(lastRefreshKey.current, refreshKey);
     lastRefreshKey.current = refreshKey;
     const authVersion = getDailyBriefAuthVersion();
@@ -516,14 +545,21 @@ function useDailyBriefLedger(refreshKey) {
     function markFullReadFailure() {
       setState((prev) => {
         const syncState = hasServableCache ? 'partial' : 'error';
-        const next = { ...prev, syncState, briefSyncState: syncState };
+        const taskToday = taskRefreshRef.current !== taskRequestId ? prev.taskToday
+          : pendingTaskState(prev.taskToday, 'error');
+        const next = { ...prev, syncState, briefSyncState: syncState, briefStale: hasServableCache, taskToday };
         if (dailyBriefCache) dailyBriefCache = { ...dailyBriefCache, state: next };
         return next;
       });
     }
 
     async function load() {
-      if (!hasServableCache) setState((prev) => ({ ...prev, syncState: 'syncing' })); // 캐시 서빙 중엔 조용히 재검증
+      if (!hasServableCache) setState((prev) => ({ ...prev, syncState: 'syncing', briefSyncState: 'syncing', briefStale: false, taskToday: pendingTaskState(prev.taskToday) })); // 캐시 서빙 중엔 조용히 재검증
+      else setState((prev) => ({
+        ...prev,
+        briefStale: ['live', 'partial', 'mixed'].includes(prev.briefSyncState ?? prev.syncState),
+        taskToday: pendingTaskState(prev.taskToday),
+      }));
       try {
         // 홈과 동시에 열려도 서버 팬아웃은 한 번 — 요청은 daily-brief-signals가 합친다.
         const read = await readDailyBrief({ force });
@@ -584,11 +620,10 @@ function useDailyBriefLedger(refreshKey) {
     }
     function unverifiedTasks(status = 'error') {
       if (!ownsRead()) return false;
-      recordTaskTruth((previous) => previous?.state === 'live' || previous?.state === 'partial'
-        ? { ...previous, state: 'partial' }
-        : { ...buildTaskToday([]), state: status });
+      recordTaskTruth((previous) => pendingTaskState(previous, status));
       return false;
     }
+    recordTaskTruth((previous) => pendingTaskState(previous));
     try {
       const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
       const data = await res.json().catch(() => null);
@@ -950,13 +985,15 @@ function StatusLine({ state, onRetry }) {
   const [open, setOpen] = React.useState(false);
   const liveCount = Number(state.summary?.liveCount || 0);
   const sourceCount = state.sources.length;
-  const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} 실시간` : sourceLabel(state.syncState);
+  const label = state.briefStale ? '이전 조회' : state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} 실시간` : sourceLabel(state.syncState);
   const detail = state.authRequired
     ? '로그인이 필요합니다 — 로그인 후 브리핑을 다시 읽어 주세요'
     : state.syncState === 'error'
     ? '브리핑을 읽지 못했습니다 — 지금 화면은 비어 보여도 실제 일이 있을 수 있습니다'
     : state.syncState === 'preview'
     ? 'Supabase 연결 후 실시간 기록으로 전환됩니다'
+    : state.briefStale
+    ? '이전 조회 결과입니다 — 최신 기록은 다시 확인해야 합니다'
     : state.syncState === 'partial'
     ? '일부 운영 기록을 읽지 못했습니다'
     : state.syncState === 'mixed'
@@ -1124,16 +1161,18 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
 // A narrow task refresh has its own truth and must not rewrite signal coverage.
 function CommandClear({ signalCount, state }) {
   const readState = state?.briefSyncState ?? state?.syncState;
-  const verified = !state?.authRequired && readState === 'live';
+  const verified = !state?.authRequired && readState === 'live' && !state?.briefStale;
   const loading = readState === 'syncing' || readState === 'loading';
   const title = verified ? '확인할 신호가 없습니다'
     : state?.authRequired ? '로그인 후 확인할 것을 읽어 주세요'
+    : state?.briefStale ? '이전 조회에서 표시할 신호가 없었습니다'
     : loading ? '확인할 것을 읽고 있습니다'
     : readState === 'partial' || readState === 'mixed' ? '확인할 것을 모두 읽지 못했습니다'
     : readState === 'error' ? '확인할 것을 읽지 못했습니다'
     : '기록 연결 후 확인할 것을 표시합니다';
   const detail = verified
     ? signalCount > 0 ? `${signalCount}건은 아래 확인할 것에서 여유 있게 보세요.` : '새 신호가 들어오면 여기 가장 먼저 올라옵니다.'
+    : state?.briefStale ? '마지막으로 확인한 목록입니다. 최신 신호는 다시 확인해야 합니다.'
     : loading ? '읽기가 끝나기 전에는 일이 없는 것으로 판단하지 않습니다.'
     : '목록이 비어 보여도 실제로 확인할 일이 있을 수 있습니다.';
   return (
@@ -1813,7 +1852,15 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
 }
 
 // 60초 시계를 페이지 루트에서 분리 — 분마다 전체 브리핑 트리가 아니라 이 리프만 다시 그린다.
-function BriefClock({ signalCount, urgentCount, todayCount }) {
+function BriefClock({ signalCount, urgentCount, todayCount, state }) {
+  const readState = state?.briefSyncState ?? state?.syncState;
+  const observedState = state?.briefStale ? state.briefObservedState ?? readState : readState;
+  const observed = !state?.authRequired && ['live', 'partial', 'mixed'].includes(observedState);
+  const complete = observedState === 'live' && !(state?.sources || []).some(source => source.state !== 'live');
+  const count = value => observed && Number.isInteger(value) && value >= 0
+    && (complete || value > 0) ? value : '—';
+  const countState = readState === 'mixed' || (readState === 'live' && !complete) ? 'partial' : readState;
+
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -1830,18 +1877,21 @@ function BriefClock({ signalCount, urgentCount, todayCount }) {
         <span>{greetingFor(now)}, 준혁</span>
         <span style={{ color: 'var(--line-strong)', opacity: 0.6 }}>·</span>
         <div className="daily-brief__intro-stats">
+          {['loading', 'syncing'].includes(readState) ? <Skeleton lines={1} width={160} label="신호 수 확인 중" /> : <>
           <span className="daily-brief__stat-chip">
             <span>신호</span>
-            <strong>{signalCount}</strong>
+            <strong>{count(signalCount)}</strong>
           </span>
-          <span className={`daily-brief__stat-chip${urgentCount > 0 ? ' daily-brief__stat-chip--danger' : ''}`}>
+          <span className={`daily-brief__stat-chip${observed && urgentCount > 0 ? ' daily-brief__stat-chip--danger' : ''}`}>
             <span>즉시</span>
-            <strong>{urgentCount}</strong>
+            <strong>{count(urgentCount)}</strong>
           </span>
           <span className="daily-brief__stat-chip">
             <span>오늘</span>
-            <strong>{todayCount}</strong>
+            <strong>{count(todayCount)}</strong>
           </span>
+          {(countState !== 'live' || state?.briefStale) && <TruthBadge state={state?.briefStale ? 'partial' : countState} label={state?.briefStale ? '이전 값 · 다시 확인 필요' : countState === 'partial' ? '일부 확인' : undefined} />}
+          </>}
         </div>
       </div>
     </>
@@ -2002,7 +2052,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
     <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 'var(--section-gap)', maxWidth: 1160, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
         <div>
-          <BriefClock signalCount={signalCount} urgentCount={screenUrgentCount} todayCount={todayCount} />
+          <BriefClock signalCount={signalCount} urgentCount={screenUrgentCount} todayCount={todayCount} state={ledger} />
         </div>
         <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
           {/* 보류 스코프(Council)가 히어로 CTA를 점유하던 것을 코어 루프(고객 연락)로 교체

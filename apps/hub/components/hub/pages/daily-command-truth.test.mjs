@@ -35,6 +35,15 @@ test('verified empty is scoped to signals, not a claim that every task or urgent
   assert.doesNotMatch(html, /지금 급한 것은 없습니다/);
 });
 
+test('a cached empty signal snapshot describes the previous read instead of current all-clear', () => {
+  for (const syncState of ['live', 'partial']) {
+    const html = render({ syncState, briefStale: true });
+    assert.match(html, /이전 조회에서 표시할 신호가 없었습니다/);
+    assert.match(html, /최신 신호는 다시 확인/);
+    assert.doesNotMatch(html, /확인할 신호가 없습니다|data-icon="check"/);
+  }
+});
+
 test('auth and full-read truth win over stale or narrow task read state', () => {
   assert.match(render({ syncState: 'live', authRequired: true }), /로그인 후/);
   assert.doesNotMatch(render({ syncState: 'live', authRequired: true }), /data-icon="check"/);

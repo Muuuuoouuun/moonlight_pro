@@ -96,7 +96,7 @@ test('a later successful narrow read recovers task truth and replaces retained r
   assert.equal(await h.refresh({ status: 'live', tasks: [] }), true);
   assert.equal(h.render().taskToday.state, 'live'); assert.deepEqual(h.render().taskToday.items, []);
   const recovered = h.render().taskToday;
-  assert.deepEqual(h.remount().taskToday, recovered);
+  assert.deepEqual(h.remount().taskToday, { ...recovered, stale: true, observedState: 'live' });
 });
 
 test('narrow recovery cannot promote unrelated partial full-ledger truth to live', async t => {
