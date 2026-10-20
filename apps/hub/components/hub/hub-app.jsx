@@ -653,7 +653,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const sidebarCollapsed = collapsed && !isMobileViewport;
 
   return (
-    <div ref={rootRef} className="hub-app" data-theme={theme} data-visual-system="depth-b">
+    <div ref={rootRef} className="hub-app" data-theme={theme} data-visual-system="depth-c">
       <ToastProvider>
         <OfficeSessionProvider key={memoDraftContext}>
           <OfficeWorkflowSessionProvider>
