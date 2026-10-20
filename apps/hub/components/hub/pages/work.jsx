@@ -155,9 +155,19 @@ function useWorkLedger(projectId = null) {
   const runLoad = React.useCallback(async () => {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
+    const cacheAtStart = workLedgerCache;
     const hasServableCache = !projectQuery && Boolean(
-      workLedgerCache && Date.now() - workLedgerCache.at < WORK_CACHE_SERVABLE_MS
+      cacheAtStart && Date.now() - cacheAtStart.at < WORK_CACHE_SERVABLE_MS
     );
+    const markCachedReadFailure = (message) => {
+      const partial = markWorkLedgerPartial(cacheAtStart.state, message);
+      // Failed revalidation is part of the cached snapshot's truth. Preserve it
+      // on tab remount, without renewing the original successful-read lifetime
+      // or relabeling a newer snapshot published by another consumer.
+      if (workLedgerCache === cacheAtStart) workLedgerCache = { ...cacheAtStart, state: partial };
+      if (baseSnapshotRef.current === cacheAtStart.state) baseSnapshotRef.current = partial;
+      setState((prev) => markWorkLedgerPartial(prev, message));
+    };
     if (!hasServableCache) {
       // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증한다.
       setState((prev) => ({
@@ -183,7 +193,7 @@ function useWorkLedger(projectId = null) {
         // 데이터 명명)이고, 캐시가 없을 때만 전면 error로 전환한다(SWR 공통 규칙).
         const message = data?.error || data?.message || `업무 기록 응답 실패 (${response.status})`;
         if (hasServableCache) {
-          setState((prev) => markWorkLedgerPartial(prev, message));
+          markCachedReadFailure(message);
           return false;
         }
         setState((prev) => ({
@@ -278,7 +288,7 @@ function useWorkLedger(projectId = null) {
       if (requestId !== requestRef.current) return LOAD_SUPERSEDED;
       const message = error instanceof Error ? error.message : String(error);
       if (hasServableCache) {
-        setState((prev) => markWorkLedgerPartial(prev, message));
+        markCachedReadFailure(message);
         return false;
       }
       setState((prev) => ({

@@ -47,7 +47,13 @@ function createPageAssembly({ id, scope, digest, now = Date.now }) {
    if (await digest(bytes(JSON.stringify([1,p.binding,p.payloadHash]))) !== p.snapshotId) reject();
    if (typeof p.data !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(p.data)) reject();
    let chunk;
-   try { chunk = Uint8Array.from(atob(p.data), character => character.charCodeAt(0)); } catch { reject(); }
+   try {
+    const decoded = atob(p.data);
+    chunk = new Uint8Array(decoded.length);
+    // Copy directly into the bounded byte buffer. Uint8Array.from(string, map)
+    // materializes iterable entries and invokes the mapper once per byte.
+    for (let index = 0; index < decoded.length; index++) chunk[index] = decoded.charCodeAt(index);
+   } catch { reject(); }
    if (chunk.length !== p.chunkBytes || await digest(chunk) !== p.chunkHash) reject();
    // Nothing advances until this page is verified. A failed fetch can retry its
    // exact cursor without appending a duplicate logical turn or byte range.

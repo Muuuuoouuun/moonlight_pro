@@ -5,7 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { brandInWorkspace } from '../workspace-map.js';
-import { todayAgendaRows } from './workflow-reading.js';
+import { collapsedTodayAgendaRows, todayAgendaRows } from './workflow-reading.js';
 import { REACTION_LABEL } from '../../../lib/sales-os/followup-scoring.js';
 
 // Run the production JSX, with read hooks and unrelated widgets replaced by local
@@ -42,7 +42,7 @@ const ledgerOf = (dailyFocus) => ({
 });
 function components(runtime, getLedger, html = false) {
   const deps = {
-    React: runtime, todayAgendaRows, brandInWorkspace, FOCUS_REACTION_LABEL: REACTION_LABEL,
+    React: runtime, collapsedTodayAgendaRows, todayAgendaRows, brandInWorkspace, FOCUS_REACTION_LABEL: REACTION_LABEL,
     REVIEW_EVENING_HOUR: 18, useDailyBriefLedger: getLedger,
     useGuruRecommendations: () => ({ reload() {} }), useToast: () => ({}),
     rankSignals: (signals) => signals,

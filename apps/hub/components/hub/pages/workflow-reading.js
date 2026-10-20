@@ -17,6 +17,25 @@ export function todayAgendaRows(items = [], now = new Date()) {
   }));
 }
 
+// A compact timeline stays near now, not the first three starts of the day.
+// Keep one all-day context, the latest started item and the next start when
+// available. A past start is context only: no end time or completion is inferred.
+export function collapsedTodayAgendaRows(rows = [], limit = 3) {
+  if (rows.length <= limit) return rows;
+  const timed = rows.filter(row => row.at !== null);
+  const nextIndex = timed.findIndex(row => row.next);
+  const selected = new Set();
+  const add = row => { if (row && selected.size < limit) selected.add(row); };
+  add(timed[nextIndex]);
+  add(nextIndex >= 0 ? timed[nextIndex - 1] : timed.at(-1));
+  add(rows.find(row => row.event.allDay));
+  const remainder = nextIndex >= 0
+    ? [...timed.slice(nextIndex + 1), ...timed.slice(0, nextIndex).reverse()]
+    : [...timed].reverse();
+  [...remainder, ...rows].forEach(add);
+  return rows.filter(row => selected.has(row));
+}
+
 // Preserve the existing check-in scope. Missing evidence comes before measured
 // values; measured zero is a real value and must not be treated as missing.
 export function recordFirstRows(rows = [], limit = 3) {

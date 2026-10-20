@@ -135,3 +135,46 @@ for (const oldResult of ['error', 'success']) {
     assert.equal(app.state.roadmap.projects[0].id, 'new-response');
   });
 }
+
+for (const failure of ['network', 'envelope']) {
+  test(`tab remount retains cached ${failure} warning until a verified fresh read`, async t => {
+    const h = harness(t), app = await h.warm();
+    const pending = app.state.retry();
+    if (failure === 'network') h.requests.at(-1).reject(new Error('synthetic offline'));
+    else h.requests.at(-1).resolve({ status: 'error', error: 'synthetic read failure' });
+    await pending; app.render();
+    const nextTab = h.mount();
+    assert.deepEqual(surfaceStates(nextTab.state), ['partial', 'partial', 'partial', 'partial']);
+    assert.equal(nextTab.state.decisions[0].id, 'first');
+    assert.match(nextTab.state.decisionsState.error.message, /synthetic/);
+    assert.equal(h.requests.length, 2, 'remount alone is not evidence of a successful read');
+    await h.load(nextTab, liveData('verified-newer'));
+    const afterSuccess = h.mount();
+    assert.deepEqual(surfaceStates(afterSuccess.state), ['live', 'live', 'live', 'live']);
+    assert.equal(afterSuccess.state.decisions[0].id, 'verified-newer');
+  });
+}
+
+test('recording a cached failure does not extend the last successful read expiry', async t => {
+  let clock = 1000000;
+  t.mock.method(Date, 'now', () => clock);
+  const h = harness(t), app = await h.warm();
+  clock += 4 * 60 * 1000;
+  const failed = app.state.retry(); h.requests.at(-1).reject(new Error('synthetic offline'));
+  await failed; app.render();
+  assert.equal(h.mount().state.decisionsState.state, 'partial');
+  clock += 60 * 1000 + 1;
+  const expired = h.mount();
+  assert.equal(expired.state.decisionsState.state, 'preview');
+  assert.deepEqual(expired.state.decisions, []);
+});
+
+test('an older consumer failure cannot mark a newer shared cache snapshot partial', async t => {
+  const h = harness(t), older = await h.warm();
+  const failed = older.state.retry(), pendingFailure = h.requests.at(-1);
+  const newer = h.mount(); await h.load(newer, liveData('newest'));
+  pendingFailure.reject(new Error('older synthetic offline')); await failed;
+  const remounted = h.mount();
+  assert.deepEqual(surfaceStates(remounted.state), ['live', 'live', 'live', 'live']);
+  assert.equal(remounted.state.decisions[0].id, 'newest');
+});

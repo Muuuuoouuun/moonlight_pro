@@ -16,9 +16,11 @@ const EMPTY_AUTOMATION_SUMMARY = {
 // 모듈 스코프 stale-while-revalidate — 개요↔Flows↔Webhooks↔Runs 탭 전환마다 기록을 다시
 // 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
 const AUTOMATIONS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+const AUTOMATIONS_READ_TIMEOUT_MS = 15000;
 let automationsLedgerCache = null; // { at, state }
 
 function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } = {}) {
+  const lifecycle = React.useRef({ active: false, controller: null }).current;
   const servable = automationsLedgerCache
     && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS;
   const [state, setState] = React.useState(servable ? automationsLedgerCache.state : {
@@ -33,17 +35,21 @@ function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } 
   });
 
   const load = React.useCallback(async (silent = false) => {
+    if (!lifecycle.active || lifecycle.controller) return;
+    const controller = new AbortController();
+    lifecycle.controller = controller;
+    const current = () => lifecycle.active && lifecycle.controller === controller;
+    const timer = setTimeout(() => controller.abort(), AUTOMATIONS_READ_TIMEOUT_MS);
+    const cacheAtStart = automationsLedgerCache;
     const hasServableCache = Boolean(
-      automationsLedgerCache && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS
+      cacheAtStart && Date.now() - cacheAtStart.at < AUTOMATIONS_CACHE_SERVABLE_MS
     );
     if (!silent && !hasServableCache) setState(s => ({ ...s, syncState: 'loading' }));
     try {
-      const response = await fetch('/api/hub/automations', { cache: 'no-store' });
+      const response = await fetch('/api/hub/automations', { cache: 'no-store', signal: controller.signal });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.status === 'error') {
-        setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
-        return;
-      }
+      if (!current()) return;
+      if (controller.signal.aborted || !response.ok || !data || data.status === 'error' || data.source === 'error') throw new Error('automations-read-failed');
       if (data.source === 'supabase') {
         const nextState = {
           source: 'supabase',
@@ -61,18 +67,31 @@ function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } 
         setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
       }
     } catch {
-      setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
+      if (current()) {
+        const fresh = cacheAtStart && Date.now() - cacheAtStart.at < AUTOMATIONS_CACHE_SERVABLE_MS;
+        if (fresh && automationsLedgerCache === cacheAtStart) automationsLedgerCache = { ...cacheAtStart, state: { ...cacheAtStart.state, syncState: 'partial' } };
+        setState(s => ({ ...s, syncState: fresh ? 'partial' : 'error' }));
+      }
+    } finally {
+      clearTimeout(timer);
+      if (current()) lifecycle.controller = null;
     }
-  }, []);
+  }, [lifecycle]);
 
   React.useEffect(() => {
+    lifecycle.active = true;
     load();
-  }, [load]);
+    return () => {
+      lifecycle.active = false;
+      lifecycle.controller?.abort();
+      lifecycle.controller = null;
+    };
+  }, [load, lifecycle]);
 
   React.useEffect(() => {
     if (!autoRefresh) return;
     const timer = setInterval(() => {
-      load(true);
+      if (!document.hidden) load(true);
     }, refreshIntervalMs);
     return () => clearInterval(timer);
   }, [autoRefresh, refreshIntervalMs, load]);

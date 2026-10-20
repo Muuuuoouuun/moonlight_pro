@@ -73,6 +73,16 @@ test('single huge turn, Korean/emoji/JSON escaping and huge receipt are reconstr
  const h=harness(detail),desktop=await h.api.detail({id,scope});assert.deepEqual(desktop.turns[0].result,detail.turns[0].result);
  assert.deepEqual(desktop.skillRequests,detail.skillRequests);assert.ok(pages.every(p=>meetingEnvelopeBytes(p)<=B));
 });
+test('byte-buffer decoding preserves UTF-8 boundary characters and escaped controls across pages',async()=>{
+ const detail=conversation(1);
+ const controls=Array.from({length:256},(_,index)=>String.fromCodePoint(index)).join('');
+ const unicode=`${controls}\u07ff\u0800\uD7ff\uE000\uFFFF\u{10000}\u{10ffff}한글😀`;
+ detail.turns[0].result.answer=unicode.repeat(400);
+ const {result,pages}=await assembled(detail);
+ assert.ok(pages.length>1);
+ assert.equal(result.turns[0].result.answer,detail.turns[0].result.answer);
+ assert.ok(pages.every(page=>meetingEnvelopeBytes(page)<=B));
+});
 test('negotiated envelopes enforce B-1/B/B+1 while legacy full responses stay compatible',async()=>{
  for(const delta of [-1,0,1]) {
   const detail=conversation(0);detail.padding='한글😀\\"\n';detail.padding+='x'.repeat(B+delta-meetingEnvelopeBytes(detail));assert.equal(meetingEnvelopeBytes(detail),B+delta);

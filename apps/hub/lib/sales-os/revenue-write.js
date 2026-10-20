@@ -338,23 +338,19 @@ async function readExistingRow(table, id, workspaceId) {
     select: table === "deals" ? "meta,stage" : "meta",
     filters: [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
     limit: 1,
-    ...(table === "deals" ? { strictRows: true } : {}),
+    strictRows: true,
   });
   // read 실패(null)와 "meta 없는 행"({})을 구분한다 — 실패를 {}로 뭉개면 patch가
   // 기존 meta 전체(snooze_until/value/stage_detail…)를 덮어쓰고 saved로 보고된다
   // (2026-08-05 재감사 안정성 M: meta-wipe).
   if (!Array.isArray(rows)) return null;
-  if (table === "deals") {
-    const row = rows[0];
-    // CAS must compare the actual snapshot, not an invented {} for a missing or
-    // malformed row. Keep SQL NULL distinct from an empty object.
-    if (rows.length !== 1 || !row || !Object.hasOwn(row, "meta") || !Object.hasOwn(row, "stage")) return null;
-    if (row.meta !== null && (typeof row.meta !== "object" || Array.isArray(row.meta))) return null;
-    if (row.stage !== null && typeof row.stage !== "string") return null;
-    return { meta: row.meta || {}, stage: row.stage, rawMeta: row.meta };
-  }
-  const meta = rows[0] ? rows[0].meta : null;
-  return { meta: meta && typeof meta === "object" ? meta : {}, stage: typeof rows[0]?.stage === "string" ? rows[0].stage : null };
+  const row = rows[0];
+  // Every metadata merge needs the actual snapshot, including customers and
+  // cases. Keep SQL NULL distinct from {}, and fail closed on malformed reads.
+  if (rows.length !== 1 || !row || !Object.hasOwn(row, "meta")) return null;
+  if (row.meta !== null && (typeof row.meta !== "object" || Array.isArray(row.meta))) return null;
+  if (table === "deals" && (!Object.hasOwn(row, "stage") || (row.stage !== null && typeof row.stage !== "string"))) return null;
+  return { meta: row.meta || {}, stage: table === "deals" ? row.stage : null, rawMeta: row.meta };
 }
 
 // Shared insert/update path for both the lead and deal routes. Returns a small status
@@ -494,11 +490,12 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
       return { status: "failed", reason: "meta-read-failed", detail: "existing meta unreadable; save aborted to avoid wiping sibling keys" };
     }
     mergedMeta = mergeRecordMeta({ table, existingMeta, metaPatch });
+    // Compare every merged metadata snapshot atomically: a second writer must
+    // not silently replace sibling keys after reading the same old row.
+    // PostgREST eq takes this literal unchanged; the adapter URL-encodes once.
+    filters.push(["meta", existing.rawMeta === null ? "is.null" : eqFilter(JSON.stringify(existing.rawMeta))]);
     if (table === "deals") {
-      // Top-level PostgREST eq takes the literal after "eq." unchanged (unlike
-      // in/or quoted values). The shared adapter URL-encodes this JSON once.
       // Stage is also part of the snapshot used to calculate won_at.
-      filters.push(["meta", existing.rawMeta === null ? "is.null" : eqFilter(JSON.stringify(existing.rawMeta))]);
       filters.push(["stage", existingStage === null ? "is.null" : eqFilter(existingStage)]);
     }
   }
@@ -512,8 +509,9 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
     { returnRepresentation: true, select: "*" },
   );
   if (!res.persisted) {
-    if (table === "deals" && hasMeta && res.reason === "no-matching-row") {
-      return { status: "conflict", reason: "concurrent-deal-change", message: "다른 변경이 먼저 저장되었거나 거래가 삭제되었습니다. 최신 기록을 확인한 뒤 다시 시도하세요." };
+    if (hasMeta && res.reason === "no-matching-row") {
+      return { status: "conflict", reason: table === "deals" ? "concurrent-deal-change" : "concurrent-record-change",
+        message: "다른 변경이 먼저 저장되었거나 기록이 삭제되었습니다. 최신 기록을 확인한 뒤 다시 시도하세요." };
     }
     return persistFailure(res);
   }

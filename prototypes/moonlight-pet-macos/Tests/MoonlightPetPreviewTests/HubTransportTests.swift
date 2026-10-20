@@ -409,11 +409,24 @@ struct HubTransportTests {
         do { try await client.login(username: "incorrect", password: "wrong"); recordFailure("Rejected credentials must fail") }
         catch { expectEqual(error as? HubTransportError, .unauthorized) }
         expectEqual(try store.load(origin: "https://hub.example.test"), saved)
+        let loadsAfterManualFailure = store.loadCount
         for _ in 0..<2 {
-            do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("Expired saved credentials must fail") }
+            do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("A rejected manual login must not fall back to saved credentials") }
             catch { expectEqual(error as? HubTransportError, .unauthorized) }
         }
-        expectEqual(logins, 2) // one manual login, one automatic attempt
+        expectEqual(logins, 1) // Explicit failure keeps this transport's automatic login disabled.
+        expectEqual(store.loadCount, loadsAfterManualFailure)
+
+        // A restarted transport may try the preserved credentials, but a rejected
+        // automatic login must stop further attempts in that transport too.
+        let restarted = try transport(store: store)
+        for _ in 0..<2 {
+            do { _ = try await restarted.request(path: "/api/hub/tasks"); recordFailure("Rejected saved credentials must fail") }
+            catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        }
+        expectEqual(logins, 2) // One manual attempt, then exactly one restart restoration.
+        expectEqual(store.loadCount, loadsAfterManualFailure + 1)
+        expectEqual(try store.load(origin: "https://hub.example.test"), saved)
     }
 
     func testUncertainWritesAndModelGenerationAreNeverAutomaticallyReplayed() async throws {
