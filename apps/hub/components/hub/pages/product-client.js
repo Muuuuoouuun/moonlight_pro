@@ -113,10 +113,27 @@ export async function runGitHubSync() {
   }
 }
 
+// Engine이 함께 돌린 PR → 프로젝트 할 일 결과(projectTasks). 연결한 저장소가 없으면 빈 문자열.
+function projectTaskNote(data) {
+  const repositories = Array.isArray(data?.projectTasks?.repositories) ? data.projectTasks.repositories : [];
+  if (!repositories.length) return "";
+  const created = repositories.reduce((sum, repo) => sum + (Number(repo.created) || 0), 0);
+  const updated = repositories.reduce((sum, repo) => sum + (Number(repo.updated) || 0), 0);
+  const failed = repositories.filter((repo) => repo.status !== "synced").length;
+  return ` PR 할 일 새로 ${created}개 · 상태 갱신 ${updated}개${failed ? ` · 실패 저장소 ${failed}개` : ""}.`;
+}
+
 export function summarizeSyncResult(httpStatus, data) {
   const status = data?.status;
-  if (httpOk(httpStatus) && status === "synced") return { ok: true, tone: "neutral", message: `저장소 ${data.repositories?.length || 0}개를 동기화했어요.` };
-  if (httpOk(httpStatus) && status === "partial") return { ok: true, tone: "danger", message: `일부 저장소만 동기화했어요 (실패 ${data.failures?.length || 0}개).` };
+  const note = projectTaskNote(data);
+  if (httpOk(httpStatus) && status === "synced" && data?.source === "projects") {
+    return { ok: true, tone: "neutral", message: `프로젝트에 연결한 저장소를 동기화했어요.${note}` };
+  }
+  if (httpOk(httpStatus) && status === "synced") return { ok: true, tone: note.includes("실패") ? "danger" : "neutral", message: `저장소 ${data.repositories?.length || 0}개를 동기화했어요.${note}` };
+  if (httpOk(httpStatus) && status === "partial") {
+    const failures = data?.source === "projects" ? "" : ` (실패 ${data.failures?.length || 0}개)`;
+    return { ok: true, tone: "danger", message: `일부 저장소만 동기화했어요${failures}.${note}` };
+  }
   if (status === "preview") {
     return { ok: false, tone: "neutral", message: data?.configured === false ? "제품에 연결된 저장소가 없어요." : "Engine 연결이 없어 동기화하지 못했어요." };
   }

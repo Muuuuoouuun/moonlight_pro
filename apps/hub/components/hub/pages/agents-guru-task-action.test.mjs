@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import ts from 'typescript';
+import { TASK_OUTCOME } from '../../../lib/memo-intake-tasks.js';
 
 const source = readFileSync(new URL('./agents.jsx', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('agents.jsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
@@ -29,7 +30,7 @@ function taskActionsFor(agentKey, message) {
   const lensMap = Object.fromEntries(['voss', 'ogilvy', 'godin', 'rackham', 'goldratt']
     .map(id => [id, { label: id, name: id }]));
   const dependencies = {
-    React, CHAT_PERSONAS: personas, DEFAULT_PERSONA_KEY: agentKey,
+    React, CHAT_PERSONAS: personas, DEFAULT_PERSONA_KEY: agentKey, TASK_OUTCOME,
     GURU_LENS_MAP: lensMap, GURU_LENS_CHIPS: ['voss', 'ogilvy'], GURU_CARDS: [], GURU_MODE_LABEL: {},
     GURU_PREVIEW_NOTE: '', collectGuruConversationHistory: () => [],
     Avatar: 'Avatar', Button: 'Button', IconButton: 'IconButton', GuruGuidanceCard: 'GuruGuidanceCard',

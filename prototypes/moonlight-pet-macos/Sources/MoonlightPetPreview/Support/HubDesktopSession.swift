@@ -3,6 +3,7 @@ import Darwin
 
 /// Same-user Unix socket. Session data lives in memory and the keychain only.
 struct HubDesktopSessionBridge: HubDesktopSessionSharing {
+    let supportsLogoutIntent = true
     let directory: String
     init(directory: String = "/tmp/moonlight-hub-\(getuid())") { self.directory = directory }
 
@@ -11,10 +12,30 @@ struct HubDesktopSessionBridge: HubDesktopSessionSharing {
     }
 
     func write(_ session: HubSavedSession?, origin: String) async {
-        _ = await exchange(action: "write", session: session, origin: origin)
+        _ = await exchange(action: session == nil ? "logout-intent" : "write-session", session: session, origin: origin)
     }
 
-    private func exchange(action: String, session: HubSavedSession?, origin: String) async -> HubDesktopSession? {
+    func write(_ session: HubSavedSession?, origin: String, epoch: String?) async {
+        _ = await exchange(action: session == nil ? "logout-intent" : "write-session", session: session, origin: origin, epoch: epoch)
+    }
+
+    func publishSession(_ session: HubSavedSession, origin: String, epoch: String?) async -> HubDesktopSession? {
+        await exchange(action: "write-session", session: session, origin: origin, epoch: epoch)
+    }
+
+    func beginLogin(origin: String) async -> HubDesktopSession? {
+        await exchange(action: "begin-login", session: nil, origin: origin)
+    }
+
+    func acceptLogin(_ session: HubSavedSession, attempt: String, origin: String) async -> HubDesktopSession? {
+        await exchange(action: "accept-login", session: session, origin: origin, attempt: attempt)
+    }
+
+    func recordLogout(origin: String) async -> HubDesktopSession? {
+        await exchange(action: "logout-intent", session: nil, origin: origin)
+    }
+
+    private func exchange(action: String, session: HubSavedSession?, origin: String, attempt: String? = nil, epoch: String? = nil) async -> HubDesktopSession? {
         await Task.detached(priority: .utility) {
             var info = stat()
             guard lstat(directory, &info) == 0, info.st_uid == getuid(),
@@ -43,7 +64,9 @@ struct HubDesktopSessionBridge: HubDesktopSessionSharing {
             }
             var peerUID: uid_t = 0; var peerGID: gid_t = 0
             guard connected == 0, getpeereid(fd, &peerUID, &peerGID) == 0, peerUID == getuid() else { return nil }
-            var request: [String: Any] = ["action": action, "origin": origin, "session": NSNull()]
+            var request: [String: Any] = ["action": action, "origin": origin, "session": NSNull(), "protocolVersion": 2]
+            if let attempt { request["loginAttempt"] = attempt }
+            if let epoch { request["sessionEpoch"] = epoch }
             if let session { request["session"] = ["value": session.value, "expiresAt": session.expiresAt] }
             guard var data = try? JSONSerialization.data(withJSONObject: request) else { return nil }
             data.append(0x0a)

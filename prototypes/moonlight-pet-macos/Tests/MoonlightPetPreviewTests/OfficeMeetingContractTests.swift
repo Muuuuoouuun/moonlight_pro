@@ -58,8 +58,11 @@ private actor MeetingTransport: HubTransporting {
             catch OfficeChatError.invalidResponse {}
         }
         let sourceID = UUID()
-        _ = try await api.createOfficeMeeting(id: id, title: "할 일 회의", scope: .personal, owner: .eevee, sourceTaskID: sourceID)
-        let creationCalls = await detailTransport.calls
+        var sourceRow = row
+        sourceRow["sourceTask"] = ["id": sourceID.uuidString, "title": "연결된 합성 할 일", "workspace": "brand"]
+        let sourceTransport = try MeetingTransport(["status": "ready", "persisted": true, "meeting": sourceRow, "turns": []])
+        _ = try await HubAPI(transport: sourceTransport).createOfficeMeeting(id: id, title: "할 일 회의", scope: .personal, owner: .eevee, sourceTaskID: sourceID)
+        let creationCalls = await sourceTransport.calls
         let creationBody = try JSONSerialization.jsonObject(with: creationCalls.last!.2!) as! [String: Any]
         try requireMeeting(creationBody["sourceTaskId"] as? String == sourceID.uuidString.lowercased() && creationBody["sourceTask"] == nil, "task handoff sends identity only for server validation")
         do { _ = try await api.officeMeetings(scope: .all); throw NSError(domain: "ExpectedLaneFailure", code: 1) }

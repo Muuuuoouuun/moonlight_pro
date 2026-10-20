@@ -597,13 +597,17 @@
   box-shadow: var(--fx-shadow);
   opacity: 0;
   transition:
-    transform var(--dur-enter) var(--ease-hub),
-    width var(--dur-enter) var(--ease-hub),
-    height var(--dur-enter) var(--ease-hub),
+    transform var(--dur-panel) var(--ease-hub),
     opacity var(--dur-hover) var(--ease-hub);
 }
 
 .hub-app .hub-nav-indicator[data-instant] { transition: opacity var(--dur-hover) var(--ease-hub); }
+
+/* Keep the final selected position; reduced motion skips only the glide. */
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-nav-indicator,
+  .hub-app .hub-nav-indicator[data-instant] { transition: none; }
+}
 
 .hub-app [data-indicator="on"] > .hub-nav-indicator { opacity: 1; }
 

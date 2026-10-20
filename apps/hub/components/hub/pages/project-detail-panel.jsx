@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from '../hub-icons';
 import { RelatedMemos } from '../related-memos';
 import { GoalLinks } from '../goal-links';
+import { GitHubPrMark } from '../github-pr-mark';
 import { Badge, Button, Checkbox, IconButton, SegmentedControl, TruthBadge } from "../hub-primitives";
 import { projectCustomerRef, projectMemoContexts } from '@/lib/project-customer-context';
 import { ProjectCustomerPanel } from './project-customer-panel';
@@ -178,6 +179,7 @@ export function ProjectDetailPanel({
             <span style={{ textDecoration: todo.done ? 'line-through' : 'none' }}>{todo.title}</span>
             {todo.nextAction && <span className="hub-pms-task-next">{todo.nextAction}</span>}
           </button><TaskChecklistGauge task={todo} /></div>
+          <GitHubPrMark pr={todo.githubPr} done={todo.done} title={todo.title} disabled={pendingTodoIds.has(todo.id)} onComplete={(event) => onToggleTodo?.(todo.id, event)} />
           <span className="mono project-focus-muted">{todo.due}</span>
         </div>)}
         {!todos.length && <p className="project-focus-muted">{taskPartial ? '할 일을 모두 확인하지 못했어요.' : '할 일을 추가해 다음 행동을 이어가세요.'}</p>}

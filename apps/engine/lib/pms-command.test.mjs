@@ -825,6 +825,27 @@ test("sets or clears a project genre as a meta key and rejects unknown genres", 
     { ok: false, reason: "invalid-genre" });
 });
 
+test("links a project to a GitHub repo as meta.github and rejects malformed repos (product lens §5.3)", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-10-18T01:00:00.000Z" };
+  const id = "11111111-1111-4111-8111-111111111111";
+  const set = pmsCommand.normalizePmsCommand({ action: "update_project", id, githubRepo: "https://github.com/Muuuuoouuun/22th_nomad.git" }, context);
+  assert.equal(set.ok, true);
+  assert.deepEqual(set.patch.meta, { github: { repo: "Muuuuoouuun/22th_nomad" } });
+  const cleared = pmsCommand.normalizePmsCommand({ action: "update_project", id, githubRepo: "" }, context);
+  assert.deepEqual(cleared.patch.meta, { github: null });
+  for (const bad of ["moonlight_pro", "a/b/c", "-bad/repo", "owner/re po"]) {
+    assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_project", id, githubRepo: bad }, context),
+      { ok: false, reason: "invalid-github-repo" }, bad);
+  }
+  const created = pmsCommand.normalizePmsCommand({
+    action: "create_project", id, areaId: "22222222-2222-4222-8222-222222222222", title: "22세기 노마드 영상",
+    orgScope: "personal", githubRepo: "Muuuuoouuun/22th_nomad",
+  }, context);
+  assert.equal(created.ok, true);
+  assert.deepEqual(created.record.meta.github, { repo: "Muuuuoouuun/22th_nomad" });
+  assert.equal(pmsCommand.normalizeGitHubRepo(" https://www.github.com/a/b/ "), "a/b");
+});
+
 test("links a project to a product or clears the link (product lens §3)", () => {
   const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-25T01:00:00.000Z" };
   const id = "11111111-1111-4111-8111-111111111111";

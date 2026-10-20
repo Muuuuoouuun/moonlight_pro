@@ -231,7 +231,15 @@ function useAttentionLedger() {
     }
   }, []);
 
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    const onTasksSaved = () => { load(); };
+    window.addEventListener('moonlight:tasks-saved', onTasksSaved);
+    load();
+    return () => {
+      window.removeEventListener('moonlight:tasks-saved', onTasksSaved);
+      requestRef.current += 1;
+    };
+  }, [load]);
   return { ...data, state, reload: load };
 }
 

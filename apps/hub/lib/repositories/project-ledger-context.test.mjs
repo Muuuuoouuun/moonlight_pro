@@ -120,6 +120,7 @@ test("keeps raw project fields separate from latest-update display fallbacks", (
     owner: "Me",
     tag: "customer",
     genre: null,
+    githubRepo: null,
     tasks: 3,
     done: 1,
     changes: 2,

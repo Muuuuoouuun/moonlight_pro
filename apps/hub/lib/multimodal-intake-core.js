@@ -173,6 +173,14 @@ function extractText(data) {
   return parts.map((p) => (typeof p?.text === "string" ? p.text : "")).join("").trim();
 }
 
+function multimodalRequestFailure(error) {
+  return {
+    ok: false,
+    error: `Gemini API 요청 실패: ${error instanceof Error ? error.message : String(error)}`,
+    data: null,
+  };
+}
+
 /**
  * Extracts structured intelligence from base64 media (image/audio) or raw text.
  * @param {{
@@ -180,6 +188,7 @@ function extractText(data) {
  *   mimeType?: string,
  *   text?: string,
  *   instruction?: string,
+ *   signal?: AbortSignal,
  *   fetchImpl?: typeof fetch
  * }} options
  */
@@ -233,21 +242,21 @@ export async function extractMultimodalIntakeHub(input = {}) {
 
   let response;
   let raw;
+  const signal = input.signal
+    ? AbortSignal.any([input.signal, AbortSignal.timeout(45_000)])
+    : AbortSignal.timeout(45_000);
   try {
+    signal.throwIfAborted();
     response = await fetchImpl(`${base}/models/${model}:generateContent`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
       cache: "no-store",
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
+      signal,
     });
     raw = await response.text();
   } catch (error) {
-    return {
-      ok: false,
-      error: `Gemini API 요청 실패: ${error instanceof Error ? error.message : String(error)}`,
-      data: null,
-    };
+    return multimodalRequestFailure(error);
   }
 
   const parsedResponse = raw ? safeJson(raw) : null;
@@ -260,6 +269,9 @@ export async function extractMultimodalIntakeHub(input = {}) {
   } else {
     import("./ai-usage-log.js").then((module) => module.recordAiUsage(usageRecord)).catch(() => null);
   }
+  // A completed response may already be billable even when its caller left.
+  // Keep the existing usage receipt, then discard its result on cancellation.
+  if (signal.aborted) return multimodalRequestFailure(signal.reason);
   if (!response.ok) {
     return {
       ok: false,

@@ -6,10 +6,11 @@ import dynamic from 'next/dynamic';
 import { OkrSummaryCard } from "../okr-summary-card";
 import { activityAxis, activityDateTicks } from "./overview-activity";
 import "./overview-activity.css";
+import "./workflow-pages.css";
 import { Iconed } from "../hub-icons";
 import { BrandIcon } from "../brand-icons";
 import { GuidanceInlineTip } from "../guidance-inline-tip";
-import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress, Skeleton } from "../hub-primitives";
+import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, TruthBadge, SegmentedControl, Sparkline, Progress, Skeleton } from "../hub-primitives";
 import {
   activitySeriesAvailability,
   buildAutomationMetricRows,
@@ -79,7 +80,7 @@ const EMPTY_LEDGER = {
 
 // 모듈 스코프 stale-while-revalidate — 탭 복귀마다 최다 팬아웃 라우트(~35콜)를 기다리며
 // 스켈레톤을 보이던 것을 제거(8차 잔여 M — daily-brief/attention/projects 15차와 같은 클래스).
-// 캐시는 즉시 서빙 + 항상 배경 재검증, 재검증 실패는 partial(오래된 live 위장 금지).
+// 캐시는 즉시 서빙 + 항상 배경 재검증. 실패하면 캐시·하위 집계를 함께 폐기한다.
 const OVERVIEW_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let overviewLedgerCache = null; // { at, ledger, syncState }
 
@@ -96,6 +97,12 @@ function useOverviewLedger() {
 
   React.useEffect(() => {
     let active = true;
+    const fail = () => {
+      if (!active) return;
+      overviewLedgerCache = null;
+      setLedger({ ...EMPTY_LEDGER, status: 'error', source: 'error' });
+      setSyncState('error');
+    };
     const hasServableCache = Boolean(
       overviewLedgerCache && Date.now() - overviewLedgerCache.at < OVERVIEW_CACHE_SERVABLE_MS
     );
@@ -105,15 +112,16 @@ function useOverviewLedger() {
         const response = await fetch('/api/hub/overview', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data) {
-          if (active) setSyncState(hasServableCache ? 'partial' : 'error');
+          fail();
           return;
         }
         const nextState = overviewSyncState(data);
+        if (nextState === 'error') { fail(); return; }
         overviewLedgerCache = { at: Date.now(), ledger: data, syncState: nextState };
         setLedger(data);
         setSyncState(nextState);
       } catch {
-        if (active) setSyncState(hasServableCache ? 'partial' : 'error');
+        fail();
       }
     }
     load();
@@ -182,7 +190,7 @@ const PANEL_COPY = {
   },
 };
 
-// 카드 헤더(제목 · SyncBadge · 이동 버튼)와 availability 기반 본문 분기를 한 곳으로 흡수.
+// 카드 헤더(제목 · TruthBadge · 이동 버튼)와 availability 기반 본문 분기를 한 곳으로 흡수.
 // 이전에는 이 마크업이 6개 패널에 복붙돼 있었고(§8.1 primitives-first 위반) marginBottom도
 // 12/14로 이미 드리프트가 시작돼 있었다. availability는 overviewPanelAvailability()의
 // { state, showData, reason } 계약을 그대로 받는다.
@@ -193,7 +201,7 @@ function PanelCard({ panel, availability, onOpen, openLabel = '열기', action, 
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{copy.title}</div>
-        <SyncBadge state={availability.state} />
+        <TruthBadge state={availability.state} />
         <div style={{ flex: 1 }} />
         {action || (onOpen && (
           <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={onOpen}>{openLabel}</Button>
@@ -646,19 +654,29 @@ function OverviewSummary({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>현황</h2>
           <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-            최근 작업과 기획 흐름을 정리합니다<SyncBadge state={syncState} />
+            목표의 근거와 다음 행동을 먼저 확인합니다
           </div>
+          <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--fg-muted)' }}>활동 데이터 <TruthBadge state={syncState} /></div>
           {disclosureMessages.map((message) => (
             <div key={message.kind} role="status" style={{ marginTop: 5, fontSize: 11.5, color: 'var(--fg-muted)' }}>
               {message.text}
             </div>
           ))}
         </div>
-        <SegmentedControl className="hub-page-actions" label="기간" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+        <Button variant="outline" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/goals?check=1')}>실제값 기록하기</Button>
       </div>
 
       {/* OKR·KPI — 추적 본체는 내 작업 › OKR·KPI. 현황에는 핵심 지표만 띄운다(2026-09-23). */}
-      <OkrSummaryCard />
+      <section className="workflow-goal-lens" aria-label="목표로 보는 현황">
+        <p className="workflow-goal-lens__intro">목표 → 측정 근거 → 이번 주 행동. 실제값과 미측정을 구분해 봅니다.</p>
+        <OkrSummaryCard />
+      </section>
+      <GuidanceInlineTip variant="overview" onNavigate={onNavigate} />
+
+      <details className="workflow-disclosure">
+        <summary>활동·운영 기록 자세히 · 프로젝트, 콘텐츠, 매출, 자동화</summary>
+        <div className="workflow-disclosure__body">
+          <SectionTitle right={<SegmentedControl label="활동 집계 기간" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />}>활동 기록 · 목표 점수와 별도</SectionTitle>
 
       <Card>
         <div className="activity-chart__head"><strong>작업·기획 활동 추이</strong><span className="activity-chart__unit">일별 · 건</span></div>
@@ -679,8 +697,6 @@ function OverviewSummary({ onNavigate }) {
           )
         )}
       </Card>
-
-      <GuidanceInlineTip variant="overview" onNavigate={onNavigate} />
 
       {/* 좌: 도메인 분포(무엇이 어디에 쌓여 있나) · 우: 흐름 레일(리듬 + 최근 활동).
           이전에는 7개 카드가 3+3+1 균등 격자로 늘어서 위계가 없었다(§3.1 "5초 안에 무엇이
@@ -770,6 +786,8 @@ function OverviewSummary({ onNavigate }) {
       <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {kpiCards.map((k) => <KpiCard key={k.label} k={k} onNavigate={onNavigate} />)}
       </div>
+        </div>
+      </details>
     </div>
   );
 }

@@ -209,6 +209,11 @@
   }
 
   function onHubStatus(status, before) {
+    if (before === 'connected' && status !== 'connected' && mode !== 'memo') {
+      // Discard the old cookie's visible data and in-flight renderer callbacks.
+      mount();
+      return;
+    }
     if (instance && instance.onHubStatus) instance.onHubStatus(status, before);
   }
 

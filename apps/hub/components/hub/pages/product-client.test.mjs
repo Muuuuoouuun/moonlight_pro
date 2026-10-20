@@ -22,6 +22,19 @@ test("sync results name what happened without a green success", () => {
   assert.equal(summarizeSyncResult(502, { status: "error" }).tone, "danger");
 });
 
+test("sync results also report pull-request tasks synced into projects", () => {
+  const projectTasks = { repositories: [{ status: "synced", created: 2, updated: 1 }, { status: "synced", created: 0, updated: 3 }] };
+  assert.equal(summarizeSyncResult(200, { status: "synced", repositories: [{}], projectTasks }).message,
+    "저장소 1개를 동기화했어요. PR 할 일 새로 2개 · 상태 갱신 4개.");
+  assert.equal(summarizeSyncResult(200, { status: "synced", source: "projects", repositories: [], projectTasks }).message,
+    "프로젝트에 연결한 저장소를 동기화했어요. PR 할 일 새로 2개 · 상태 갱신 4개.");
+  const failed = { repositories: [{ status: "error", created: 0, updated: 0 }, { status: "synced", created: 1, updated: 0 }] };
+  const partial = summarizeSyncResult(200, { status: "partial", source: "projects", repositories: [], projectTasks: failed });
+  assert.equal(partial.tone, "danger");
+  assert.equal(partial.message, "일부 저장소만 동기화했어요. PR 할 일 새로 1개 · 상태 갱신 0개 · 실패 저장소 1개.");
+  assert.equal(summarizeSyncResult(200, { status: "synced", repositories: [{}], projectTasks: failed }).tone, "danger");
+});
+
 test("codex draft carries the failing check and log link, not secrets", () => {
   const draft = buildCodexDraft({ name: "OMR" }, { fullName: "o/omr", defaultBranch: "main", summary: { ci: { failed: ["test"], url: "https://github.com/o/omr/actions/runs/1" } } });
   assert.match(draft, /o\/omr 기본 브랜치\(main\) CI가 실패/);

@@ -120,11 +120,13 @@ struct GlassRim: View {
 }
 
 struct GlassQuietStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(Palette.glassInkMuted)
+            .foregroundStyle(isEnabled && configuration.role == .destructive ? Palette.danger : Palette.glassInkMuted)
             .modifier(GlassRowSurface())
-            .opacity(configuration.isPressed ? 0.65 : 1)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.65 : 1) : 0.4)
             .scaleEffect(configuration.isPressed && !PetMotion.reduceMotion ? 0.98 : 1)
             .animation(configuration.isPressed ? PetMotion.petPress : PetMotion.petRelease,
                        value: configuration.isPressed)

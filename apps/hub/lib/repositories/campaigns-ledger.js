@@ -208,13 +208,21 @@ function buildCampaignWrite(payload = {}) {
 }
 
 async function readExistingMeta(id, workspaceId) {
-  const rows = await fetchSupabaseRows("campaigns", {
-    select: "meta",
-    filters: [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
-    limit: 1,
-  });
-  const meta = Array.isArray(rows) && rows[0] ? rows[0].meta : null;
-  return meta && typeof meta === "object" ? meta : {};
+  try {
+    const rows = await fetchSupabaseRows("campaigns", {
+      select: "meta",
+      filters: [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
+      limit: 2,
+    });
+    if (!Array.isArray(rows) || rows.length !== 1) return null;
+    const row = rows[0];
+    if (!row || typeof row !== "object" || Array.isArray(row) || !Object.hasOwn(row, "meta")) return null;
+    // A stored null is empty metadata; a missing/failed/malformed read is not.
+    if (row.meta === null) return {};
+    return row.meta && typeof row.meta === "object" && !Array.isArray(row.meta) ? row.meta : null;
+  } catch {
+    return null;
+  }
 }
 
 // create/update/delete envelope — mirrors persistRevenueRecord's contract:
@@ -275,7 +283,14 @@ export async function saveCampaign({ op = "create", id, payload = {} } = {}) {
   if (!id) return { status: "error", reason: "missing-id" };
   if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
 
-  let mergedMeta = hasMeta ? { ...(await readExistingMeta(id, workspaceId)), ...metaPatch } : null;
+  let mergedMeta = null;
+  if (hasMeta) {
+    if (!resolveSupabaseConfig()) return { status: "preview", reason: "missing-config" };
+    const existingMeta = await readExistingMeta(id, workspaceId);
+    // The PATCH replaces the whole JSON value, so never merge into a guessed {}.
+    if (existingMeta === null) return { status: "failed", reason: "campaigns-meta-read-failed", retryable: true };
+    mergedMeta = { ...existingMeta, ...metaPatch };
+  }
   if (mergedMeta && businessTruth !== undefined) {
     mergedMeta = buildBusinessTruthMeta(mergedMeta, businessTruth);
   }

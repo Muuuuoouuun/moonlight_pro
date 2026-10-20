@@ -1,3 +1,4 @@
+import meetingPages from '../../../desktop/pet/shared/office-meeting-pages.js';
 import { OFFICE_MINIMUM_INSTRUCTION, loadOfficeTasks } from './office-session.js';
 
 const BASE = '/api/hub/office/meetings';
@@ -15,21 +16,30 @@ export function officeMeetingNotice(status) {
 
 function validDetail(data, scope, meetingId) {
   const meeting = data?.meeting;
-  return Boolean(data.persisted === true && meeting && UUID.test(meeting.meetingId || '') && (!meetingId || meeting.meetingId === meetingId)
+  return Boolean(data.historyComplete !== false && data.persisted === true && meeting && UUID.test(meeting.meetingId || '') && (!meetingId || meeting.meetingId === meetingId)
     && meeting.scope === scope && Number.isInteger(meeting.revision) && meeting.revision >= 0
     && ['open', 'closed'].includes(meeting.state) && Array.isArray(data.turns)
     && data.turns.every(turn => UUID.test(turn.id || '') && ['running', 'generated', 'error', 'unknown'].includes(turn.state)
       && (turn.state !== 'generated' || (turn.result?.scope === scope && typeof turn.result.answer === 'string' && turn.request?.scope === scope))));
 }
 
-async function request(path, { method = 'GET', body, fetcher = fetch, signal } = {}) {
+async function request(path, { method = 'GET', body, fetcher = fetch, signal, recoveryScope } = {}) {
   try {
-    const response = await fetcher(path, { method, cache: 'no-store', signal: signal || AbortSignal.timeout(method === 'GET' ? 20000 : 90000),
-      ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) });
+    const response = await fetcher(path, { method, cache: 'no-store', signal: signal ? AbortSignal.any([signal,AbortSignal.timeout(method === 'GET' ? 20000 : 90000)]) : AbortSignal.timeout(method === 'GET' ? 20000 : 90000),
+      ...(body ? { headers: { 'content-type': 'application/json', 'x-office-read-version':'1' }, body: JSON.stringify(body) } : {}) });
     const data = await response.json().catch(() => null);
+    if (data?.receiptVersion !== undefined) {
+      const id = body?.meetingId || path.match(/meetings\/([a-f0-9-]{36})/i)?.[1];
+      if (!response.ok || method === 'GET' || data.receiptVersion !== 1 || data.status !== 'accepted' || data.meetingId !== id || data.requestId !== body?.requestId
+        || data.historyComplete !== false || data.recovery?.method !== 'GET' || data.recovery?.readVersion !== 1) return {status:'unknown',error:officeMeetingNotice('unknown')};
+      const restored = await readOfficeMeeting(id, recoveryScope || body?.scope, {fetcher,signal});
+      const turn = body?.requestId ? restored.turns?.find(row => row.id === body.requestId && row.request?.message === body.message) : null;
+      if (restored.status !== 'ready' || (body?.requestId && !turn)) return {status:'unknown',error:officeMeetingNotice('unknown')};
+      return { ...restored, status:turn?.state || 'ready' };
+    }
     if (!data || data.source === 'error' || data.status === 'error' || (!response.ok && response.status !== 409)) {
       const status = method !== 'GET' && (!data || response.status >= 500) ? 'unknown' : 'error';
-      return { status, error: officeMeetingNotice(status) };
+      return { status, error: officeMeetingNotice(status), ...(typeof data?.error === 'string' ? {code:data.error} : {}) };
     }
     if (response.status === 409 || data.status === 'conflict') return { ...data, status: 'conflict', error: officeMeetingNotice('conflict') };
     if (['preview', 'running', 'unknown'].includes(data.status)) return { ...data, error: officeMeetingNotice(data.status) };
@@ -48,9 +58,21 @@ export async function listOfficeMeetings(scope, { cursor, ...options } = {}) {
   return { ...data, status: data.status === 'preview' ? 'preview' : 'error', meetings: [], error: data.error || officeMeetingNotice('error') };
 }
 
+const readers = new WeakMap();
+const browserDigest = async value => [...new Uint8Array(await crypto.subtle.digest('SHA-256', value))].map(byte => byte.toString(16).padStart(2,'0')).join('');
+function readerFor(fetcher) {
+  if (!readers.has(fetcher)) readers.set(fetcher, meetingPages.createMeetingReader({digest:browserDigest, read:async (path, options) => {
+    const data = await request(path,{...options,fetcher});
+    if (data.status === 'error') throw Object.assign(new Error(data.code || 'office-meeting-read-unavailable'),{error:data.code});
+    return data;
+  }}));
+  return readers.get(fetcher);
+}
 export async function readOfficeMeeting(meetingId, scope, options = {}) {
   if (!UUID.test(meetingId || '') || !officeMeetingScope(scope)) return { status: 'error', error: '회의 주소와 업무 범위를 확인해 주세요.' };
-  const data = await request(`${BASE}/${meetingId}`, options);
+  let data;
+  try { data = await readerFor(options.fetcher || fetch)(meetingId,scope,options); }
+  catch (error) { return {status:'error',historyComplete:false,error:officeMeetingNotice('error'),code:error.error || error.message,progress:error.progress}; }
   if (data.status === 'ready' && validDetail(data, scope, meetingId)) return data;
   return { status: data.status === 'preview' ? 'preview' : 'error', error: data.error || officeMeetingNotice('error') };
 }
@@ -61,7 +83,7 @@ const changedSettings = session => Object.entries(settings(session)).some(([key,
 export async function saveOfficeMeetingSettings(store, scope, { fetcher = fetch, patch = {} } = {}) {
   const session = store.get(scope);
   if (!session.meetingId) return { status: 'error', error: '첫 요청을 보낸 뒤 회의 맥락을 저장할 수 있습니다.' };
-  const data = await request(`${BASE}/${session.meetingId}`, { method: 'PATCH', fetcher, body: { expectedRevision: session.revision, ...settings(session), ...patch } });
+  const data = await request(`${BASE}/${session.meetingId}`, { method: 'PATCH', fetcher, recoveryScope:scope, body: { expectedRevision: session.revision, ...settings(session), ...patch } });
   if (store.get(scope).meetingId !== session.meetingId) return { status: 'error', error: '회의 선택이 바뀌었습니다. 저장된 회의에서 결과를 확인해 주세요.' };
   if (data.status === 'ready' && validDetail(data, scope, session.meetingId)) {
     // Keep any input/settings edited while the request was in flight.
@@ -106,7 +128,7 @@ export async function sendOfficeMeeting(store, scope, { requestId, meetingId = c
   }
   const current = store.get(scope);
   if (current.pending?.id !== requestId) return { status: 'error', error: '회의 선택이 바뀌었습니다. 질문을 보내지 않았습니다.' };
-  const result = await request(`${BASE}/${current.meetingId}/turns`, { method: 'POST', fetcher, body: {
+  const result = await request(`${BASE}/${current.meetingId}/turns`, { method: 'POST', fetcher, recoveryScope:scope, body: {
     requestId, expectedRevision: current.revision,
     message: (initial.minimumOnly ? OFFICE_MINIMUM_INSTRUCTION : '') + pending.rawDraft.trim(),
     mode: pending.request.mode, includeProjects: initial.includeProjects,

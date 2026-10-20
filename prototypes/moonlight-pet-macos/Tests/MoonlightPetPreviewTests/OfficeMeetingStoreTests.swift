@@ -10,7 +10,17 @@ private actor MeetingsGate: HubOfficeMeetingServing {
     let meetingID: UUID
     private var waiter: CheckedContinuation<OfficeMeetingDetail, Error>?
     private(set) var sentIDs: [UUID] = []
-    private var completed: [[String: Any]] = []
+    private var completed: [UUID: [[String: Any]]] = [:]
+    private var pending: (id: UUID, revision: Int, owner: String)?
+    private var readOverride: OfficeMeetingDetail?
+    private var holdReads = false
+    private var readWaiter: CheckedContinuation<OfficeMeetingDetail, Error>?
+    private(set) var isReading = false
+    func overrideRead(_ detail: OfficeMeetingDetail?) { readOverride = detail }
+    func holdRead() { holdReads = true }
+    func recordedDetail(_ id: UUID, revision: Int) throws -> OfficeMeetingDetail { try detail(id, rounds: completed[id] ?? [], revision: revision, owner: owner) }
+    func finishRead(_ detail: OfficeMeetingDetail) { readWaiter?.resume(returning: detail); readWaiter = nil; holdReads = false }
+
     private var failCreation = false
     private var owner = "eevee"
     func changeOwner(_ value: String) { owner = value }
@@ -20,20 +30,30 @@ private actor MeetingsGate: HubOfficeMeetingServing {
         if scope == .classin { throw HubTransportError.offline }
         return [try detail(meetingID).meeting]
     }
-    func officeMeeting(id: UUID) async throws -> OfficeMeetingDetail { try detail(id, rounds: completed, revision: completed.isEmpty ? 1 : 2, owner: owner) }
+    func officeMeeting(id: UUID) async throws -> OfficeMeetingDetail {
+        if holdReads { isReading = true; defer { isReading = false }; return try await withCheckedThrowingContinuation { readWaiter = $0 } }
+        if let readOverride { return readOverride }
+        let rounds = completed[id] ?? []
+        return try detail(id, rounds: rounds, revision: rounds.count + 1, owner: owner)
+    }
     func failNextCreation() { failCreation = true }
     func createOfficeMeeting(id: UUID, title: String, scope: OfficeChatScope, owner: OfficeAgent, sourceTaskID: UUID?) async throws -> OfficeMeetingDetail {
         if failCreation { failCreation = false; throw HubTransportError.timeout }
-        return try detail(id)
+        self.owner = owner.rawValue
+        return try detail(id, owner: owner.rawValue)
     }
     func sendOfficeMeeting(id: UUID, requestID: UUID, revision: Int, message: String) async throws -> OfficeMeetingDetail {
-        sentIDs.append(requestID)
+        sentIDs.append(requestID); pending = (id, revision, owner)
         return try await withCheckedThrowingContinuation { waiter = $0 }
     }
     func finish(id: UUID, message: String) throws {
         let requestID = sentIDs.last!
-        completed = [["id": requestID.uuidString, "roundNumber": 1, "state": "generated", "request": ["message": message, "ownerId": "eevee", "mode": "chat"], "result": ["answer": "저장된 답변", "nextAction": "다음 확인", "ownerId": "eevee", "scope": "personal", "mode": "chat"]]]
-        waiter?.resume(returning: try detail(id, state: "generated", rounds: completed, revision: 2)); waiter = nil
+        let captured = pending!
+        var rounds = completed[id] ?? []
+        rounds.removeAll { ($0["id"] as? String) == requestID.uuidString }
+        rounds.append(["id": requestID.uuidString, "roundNumber": rounds.count + 1, "state": "generated", "request": ["message": message, "ownerId": captured.owner, "mode": "chat"], "result": ["answer": "저장된 답변", "nextAction": "다음 확인", "ownerId": captured.owner, "scope": "personal", "mode": "chat"]])
+        completed[id] = rounds
+        waiter?.resume(returning: try detail(id, state: "generated", rounds: rounds, revision: captured.revision + 1, owner: owner)); waiter = nil
     }
     func timeout() { waiter?.resume(throwing: HubTransportError.timeout); waiter = nil }
 }
@@ -120,6 +140,40 @@ private actor MeetingsGate: HubOfficeMeetingServing {
         try check(store.sourceTaskID == nil, "task identity never crosses meeting lanes")
         store.scope = .personal
         try check(store.draft == "가져온 할 일" && store.sourceTaskID == sourceID, "returning to draft lane restores linked task identity")
+        let robustID = UUID(), robustAPI = MeetingsGate(id: UUID())
+        let robust = OfficeChatStore(durableMeetings: true)
+        robust.configure(service: robustAPI, origin: "https://synthetic.example")
+        await robust.resumeMeeting(robustID)
+        robust.draft = "é"
+        let unicodeSend = Task { await robust.send(message: robust.draft) }
+        while await robustAPI.sentIDs.isEmpty { await Task.yield() }
+        robust.draft = "e\u{301}"
+        try await robustAPI.finish(id: robustID, message: "é")
+        _ = await unicodeSend.value
+        try check(robust.draft.utf8.elementsEqual("e\u{301}".utf8), "canonically equivalent edited draft is not erased")
+        await robustAPI.overrideRead(try detail(robustID))
+        await robust.reloadMeeting()
+        try check(robust.turns.count == 1 && robust.meetingNeedsReload, "missing terminal turn preserves prior verified history")
+        await robustAPI.overrideRead(nil)
+        await robust.reloadMeeting()
+        try check(!robust.meetingNeedsReload, "fresh complete history recovers after stale snapshot")
+        robust.draft = "원래 요청"
+        let mismatch = Task { await robust.send(message: robust.draft) }
+        while await robustAPI.sentIDs.count < 2 { await Task.yield() }
+        try await robustAPI.finish(id: robustID, message: "다른 요청")
+        _ = await mismatch.value
+        try check(robust.meetingNeedsReload && robust.draft == "원래 요청" && robust.turns.count == 1, "wrong request receipt neither applies nor releases pending")
+        try await robustAPI.finish(id: robustID, message: "원래 요청")
+        await robust.reloadMeeting()
+        try check(!robust.meetingNeedsReload && robust.turns.count == 2 && robust.draft.isEmpty, "exact original receipt resolves pending")
+        await robustAPI.holdRead()
+        let cancelledRead = Task { await robust.reloadMeeting() }
+        while !(await robustAPI.isReading) { await Task.yield() }
+        cancelledRead.cancel()
+        let lateRead = try await robustAPI.recordedDetail(robustID, revision: 99)
+        await robustAPI.finishRead(lateRead)
+        await cancelledRead.value
+        try check(robust.meeting?.revision != 99 && robust.turns.count == 2, "cancelled caller cannot apply a late read")
         print("PASS: Office meeting store checks")
     }
 }

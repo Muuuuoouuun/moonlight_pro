@@ -35,6 +35,13 @@ struct OfficeMeetingDetail: Decodable, Sendable {
     let persisted: Bool
     let meeting: OfficeMeeting
     let turns: [OfficeMeetingRound]
+    // Retain every original public field (including full council/skill receipts)
+    // independently of the intentionally smaller native chat projection.
+    var originalData: Data? = nil
+    var historyComplete: Bool? = nil
+    var restoration: OfficeMeetingRestoration? = nil
+    var unresolved: OfficeMeetingUnresolved? = nil
+    private enum CodingKeys: String, CodingKey { case status, persisted, meeting, turns, historyComplete, unresolved }
 }
 struct OfficeMeetingRound: Decodable, Identifiable, Sendable {
     let id: UUID

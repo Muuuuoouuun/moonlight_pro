@@ -9,7 +9,9 @@ import Network
 private final class MemoryHubCredentials: HubCredentialStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var items: [String: HubCredentials] = [:]
-    func load(origin: String) throws -> HubCredentials? { lock.lock(); defer { lock.unlock() }; return items[origin] }
+    private var loads = 0
+    var loadCount: Int { lock.lock(); defer { lock.unlock() }; return loads }
+    func load(origin: String) throws -> HubCredentials? { lock.lock(); defer { lock.unlock() }; loads += 1; return items[origin] }
     func save(_ credentials: HubCredentials, origin: String) throws { lock.lock(); defer { lock.unlock() }; items[origin] = credentials }
     func remove(origin: String) throws { lock.lock(); defer { lock.unlock() }; items[origin] = nil }
 }
@@ -46,6 +48,169 @@ private final class TransportURLProtocol: URLProtocol {
 
 struct HubTransportTests {
 
+    func testPeerCapabilityRequiresExactVersionAndFlag() throws {
+        let origin = "https://hub.example.test"
+        let old = HubDesktopSession(origin: origin, session: nil, signedOut: false)
+        expectEqual(HubDesktopPeer.classify(nil, origin: origin), .unavailable)
+        expectEqual(HubDesktopPeer.classify(old, origin: origin), .unsupported)
+        expectEqual(HubDesktopPeer.classify(verifiedSnapshot(old), origin: origin), .verified)
+        expectEqual(HubDesktopPeer.classify(verifiedSnapshot(old), origin: "https://other.example.test"), .unavailable)
+        for version in [nil, 1, 3] as [Int?] {
+            var candidate = verifiedSnapshot(old); candidate.protocolVersion = version
+            expectEqual(HubDesktopPeer.classify(candidate, origin: origin), .unsupported)
+        }
+        var candidate = verifiedSnapshot(old); candidate.capabilities = HubDesktopCapabilities(logoutIntent: false)
+        expectEqual(HubDesktopPeer.classify(candidate, origin: origin), .unsupported)
+        candidate.capabilities = nil
+        expectEqual(HubDesktopPeer.classify(candidate, origin: origin), .unsupported)
+    }
+
+    func testUnsupportedPeerHoldsAutomaticRestoreButPreservesManualStandaloneLogin() async throws {
+        let origin = "https://hub.example.test"
+        for old in [HubDesktopSession(origin: origin, session: nil, signedOut: false),
+                    HubDesktopSession(origin: origin, session: nil, signedOut: true),
+                    HubDesktopSession(origin: origin, session: HubSavedSession(value: "old.signature", expiresAt: 4102444800))] {
+            let store = MemoryHubCredentials()
+            try store.save(HubCredentials(username: "operator", password: "old-synthetic"), origin: origin)
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [TransportURLProtocol.self]
+            let bridge = PeerFixtureDesktopSession(old)
+            let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
+                credentialStore: store, desktopSession: bridge, sharedSession: { nil })
+            var posts = 0, requests = 0
+            TransportURLProtocol.handler = { request, response in
+                requests += 1
+                if request.httpMethod == "POST" {
+                    posts += 1
+                    response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=manual.signature; Path=/; Max-Age=3600; Secure; HttpOnly"])
+                } else {
+                    expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=manual.signature")
+                    response.respond(json: "{\"status\":\"live\"}", headers: ["Set-Cookie": "com_moon_operator_session=rotated.signature; Path=/; Max-Age=3600; Secure; HttpOnly"])
+                }
+            }
+            do { _ = try await client.sessionStatus(); recordFailure("Legacy peer cannot verify restore") }
+            catch { expectEqual(error as? HubTransportError, .desktopSessionUnavailable) }
+            expectEqual(store.loadCount, 0); expectEqual(requests, 0)
+            try await client.login(username: "operator", password: "new-synthetic")
+            _ = try await client.request(path: "/api/hub/tasks")
+            expectEqual(posts, 1)
+            expectEqual(try store.load(origin: origin)?.password, "new-synthetic")
+            expectEqual(await bridge.begins, 0); expectEqual(await bridge.writes, 0)
+            do { try await client.clearSession(); recordFailure("Legacy logout cannot claim durable completion") }
+            catch { expectEqual(error as? HubTransportError, .desktopSessionUnavailable) }
+            expectEqual(await bridge.logouts, 0)
+            expectEqual(try store.load(origin: origin)?.password, "new-synthetic")
+            do { try await client.logout(); recordFailure("Legacy logout cannot mutate an unverified peer") }
+            catch { expectEqual(error as? HubTransportError, .desktopSessionUnavailable) }
+            expectEqual(await bridge.logouts, 0)
+            expectEqual(posts, 1)
+        }
+    }
+
+    func testVerifiedPeerCannotDowngradeDuringExplicitBegin() async throws {
+        let origin = "https://hub.example.test"
+        let store = MemoryHubCredentials(), bridge = PeerFixtureDesktopSession(verifiedSnapshot(HubDesktopSession(origin: origin, session: nil)))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
+            credentialStore: store, desktopSession: bridge, sharedSession: { nil })
+        var requests = 0
+        TransportURLProtocol.handler = { _, response in requests += 1; response.respond(json: "{\"status\":\"authenticated\"}") }
+        do { try await client.login(username: "operator", password: "synthetic"); recordFailure("Unverified begin must fail") }
+        catch { expectEqual(error as? HubTransportError, .desktopSessionUnavailable) }
+        expectEqual(await bridge.begins, 1); expectEqual(requests, 0); expectEqual(store.loadCount, 0)
+    }
+
+    func testVerifiedPairedSessionIsFencedOnlyOnKnownDowngrade() async throws {
+        let origin = "https://hub.example.test", store = MemoryHubCredentials()
+        try store.save(HubCredentials(username: "operator", password: "preserved-synthetic"), origin: origin)
+        let paired = verifiedSnapshot(HubDesktopSession(origin: origin,
+            session: HubSavedSession(value: "paired.signature", expiresAt: 4102444800)))
+        let bridge = PeerFixtureDesktopSession(paired)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
+            credentialStore: store, desktopSession: bridge, sharedSession: { nil })
+        var requests = 0
+        TransportURLProtocol.handler = { request, response in
+            requests += 1
+            expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=paired.signature")
+            response.respond(json: "{\"status\":\"live\"}")
+        }
+        _ = try await client.request(path: "/api/hub/tasks")
+        await bridge.set(nil) // Temporary absence keeps an already accepted session.
+        _ = try await client.request(path: "/api/hub/tasks")
+        expectEqual(requests, 2)
+        await bridge.set(HubDesktopSession(origin: origin, session: paired.session))
+        do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("Known downgrade must fence paired cookie") }
+        catch { expectEqual(error as? HubTransportError, .desktopSessionUnavailable) }
+        expectEqual(requests, 2); expectEqual(store.loadCount, 0)
+        expectEqual(try store.load(origin: origin)?.password, "preserved-synthetic")
+        expectEqual(await bridge.writes, 0); expectEqual(await bridge.logouts, 0)
+    }
+
+    func testAutomaticRestoreRequiresVerifiedPublicationAcknowledgement() async throws {
+        let origin = "https://hub.example.test"
+        let failures: [HubDesktopSession?] = [nil,
+            HubDesktopSession(origin: origin, session: nil),
+            verifiedSnapshot(HubDesktopSession(origin: origin, session: nil, signedOut: true, automaticLoginBlocked: true)),
+            verifiedSnapshot(HubDesktopSession(origin: origin, session: HubSavedSession(value: "other.signature", expiresAt: 4102444800), signedOut: false))]
+        for rejected in failures {
+            let store = MemoryHubCredentials()
+            try store.save(HubCredentials(username: "operator", password: "synthetic"), origin: origin)
+            let gate = HeldSessionRead(rejected)
+            let bridge = PeerFixtureDesktopSession(verifiedSnapshot(HubDesktopSession(origin: origin, session: nil, signedOut: false)), publicationGate: gate)
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [TransportURLProtocol.self]
+            let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
+                credentialStore: store, desktopSession: bridge, sharedSession: { nil })
+            var posts = 0, reads = 0
+            TransportURLProtocol.handler = { request, response in
+                if request.httpMethod == "POST" {
+                    posts += 1
+                    response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=automatic.signature; Path=/; Max-Age=3600; Secure; HttpOnly"])
+                } else {
+                    reads += 1
+                    expectNil(request.value(forHTTPHeaderField: "Cookie"))
+                    response.respond(json: "{\"status\":\"anonymous\",\"configured\":true}")
+                }
+            }
+            let restoring = Task { try await client.sessionStatus() }
+            while !(await gate.started) { await Task.yield() }
+            await gate.release() // A logout, downgrade, lost reply or different session wins.
+            do { _ = try await restoring.value; recordFailure("Unconfirmed publication cannot accept automatic restore") }
+            catch { expectEqual(error as? HubTransportError, .desktopSessionUnavailable) }
+            expectEqual(posts, 1); expectEqual(reads, 1)
+            expectEqual(try store.load(origin: origin)?.password, "synthetic")
+            _ = try await client.request(path: "/api/hub/tasks") // The rejected private cookie was cleared.
+            expectEqual(posts, 1); expectEqual(reads, 2)
+        }
+    }
+
+    func testVerifiedPeerAcceptsAutomaticPublication() async throws {
+        let origin = "https://hub.example.test", store = MemoryHubCredentials()
+        try store.save(HubCredentials(username: "operator", password: "synthetic"), origin: origin)
+        let bridge = PeerFixtureDesktopSession(verifiedSnapshot(HubDesktopSession(origin: origin, session: nil, signedOut: false)))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
+            credentialStore: store, desktopSession: bridge, sharedSession: { nil })
+        var posts = 0
+        TransportURLProtocol.handler = { request, response in
+            if request.httpMethod == "POST" {
+                posts += 1
+                response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=automatic.signature; Path=/; Max-Age=3600; Secure; HttpOnly"])
+            } else {
+                let status = request.value(forHTTPHeaderField: "Cookie") == nil ? "anonymous" : "authenticated"
+                response.respond(json: "{\"status\":\"\(status)\",\"configured\":true}")
+            }
+        }
+        let status = try await client.sessionStatus()
+        expectTrue(status.isAuthenticated)
+        expectEqual(posts, 1)
+        expectEqual(try store.load(origin: origin)?.password, "synthetic")
+    }
+
     func testDesktopSessionImportsLoginAndExplicitSignOutWithoutReauthenticating() async throws {
         let origin = "https://hub.example.test"
         let store = MemoryHubCredentials()
@@ -53,7 +218,7 @@ struct HubTransportTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TransportURLProtocol.self]
         let bridge = MemoryDesktopSession()
-        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store, desktopSession: bridge)
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store, desktopSession: bridge, sharedSession: { nil })
         let saved = HubSavedSession(value: "desktop.signature", expiresAt: Date().timeIntervalSince1970 + 86400)
         await bridge.set(HubDesktopSession(origin: origin, session: saved))
         TransportURLProtocol.handler = { request, response in
@@ -85,6 +250,102 @@ struct HubTransportTests {
         expectNil(cleared?.session)
     }
 
+    func testDurableDesktopLogoutPreservesCredentialsAndUnavailableBridgeAllowsManualLogin() async throws {
+        let origin = "https://hub.example.test"
+        let store = MemoryHubCredentials()
+        let credentials = HubCredentials(username: "operator", password: "synthetic-password")
+        try store.save(credentials, origin: origin)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let bridge = MemoryIntentDesktopSession()
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store, desktopSession: bridge, sharedSession: { nil })
+        let intent = HubDesktopLogoutIntent(id: "synthetic-intent", installationId: "synthetic-installation", accountScope: "unknown/currentconnection",
+            persistence: "persisted", localSession: "cleared", companion: "unconfirmed", ownedKeychain: "not-requested", remoteSession: "not-requested")
+        await bridge.set(HubDesktopSession(origin: origin, session: nil, signedOut: true, automaticLoginBlocked: true, logoutIntent: intent))
+        var posts = 0
+        TransportURLProtocol.handler = { request, response in
+            if request.httpMethod == "POST" { posts += 1 }
+            response.respond(status: 401, json: "{\"status\":\"unauthorized\"}")
+        }
+        do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("Expected signed out") } catch {}
+        expectEqual(posts, 0)
+        expectTrue(try store.load(origin: origin) != nil)
+        await bridge.set(nil)
+        let restarted = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store, desktopSession: bridge, sharedSession: { nil })
+        do { _ = try await restarted.sessionStatus(); recordFailure("Expected unconfirmed bridge") }
+        catch { expectEqual(error as? HubTransportError, .desktopSessionUnavailable) }
+        expectEqual(posts, 0)
+        TransportURLProtocol.handler = { request, response in
+            if request.httpMethod == "POST" {
+                posts += 1
+                response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=manual.signature; Path=/; Max-Age=3600; Secure; HttpOnly"])
+            } else {
+                expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=manual.signature")
+                response.respond(json: "{\"status\":\"live\"}")
+            }
+        }
+        try await restarted.login(username: "operator", password: "synthetic-password")
+        _ = try await restarted.request(path: "/api/hub/tasks")
+        expectEqual(posts, 1)
+        expectNil(await bridge.read(origin: origin)) // No claim that the app intent was cleared.
+    }
+
+    func testOldLogoutAcknowledgementCannotEraseNewManualLogin() async throws {
+        let origin = "https://hub.example.test"
+        let store = MemoryHubCredentials()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let gate = HeldSessionRead<HubDesktopSession>(nil)
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store,
+            desktopSession: HeldLogoutDesktopSession(gate: gate), sharedSession: { nil })
+        let oldLogout = Task { try await client.logout() }
+        while !(await gate.started) { await Task.yield() }
+        var posts = 0
+        TransportURLProtocol.handler = { request, response in
+            if request.httpMethod == "POST" {
+                posts += 1
+                response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=newer.signature; Path=/; Max-Age=3600; Secure; HttpOnly"])
+            } else {
+                expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=newer.signature")
+                response.respond(json: "{\"status\":\"live\"}")
+            }
+        }
+        try await client.login(username: "operator", password: "newer-password")
+        await gate.release()
+        do { try await oldLogout.value; recordFailure("Old logout must cancel") } catch is CancellationError {} catch { recordFailure("Wrong cancellation") }
+        _ = try await client.request(path: "/api/hub/tasks")
+        expectEqual(try store.load(origin: origin)?.password, "newer-password")
+        expectEqual(posts, 1)
+    }
+
+    func testOldLoginAcceptanceCannotClearNewerLogin() async throws {
+        let origin = "https://hub.example.test"
+        let store = MemoryHubCredentials()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let bridge = HeldAcceptanceDesktopSession(origin: origin)
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store,
+            desktopSession: bridge, sharedSession: { nil })
+        var posts = 0
+        TransportURLProtocol.handler = { request, response in
+            if request.httpMethod == "POST" {
+                posts += 1
+                let value = posts == 1 ? "older.signature" : "newer.signature"
+                response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=\(value); Path=/; Max-Age=3600; Secure; HttpOnly"])
+            } else {
+                expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=newer.signature")
+                response.respond(json: "{\"status\":\"live\"}")
+            }
+        }
+        let older = Task { try await client.login(username: "operator", password: "older-password") }
+        while !(await bridge.waiting) { await Task.yield() }
+        try await client.login(username: "operator", password: "newer-password")
+        await bridge.release()
+        do { try await older.value; recordFailure("Old login must cancel") } catch is CancellationError {} catch { recordFailure("Wrong cancellation") }
+        _ = try await client.request(path: "/api/hub/tasks")
+        expectEqual(try store.load(origin: origin)?.password, "newer-password")
+    }
+
     func testDesktopNaturalExpiryKeepsKeychainAutoLogin() async throws {
         let origin = "https://hub.example.test"
         let store = MemoryHubCredentials()
@@ -92,7 +353,7 @@ struct HubTransportTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TransportURLProtocol.self]
         let bridge = MemoryDesktopSession()
-        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store, desktopSession: bridge)
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store, desktopSession: bridge, sharedSession: { nil })
         await bridge.set(HubDesktopSession(origin: origin, session: nil, signedOut: false))
         var logins = 0
         TransportURLProtocol.handler = { request, response in
@@ -192,6 +453,69 @@ struct HubTransportTests {
         _ = try await client.request(path: "/api/hub/tasks")
     }
 
+    func testSharedSessionPreflightCannotSendAfterDisconnectOrSignOut() async throws {
+        let origin = URL(string: "https://hub.example.test")!
+        let snapshots: [HubSharedSession?] = [nil,
+            HubSharedSession(origin: URL(string: "https://other.example.test")!, cookie: "other.signature"),
+            HubSharedSession(origin: origin, cookie: "previous.signature")]
+        for forget in [false, true] {
+            for snapshot in snapshots {
+                let gate = HeldSessionRead(snapshot)
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [TransportURLProtocol.self]
+                let client = try HubTransport(baseURL: origin, configuration: configuration,
+                    credentialStore: MemoryHubCredentials(), sharedSession: { await gate.read() })
+                var requests = 0
+                TransportURLProtocol.handler = { _, response in
+                    requests += 1
+                    response.respond(json: "{\"status\":\"live\"}")
+                }
+                let pending = Task { try await client.request(path: "/api/hub/journal", method: "POST", body: Data("{}".utf8)) }
+                while !(await gate.started) { await Task.yield() }
+                if forget { try await client.clearSession() } else { await client.disconnect() }
+                await gate.release()
+                do { _ = try await pending.value; recordFailure("An invalidated preflight must cancel before sending") }
+                catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
+                expectEqual(requests, 0)
+                TransportURLProtocol.handler = { request, response in
+                    expectNil(request.value(forHTTPHeaderField: "Cookie"))
+                    response.respond(json: "{\"status\":\"live\"}")
+                }
+                _ = try await client.request(path: "/api/hub/tasks")
+            }
+        }
+    }
+
+    func testDesktopPreflightCannotSendAfterDisconnectOrSignOut() async throws {
+        let origin = "https://hub.example.test"
+        let saved = HubSavedSession(value: "previous.signature", expiresAt: Date().timeIntervalSince1970 + 86400)
+        let snapshots: [HubDesktopSession?] = [nil,
+            HubDesktopSession(origin: "https://other.example.test", session: saved),
+            HubDesktopSession(origin: origin, session: saved)]
+        for forget in [false, true] {
+            for snapshot in snapshots {
+                let gate = HeldSessionRead(snapshot)
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [TransportURLProtocol.self]
+                let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
+                    credentialStore: MemoryHubCredentials(), desktopSession: HeldDesktopSession(gate: gate),
+                    sharedSession: { nil })
+                var requests = 0
+                TransportURLProtocol.handler = { _, response in
+                    requests += 1
+                    response.respond(json: "{\"status\":\"live\"}")
+                }
+                let pending = Task { try await client.request(path: "/api/hub/journal", method: "POST", body: Data("{}".utf8)) }
+                while !(await gate.started) { await Task.yield() }
+                if forget { try await client.clearSession() } else { await client.disconnect() }
+                await gate.release()
+                do { _ = try await pending.value; recordFailure("An invalidated desktop preflight must not send") }
+                catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
+                expectEqual(requests, 0)
+            }
+        }
+    }
+
     func testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials() async throws {
         for forget in [false, true] {
             let store = MemoryHubCredentials()
@@ -259,7 +583,7 @@ struct HubTransportTests {
     private func transport(_ address: String = "https://hub.example.test", store: any HubCredentialStoring = MemoryHubCredentials()) throws -> HubTransport {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TransportURLProtocol.self]
-        return try HubTransport(baseURL: URL(string: address)!, configuration: configuration, credentialStore: store)
+        return try HubTransport(baseURL: URL(string: address)!, configuration: configuration, credentialStore: store, sharedSession: { nil })
     }
 
     func testSharedLoginRotationLogoutAndOriginIsolation() async throws {
@@ -267,7 +591,7 @@ struct HubTransportTests {
         let state = SharedSessionState(HubSharedSession(origin: origin, cookie: "first-session"))
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TransportURLProtocol.self]
-        let client = try HubTransport(baseURL: origin, configuration: configuration, sharedSession: { await state.read() })
+        let client = try HubTransport(baseURL: origin, configuration: configuration, credentialStore: MemoryHubCredentials(), sharedSession: { await state.read() })
         var requests = 0
         var expectedCookie: String? = "com_moon_operator_session=first-session"
         TransportURLProtocol.handler = { request, protocolInstance in
@@ -503,7 +827,7 @@ struct HubTransportTests {
         let source = try RedirectProbeServer(response: "HTTP/1.1 307 Temporary Redirect\r\nLocation: http://127.0.0.1:\(destinationPort)/receive\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
         let sourcePort = try await source.start()
         defer { source.stop() }
-        let client = try HubTransport(baseURL: URL(string: "http://127.0.0.1:\(sourcePort)")!)
+        let client = try HubTransport(baseURL: URL(string: "http://127.0.0.1:\(sourcePort)")!, credentialStore: MemoryHubCredentials(), sharedSession: { nil })
         do { try await client.login(username: "test-operator", password: "test-password"); recordFailure("Redirect must fail") }
         catch { expectEqual(error as? HubTransportError, .redirectRejected) }
         expectEqual(source.requestCount, 1)
@@ -657,6 +981,101 @@ private final class TestFailures: @unchecked Sendable {
 }
 private let testFailures = TestFailures()
 
+private actor HeldSessionRead<Value: Sendable> {
+    private let snapshot: Value?
+    private var continuation: CheckedContinuation<Value?, Never>?
+    private var released = false
+    private(set) var started = false
+    init(_ snapshot: Value?) { self.snapshot = snapshot }
+    func read() async -> Value? {
+        if released { return nil }
+        started = true
+        return await withCheckedContinuation { continuation = $0 }
+    }
+    func release() {
+        released = true
+        continuation?.resume(returning: snapshot)
+        continuation = nil
+    }
+}
+
+private struct HeldDesktopSession: HubDesktopSessionSharing {
+    let gate: HeldSessionRead<HubDesktopSession>
+    func read(origin: String) async -> HubDesktopSession? { await gate.read() }
+    func write(_ session: HubSavedSession?, origin: String) async {}
+}
+
+private struct HeldLogoutDesktopSession: HubDesktopSessionSharing {
+    let gate: HeldSessionRead<HubDesktopSession>
+    func read(origin: String) async -> HubDesktopSession? { nil }
+    func write(_ session: HubSavedSession?, origin: String) async {}
+    func recordLogout(origin: String) async -> HubDesktopSession? { await gate.read() }
+}
+
+private func verifiedSnapshot(_ value: HubDesktopSession) -> HubDesktopSession {
+    var result = value
+    result.protocolVersion = 2
+    result.capabilities = HubDesktopCapabilities(logoutIntent: true)
+    return result
+}
+
+private actor HeldAcceptanceDesktopSession: HubDesktopSessionSharing {
+    nonisolated let supportsLogoutIntent = true
+    let origin: String
+    var count = 0
+    var waiting = false
+    var snapshot: HubDesktopSession?
+    var continuation: CheckedContinuation<Void, Never>?
+    init(origin: String) { self.origin = origin; snapshot = verifiedSnapshot(HubDesktopSession(origin: origin, session: nil)) }
+    func read(origin: String) -> HubDesktopSession? { snapshot }
+    func write(_ session: HubSavedSession?, origin: String) {}
+    func beginLogin(origin: String) -> HubDesktopSession? {
+        count += 1
+        return verifiedSnapshot(HubDesktopSession(origin: origin, session: nil, signedOut: false, loginAttempt: String(count)))
+    }
+    func acceptLogin(_ session: HubSavedSession, attempt: String, origin: String) async -> HubDesktopSession? {
+        let result = verifiedSnapshot(HubDesktopSession(origin: origin, session: session, signedOut: false))
+        if attempt == "1" {
+            waiting = true
+            await withCheckedContinuation { continuation = $0 }
+        } else { snapshot = result }
+        return result
+    }
+    func release() { continuation?.resume(); continuation = nil }
+}
+
+private actor PeerFixtureDesktopSession: HubDesktopSessionSharing {
+    nonisolated let supportsLogoutIntent = true
+    var snapshot: HubDesktopSession?
+    private(set) var begins = 0
+    private(set) var writes = 0
+    private(set) var logouts = 0
+    let publicationGate: HeldSessionRead<HubDesktopSession>?
+    init(_ snapshot: HubDesktopSession, publicationGate: HeldSessionRead<HubDesktopSession>? = nil) {
+        self.snapshot = snapshot; self.publicationGate = publicationGate
+    }
+    func set(_ value: HubDesktopSession?) { snapshot = value }
+    func read(origin: String) -> HubDesktopSession? { snapshot }
+    func write(_ session: HubSavedSession?, origin: String) { writes += 1 }
+    func publishSession(_ session: HubSavedSession, origin: String, epoch: String?) async -> HubDesktopSession? {
+        if let publicationGate { return await publicationGate.read() }
+        return verifiedSnapshot(HubDesktopSession(origin: origin, session: session, signedOut: false, sessionEpoch: epoch))
+    }
+    func beginLogin(origin: String) -> HubDesktopSession? {
+        begins += 1
+        return HubDesktopSession(origin: origin, session: nil, loginAttempt: "unsupported")
+    }
+    func recordLogout(origin: String) -> HubDesktopSession? { logouts += 1; return snapshot }
+}
+
+private actor MemoryIntentDesktopSession: HubDesktopSessionSharing {
+    nonisolated let supportsLogoutIntent = true
+    private var snapshot: HubDesktopSession?
+    func set(_ value: HubDesktopSession?) { snapshot = value.map(verifiedSnapshot) }
+    func read(origin: String) -> HubDesktopSession? { snapshot }
+    func write(_ session: HubSavedSession?, origin: String) {}
+}
+
 private actor MemoryDesktopSession: HubDesktopSessionSharing {
     private var snapshot: HubDesktopSession?
     func set(_ value: HubDesktopSession?) { snapshot = value }
@@ -690,12 +1109,23 @@ private struct HubTransportTestRunner {
     static func main() async {
         let tests = HubTransportTests()
         let cases: [(String, () async throws -> Void)] = [
+            ("peer capability requires exact version and flag", { try tests.testPeerCapabilityRequiresExactVersionAndFlag() }),
+            ("unsupported peer preserves manual standalone login", tests.testUnsupportedPeerHoldsAutomaticRestoreButPreservesManualStandaloneLogin),
+            ("verified peer rejects downgraded begin", tests.testVerifiedPeerCannotDowngradeDuringExplicitBegin),
+            ("known peer downgrade fences paired session", tests.testVerifiedPairedSessionIsFencedOnlyOnKnownDowngrade),
+            ("automatic restore requires verified publication acknowledgement", tests.testAutomaticRestoreRequiresVerifiedPublicationAcknowledgement),
+            ("verified peer accepts automatic publication", tests.testVerifiedPeerAcceptsAutomaticPublication),
             ("desktop login import and sign-out without reauthentication", tests.testDesktopSessionImportsLoginAndExplicitSignOutWithoutReauthenticating),
+            ("old logout acknowledgement preserves newer login", tests.testOldLogoutAcknowledgementCannotEraseNewManualLogin),
+            ("old login acceptance preserves newer login", tests.testOldLoginAcceptanceCannotClearNewerLogin),
+            ("durable logout preserves credentials and manual standalone login", tests.testDurableDesktopLogoutPreservesCredentialsAndUnavailableBridgeAllowsManualLogin),
             ("desktop natural expiry preserves Keychain auto login", tests.testDesktopNaturalExpiryKeepsKeychainAutoLogin),
             ("restart restores only the saved origin", tests.testRestartRestoresLoginOnlyForTheSavedOrigin),
             ("rejected credentials are neither saved nor retried forever", tests.testRejectedLoginNeverReplacesAcceptedCredentialsOrLoops),
             ("uncertain writes and model generation never replay", tests.testUncertainWritesAndModelGenerationAreNeverAutomaticallyReplayed),
             ("late responses cannot restore logout cookies", tests.testLateResponseCannotRestoreCookiesAfterSignOut),
+            ("shared bridge preflight cannot send after disconnect/sign-out", tests.testSharedSessionPreflightCannotSendAfterDisconnectOrSignOut),
+            ("desktop bridge preflight cannot send after disconnect/sign-out", tests.testDesktopPreflightCannotSendAfterDisconnectOrSignOut),
             ("disconnect cancels authentication without losing origin credentials", tests.testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials),
             ("concurrent reads share automatic login", tests.testSimultaneousReadsShareOneAutomaticLogin),
             ("expired session renews without changing memo", tests.testExpiredSessionAuthenticatesOnceAndReplaysIdenticalMemoCommand),

@@ -631,6 +631,27 @@ export function shouldMobileNavigationHandleEscape({ open, paletteOpen, tweaksOp
   return Boolean(open && !paletteOpen && !tweaksOpen && !helpOpen);
 }
 
+// 안드로이드 뒤로 가기 등 모바일 시스템 제스처가 들어왔을 때:
+// 1) 최상위 ESC 레이어(Drawer · 바텀 시트 · CommandPalette · ShortcutOverlay · 멘토 위젯)가 있으면 먼저 닫는다.
+// 2) 없으면 열린 모바일 사이드바 내비게이션을 닫는다.
+// 3) 둘 다 없으면 false를 돌려줘 WebView 기록 이동이나 시스템 기본 동작으로 넘긴다.
+export function dismissTopMobileOverlay({
+  hasEscLayer = false,
+  dismissEscLayer,
+  mobileNavOpen = false,
+  closeMobileNavigation,
+} = {}) {
+  const escOpen = typeof hasEscLayer === 'function' ? hasEscLayer() : Boolean(hasEscLayer);
+  if (escOpen) {
+    return Boolean(dismissEscLayer?.());
+  }
+  if (mobileNavOpen) {
+    closeMobileNavigation?.();
+    return true;
+  }
+  return false;
+}
+
 export function shouldFocusMainAfterMobileNavigation({ pending, currentPath, navOpen }) {
   if (!pending || navOpen) return false;
   const fromPath = String(pending.fromPath || '');

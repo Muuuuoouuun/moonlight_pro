@@ -31,7 +31,7 @@ async function until(check, label, ms = 3000) {
 
 // hub: 기본은 pet-main 이 받는 hubContext 그대로 createPetHub 에 넘기고 전송만 fetch 대역으로 바꾼다.
 // wrapHub(hub) 로 허브 객체를 감쌀 수 있다. defaultHub: true 면 pet-main 의 기본 경로(loadDefaultHub)를 쓴다.
-async function boot(t, { wrapHub, defaultHub = false, hubUrl: initialUrl, ...extra } = {}) {
+async function boot(t, { wrapHub, now, defaultHub = false, hubUrl: initialUrl, ...extra } = {}) {
   const double = createHubDouble();
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-integration-'));
   const E2 = createElectronDouble({ userData, cookies: [{ origin: double.origin, name: 'com_moon_operator_session', value: 'operator-session' }] });
@@ -43,7 +43,7 @@ async function boot(t, { wrapHub, defaultHub = false, hubUrl: initialUrl, ...ext
   let hubUrl = initialUrl === undefined ? double.origin : initialUrl;
   const hubOption = defaultHub ? {} : {
     hub: (ctx) => {
-      const hub = createPetHub({ ...ctx, fetch: double.fetch });
+      const hub = createPetHub({ ...ctx, fetch: double.fetch, ...(now ? { now } : {}) });
       return wrapHub ? wrapHub(hub) : hub;
     },
   };
@@ -87,6 +87,30 @@ test('허브 모델은 pet-hub 하나 — 셸 ctx.store 를 같이 쓰고(같은
   const { createPetStore, STORE_FILE } = require('./pet-store');
   assert.equal(createPetStore(path.join(userData, STORE_FILE)), pet.store, '같은 파일은 같은 저장소');
   await until(() => pet.state().hubStatus === 'connected', 'connected after first poll');
+});
+
+test('Windows cookie change rechecks logout/login immediately without a polling interval', async t => {
+  const { pet, double } = await boot(t);
+  await until(() => pet.state().hubStatus === 'connected', 'initial session');
+  double.state.cookie = 'new-session';
+  await pet.sessionChanged();
+  assert.equal(pet.state().hubStatus, 'unauthorized');
+  double.state.cookie = 'com_moon_operator_session=operator-session';
+  await pet.sessionChanged();
+  assert.equal(pet.state().hubStatus, 'connected');
+  assert.ok(double.state.seen.filter(r => r.path === '/api/operator/session').length >= 2);
+  assert.ok(double.state.seen.every(r => r.method === 'GET'), 'session recovery must not create or replay writes');
+});
+
+test('Office command identity is flushed before a renderer can send; disk failure is explicit', async t => {
+  const { pet, call } = await boot(t);
+  const flush = pet.store.flush;
+  let flushed = false;
+  pet.store.flush = () => { flushed = true; return false; };
+  try {
+    assert.deepEqual(await call('pet:store-set', { key: 'petOffice.pending', value: { requestId: randomUUID() } }), { ok: false, reason: 'disk' });
+    assert.equal(flushed, true);
+  } finally { pet.store.flush = flush; }
 });
 
 test('할 일: 목록·추가·완료(updatedAt 낙관적 잠금)·낡은 완료는 conflict — 렌더러 뷰 모델이 그대로 읽는다', async (t) => {
@@ -191,7 +215,8 @@ test('알림: 새 문의마다 말풍선, 닫기(X)는 말풍선만 내리고 �
 });
 
 test('알림: 패널이 열린 동안 넘겨받은 알림은 보이기 직전에 다시 거른다 — 읽은 문의·시작한 일정은 말풍선에 뜨지 않는다', async (t) => {
-  const { call, double, w, pet } = await boot(t);
+  let now = Date.now();
+  const { call, double, w, pet } = await boot(t, { now: () => now });
   const baseline = randomUUID();
   double.state.inquiries = [inquiryRow(baseline)];
   double.state.unreadCount = 1;
@@ -203,7 +228,7 @@ test('알림: 패널이 열린 동안 넘겨받은 알림은 보이기 직전에
   const stillUnread = randomUUID();
   double.state.inquiries = [inquiryRow(readInPanel, 3, '패널 열린 동안 온 문의'), inquiryRow(stillUnread, 3, '아직 안 읽은 문의'), inquiryRow(baseline)];
   double.state.unreadCount = 3;
-  const startsAt = Date.now() + 400;
+  const startsAt = now + 400;
   double.state.events = [{
     id: 'soon', title: '곧 시작 일정', start: new Date(startsAt).toISOString(), end: new Date(startsAt + 1800000).toISOString(), allDay: false, source: 'google',
   }];
@@ -212,7 +237,7 @@ test('알림: 패널이 열린 동안 넘겨받은 알림은 보이기 직전에
   assert.equal(bubbleShown().length, 0, '패널이 열려 있으면 말풍선은 기다린다');
   assert.equal(w.bubble.isVisible(), false);
   await call('pet:notices-read', { id: `inquiry:${readInPanel}:3` }); // 패널에서 읽음
-  await until(() => Date.now() > startsAt + 50, 'event started', 2000);
+  now = startsAt + 50; // Advance only after the notices have been delivered and read.
   pet.collapse();
   await until(() => bubbleShown().length === 1, 'bubble after collapse');
   assert.deepEqual(bubbleShown(), [`inquiry:${stillUnread}:3`], '읽은 문의·시작한 일정은 건너뛴다');

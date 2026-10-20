@@ -9,6 +9,7 @@ import * as mute from './my-work-mute.js';
 import { createMyWorkQuickTask } from '../../../lib/my-work-quick-task.js';
 import { clearSubmittedQuickTaskDraft, shouldSubmitQuickTask } from '../../../lib/quick-task-capture.js';
 import { QUICK_TASK_RECOVERY_KEY, resetQuickTasks } from '../../../lib/quick-task-recovery.js';
+import { persistDesktopLogout } from '../../../lib/desktop-session-intent.js';
 import { MAX_FOCUS_PER_DAY, focusLimitMessage } from '../../../lib/task-today.js';
 const source=readFileSync(new URL('./my-work.jsx',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source.replace(/^import[^\n]+\n/gm,'').replace(/^export /gm,''),{compilerOptions:{jsx:ts.JsxEmit.React,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -70,7 +71,7 @@ test('actual MyWork owner change clears prior input and suppresses a late saved 
 
 function logout(storage,fetchImpl,{blockedAccess=false}={}){globalThis.window={sessionStorage:storage,location:{replace:href=>{redirect=href;}}};if(blockedAccess)Object.defineProperty(window,'sessionStorage',{get(){throw new DOMException('blocked','SecurityError');}});globalThis.BroadcastChannel=undefined;let redirect='',error='',busy=false;
   const settings=readFileSync(new URL('./evolution-settings.jsx',import.meta.url),'utf8');const start=settings.indexOf('  const logout = async () => {'),end=settings.indexOf('  const loadDeadlineAlerts',start);
-  const action=new Function('logoutBusy','setLogoutBusy','setLogoutError','resetQuickTasks','fetch','window',`${settings.slice(start,end)}\nreturn logout;`)(false,value=>{busy=value;},value=>{error=value;},resetQuickTasks,fetchImpl,window);
+  const action=new Function('logoutBusy','setLogoutBusy','setLogoutError','resetQuickTasks','fetch','window','persistDesktopLogout',`${settings.slice(start,end)}\nreturn logout;`)(false,value=>{busy=value;},value=>{error=value;},resetQuickTasks,fetchImpl,window,persistDesktopLogout);
   return {run:action,get:()=>({redirect,error,busy})};}
 
 test('actual logout handler deletes only QuickTask recovery before logout POST',async()=>{

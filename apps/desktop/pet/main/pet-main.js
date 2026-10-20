@@ -284,7 +284,7 @@ function install(options = {}) {
 
   const focusRunning = () => state.focus.running;
   const glassSizeNow = () => {
-    const base = G.panelGlassSize(state.mode);
+    const base = G.panelGlassSize(state.mode, platform);
     return contentHeight ? { width: base.width, height: contentHeight } : base;
   };
 
@@ -926,7 +926,9 @@ function install(options = {}) {
         setCharacter(p.value);
         return { ok: true };
       }
-      return store.set(p.key, p.value === undefined ? null : p.value);
+      const result = store.set(p.key, p.value === undefined ? null : p.value);
+      if (result.ok && p.key === 'petOffice.pending' && !store.flush()) return { ok: false, reason: 'disk' };
+      return result;
     },
     'pet:focus-start': (p) => startFocus(p.minutes),
     'pet:focus-stop': () => stopFocus(),
@@ -1120,6 +1122,7 @@ function install(options = {}) {
     stopFocus,
     openHub,
     hubUrlChanged,
+    sessionChanged: () => hub?.sessionChanged?.().catch(error => log(`pet:hub session refresh failed ${error?.message}`)),
     pointer: onPointer,
     // 트레이 펫 묶음: 빠른 기능 항목 + 자리 항목(모니터로 옮기기·가장자리·초기화·숨기기/보이기).
     trayItems: () => [

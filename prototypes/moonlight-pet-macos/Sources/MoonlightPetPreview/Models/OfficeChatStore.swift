@@ -19,12 +19,21 @@ final class OfficeChatStore: ObservableObject {
     let durableMeetings: Bool
     @Published private(set) var meetings: [OfficeMeeting] = []
     @Published private(set) var meeting: OfficeMeeting?
+    private(set) var verifiedMeetingDetail: OfficeMeetingDetail?
     @Published private(set) var isLoadingMeetings = false
     @Published private(set) var meetingNeedsReload = false
     var sourceTaskID: UUID? { didSet { if !restoring { saveSession() } } }
     private var newMeetingID: UUID?
     private var meetingRequestTask: Task<OfficeMeetingDetail, Error>?
-    private struct PendingReceipt { let requestID: UUID; let message: String }
+    private struct PendingReceipt {
+        let requestID: UUID; let originalDraft: String; let sentMessage: String
+        let scope: OfficeChatScope; let owner: OfficeAgent; let revision: Int
+        func matches(_ round: OfficeMeetingRound, in detail: OfficeMeetingDetail) -> Bool {
+            round.id == requestID && detail.meeting.scope == scope && detail.meeting.revision > revision
+                && round.request.ownerId == owner && round.request.mode == "chat"
+                && round.request.message.utf8.elementsEqual(sentMessage.utf8)
+        }
+    }
     private var unresolved: [String: PendingReceipt] = [:]
     private var meetingService: (any HubOfficeMeetingServing)? { service as? any HubOfficeMeetingServing }
     private func receiptKey(_ id: UUID) -> String { (origin ?? "") + "\n" + id.uuidString }
@@ -104,7 +113,7 @@ final class OfficeChatStore: ObservableObject {
         }
         saveSession(); invalidateRequest()
         if self.origin != origin, durableMeetings {
-            meeting = nil; meetings = []; meetingListState = .idle; meetingListScope = nil
+            meeting = nil; verifiedMeetingDetail = nil; meetings = []; meetingListState = .idle; meetingListScope = nil
             newMeetingID = nil; meetingNeedsReload = false; topicID = "general"
         }
         self.service = service; self.origin = origin; hasConnection = service != nil
@@ -317,7 +326,7 @@ final class OfficeChatStore: ObservableObject {
     func startNewMeeting() {
         guard durableMeetings, !isSending else { return }
         invalidateRequest()
-        meeting = nil; newMeetingID = nil; meetingNeedsReload = false
+        meeting = nil; verifiedMeetingDetail = nil; newMeetingID = nil; meetingNeedsReload = false
         isLoadingMeetings = false
         if meetingListScope != scope { meetings = []; meetingListState = .idle }
         topicID = "general"
@@ -327,18 +336,27 @@ final class OfficeChatStore: ObservableObject {
     func resumeMeeting(_ id: UUID) async {
         guard durableMeetings, !isSending, let service = meetingService else { return }
         invalidateRequest()
-        let ticket = generation
+        let ticket = generation, requestedScope = scope
         isLoadingMeetings = true
-        defer { if ticket == generation { isLoadingMeetings = false } }
+        defer { if ticket == generation { isLoadingMeetings = false; meetingRequestTask = nil } }
         do {
-            let detail = try await service.officeMeeting(id: id)
-            guard ticket == generation else { return }
+            let read = Task { try await service.officeMeeting(id: id, scope: requestedScope) }
+            meetingRequestTask = read
+            let detail = try await withTaskCancellationHandler(operation: { try await read.value }, onCancel: { read.cancel() })
+            try Task.checkCancellation()
+            guard ticket == generation, !read.isCancelled, scope == requestedScope,
+                  detail.meeting.meetingId == id, detail.meeting.scope == requestedScope else { return }
             let creationDraft = newMeetingID == id ? draft : nil
             let creationSource = source
-            applyMeeting(detail)
+            try applyMeeting(detail)
             if let creationDraft { draft = creationDraft; source = creationSource }
             errorMessage = meetingNeedsReload ? "이전 요청의 결과를 아직 확인하지 못했어요. 잠시 뒤 다시 불러와 주세요." : nil
-        } catch { if ticket == generation { errorMessage = error.localizedDescription } }
+        } catch {
+            if ticket == generation {
+                if meeting?.meetingId == id { meetingNeedsReload = true }
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     func reloadMeeting() async {
@@ -346,10 +364,23 @@ final class OfficeChatStore: ObservableObject {
         else { await loadMeetings() }
     }
 
-    private func applyMeeting(_ detail: OfficeMeetingDetail) {
+    private func applyMeeting(_ detail: OfficeMeetingDetail) throws {
         let saved = detail.meeting
+        guard detail.historyComplete != false, saved.scope == scope else { throw OfficeChatError.invalidResponse }
+        if let pending = unresolved[receiptKey(saved.meetingId)], let round = detail.turns.first(where: { $0.id == pending.requestID }),
+           !pending.matches(round, in: detail) { throw OfficeChatError.unconfirmed }
+        let key = OfficeConversationKey(origin: origin ?? "", scope: saved.scope, topicID: "meeting:" + saved.meetingId.uuidString.lowercased())
+        // A stale read cannot erase a terminal generated turn already verified
+        // in this conversation, including after leaving and returning to it.
+        for previous in sessions[key]?.turns ?? [] {
+            guard let current = detail.turns.first(where: { $0.id == previous.id }), current.state == "generated",
+                  current.request.message.utf8.elementsEqual(previous.message.utf8), let result = current.result,
+                  result.ownerId == previous.agent, result.scope == previous.scope,
+                  result.answer.utf8.elementsEqual(previous.reply.answer.utf8),
+                  result.nextAction.utf8.elementsEqual(previous.reply.nextAction.utf8) else { throw OfficeChatError.unconfirmed }
+        }
         restoring = true
-        meeting = saved; topicID = "meeting:" + saved.meetingId.uuidString.lowercased(); scope = saved.scope
+        meeting = saved; verifiedMeetingDetail = detail; topicID = "meeting:" + saved.meetingId.uuidString.lowercased(); scope = saved.scope
         restoring = false
         restoreSession(defaultOwner: saved.ownerId)
         restoring = true
@@ -360,11 +391,13 @@ final class OfficeChatStore: ObservableObject {
         meetings = Array(([saved] + meetings.filter { $0.meetingId != saved.meetingId && $0.scope == saved.scope }).prefix(20))
         meetingListScope = saved.scope; meetingListState = .ready
         let receipt = unresolved[receiptKey(saved.meetingId)]
-        if let receipt, let round = detail.turns.first(where: { $0.id == receipt.requestID }), ["generated", "error"].contains(round.state) {
+        if let receipt, let round = detail.turns.first(where: { $0.id == receipt.requestID }),
+           receipt.matches(round, in: detail), ["generated", "error"].contains(round.state) {
             unresolved.removeValue(forKey: receiptKey(saved.meetingId))
-            if round.state == "generated", draft == receipt.message { draft = ""; source = .text }
+            if round.state == "generated", draft.utf8.elementsEqual(receipt.originalDraft.utf8) { draft = ""; source = .text }
         }
         meetingNeedsReload = unresolved[receiptKey(saved.meetingId)] != nil
+            || (detail.unresolved?.total ?? 0) > 0
             || detail.turns.contains(where: { ["running", "unknown"].contains($0.state) })
         newMeetingID = nil
     }
@@ -386,40 +419,43 @@ final class OfficeChatStore: ObservableObject {
                 let owner = agent, lane = scope, taskID = sourceTaskID
                 let create = Task { try await service.createOfficeMeeting(id: id, title: String(title), scope: lane, owner: owner, sourceTaskID: taskID) }
                 meetingRequestTask = create
-                let created = try await create.value
+                let created = try await withTaskCancellationHandler(operation: { try await create.value }, onCancel: { create.cancel() })
+                try Task.checkCancellation()
                 guard ticket == generation, !create.isCancelled else { return nil }
                 // Moving to the saved meeting keeps edits made while creation was in flight.
                 let currentDraft = draft, currentSource = source, unsavedKey = conversationKey
-                applyMeeting(created); draft = currentDraft; source = currentSource
+                try applyMeeting(created); draft = currentDraft; source = currentSource
                 sessions[unsavedKey] = Session(owner: owner)
             }
             guard let saved = meeting else { throw OfficeChatError.invalidResponse }
             let requestID = UUID()
-            unresolved[receiptKey(saved.meetingId)] = PendingReceipt(requestID: requestID, message: message)
-            let send = Task { try await service.sendOfficeMeeting(id: saved.meetingId, requestID: requestID, revision: saved.revision, message: value) }
+            let receipt = PendingReceipt(requestID: requestID, originalDraft: message, sentMessage: value,
+                                         scope: saved.scope, owner: saved.ownerId, revision: saved.revision)
+            unresolved[receiptKey(saved.meetingId)] = receipt
+            let send = Task { try await service.sendOfficeMeeting(id: saved.meetingId, scope: saved.scope, requestID: requestID, revision: saved.revision, message: value) }
             meetingRequestTask = send
-            let detail = try await send.value
+            let detail = try await withTaskCancellationHandler(operation: { try await send.value }, onCancel: { send.cancel() })
+            try Task.checkCancellation()
             guard ticket == generation, !send.isCancelled else { return nil }
-            applyMeeting(detail)
-            guard detail.turns.contains(where: { $0.id == requestID && $0.state == "generated" }) else {
+            guard detail.meeting.meetingId == saved.meetingId, detail.meeting.scope == saved.scope else { throw OfficeChatError.unconfirmed }
+            try applyMeeting(detail)
+            guard detail.turns.contains(where: { receipt.matches($0, in: detail) && $0.state == "generated" }) else {
                 meetingNeedsReload = true; throw OfficeChatError.unconfirmed
             }
-            if draftRevision == draftVersion, draft == message { draft = ""; source = .text }
+            if draftRevision == draftVersion, draft.utf8.elementsEqual(message.utf8) { draft = ""; source = .text }
             return value
         } catch {
             guard ticket == generation else { return nil }
             // A transport failure cannot tell whether the server reserved or completed a round.
             // Keep its ID and require a read; never turn an ambiguous send into another generation.
             var rejected = (error as? OfficeChatError) == .invalidInput || (error as? OfficeChatError) == .preview
-            var conflict = false
             if let failure = error as? HubTransportError {
                 switch failure {
-                case .conflict: conflict = true
                 case .unauthorized, .unconfigured, .server(statusCode: 400), .server(statusCode: 404): rejected = true
                 default: break
                 }
             }
-            if rejected || conflict {
+            if rejected {
                 if let id = meeting?.meetingId { unresolved.removeValue(forKey: receiptKey(id)) }
                 newMeetingID = nil
             }

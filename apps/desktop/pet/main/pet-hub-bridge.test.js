@@ -10,6 +10,8 @@ test('허브 채널: 세션부터 Council 넘기기까지, 집중은 셸', () =>
     'pet:journal-read', 'pet:journal-save', 'pet:calendar-week',
     'pet:notices-list', 'pet:notices-read', 'pet:notices-hide', 'pet:notices-read-all',
     'pet:chat-send', 'pet:chat-cancel', 'pet:chat-session', 'pet:council-handoff',
+    'pet:office-inbox', 'pet:office-receipt', 'pet:office-meetings', 'pet:office-meeting',
+    'pet:office-create', 'pet:office-send',
   ]);
   assert.deepEqual(B.FOCUS_CHANNELS, ['pet:focus-start', 'pet:focus-stop', 'pet:focus-state']);
   for (const channel of [...B.HUB_CHANNELS, ...B.FOCUS_CHANNELS]) assert.ok(C.PET_INVOKE.includes(channel));

@@ -91,6 +91,16 @@ struct HubConnectionContent: View {
         }
         .scrollIndicators(.hidden)
         .foregroundStyle(Palette.glassInk)
+        .background(LoginTabNavigation { backwards in
+            guard !isSubmitting, !model.hub.isConnecting else { return false }
+            switch (focusedField, backwards) {
+            case (.username, false): focusedField = .password
+            case (.address, false): focusedField = .username
+            case (.password, true): focusedField = .username
+            default: return false
+            }
+            return true
+        })
         .onAppear {
             address = model.hubBaseURL
             focusedField = .username
@@ -200,5 +210,19 @@ struct HubRefreshButton: View {
         .disabled(model.hub.isRefreshing || model.hub.isConnecting)
         .accessibilityLabel(model.hub.isRefreshing ? "Hub 새로고침 중" : "Hub 새로고침")
         .help(model.hub.isRefreshing ? "새로고침 중…" : "Hub에서 다시 불러오기")
+    }
+}
+
+struct HubOpenButton: View {
+    let model: AppModel
+    let mode: QuickMode
+
+    var body: some View {
+        Button { model.openHub(mode) } label: {
+            Image(systemName: "arrow.up.right").modifier(GlassGlyphShadow()).frame(width: 28, height: 28)
+        }
+        .buttonStyle(GlassQuietStyle())
+        .accessibilityLabel("Hub에서 열기")
+        .help("Hub에서 열기")
     }
 }

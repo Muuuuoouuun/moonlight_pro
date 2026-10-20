@@ -72,13 +72,14 @@ function windowMenu() {
   };
 }
 
-function viewMenu({ platform, goBack, goForward }) {
+function viewMenu({ platform, goBack, goForward, refreshHub }) {
   const mac = isMac(platform);
   return {
     label: '보기',
     submenu: [
       { label: '새로고침', role: 'reload' },
       { label: '강력 새로고침', role: 'forceReload' },
+      ...(!mac && refreshHub ? [{ label: '허브 최신 화면 불러오기', click: refreshHub }] : []),
       { type: 'separator' },
       { label: '뒤로', accelerator: mac ? 'Command+[' : 'Alt+Left', click: goBack },
       { label: '앞으로', accelerator: mac ? 'Command+]' : 'Alt+Right', click: goForward },
@@ -97,7 +98,7 @@ function viewMenu({ platform, goBack, goForward }) {
 // loginItem 은 macOS 앱 메뉴에만 들어간다(Windows 는 트레이 메뉴에 있다).
 function buildAppMenuTemplate({ platform, name = 'Moonlight', quickAccelerator, widgetItem, loginItem = null, actions }) {
   const quickCapture = { label: '빠른 입력', accelerator: quickAccelerator, registerAccelerator: false, click: actions.quickCapture };
-  const view = viewMenu({ platform, goBack: actions.goBack, goForward: actions.goForward });
+  const view = viewMenu({ platform, goBack: actions.goBack, goForward: actions.goForward, refreshHub: actions.refreshHub });
   if (isMac(platform)) {
     return [
       macAppMenu({ name, quickCapture, widgetItem, showSettings: actions.showSettings, loginItem }),
@@ -113,6 +114,7 @@ function buildAppMenuTemplate({ platform, name = 'Moonlight', quickAccelerator, 
         quickCapture,
         widgetItem,
         { label: '허브 주소 바꾸기', click: actions.showSettings },
+        { label: '앱 정보 · 허브 연결 확인', click: actions.showSettings },
         { type: 'separator' },
         { label: '종료', accelerator: 'CommandOrControl+Q', click: actions.quit },
       ],

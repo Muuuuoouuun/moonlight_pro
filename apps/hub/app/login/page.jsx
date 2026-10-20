@@ -4,6 +4,7 @@
 // 로컬(loopback)에서는 게이트가 통과시키므로 이 화면을 볼 일이 없다 — 배포용이다.
 
 import React from "react";
+import { desktopAllowsSessionRestore, beginDesktopLogin, acceptDesktopLogin } from "../../lib/desktop-session-intent";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import "../../components/hub/hub-tokens.css";
@@ -82,8 +83,9 @@ function LoginForm() {
 
   React.useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/operator/session", { cache: "no-store", signal: controller.signal })
-      .then(async response => response.ok ? response.json() : null)
+    desktopAllowsSessionRestore(window.moonlightSession).then(allowed => allowed && !controller.signal.aborted
+      ? fetch("/api/operator/session", { cache: "no-store", signal: controller.signal }) : null)
+      .then(async response => response?.ok ? response.json() : null)
       .then(data => {
         if (!controller.signal.aborted && data?.configured && data.status === "authenticated") {
           setState({ status: "ok", message: "이동합니다…" });
@@ -101,14 +103,17 @@ function LoginForm() {
     if (state.status === 'ready') { continueToDestination(); return; }
     if (!username.trim() || !password || state.status === "saving") return;
     setState({ status: "saving", message: "확인 중…" });
+    let desktopAttempt;
     try {
+      desktopAttempt = await beginDesktopLogin(window.moonlightSession);
       const response = await fetch("/api/operator/session", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(desktopAttempt ? { "x-moonlight-login-attempt": desktopAttempt } : {}) },
         body: JSON.stringify({ action: "login", username: username.trim(), password, rememberMe }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.ok && data.status === "authenticated") {
+        await acceptDesktopLogin(window.moonlightSession, desktopAttempt);
         setState({ status: "ok", message: "이동합니다…" });
         setPassword("");
         // Only an exact Council destination receives the in-memory draft. No advisor runs here.
@@ -128,8 +133,10 @@ function LoginForm() {
           : "아이디 또는 비밀번호를 확인하세요.",
       });
       passwordRef.current?.focus();
-    } catch {
-      setState({ status: "error", message: "연결에 실패했습니다. 다시 시도하세요." });
+    } catch (error) {
+      setState({ status: "error", message: error?.message || "연결에 실패했습니다. 다시 시도하세요." });
+    } finally {
+      if (desktopAttempt) await window.moonlightSession?.cancelLogin?.(desktopAttempt).catch(() => {});
     }
   }
 
@@ -143,6 +150,12 @@ function LoginForm() {
         <p style={{ margin: "6px 0 20px", fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>
           아이디와 비밀번호로 로그인하세요.
         </p>
+
+        {params.get('companionLogout') === 'unconfirmed' && (
+          <p role="status" style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--fg-muted)', margin: '0 0 16px' }}>
+            앱의 로그아웃 의도를 저장했습니다. 컴패니언 반영은 미확인입니다. 저장 로그인 정보 삭제는 요청하지 않았으며 원격 세션 폐기는 확인되지 않았습니다.
+          </p>
+        )}
 
         {params.get('recoveryCleanup') === 'failed' && (
           <p role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--danger)', margin: '0 0 16px', overflowWrap: 'anywhere' }}>

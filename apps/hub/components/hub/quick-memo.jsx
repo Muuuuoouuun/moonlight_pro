@@ -25,6 +25,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   const [error, setError] = React.useState("");
   const [aiAnalyzing, setAiAnalyzing] = React.useState(false);
   const [extractedActions, setExtractedActions] = React.useState(null);
+  const actionsRef = React.useRef(null);
   const [savingActions, setSavingActions] = React.useState(() => new Set());
   const taskWriter = React.useRef(null);
   const extractionRequest = React.useRef(0);
@@ -52,6 +53,18 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   const unavailable = blocked || otherDialog;
   const shown = open && !unavailable;
   routeRef.current = route;
+
+  function changeActions(update) {
+    const next = typeof update === "function" ? update(actionsRef.current) : update;
+    actionsRef.current = next;
+    setExtractedActions(next);
+  }
+  function retainSubmittedActions() {
+    changeActions(previous => {
+      const actions = previous?.actions.filter(action => action.submitted) || [];
+      return actions.length ? { summary: "", actions } : null;
+    });
+  }
 
   // Measure against a fixed anchor so expansion cannot chase the pointer.
   // Proximity listens without adding an invisible hit area over the page.
@@ -109,7 +122,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     extractionRequest.current += 1;
     extractionController.current?.abort();
     extractionController.current = null;
-    setExtractedActions(null);
+    changeActions(null);
     setAiAnalyzing(false);
     const flush = () => persist();
     window.addEventListener("pagehide", flush);
@@ -241,7 +254,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     extractionRequest.current += 1;
     extractionController.current?.abort();
     extractionController.current = null;
-    setExtractedActions(null);
+    retainSubmittedActions();
     setAiAnalyzing(false);
     setReceipt(null);
     setIdeaReceipt(null);
@@ -274,7 +287,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
       extractionRequest.current += 1;
       extractionController.current?.abort();
       extractionController.current = null;
-      setExtractedActions(null);
+      retainSubmittedActions();
       setAiAnalyzing(false);
       setReceipt(result.id);
       setIdeaReceipt(result.contentId || null);
@@ -314,7 +327,10 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
       if (!isCurrent()) return;
       if (res.state === "done") {
         const parsed = parseExtractedActions(res.text);
-        setExtractedActions({ ...parsed, actions: parsed.actions.map(action => ({ ...action, id: crypto.randomUUID() })) });
+        changeActions(previous => ({ ...parsed, actions: [
+          ...(previous?.actions.filter(action => action.submitted) || []),
+          ...parsed.actions.map(action => ({ ...action, id: crypto.randomUUID(), sourceId: current.current.id })),
+        ] }));
         if (!parsed.actions.length) setError("실행 항목을 확인하지 못했습니다. 메모를 보완한 뒤 다시 추출하세요.");
       } else {
         setError(res.note || "액션 추출에 실패했습니다.");
@@ -328,9 +344,9 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   };
 
   const handleSaveExtractedTask = async (action) => {
-    if (action.saved || pendingActions.current.has(action.id)) return;
+    const candidate = actionsRef.current?.actions.find(item => item.id === action.id);
+    if (!candidate || candidate.saved || (!candidate.submitted && candidate.sourceId !== current.current?.id) || pendingActions.current.has(action.id)) return;
     pendingActions.current.add(action.id);
-    const sourceId = current.current?.id;
     setSavingActions(new Set(pendingActions.current));
     setError("");
     try {
@@ -339,13 +355,19 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
         // One writer per mount keeps its retry identity, so a second tap never makes a second task.
         taskWriter.current ??= createAdviceTaskWriter({ fetchImpl });
       }
-      const result = await taskWriter.current.save({ key: action.id, title: action.title });
-      if (!alive.current || current.current?.id !== sourceId) return;
+      const currentAction = actionsRef.current?.actions.find(item => item.id === action.id);
+      if (!alive.current || !currentAction || (!currentAction.submitted && currentAction.sourceId !== current.current?.id)) return;
+      // Once sent, the row owns its immutable retry identity independently of later memo edits.
+      changeActions(previous => ({ ...previous, actions: previous.actions.map(item => item.id === action.id ? { ...item, submitted: true } : item) }));
+      const result = await taskWriter.current.save({ key: currentAction.id, title: currentAction.title });
+      if (!alive.current || !actionsRef.current?.actions.some(item => item.id === action.id)) return;
       if (result.state === "saved") {
-        setExtractedActions(prev => prev && ({ ...prev, actions: prev.actions.map(item => item.id === action.id ? { ...item, saved: true } : item) }));
+        changeActions(previous => previous && ({ ...previous, actions: previous.actions.map(item => item.id === action.id ? { ...item, saved: true } : item) }));
+        window.dispatchEvent(new Event("moonlight:tasks-saved"));
       } else setError(result.note);
     } catch {
-      if (alive.current && current.current?.id === sourceId) setError("할 일로 저장하지 못했어요. 다시 시도해 주세요.");
+      const failedAction = actionsRef.current?.actions.find(item => item.id === action.id);
+      if (alive.current && failedAction && (failedAction.submitted || failedAction.sourceId === current.current?.id)) setError("할 일로 저장하지 못했어요. 다시 시도해 주세요.");
     } finally {
       pendingActions.current.delete(action.id);
       if (alive.current) setSavingActions(new Set(pendingActions.current));

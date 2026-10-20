@@ -91,7 +91,8 @@ function resolveApiUrl(origin, path) {
 
 // Office chat POST(정확한 경로)만 긴 예산을 쓴다. 쿼리·접미사·인코딩 변형은 일반 예산.
 function timeoutsFor(path, method = 'GET') {
-  const exactChat = path === OFFICE_CHAT_PATH && String(method).toUpperCase() === 'POST';
+  const exactChat = (path === OFFICE_CHAT_PATH || /^\/api\/hub\/office\/meetings\/[\da-f-]{36}\/turns$/i.test(path))
+    && String(method).toUpperCase() === 'POST';
   return exactChat
     ? { request: LIMITS.chatTimeoutMs, total: LIMITS.chatTotalTimeoutMs }
     : { request: LIMITS.requestTimeoutMs, total: LIMITS.totalTimeoutMs };
@@ -116,6 +117,7 @@ function headerSafe(value) {
 //   fetch        WHATWG fetch 호환(기본 globalThis.fetch). redirect:'manual' 을 지켜야 한다.
 //   cookieHeader async (url) → 'name=value; …' | '' — Electron 에서는 session.defaultSession 쿠키
 //   storeCookies async (setCookieHeaders[], url) → void — 성공 응답의 Set-Cookie 를 세션에 되돌린다(선택)
+//   isCurrent    () → boolean — 폐기된 연결은 쿠키 조회·후속 요청을 시작하지 않는다
 //   setTimeout/clearTimeout 주입(테스트용)
 function createHubClient(options = {}) {
   const origin = canonicalOrigin(options.origin);
@@ -125,13 +127,16 @@ function createHubClient(options = {}) {
   const storeCookies = typeof options.storeCookies === 'function' ? options.storeCookies : null;
   const startTimer = options.setTimeout || setTimeout;
   const stopTimer = options.clearTimeout || clearTimeout;
+  const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : () => true;
 
   async function request(path, init = {}) {
+    if (!isCurrent()) throw fail('error', 'stale-origin');
     const method = String(init.method || 'GET').toUpperCase();
     if (!METHODS.has(method)) throw fail('error', 'rejected-url');
     const url = resolveApiUrl(origin, path);
     const budget = timeoutsFor(path, method);
     const headers = { accept: 'application/json' };
+    if (init.officeReadVersion === 1) headers['x-office-read-version'] = '1';
     if (method !== 'GET') {
       headers.origin = origin;
       headers['content-type'] = 'application/json';
@@ -145,6 +150,7 @@ function createHubClient(options = {}) {
       }
       if (headerSafe(cookie)) headers.cookie = cookie;
     }
+    if (!isCurrent()) throw fail('error', 'stale-origin');
     let body;
     if (method !== 'GET' && init.body !== undefined && init.body !== null) {
       body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
@@ -198,11 +204,25 @@ function createHubClient(options = {}) {
       if (httpStatus === 401 || httpStatus === 403 || status === 'unauthorized' || status === 'forbidden') {
         throw fail('unauthorized', 'unauthorized', httpStatus);
       }
-      if (httpStatus === 409) throw fail('conflict', 'conflict', httpStatus);
+      if (httpStatus === 409) {
+        // These claim-RPC failures occur only after checking that this request ID
+        // has no existing turn. Other conflicts can refer to an accepted request.
+        const unclaimed = method === 'POST' && /^\/api\/hub\/office\/meetings\/[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}\/turns$/i.test(path)
+          && status === 'conflict' && envelope?.persisted === false
+          && ['meeting-revision-changed', 'meeting-closed'].includes(envelope.error)
+          && Object.keys(envelope).every(key => ['status', 'error', 'persisted', 'businessWrites'].includes(key))
+          && (envelope.businessWrites === undefined || envelope.businessWrites === false);
+        throw fail('conflict', unclaimed ? envelope.error : 'conflict', httpStatus);
+      }
+      if (method === 'GET' && /^\/api\/hub\/office\/meetings\/[\da-f-]{36}\?/.test(path)
+        && httpStatus === 200 && status === 'error' && source === 'error'
+        && ['office-meeting-snapshot-changed','office-meeting-snapshot-expired','office-meeting-page-scope-mismatch',
+          'office-meeting-page-cursor-invalid','office-meeting-restoration-limit','office-meeting-turn-limit',
+          'office-meeting-page-version-unsupported'].includes(envelope.error)) throw fail('error', envelope.error, httpStatus);
       if (httpStatus < 200 || httpStatus >= 300 || status === 'error' || source === 'error') throw fail('error', 'server', httpStatus);
       if (!envelope && httpStatus !== 204) throw fail('invalid', 'invalid-response', httpStatus);
 
-      if (storeCookies && response.headers && typeof response.headers.getSetCookie === 'function') {
+      if (isCurrent() && storeCookies && response.headers && typeof response.headers.getSetCookie === 'function') {
         const setCookies = response.headers.getSetCookie();
         if (setCookies.length) {
           try {

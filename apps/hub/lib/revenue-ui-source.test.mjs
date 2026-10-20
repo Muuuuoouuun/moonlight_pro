@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import ts from "typescript";
 
 const revenueSource = await readFile(
   new URL("../components/hub/pages/revenue.jsx", import.meta.url),
@@ -34,17 +35,27 @@ test("Leads wires the bulk bar with per-record persistence and named partial fai
 // 스테이지 변경 되돌리기(24차) — 최고 빈도 뮤테이션의 마지막 undo 공백. 지연 쓰기 계약:
 // 창이 닫힌 뒤에만 PATCH, 되돌리기는 네트워크 없는 진짜 취소, 연속 이동은 최초 원위치 복원.
 test("deal stage moves defer the PATCH behind a 3.5s undo window", () => {
-  const moveBlock = revenueSource.match(/const pendingStageRef[\s\S]*?\n  \};/);
-  assert.ok(moveBlock, "지연 쓰기 move 블록이 있어야 한다");
-  assert.match(moveBlock[0], /scheduleUndoable\(key, \(\) => \{/);
+  // Find the actual move initializer; adjacent helpers are not its boundary.
+  const parsed = ts.createSourceFile("revenue.jsx", revenueSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+  const component = parsed.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "Deals");
+  let moveNode;
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(parsed) === "move") moveNode = node.initializer;
+    ts.forEachChild(node, visit);
+  }
+  assert.ok(component, "Deals must exist");
+  visit(component);
+  assert.ok(moveNode, "지연 쓰기 move 블록이 있어야 한다");
+  const moveBlock = moveNode.getText(parsed);
+  assert.match(moveBlock, /scheduleUndoable\(key, \(\) => \{/);
   // PATCH는 예약 콜백 안에서만 — 즉시 실행 경로가 남으면 undo가 역연산이 돼버린다.
-  const immediatePersist = moveBlock[0].split('scheduleUndoable')[0];
+  const immediatePersist = moveBlock.split('scheduleUndoable')[0];
   assert.doesNotMatch(immediatePersist, /saveRevenueRecord/);
-  assert.match(moveBlock[0], /const undoBase = pendingStageRef\.current\.get\(key\) \?\? prevStage;/);
-  assert.match(moveBlock[0], /if \(cancelUndoable\(key\)\)/);
+  assert.match(moveBlock, /const undoBase = pendingStageRef\.current\.get\(key\) \?\? prevStage;/);
+  assert.match(moveBlock, /if \(cancelUndoable\(key\)\)/);
   // 창 종료 시 알림 소거(19차 수명 계약) + 실패 롤백 명명.
-  assert.match(moveBlock[0], /setBoardNotice\(cur => \(cur\?\.key === key \? null : cur\)\)/);
-  assert.match(moveBlock[0], /스테이지 이동 저장 실패/);
+  assert.match(moveBlock, /setBoardNotice\(cur => \(cur\?\.key === key \? null : cur\)\)/);
+  assert.match(moveBlock, /스테이지 이동 저장 실패/);
 });
 
 // 딜 backlink 노출 — create_project가 이미 쓰고 있던 meta.origin_deal_id를 되읽는다.

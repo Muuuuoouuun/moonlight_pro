@@ -9,6 +9,8 @@ import { recommendationForSubject } from './guru-recommendations-client.js';
 import { monthKeyOf, normalizeTargetAmount, targetForMonth } from '../../lib/revenue-target.js';
 import { planBaselineFor } from '../../lib/deal-payments.js';
 import { buildMoneyModel } from '../../lib/deal-money.js';
+import { buildDealWrite, persistRevenueRecord } from '../../lib/sales-os/revenue-write.js';
+import { mapDeal } from '../../lib/repositories/revenue-ledger.js';
 
 // Regression: ISSUE-001 — column moves unmount the drag source before dragend.
 // Found by /qa on 2026-09-21. Browser evidence: /tmp/moonlight-deals-qa/drag-result.png.
@@ -28,6 +30,7 @@ const javascript = ts.transpileModule(component.replace('export function', 'func
 function mount({ state = 'live', records = [], workspace, search = 'view=stage', save, selectedId = null, guruRecommendations = [] } = {}) {
   const slots = [], timers = [], pending = new Map(), selections = [], replaced = [], recommendationReads = [];
   let index = 0, tree, reloads = 0;
+  const errors = [];
   const React = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
     useState: initial => {
@@ -40,7 +43,7 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
   };
   const dependencies = {
     React, setTimeout: fn => { timers.push(fn); }, clearTimeout: () => {},
-    useToast: () => ({ success() {}, error() {}, info() {} }),
+    useToast: () => ({ success() {}, error: (...args) => errors.push(args), info() {} }),
     useRevenueLedger: () => ({ ledger: { deals: records, stages: DEAL_STAGES }, syncState: state, reload: () => { reloads++; } }),
     useSearchParams: () => new URLSearchParams(search), useRouter: () => ({ replace: url => { replaced.push(url); } }), usePathname: () => '/dashboard/revenue/deals',
     useScopeFilter: () => React.useState('all'), getWorkspace: scope => scope ? { label: scope } : null,
@@ -63,12 +66,110 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
     return [...(predicate(node) ? [node] : []), ...(node.props?.children || []).flatMap(child => findAll(predicate, child))];
   }
   render();
-  return { render, findAll, pending, replaced, flush: () => { timers.splice(0).forEach(fn => fn()); }, reloads: () => reloads, lastSelection: () => selections[selections.length - 1], recommendationReads };
+  return { render, findAll, pending, replaced, errors, flush: () => { timers.splice(0).forEach(fn => fn()); }, reloads: () => reloads, lastSelection: () => selections[selections.length - 1], recommendationReads };
 }
 
 function deal() { return { id: 'stage-regression', stage: DEAL_STAGES[0].key, value: 0 }; }
 const cardOf = app => app.findAll(n => n.props['data-deal-card'])[0];
 const drawerOf = app => app.findAll(n => n.type === 'EditDrawer')[0];
+
+// Run the actual browser save adapter too; only the HTTP boundary is synthetic.
+const coreSource = readFileSync(new URL('./pages/revenue-core.jsx', import.meta.url), 'utf8');
+const saveSource = coreSource.slice(coreSource.indexOf('export async function saveRevenueRecord('), coreSource.indexOf('export function LeadEnrichmentPanel('));
+const saveThroughTransport = new Function(`${saveSource.replace('export async function', 'async function')}; return saveRevenueRecord;`)();
+
+function installDealTransport(t) {
+  const originalFetch = globalThis.fetch;
+  const keys = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'COM_MOON_DEFAULT_WORKSPACE_ID'];
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  process.env.SUPABASE_URL = 'https://synthetic.invalid';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'synthetic-test-key';
+  process.env.COM_MOON_DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  });
+  let row = { id: '00000000-0000-0000-0000-000000000002', title: '합성 거래', stage: 'proposal', amount: 100000, meta: { stage_detail: 'quote', next_action: '이전 행동', provenance: 'synthetic' } };
+  const requests = [];
+  const json = value => ({ ok: true, status: 200, json: async () => structuredClone(value), text: async () => JSON.stringify(value), headers: { get: () => null } });
+  globalThis.fetch = async (input, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : null;
+    requests.push({ url: String(input), method: init.method || 'GET', body });
+    if (String(input) === '/api/hub/revenue/deal') {
+      assert.equal(init.method, 'POST');
+      assert.equal(body.op, 'update');
+      return json(await persistRevenueRecord({ table: 'deals', op: body.op, id: body.id, payload: body, build: buildDealWrite }));
+    }
+    const url = new URL(String(input));
+    assert.equal(url.origin, 'https://synthetic.invalid');
+    assert.equal(url.pathname, '/rest/v1/deals');
+    if (!init.method || init.method === 'GET') return json([row]);
+    assert.equal(init.method, 'PATCH');
+    row = { ...row, ...structuredClone(body) };
+    return json([row]);
+  };
+  return { row: () => row, requests };
+}
+
+test('contact draft next action survives the real drawer save and persistence mapper', async t => {
+  const transport = installDealTransport(t);
+  const record = { id: transport.row().id, name: '합성 거래', stage: 'quote', value: 100000, nextAction: '이전 행동' };
+  const app = mount({ records: [record], save: saveThroughTransport });
+  cardOf(app).props.onClick(); app.render();
+  app.findAll(n => n.type === 'DealOutreachDrafter')[0].props.onApplyNextAction('  합성 후속 연락  ');
+  app.render();
+  assert.equal(drawerOf(app).props.record.nextAction, '  합성 후속 연락  ');
+  const receipt = await drawerOf(app).props.onSave();
+  assert.equal(receipt.ok, true);
+  assert.equal(transport.row().meta.next_action, '합성 후속 연락');
+  assert.equal(transport.row().meta.provenance, 'synthetic');
+  assert.equal(transport.requests.filter(request => request.method === 'PATCH').length, 1);
+  const reopened = mount({ records: [mapDeal(transport.row(), new Map())] });
+  cardOf(reopened).props.onClick(); reopened.render();
+  assert.equal(drawerOf(reopened).props.record.nextAction, '합성 후속 연락');
+});
+
+test('direct deal edits retain omitted next action and explicit snake-case changes including clearing', async t => {
+  const transport = installDealTransport(t);
+  const id = transport.row().id;
+  assert.equal((await saveThroughTransport('deal', 'update', { id, name: '합성 이름 수정' })).ok, true);
+  assert.equal(transport.row().title, '합성 이름 수정');
+  assert.equal(transport.row().meta.next_action, '이전 행동');
+  assert.equal((await saveThroughTransport('deal', 'update', { id, next_action: '  직접 수정  ', nextAction: '오래된 표시 값' })).ok, true);
+  assert.equal(transport.row().meta.next_action, '직접 수정');
+  assert.equal((await saveThroughTransport('deal', 'update', { id, next_action: '', nextAction: '오래된 표시 값' })).ok, true);
+  assert.equal(transport.row().meta.next_action, null);
+  assert.equal(transport.row().meta.provenance, 'synthetic');
+});
+
+test('409 preserves the deal draft, offers an actual reload, and only saves on explicit retry', async t => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  let conflict = true, writes = 0;
+  globalThis.fetch = async input => {
+    assert.equal(input, '/api/hub/revenue/deal');
+    writes++;
+    return { ok: !conflict, json: async () => ({ status: conflict ? 'conflict' : 'saved' }) };
+  };
+  const app = mount({ records: [{ id: 'synthetic-deal', stage: 'quote', name: '합성 거래', value: 100000 }], save: saveThroughTransport });
+  cardOf(app).props.onClick(); app.render();
+  drawerOf(app).props.onChange('name', '보존할 합성 입력'); app.render();
+  const rejected = await drawerOf(app).props.onSave(); app.render();
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.status, 'conflict');
+  assert.equal(drawerOf(app).props.record.name, '보존할 합성 입력');
+  const [message, notice] = app.errors.at(-1);
+  assert.match(message, /최신 기록.*다시 시도/);
+  notice.action.onClick();
+  assert.equal(app.reloads(), 1);
+  assert.equal(writes, 1, 'reload does not silently resubmit');
+  conflict = false;
+  assert.equal((await drawerOf(app).props.onSave()).ok, true);
+  assert.equal(writes, 2);
+});
 
 test('drag contact → potential releases opacity and permits detail click without source dragend', () => {
   const app = mount({ records: [deal()] });

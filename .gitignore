@@ -44,3 +44,5 @@ google-credentials*.json
 output/
 
 .vercel
+# Generated desktop build identity; packaged with the executable.
+apps/desktop/build-info.json

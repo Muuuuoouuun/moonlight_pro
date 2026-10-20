@@ -575,7 +575,7 @@ export function Runs({ onNavigate } = {}) {
             <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
           </div>
           <div style={{ fontSize: 11, color: failureRuns.length > 0 ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}>
-            {failureRuns.length > 0 ? '실패 원인 확인 필요' : '모든 프로세스 정상'}
+            {failureRuns.length > 0 ? '실패 원인 확인 필요' : syncState === 'live' ? '조회한 실패 기록 없음' : '실패 여부 확인 필요'}
           </div>
         </Card>
 
@@ -584,7 +584,8 @@ export function Runs({ onNavigate } = {}) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
             <Dot tone={syncState === 'error' ? 'danger' : 'neutral'} />
             <span className="mono" style={{ fontSize: 15, fontWeight: 500, color: 'var(--fg)' }}>
-              {syncState === 'error' ? 'Degraded' : 'Live'}
+              {syncState === 'live' ? (latestHeartbeat ? '핑 기록 확인됨' : '핑 기록 없음')
+                : ({ loading: '확인 중', partial: '일부 확인', preview: '연결 전', error: '확인 불가' }[syncState] || '확인 필요')}
             </span>
             {latestHeartbeat && (
               <Badge tone="neutral" size="xs" numeric>{latestHeartbeat.ms}ms</Badge>
@@ -656,26 +657,29 @@ export function Runs({ onNavigate } = {}) {
 
       <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
-          {displayRows.length === 0 && (
+          {displayRows.length === 0 && syncState === 'loading' && <Skeleton lines={3} label="실행 로그 읽는 중" />}
+          {displayRows.length === 0 && syncState !== 'loading' && (
             <EmptyState
               icon={filter === 'errors' ? 'shield' : 'runs'}
               title={
-                filter === 'errors'
-                  ? '발생한 실행 오류가 없습니다'
+                syncState === 'error' ? '실행 로그를 읽지 못했습니다'
+                  : syncState === 'partial' ? '일부 실행 로그만 확인했습니다'
+                  : syncState !== 'live' ? '실행 로그 연결이 필요합니다'
+                  : filter === 'errors'
+                    ? '조회한 실행 기록에 오류가 없습니다'
                   : filter === 'events' && heartbeatRuns.length > 0
                     ? '기록된 비즈니스 실행 이벤트가 없습니다'
-                    : syncState === 'error'
-                      ? '실행 로그를 읽지 못했습니다'
-                      : '실행 로그가 없습니다'
+                    : '실행 로그가 없습니다'
               }
               description={
-                filter === 'errors'
-                  ? '모든 자동화 및 엔진 프로세스가 정상 작동하고 있습니다.'
+                syncState === 'error' ? '새로고침으로 기록 연결을 다시 확인하세요. 실행 상태는 아직 판단할 수 없습니다.'
+                  : syncState === 'partial' ? '누락된 기록이 있을 수 있습니다. 새로고침으로 다시 확인하세요.'
+                  : syncState !== 'live' ? '기록 연결 후 실행 결과를 확인할 수 있습니다.'
+                  : filter === 'errors'
+                    ? '이번에 조회한 범위에 오류 기록이 없습니다. 전체 시스템의 정상 여부를 보장하지 않습니다.'
                   : filter === 'events' && heartbeatRuns.length > 0
-                    ? `엔진 헬스체크는 정상 작동 중입니다 (최근 핑: ${latestHeartbeat?.at || '방금'} · ${latestHeartbeat?.ms || 0}ms). 고객 연동이나 웹훅이 실행되면 여기에 나타납니다.`
-                    : syncState === 'error'
-                      ? '화면을 새로고침하여 기록 연결을 다시 시도하세요.'
-                      : 'Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다.'
+                    ? `조회한 기록에는 시스템 핑만 있습니다 (최근 핑: ${latestHeartbeat?.at || '시각 미확인'} · ${latestHeartbeat?.ms || 0}ms).`
+                    : 'Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다.'
               }
               action={
                 filter === 'events' && heartbeatRuns.length > 0 ? (

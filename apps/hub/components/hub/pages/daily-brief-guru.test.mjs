@@ -32,7 +32,7 @@ function mount(dailyFocus) {
     },
   };
   const deps = { React, brandInWorkspace, FOCUS_REACTION_LABEL: REACTION_LABEL };
-  for (const name of ['Card', 'Iconed', 'Badge', 'IconButton', 'Button', 'SyncBadge', 'TruthBadge', 'CertaintyBadge', 'CalendarOutcome', 'FloatingMentorWidget']) {
+  for (const name of ['Card', 'Iconed', 'Badge', 'IconButton', 'Button', 'SyncBadge', 'TruthBadge', 'CertaintyBadge', 'CalendarOutcome', 'TodayTimeFlow', 'FloatingMentorWidget']) {
     deps[name] = name;
   }
   const FocusSlots = new Function(...Object.keys(deps), `${sectionJs}; return FocusSlots;`)(...Object.values(deps));

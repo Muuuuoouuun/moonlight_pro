@@ -24,6 +24,7 @@ const { randomUUID } = require('node:crypto');
 const { LIMITS, CHARACTERS } = require('../shared/contract');
 const { canonicalOrigin, createHubClient, electronCookieBridge, fail, okEnvelope, errorEnvelope, HubError } = require('./pet-hub-client');
 const { createHubApi, isUuid } = require('./pet-hub-api');
+const { createOfficeApi } = require('./pet-office-api');
 const { createPending } = require('./pet-pending');
 const { createActivity, badgeLabel } = require('./pet-activity');
 const { createChat } = require('./pet-chat');
@@ -34,6 +35,7 @@ const HUB_STATUSES = Object.freeze(['connected', 'unauthorized', 'not-configured
 const CHANNEL_METHODS = Object.freeze([
   'session', 'tasksList', 'tasksAdd', 'tasksToggle', 'journalRead', 'journalSave', 'calendarWeek',
   'noticesList', 'noticesRead', 'noticesHide', 'noticesReadAll', 'chatSend', 'chatCancel', 'chatSession', 'councilHandoff',
+  'officeInbox', 'officeReceipt', 'officeMeetings', 'officeMeeting', 'officeCreate', 'officeSend',
 ]);
 // 이 상태에서는 폴링이 알림 원천(문의·일정)을 읽지 않고 세션만 가볍게 확인한다 — 401 을 60초마다 쌓지 않는다.
 const PROBE_ONLY_STATUSES = Object.freeze(['unauthorized', 'not-configured']);
@@ -154,6 +156,7 @@ function createPetHub(input = {}) {
   let lastBadge = 0;
   let stopPollingFn = null;
   let pollInFlight = null;
+  let chatRequest = null; // Reserve a single send before connection preparation finishes.
 
   function emit(name, payload) {
     try {
@@ -197,25 +200,34 @@ function createPetHub(input = {}) {
     onReply: (payload) => emit('pet:chat-reply', payload),
   });
 
-  function connect(originInput) {
+  function connect(originInput, force = false) {
     const origin = canonicalOrigin(originInput);
-    if (conn && origin === conn.origin) return conn.ready;
+    if (conn && origin === conn.origin && !force) return conn.ready;
+    const previous = conn;
     conn = null;
+    pollInFlight = null;
+    chatRequest = null;
     if (!origin) {
       chat.configure({ service: null, origin: null });
       const ready = activity.configure({ service: null, origin: null });
       setHubStatus('not-configured');
       return ready.then(() => undefined);
     }
+    let next;
     const client = createHubClient({
       origin, fetch: options.fetch, cookieHeader: options.cookieHeader, storeCookies: options.storeCookies,
       setTimeout: options.setTimeout, clearTimeout: options.clearTimeout,
+      isCurrent: () => conn === next,
     });
     const api = createHubApi(client);
-    const pending = createPending({ api, store, origin, now: clock });
-    const next = { origin, client, api, pending, ready: null };
+    const pending = previous?.origin === origin ? previous.pending : createPending({ api, store, origin, now: clock });
+    pending.setApi(api);
+    // Preserve initialization and any in-flight write state across cookie changes.
+    // Reloading a snapshot here can resurrect an already acknowledged command.
+    const pendingReady = previous?.origin === origin ? previous.pendingReady : pending.load();
+    next = { origin, client, api, office: createOfficeApi(client), pending, pendingReady, ready: null };
     chat.configure({ service: api, origin });
-    next.ready = Promise.all([pending.load(), activity.configure({ service: api, origin })]).then(() => undefined);
+    next.ready = Promise.all([pendingReady, activity.configure({ service: api, origin })]).then(() => undefined);
     conn = next;
     setHubStatus('unknown');
     return next.ready;
@@ -228,6 +240,7 @@ function createPetHub(input = {}) {
     const current = conn;
     if (!current) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
     await current.ready;
+    if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
     let envelope;
     try {
       const result = await fn(current);
@@ -256,6 +269,12 @@ function createPetHub(input = {}) {
 
   // ── 채널 ─────────────────────────────────────────────────────────────
   const hub = {
+    officeInbox(payload) { return run(async c => ({ data: await c.office.inbox(payloadOf(payload)) })); },
+    officeReceipt(payload) { return run(async c => ({ data: await c.office.receipt(payloadOf(payload)) })); },
+    officeMeetings(payload) { return run(async c => ({ data: await c.office.meetings(payloadOf(payload)) })); },
+    officeMeeting(payload) { return run(async c => ({ data: await c.office.detail(payloadOf(payload)) })); },
+    officeCreate(payload) { return run(async c => ({ data: await c.office.create(payloadOf(payload)) })); },
+    officeSend(payload) { return run(async c => ({ data: await c.office.send(payloadOf(payload)) })); },
     // 'pet:hub-session' → { status:'authenticated'|'anonymous', configured, reason }
     session() {
       return run(async (c) => ({ data: await c.client.sessionStatus() }),
@@ -372,14 +391,26 @@ function createPetHub(input = {}) {
     // 'pet:chat-send' {ownerId, scope, message} → { turn, userTurn }
     async chatSend(input) {
       const current = conn;
-      if (current) await current.ready;
-      const envelope = await chat.send(payloadOf(input));
-      if (current && current === conn) setHubStatus(statusFromEnvelope(envelope));
-      return envelope;
+      if (chatRequest) return errorEnvelope(fail('error', 'busy'));
+      const ticket = {};
+      chatRequest = ticket;
+      try {
+        if (current) await current.ready;
+        if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
+        if (chatRequest !== ticket) return errorEnvelope(fail('error', 'cancelled'));
+        const envelope = await chat.send(payloadOf(input));
+        if (current && current === conn && chatRequest === ticket) setHubStatus(statusFromEnvelope(envelope));
+        return envelope;
+      } finally {
+        if (chatRequest === ticket) chatRequest = null;
+      }
     },
     // 'pet:chat-cancel' {} → { cancelled }
     chatCancel() {
-      return Promise.resolve(okEnvelope('live', { cancelled: chat.cancel() }));
+      const queued = chatRequest !== null;
+      chatRequest = null;
+      const active = chat.cancel();
+      return Promise.resolve(okEnvelope('live', { cancelled: queued || active }));
     },
     // 'pet:chat-session' {ownerId, scope, draft?} → { turns, draft, busy(이 대화가 보내는 중: boolean), sending(=busy), busyWith(보내는 대화 {ownerId,scope,message}|null), error }
     // 이 대화를 '보고 있음'으로 표시하고 그 대화의 답변 알림을 거둔다. 실제로 보이는지는 isChatVisible()(셸 ctx 면
@@ -446,8 +477,9 @@ function createPetHub(input = {}) {
       const current = conn;
       if (!current) return { skipped: true };
       await current.ready;
+      if (current !== conn) return { skipped: true };
       if (pollInFlight) return pollInFlight;
-      pollInFlight = (async () => {
+      const flight = (async () => {
         if (PROBE_ONLY_STATUSES.includes(hubStatus)) {
           await hub.session();
           if (current !== conn || hubStatus !== 'connected') return { skipped: true, probed: true, status: hubStatus };
@@ -459,10 +491,11 @@ function createPetHub(input = {}) {
         }
         return result;
       })();
+      pollInFlight = flight;
       try {
-        return await pollInFlight;
+        return await flight;
       } finally {
-        pollInFlight = null;
+        if (pollInFlight === flight) pollInFlight = null;
       }
     },
     startPolling(intervalMs = LIMITS.pollMs) {
@@ -529,8 +562,16 @@ function createPetHub(input = {}) {
         .catch(() => {})
         .then(() => { emit('pet:hub-status', { status: hubStatus }); });
     },
+    async sessionChanged() {
+      // New connection identity rejects responses started with the old cookie.
+      // Pending writes keep their original IDs and are never replayed here.
+      await connect(conn?.origin || options.origin, true);
+      await hub.session();
+      if (hubStatus === 'connected') await hub.tick();
+    },
     dispose() {
       hub.stopPolling();
+      chatRequest = null;
       chat.configure({ service: null, origin: null });
       activity.configure({ service: null, origin: null }).catch(() => {});
       conn = null;

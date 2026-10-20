@@ -55,7 +55,7 @@ function mount(options = {}) {
     },
     useLayoutEffect(fn, deps) { this.useEffect(fn, deps); } };
 
-  const scope = { React, Button: 'Button', Checkbox: 'Checkbox', IconButton: 'IconButton', Input: 'Input', LifecycleBadge: 'LifecycleBadge', Iconed: 'Iconed',
+  const scope = { React, Button: 'Button', Checkbox: 'Checkbox', IconButton: 'IconButton', Input: 'Input', LifecycleBadge: 'LifecycleBadge', Iconed: 'Iconed', GitHubPrMark: 'GitHubPrMark',
     localStorage, window, cancelAnimationFrame() {}, ...indexOrder, styles: new Proxy({}, { get: (_, key) => key }), requestAnimationFrame: callback => frames.push(callback), ...checklist };
   const Component = new Function(...Object.keys(scope), `${compiled}\nreturn ProjectWorkList;`)(...Object.values(scope));
   const render = (next = {}) => { props = { ...props, ...next }; cursor = 0; tree = Component(props, handle); effects.splice(0).forEach(fn => fn()); return tree; };
@@ -366,4 +366,20 @@ test('inline checklist reordering uses durable writer, blocks duplicates, and re
   assert.match(text(view.tree), /다른 곳에서 먼저 바뀌었습니다/);
   assert.doesNotMatch(text(view.tree), /순서 저장됨/);
   assert.equal(view.storage.size, 0);
+});
+
+test('a task from a merged GitHub PR shows its source and completes through the same toggle path', async () => {
+  const toggled = [];
+  const githubPr = { repo: 'Muuuuoouuun/moonlight_pro', number: 37, url: 'https://github.com/Muuuuoouuun/moonlight_pro/pull/37', state: 'merged', draft: false };
+  const view = mount({ tasks: [task({ title: 'PR 37', githubPr })], onToggleTask: async (id, event) => { toggled.push({ id, event }); return { ok: true }; } });
+  const mark = view.find(node => node.type === 'GitHubPrMark');
+  assert.deepEqual(mark.props.pr, githubPr);
+  assert.equal(mark.props.done, false);
+  assert.equal(mark.props.title, 'PR 37');
+  mark.props.onComplete({ type: 'click' });
+  await settle();
+  assert.deepEqual(toggled, [{ id: task().id, event: { type: 'click' } }]);
+  // PR이 없는 할 일에도 같은 자리가 렌더되지만 pr이 비어 있어 아무것도 그리지 않는다.
+  view.render({ tasks: [task()] });
+  assert.equal(view.find(node => node.type === 'GitHubPrMark').props.pr, undefined);
 });

@@ -116,6 +116,7 @@ input[aria-invalid="true"] { border-color: var(--danger-line); }
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 24px;
 }

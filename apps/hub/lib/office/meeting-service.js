@@ -1,3 +1,4 @@
+import { createMeetingPage } from './meeting-pages.js';
 import { isAgentUuid } from '@com-moon/agent-contracts';
 import { OFFICE_IDS, OFFICE_MODES, OFFICE_DISCUSSION_VERSION, parseOfficeRequest, parseOfficeDiscussion, evaluateOfficeDiscussion } from '@com-moon/agent-contracts/office';
 
@@ -105,6 +106,14 @@ export function createOfficeMeetingService(deps) {
  }
  return {
   get,
+  async getPage(id, query, identity, context) {
+   if (!keys(query,['scope','cursor']) || !['personal','classin'].includes(query.scope)
+    || (query.cursor !== undefined && (typeof query.cursor !== 'string' || query.cursor.length > 2048))) return failure('invalid-meeting-page-query','invalid-input');
+   const detail = await get(id, identity);
+   if (detail.status !== 'ready') return detail;
+   return createMeetingPage(detail, { identity, origin:context.origin, meetingId:id.toLowerCase(), scope:query.scope,
+    cursor:query.cursor ?? null, now:deps.now?.() ?? Date.now() }, deps.pageLimits);
+  },
   async list(input, identity) {
    if (!validIdentity(identity)) return failure('office-meeting-workspace-not-configured','preview');
    let limit,before=null;

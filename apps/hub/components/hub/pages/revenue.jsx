@@ -1642,6 +1642,13 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   // 되돌리기가 없던 마지막 항목이었다(기준선 §2.8 — 24차). 창 안에서 같은 딜을 연속
   // 이동하면 예약이 대체되고 되돌리기는 최초 원위치로 복원한다. 실패 시 롤백 + 명명.
   const pendingStageRef = React.useRef(new Map()); // key → 최초 prevStage
+  const showDealConflict = (result) => {
+    if (result.status !== 'conflict') return false;
+    toast.error('다른 변경이 먼저 저장되었습니다. 최신 기록을 확인한 뒤 다시 시도하세요.', {
+      action: { label: '최신 기록 확인', onClick: () => reloadLedger() },
+    });
+    return true;
+  };
   const move = (id, to) => {
     const prevStage = deals.find(d => d.id === id)?.stage;
     if (!prevStage || prevStage === to) return;
@@ -1669,6 +1676,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
         if (r.ok) return;
         setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
         setBoardNotice({ tone: 'err', label: `스테이지 이동 저장 실패 (${r.status}) — 원위치로 되돌렸습니다` });
+        if (showDealConflict(r)) return;
         toast.error('스테이지 이동 저장 실패 — 원위치로 되돌렸습니다');
       });
     });
@@ -1709,6 +1717,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       saveRevenueRecord('deal', 'update', { id, closeAt: next, ...(planBaseline ? { planBaseline } : {}) }).then((r) => {
         if (r.ok) return;
         restore();
+        if (showDealConflict(r)) return;
         toast.error(r.status === 'preview'
           ? 'Supabase 미연결 — 예상일이 저장되지 않아 원래 날짜로 되돌렸습니다'
           : `예상일 저장 실패 (${r.status}) — 원래 날짜로 되돌렸습니다`);
@@ -1741,6 +1750,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       saveRevenueRecord('deal', 'update', { id, payments: nextPayments }).then((r) => {
         if (r.ok) return;
         restore();
+        if (showDealConflict(r)) return;
         toast.error(r.status === 'preview'
           ? 'Supabase 미연결 — 결제 변경이 저장되지 않아 되돌렸습니다'
           : `결제 저장 실패 (${r.status}) — 되돌렸습니다`);
@@ -1772,6 +1782,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       saveRevenueRecord('deal', 'update', { id, recurring: nextRecurring }).then((r) => {
         if (r.ok) return;
         restore();
+        if (showDealConflict(r)) return;
         toast.error(r.status === 'preview'
           ? 'Supabase 미연결 — 매달 정기가 저장되지 않아 되돌렸습니다'
           : `매달 정기 저장 실패 (${r.status}) — 되돌렸습니다`);
@@ -1851,7 +1862,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       if (isNew && r.id) setEditDealId(realId);
       toast.success(isNew ? '새 딜을 저장했습니다.' : '딜 정보를 저장했습니다.');
     } else {
-      toast.error(r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '딜 저장에 실패했습니다.');
+      if (!showDealConflict(r)) toast.error(r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '딜 저장에 실패했습니다.');
     }
     return r;
   };

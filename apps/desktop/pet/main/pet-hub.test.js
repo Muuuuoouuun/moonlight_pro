@@ -23,6 +23,7 @@ function startHubDouble() {
     tasks: [], memos: new Map(), inquiries: [], unreadCount: 0, events: [], seen: [], chatDelay: 0,
     cookie: 'com_moon_operator_session=operator-session',
   };
+  let boundOrigin;
   const server = http.createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => { raw += c; });
@@ -31,7 +32,8 @@ function startHubDouble() {
       const body = raw ? JSON.parse(raw) : null;
       state.seen.push({ method: req.method, path: url.pathname, search: url.search, headers: req.headers, body });
       const send = (status, value) => { res.statusCode = status; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(value)); };
-      const origin = `http://127.0.0.1:${server.address().port}`;
+      // A queued request may finish after close() clears server.address().
+      const origin = boundOrigin;
       if (url.pathname === '/api/operator/session' && req.method === 'GET') {
         return send(200, { status: req.headers.cookie === state.cookie ? 'authenticated' : 'anonymous', configured: true, reason: null });
       }
@@ -81,7 +83,7 @@ function startHubDouble() {
       return send(404, { status: 'error' });
     });
   });
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, state, origin: `http://127.0.0.1:${server.address().port}` })));
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => { boundOrigin = `http://127.0.0.1:${server.address().port}`; resolve({ server, state, origin: boundOrigin }); }));
 }
 
 function inquiryRow(id = randomUUID(), seq = 3) {
@@ -103,8 +105,163 @@ function hubFor(double, extra = {}) {
 
 const channelMethod = (channel) => channel.replace(/^pet:/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
+test('a response started with the old cookie cannot reconnect the pet after logout', async () => {
+  let loggedIn = true, release, started;
+  const began = new Promise(resolve => { started = resolve; });
+  const hub = createPetHub({ origin: 'https://hub.example.test', cookieHeader: async () => loggedIn ? 'session=valid' : '',
+    fetch: async (url, init) => {
+      if (new URL(url).pathname === '/api/operator/session') return new Response(JSON.stringify({ status: loggedIn ? 'authenticated' : 'anonymous', configured: true }));
+      started();
+      return new Promise(resolve => { release = () => resolve(new Response(JSON.stringify({ status: 'live', tasks: [] }))); });
+    } });
+  await hub.session();
+  const oldRead = hub.tasksList();
+  await began;
+  loggedIn = false;
+  await hub.sessionChanged();
+  assert.equal(hub.status, 'unauthorized');
+  release();
+  assert.equal((await oldRead).error, 'stale-origin');
+  assert.equal(hub.status, 'unauthorized');
+  hub.dispose();
+});
+
+test('a write waiting for local state never starts under a replacement session', async (t) => {
+  const double = await startHubDouble();
+  t.after(() => double.server.close());
+  const store = memoryStore(), read = store.get;
+  let release;
+  const ready = new Promise(resolve => { release = resolve; });
+  store.get = async key => {
+    if (key.startsWith('petHub.pending.v1.')) await ready;
+    return read(key);
+  };
+  const { hub } = hubFor(double, { store });
+  t.after(() => hub.dispose());
+  const write = hub.tasksAdd({ title: '세션 교체 전 입력', id: randomUUID() });
+  const changed = hub.sessionChanged();
+  release();
+  const result = await write;
+  await changed;
+  assert.equal(result.error, 'stale-origin');
+  assert.equal(double.state.seen.filter(r => r.method === 'POST').length, 0,
+    'the stale call must be rejected before sending a write');
+});
+
+test('session refresh preserves uncertain memo command without replaying it', async (t) => {
+  const double = await startHubDouble();
+  t.after(() => double.server.close());
+  const attempts = [];
+  let loseResponse = true;
+  const { hub } = hubFor(double, { fetch: async (url, init) => {
+    if (init.method === 'POST' && new URL(url).pathname === '/api/hub/journal') {
+      attempts.push(JSON.parse(init.body));
+      if (loseResponse) { loseResponse = false; throw new Error('transport unavailable'); }
+    }
+    return fetch(url, init);
+  } });
+  t.after(() => hub.dispose());
+  const body = '응답이 없어도 보존할 메모';
+  const uncertain = await hub.journalSave({ body });
+  assert.equal(uncertain.kind, 'error');
+  assert.equal(uncertain.data.pending.hasPendingMemo, true);
+  const command = attempts[0];
+  await hub.sessionChanged();
+  assert.equal(attempts.length, 1, 'refresh never repeats a pending write');
+  const saved = await hub.journalSave({ body });
+  assert.equal(saved.kind, 'live');
+  assert.equal(saved.data.entry.body, body);
+  assert.equal(saved.data.pending.hasPendingMemo, false);
+  assert.deepEqual(attempts[1], command, 'explicit recovery reuses the exact request and entry IDs');
+});
+
+test('session refresh cannot resurrect a memo command acknowledged during refresh', async (t) => {
+  const double = await startHubDouble();
+  t.after(() => double.server.close());
+  const store = memoryStore(), read = store.get;
+  let loads = 0, releaseSnapshot, releaseResponse, started;
+  const snapshotGate = new Promise(resolve => { releaseSnapshot = resolve; });
+  const responseGate = new Promise(resolve => { releaseResponse = resolve; });
+  const began = new Promise(resolve => { started = resolve; });
+  store.get = async key => {
+    const snapshot = await read(key);
+    if (key.startsWith('petHub.pending.v1.') && ++loads > 1) await snapshotGate;
+    return snapshot;
+  };
+  const { hub } = hubFor(double, { store, fetch: async (url, init) => {
+    const response = await fetch(url, init);
+    if (init.method === 'GET' && new URL(url).pathname === '/api/hub/journal') {
+      started(); await responseGate;
+    }
+    return response;
+  } });
+  t.after(() => { releaseResponse(); releaseSnapshot(); hub.dispose(); });
+  await hub.session();
+  const body = '세션 갱신 중 저장된 메모';
+  const writing = hub.journalSave({ body });
+  await began;
+  const changed = hub.sessionChanged();
+  releaseResponse();
+  assert.equal((await writing).error, 'stale-origin', 'old session response stays hidden');
+  releaseSnapshot();
+  await changed;
+  const recovered = await hub.journalRead({});
+  assert.equal(recovered.data.pending.hasPendingMemo, false, 'acknowledged command stays acknowledged');
+  assert.equal(recovered.data.entry.body, body);
+  assert.equal(double.state.seen.filter(r => r.method === 'POST').length, 1);
+});
+
+test('a write waiting for cookies cannot start after logout', async (t) => {
+  const double = await startHubDouble();
+  t.after(() => double.server.close());
+  let release, started, loggedIn = true;
+  const began = new Promise(resolve => { started = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  const { hub } = hubFor(double, { cookieHeader: async url => {
+    if (new URL(url).pathname === '/api/hub/tasks') { started(); await gate; }
+    return loggedIn ? double.state.cookie : '';
+  } });
+  t.after(() => { release(); hub.dispose(); });
+  await hub.session();
+  const writing = hub.tasksAdd({ title: '쿠키 조회 중 로그아웃', id: randomUUID() });
+  await began;
+  loggedIn = false;
+  await hub.sessionChanged();
+  release();
+  assert.equal((await writing).error, 'stale-origin');
+  assert.equal(double.state.seen.filter(r => r.method === 'POST').length, 0);
+});
+
+test('a memo edit cannot continue from old-session read into new-session write', async (t) => {
+  const double = await startHubDouble();
+  t.after(() => double.server.close());
+  let holdRead = false, release, started;
+  const began = new Promise(resolve => { started = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  const { hub } = hubFor(double, { fetch: async (url, init) => {
+    const response = await fetch(url, init);
+    if (holdRead && init.method === 'GET' && new URL(url).pathname === '/api/hub/journal') {
+      started(); await gate;
+    }
+    return response;
+  } });
+  t.after(() => { release(); hub.dispose(); });
+  const first = await hub.journalSave({ body: '이미 저장된 메모' });
+  holdRead = true;
+  const writing = hub.journalSave({ body: '이전 세션에서 시작한 수정' });
+  await began;
+  await hub.sessionChanged();
+  release();
+  assert.equal((await writing).error, 'stale-origin');
+  assert.equal(double.state.memos.get(first.data.entry.id).body, '이미 저장된 메모');
+  assert.equal(double.state.seen.filter(r => r.method === 'POST').length, 1);
+  holdRead = false;
+  assert.equal((await hub.journalSave({ body: '새 세션의 명시적 수정' })).kind, 'live',
+    'future actions use the refreshed client');
+});
+
 test('허브 채널은 모두 메서드로 있고, 봉투 kind 는 계약 목록 안', async () => {
-  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-)/.test(c));
+  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-|office-)/.test(c));
   const { hub } = hubFor({ origin: '', state: {} });
   for (const channel of hubChannels) {
     const method = channel === 'pet:hub-session' ? 'session' : channelMethod(channel);
@@ -751,7 +908,7 @@ test('셸 hubContext 로 만들고 invoke 로 부른다 — 쿠키·이벤트·�
 
 test('invoke 채널표: 계약의 허브 채널 전부가 메서드로 이어진다', () => {
   const { PET_INVOKE } = require('../shared/contract');
-  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-)/.test(c));
+  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-|office-)/.test(c));
   assert.deepEqual(hubChannels.map(hubChannelMethod).sort(), [...CHANNEL_METHODS].sort());
 });
 

@@ -46,21 +46,36 @@ public class MainActivity extends BridgeActivity {
         if (bridge != null) {
             configureWebView(bridge);
         }
-        // 뒤로 가기: WebView 기록을 거슬러 가고, 더 갈 곳이 없거나 대체 화면이면 시스템 기본(앱 닫기)으로 넘긴다.
+        // 뒤로 가기: 허브 안에 열린 최상위 오버레이(드로어·바텀 시트·팔레트·모바일 내비게이션)가 있으면
+        // 먼저 닫고, 없을 때만 WebView 기록을 거슬러 가며, 더 갈 곳이 없거나 대체 화면이면 시스템 기본(앱 닫기)으로 넘긴다.
         // 대체 화면에서 뒤로 가면 실패한 주소를 다시 열어 같은 화면으로 돌아오는 고리가 생기므로 여기서 끊는다.
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
                 WebView webView = bridge == null ? null : bridge.getWebView();
-                if (webView != null && webView.canGoBack() && !isOfflinePage(webView.getUrl())) {
-                    webView.goBack();
+                if (webView != null && !isOfflinePage(webView.getUrl())) {
+                    webView.evaluateJavascript(
+                        "(typeof window.moonlightDismissTopOverlay === 'function' && Boolean(window.moonlightDismissTopOverlay()))",
+                        result -> {
+                            if ("true".equals(result)) return;
+                            navigateBackOrFinish(this, webView);
+                        }
+                    );
                     return;
                 }
-                setEnabled(false);
-                getOnBackPressedDispatcher().onBackPressed();
-                setEnabled(true);
+                navigateBackOrFinish(this, webView);
             }
         });
+    }
+
+    private void navigateBackOrFinish(OnBackPressedCallback callback, WebView webView) {
+        if (webView != null && webView.canGoBack() && !isOfflinePage(webView.getUrl())) {
+            webView.goBack();
+            return;
+        }
+        callback.setEnabled(false);
+        getOnBackPressedDispatcher().onBackPressed();
+        callback.setEnabled(true);
     }
 
     private void configureWebView(Bridge bridge) {

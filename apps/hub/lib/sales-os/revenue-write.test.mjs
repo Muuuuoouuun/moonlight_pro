@@ -211,7 +211,7 @@ function installSupabaseFetch({ existingMeta, existingStage, deleteReturnsRows =
 
     if (method === "GET") {
       // meta read for the merge step
-      return jsonResponse([{ meta: existingMeta || {}, ...(existingStage ? { stage: existingStage } : {}) }]);
+      return jsonResponse([{ meta: existingMeta || {}, stage: existingStage || "proposal" }]);
     }
     if (method === "POST") {
       return jsonResponse([{ id: "real-id-123", ...(init.body ? JSON.parse(init.body) : {}) }]);

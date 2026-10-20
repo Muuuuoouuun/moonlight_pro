@@ -31,14 +31,14 @@ const invalid = (message = '예약 입력을 확인해 주세요.') => ({ status
 const INVALID_MESSAGES = { 'time-in-past': '이미 지난 시각이에요. 지금 이후로 골라 주세요.', 'time-too-far': '1년 안의 시각만 예약할 수 있어요.', 'invalid-time': '올릴 시각을 확인해 주세요.' };
 
 // 결과물 상태 교차 확인 — 발행 기록이 있는데 예약이 '올릴 차례'로 남는 일을 막는다(기록 저장 뒤 예약 표시 갱신이 실패해도).
-async function publishedVariantIds(workspaceId, rows) {
+async function publishedVariantIds(workspaceId, rows, strictRows = false) {
   const ids = rows.filter((row) => row.status === 'scheduled' || row.status === 'missed').map((row) => row.variant_id).filter(isCanonicalUuid);
   if (!ids.length) return { ids: new Set(), failed: false };
   const batches = [];
   for (let offset = 0; offset < ids.length; offset += LIST_LIMIT) {
     const chunk = ids.slice(offset, offset + LIST_LIMIT);
     batches.push(fetchSupabaseRowsDetailed('content_variants', {
-      select: 'id,status', filters: [['workspace_id', eqFilter(workspaceId)], ['id', `in.(${chunk.join(',')})`]], limit: chunk.length,
+      select: 'id,status', filters: [['workspace_id', eqFilter(workspaceId)], ['id', `in.(${chunk.join(',')})`]], limit: chunk.length, strictRows,
     }));
   }
   const results = await Promise.all(batches);
@@ -46,13 +46,18 @@ async function publishedVariantIds(workspaceId, rows) {
   return { ids: new Set(results.flatMap(({ rows: variants }) => variants).filter((variant) => variant.status === 'published').map((variant) => variant.id)), failed: false };
 }
 
-/** scope: 'action' = 지금 올릴 글·놓친 글 / 'upcoming' = 앞으로 / 'all' = 최근 이력 포함(발행 로그). */
-export async function listContentSchedules({ scope = 'all', now = Date.now() } = {}) {
+/** scope: 'action' = 지금 올릴 글·놓친 글 / 'upcoming' = 앞으로 / 'all' = 최근 이력 포함(발행 로그).
+ * variantId + contentId: Studio의 선택 결과물 한 건. 최근 100건에 없어도 해제·발행 이력의 revision을 읽는다.
+ */
+export async function listContentSchedules({ scope = 'all', variantId, contentId, now = Date.now() } = {}) {
+  const exact = variantId !== undefined || contentId !== undefined;
+  if (exact && (!isCanonicalUuid(variantId) || !isCanonicalUuid(contentId))) return readError();
   const workspaceId = context();
   if (!workspaceId) return { status: 'preview', schedules: [], message: '예약 저장 연결이 필요합니다.' };
   const baseFilters = [['workspace_id', eqFilter(workspaceId)]];
   const nowIso = new Date(now).toISOString();
-  const queries = scope === 'action' ? [
+  // content_id는 응답에서 대조한다. 다른 콘텐츠의 행을 필터로 숨겨 '예약 없음'으로 오인하지 않는다.
+  const queries = exact ? [{ filters: scoped(workspaceId, variantId), limit: 2, strictRows: true }] : scope === 'action' ? [
     { order: 'scheduled_at.asc', filters: [...baseFilters, ['status', eqFilter('scheduled')], ['scheduled_at', `lte.${nowIso}`]] },
     { order: 'scheduled_at.desc', filters: [...baseFilters, ['status', eqFilter('missed')]] },
   ] : scope === 'upcoming' ? [
@@ -65,15 +70,16 @@ export async function listContentSchedules({ scope = 'all', now = Date.now() } =
     if (results.some(({ error }) => error && tableMissing(error))) return { status: 'preview', schedules: [], message: '예약 테이블이 아직 없습니다. 마이그레이션 적용이 필요합니다.' };
     if (results.some(({ rows, error }) => error || !Array.isArray(rows))) return readError();
     const rows = results.flatMap((result) => result.rows);
+    if (exact && (rows.length > 1 || rows.some((row) => row?.variant_id !== variantId || row?.content_id !== contentId))) return readError();
     const mapped = rows.map((row) => scheduleFromRow(row, workspaceId, now));
     if (mapped.some((row) => !row)) return readError();
-    const published = await publishedVariantIds(workspaceId, rows);
+    const published = await publishedVariantIds(workspaceId, rows, exact);
     if (published.failed) return { ...readError(), message: '발행 여부를 확인하지 못해 예약 목록을 보여 주지 않아요. 다시 시도해 주세요.' };
     const schedules = mapped
       .map((row) => (published.ids.has(row.variantId) ? { ...row, status: 'published', state: 'published' } : row))
-      .filter((row) => scope === 'all' || ['scheduled', 'due', 'missed'].includes(row.state))
-      .filter((row) => scope !== 'action' || row.state === 'due' || row.state === 'missed')
-      .filter((row) => scope !== 'upcoming' || row.state === 'scheduled');
+      .filter((row) => exact || scope === 'all' || ['scheduled', 'due', 'missed'].includes(row.state))
+      .filter((row) => exact || scope !== 'action' || row.state === 'due' || row.state === 'missed')
+      .filter((row) => exact || scope !== 'upcoming' || row.state === 'scheduled');
     return { status: 'live', schedules };
   } catch { return readError(); }
 }

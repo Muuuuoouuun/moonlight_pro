@@ -7,6 +7,7 @@ enum Palette {
     static let surface2 = color(0.225, 0.007, 250)
     static let surface3 = color(0.255, 0.008, 250)
     static let line = color(0.30, 0.008, 250)
+    static let danger = color(0.68, 0.16, 25)
     static let moon100 = color(0.92, 0.005, 250)
     static let moon300 = color(0.78, 0.008, 250)
     static let moon400 = color(0.68, 0.009, 250)

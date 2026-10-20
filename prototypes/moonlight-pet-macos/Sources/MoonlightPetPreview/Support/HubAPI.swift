@@ -8,6 +8,7 @@ protocol HubServing: Sendable {
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage
     func createTask(_ command: HubTaskCommand) async throws -> HubTask
     func setTask(_ task: HubTask, done: Bool) async throws -> HubTask
+    func deleteTask(_ id: UUID) async throws
     func memo(id: UUID) async throws -> HubMemoEntry
     func saveMemo(_ command: HubMemoCommand) async throws -> HubMemoEntry
 }
@@ -51,6 +52,12 @@ struct HubAPI: HubServing {
         let saved = try await writeTask(method: "PATCH", body: data)
         guard saved.id == task.id, saved.isDone == done else { throw HubDataError.unverifiedSave }
         return saved
+    }
+    func deleteTask(_ id: UUID) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["id": id.uuidString.lowercased()])
+        let response = try await transport.request(path: "/api/hub/tasks", method: "DELETE", body: body)
+        if response.isPreview { throw HubDataError.preview }
+        guard response.status == "saved" else { throw HubDataError.unverifiedSave }
     }
     func memo(id: UUID) async throws -> HubMemoEntry {
         struct Page: Decodable { let entry: HubMemoEntry? }

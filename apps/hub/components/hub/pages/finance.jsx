@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import Link from 'next/link';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {Button, CertaintyBadge, Drawer, EditDrawer, EmptyState, LifecycleBadge, SegmentedControl, SelectField, Skeleton, TextAreaField, TextField, TruthBadge, useToast} from '../hub-primitives';
 import {FINANCE_VIEWS, PURPOSE_OPTIONS, CLAIM_OPTIONS, CYCLE_OPTIONS, SERVICE_OPTIONS, financeMoney, financeReadState, financeFilters, financeEntries, financePeriodTotals, financeSubscriptionDates, financeSubscriptionPayments, financeChanges, financeSaveResult, financeOptionLabel, financeClaimEntries, financeNextSort, financeSortRows, financeClaimRemaining} from './finance-view';
@@ -157,7 +158,7 @@ export function Finance({onNavigate}) {
   const draft=edit?.draft;
   const errorFor=key=>fieldError?.field===key?fieldError.message:undefined;
   return <div className="finance-page fade-up">
-    <header className="finance-header"><div className="finance-heading"><h2>개인 현금 흐름</h2><p>수집한 소비와 구독·회사 청구를 검토해요.</p></div><Button variant="ghost" onClick={()=>setMoreOpen(true)}>더보기</Button></header>
+    <header className="finance-header"><div className="finance-heading"><h2>개인 현금 흐름</h2><p>수집한 소비와 구독·회사 청구를 검토해요.</p></div><div className="finance-header-actions"><Link className="finance-forecast-link hub-row" href="/dashboard/revenue/overview?scope=personal">개인 매출 전망</Link><Button variant="ghost" onClick={()=>setMoreOpen(true)}>더보기</Button></div></header>
     <div className="finance-toolbar"><SegmentedControl label="금융 보기" options={FINANCE_VIEWS} value={filters.view} onChange={value=>changeFilter('view',value)} />
     <div className="finance-filters"><SelectField label="관측 월" value={filters.month} onChange={event=>changeFilter('month',event.target.value)} options={[{value:'',label:'수집한 전체 기간'},...months.map(month=>({value:month,label:month}))]} /><TextField label="검색" type="search" value={filters.q} placeholder="거래·계약 이름" onChange={event=>changeFilter('q',event.target.value)} /></div></div>
     <div className="finance-read-notice"><TruthBadge state={data.status} />{available && <><span className="mono">{period}</span><span>은행 원장 미조회 · 은행 잔액 미확인</span>{data.status==='partial' && <Button variant="ghost" size="sm" onClick={reload}>다시 읽기</Button>}</>}</div>
@@ -167,15 +168,14 @@ export function Finance({onNavigate}) {
     {available && filters.view==='flow' && <>
       <section className="finance-summary" aria-label="수집한 소비 합계"><div><span>수집한 순소비</span><strong className="stat">{financeMoney(totals.net)}</strong></div><div><span>원구매</span><strong className="mono">{financeMoney(totals.gross)}</strong></div><div><span>환불</span><strong className="mono">{financeMoney(totals.refund)}</strong></div><div><span>중복 제외</span><strong className="mono">{financeMoney(totals.duplicate)}</strong></div></section>
       <p className="finance-muted">합계는 선택 월 기준 · 검색은 목록에만 적용 · 순소비는 은행 출금과 다릅니다.</p>
-      <div className="finance-monthly-grid"><section className="finance-section"><div className="finance-section-head"><h3>월별 소비</h3><span className="finance-muted">원구매 − 환불 − 중복</span></div><MonthlyTable rows={monthly} /></section>
-      <section className="finance-section"><div className="finance-section-head"><h3>머니 이동</h3><span className="finance-muted">소비 합계에서 제외 · 잔액 아님</span></div><MonthlyTable rows={wallet} wallet /></section></div>
       <section className="finance-section"><div className="finance-section-head"><h3>거래 검토</h3><span className="finance-muted num">{visibleEntries.length}건 · 행을 눌러 검토</span></div><FinanceRows entries={visibleEntries} onReview={openReview} onClear={clearFilters} /></section>
+      <details className="finance-supporting"><summary>월별 소비·머니 이동 <span className="finance-muted">선택 기간 집계</span></summary><div className="finance-monthly-grid"><section className="finance-section"><div className="finance-section-head"><h3>월별 소비</h3><span className="finance-muted">원구매 − 환불 − 중복</span></div><MonthlyTable rows={monthly} /></section>
+      <section className="finance-section"><div className="finance-section-head"><h3>머니 이동</h3><span className="finance-muted">소비 합계에서 제외 · 잔액 아님</span></div><MonthlyTable rows={wallet} wallet /></section></div></details>
     </>}
     {available && filters.view==='subscriptions' && <>
-      <p className="finance-muted">결제일 기준 월별 · 환불·중복 차감 · 같은 Claude 공동 결제는 한 번만 합산</p>
-      <section className="finance-section"><div className="finance-section-head"><h3>월별 구독 결제</h3><span className="finance-muted">날짜 · 순소비 / 눌러서 내역 확인</span></div><SubscriptionPaymentTable table={payments} onReview={(cell,row)=>setPaymentDetail({...cell,label:GROUP_LABELS[row.group]||row.names.join(' · ')})} /></section>
       <section className="finance-section"><div className="finance-section-head"><h3>구독·고정비 계약</h3><span className="finance-muted num">{subscriptions.length}개 · 최근 결제일은 수집 전체 기간 기준</span></div><SubscriptionRows records={subscriptions} onReview={openReview} onClear={clearFilters} /></section>
       <p className="finance-muted">이용 상태는 운영자 입력 기준 · 행에서 수정 · 중단·해지는 과거 결제 유지 · 재개 예정은 직접 입력 · 월결제 예상은 최근 결제 +1개월</p>
+      <details className="finance-supporting"><summary>월별 구독 결제 <span className="finance-muted">날짜·금액 대조</span></summary><section className="finance-section"><p className="finance-muted">결제일 기준 월별 · 환불·중복 차감 · 같은 Claude 공동 결제는 한 번만 합산 · 결제를 눌러 내역 확인</p><SubscriptionPaymentTable table={payments} onReview={(cell,row)=>setPaymentDetail({...cell,label:GROUP_LABELS[row.group]||row.names.join(' · ')})} /></section></details>
     </>}
     {available && filters.view==='claims' && <>
       <p className="finance-muted">목적·신청·승인·실제 회수를 따로 확인합니다. 미확인 금액은 0원으로 계산하지 않습니다.</p>

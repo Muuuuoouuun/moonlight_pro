@@ -89,6 +89,41 @@ function decisionSourceRef(meta) {
   return ref && typeof ref.type === "string" && typeof ref.id === "string" ? { type: ref.type, id: ref.id } : null;
 }
 
+function decisionDeskFields(meta) {
+  const options = Array.isArray(meta.options)
+    ? meta.options
+        .filter((option) => option && typeof option.id === "string" && typeof option.title === "string")
+        .map((option) => ({ id: option.id, title: option.title, gain: typeof option.gain === "string" ? option.gain : "", loss: typeof option.loss === "string" ? option.loss : "" }))
+    : [];
+  return {
+    question: typeof meta.question === "string" ? meta.question : "",
+    options,
+    chosenOptionId: typeof meta.chosenOptionId === "string" && options.some((option) => option.id === meta.chosenOptionId) ? meta.chosenOptionId : null,
+    deferUntil: typeof meta.deferUntil === "string" ? meta.deferUntil : null,
+  };
+}
+
+// 결정 데스크의 "막힘" 갈래 — 막힌 프로젝트(병목 분류는 화면이 거른다). 막힘을 풀 때 쓰는 계획·버전을 함께 싣는다.
+// 못 읽으면 null(모름) — 빈 배열(막힌 것 없음)과 구분한다.
+const BLOCKED_PROJECT_LIMIT = 20;
+
+function mapBlockedProjects(rows) {
+  if (!Array.isArray(rows)) return null;
+  return rows
+    .filter((row) => row && row.status === "blocked")
+    .slice(0, BLOCKED_PROJECT_LIMIT)
+    .map((row) => {
+      const delivery = row.delivery && typeof row.delivery === "object" ? row.delivery : null;
+      return {
+        id: row.id,
+        name: row.name || "(제목 없음)",
+        dueAt: row.due_at || null,
+        updatedAt: row.updated_at || null,
+        delivery: delivery ? { ...delivery, nextAction: row.next_action || "" } : null,
+      };
+    });
+}
+
 function mapDecisions(rows, profileById, projectNameById = new Map()) {
   return rows.map((row) => {
     const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
@@ -112,6 +147,10 @@ function mapDecisions(rows, profileById, projectNameById = new Map()) {
     projectName: row.project_id ? projectNameById.get(row.project_id) || "" : "",
     nextTaskId: typeof meta.nextTaskId === "string" ? meta.nextTaskId : null,
     unblockedProjectId: typeof meta.unblockedProjectId === "string" ? meta.unblockedProjectId : null,
+    // 결정 데스크(2026-10-15 스펙 §4) — 질문·선택지·고른 선택지·미루기, 미정 경과일 계산용 생성 시각.
+    ...decisionDeskFields(meta),
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || "",
     };
   });
 }
@@ -492,6 +531,7 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       },
       rituals: [],
       projects: [],
+      blockedProjects: [],
       rhythm: {
         source: "preview",
         state: "preview",
@@ -521,6 +561,7 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     workspaceRows,
     roadmapBrandRows,
     ritualDefinitionRows,
+    blockedProjectRows,
   ] = await Promise.all([
     fetchSupabaseRows("decisions", {
       limit: DECISION_ROW_LIMIT + 1,
@@ -577,6 +618,15 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
         ...(selectedProjectId ? [["project_id", eqFilter(selectedProjectId)]] : []),
       ]),
     }),
+    // 결정 데스크 — 프로젝트를 고른 로드맵 읽기에서는 쓰지 않는다.
+    selectedProjectId
+      ? Promise.resolve([])
+      : fetchSupabaseRows("projects", {
+          select: "id,name,status,due_at,updated_at,next_action,delivery:meta->delivery",
+          limit: BLOCKED_PROJECT_LIMIT,
+          order: "updated_at.asc",
+          filters: withWorkspaceFilter([["status", eqFilter("blocked")]]),
+        }),
   ]);
 
   const workspaceTimeZoneAvailable = Array.isArray(workspaceRows) && workspaceRows.length === 1;
@@ -657,6 +707,7 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     decisionsState,
     rituals,
     projects: mapDecisionProjectOptions(Array.isArray(projectRows) ? projectRows : []),
+    blockedProjects: mapBlockedProjects(blockedProjectRows),
     rhythm,
     roadmap,
     summary: summarizeRituals(rituals),

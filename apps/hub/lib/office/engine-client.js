@@ -41,7 +41,10 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
    // A durable caller must not pay for another generation when the first
    // response was lost or timed out. Legacy freeform callers keep their status.
    if(unknownOnTransportFailure && !responseRead) return {status:'unknown',error:'오피스 응답 수신을 확인하지 못했습니다. 저장된 회의 상태를 다시 확인해 주세요.'};
-   if(attempt<attempts) {
+   // Once an answer or rejection was received, a contract/policy failure is
+   // not transient. Retrying this POST would create a new model generation.
+   // Explicit 502/503 retries above and legacy transport retries remain bounded.
+   if(attempt<attempts && !responseRead) {
     await new Promise(r=>setTimeout(r,600));
     continue;
    }

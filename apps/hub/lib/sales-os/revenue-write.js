@@ -155,8 +155,10 @@ export function buildDealWrite(payload = {}) {
   if (payload.workspace) metaPatch.workspace = payload.workspace;
 
   // Deals have no next_action column → keep both follow-up fields in meta.
-  if (payload.next_action !== undefined) {
-    metaPatch.next_action = String(payload.next_action).trim() || null;
+  // The drawer edits nextAction; explicit API next_action (including clearing) wins.
+  const nextAction = payload.next_action !== undefined ? payload.next_action : payload.nextAction;
+  if (nextAction !== undefined) {
+    metaPatch.next_action = String(nextAction).trim() || null;
   }
   if (payload.snooze_until !== undefined) {
     metaPatch.snooze_until = String(payload.snooze_until).trim() || null;
@@ -336,11 +338,21 @@ async function readExistingRow(table, id, workspaceId) {
     select: table === "deals" ? "meta,stage" : "meta",
     filters: [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
     limit: 1,
+    ...(table === "deals" ? { strictRows: true } : {}),
   });
   // read 실패(null)와 "meta 없는 행"({})을 구분한다 — 실패를 {}로 뭉개면 patch가
   // 기존 meta 전체(snooze_until/value/stage_detail…)를 덮어쓰고 saved로 보고된다
   // (2026-08-05 재감사 안정성 M: meta-wipe).
   if (!Array.isArray(rows)) return null;
+  if (table === "deals") {
+    const row = rows[0];
+    // CAS must compare the actual snapshot, not an invented {} for a missing or
+    // malformed row. Keep SQL NULL distinct from an empty object.
+    if (rows.length !== 1 || !row || !Object.hasOwn(row, "meta") || !Object.hasOwn(row, "stage")) return null;
+    if (row.meta !== null && (typeof row.meta !== "object" || Array.isArray(row.meta))) return null;
+    if (row.stage !== null && typeof row.stage !== "string") return null;
+    return { meta: row.meta || {}, stage: row.stage, rawMeta: row.meta };
+  }
   const meta = rows[0] ? rows[0].meta : null;
   return { meta: meta && typeof meta === "object" ? meta : {}, stage: typeof rows[0]?.stage === "string" ? rows[0].stage : null };
 }
@@ -472,6 +484,7 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
   let mergedMeta = null;
   let existingMeta = null;
   let existingStage = null;
+  const filters = [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]];
   if (hasMeta) {
     const existing = await readExistingRow(table, id, workspaceId);
     existingMeta = existing ? existing.meta : null;
@@ -481,17 +494,29 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
       return { status: "failed", reason: "meta-read-failed", detail: "existing meta unreadable; save aborted to avoid wiping sibling keys" };
     }
     mergedMeta = mergeRecordMeta({ table, existingMeta, metaPatch });
+    if (table === "deals") {
+      // Top-level PostgREST eq takes the literal after "eq." unchanged (unlike
+      // in/or quoted values). The shared adapter URL-encodes this JSON once.
+      // Stage is also part of the snapshot used to calculate won_at.
+      filters.push(["meta", existing.rawMeta === null ? "is.null" : eqFilter(JSON.stringify(existing.rawMeta))]);
+      filters.push(["stage", existingStage === null ? "is.null" : eqFilter(existingStage)]);
+    }
   }
   const patch = { ...columns, ...dealWonAtPatch({ table, existingMeta, existingStage, metaPatch }), ...(mergedMeta ? { meta: mergedMeta } : {}) };
   if (!Object.keys(patch).length) return { status: "noop" };
 
   const res = await updateSupabaseRecord(
     table,
-    [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
+    filters,
     patch,
     { returnRepresentation: true, select: "*" },
   );
-  if (!res.persisted) return persistFailure(res);
+  if (!res.persisted) {
+    if (table === "deals" && hasMeta && res.reason === "no-matching-row") {
+      return { status: "conflict", reason: "concurrent-deal-change", message: "다른 변경이 먼저 저장되었거나 거래가 삭제되었습니다. 최신 기록을 확인한 뒤 다시 시도하세요." };
+    }
+    return persistFailure(res);
+  }
   await recordDealStageMove({ table, id, workspaceId, existingMeta, metaPatch });
   return { status: "saved", id, record: res.record };
 }
