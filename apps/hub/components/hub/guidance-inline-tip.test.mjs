@@ -110,7 +110,8 @@ test('each workflow keeps one tip in its selected hierarchy, outside the Home br
   assert.equal((home.match(/<GuidanceInlineTip\b/g) || []).length, 1);
   assert.equal((homeBrief.match(/<GuidanceInlineTip\b/g) || []).length, 0);
   assert.match(today, /<TaskToday[\s\S]*?<GuidanceInlineTip\s+variant="today"[\s\S]*?<FocusSlots/);
-  assert.match(home, /<TodaySchedule\b[\s\S]*?<GuidanceInlineTip\s+variant="home"[\s\S]*?<HomeMorningBrief\b/);
+  // 홈 7g(2026-10-19): 결정 카드 → 멘토 한 줄 → 오늘의 시간표 → 아침 요약.
+  assert.match(home, /<FocusCard\b[\s\S]*?<GuidanceInlineTip\s+variant="home"[\s\S]*?<TodaySchedule\b[\s\S]*?<HomeMorningBrief\b/);
   const chartStart = overview.indexOf('작업·기획 활동 추이');
   const tip = overview.indexOf('<GuidanceInlineTip variant="overview"');
   const domainPanels = overview.indexOf('hub-grid--split', chartStart);
@@ -121,4 +122,19 @@ test('each workflow keeps one tip in its selected hierarchy, outside the Home br
   assert.ok(goalLens >= 0 && tip > goalLens && summaryLens > tip);
   assert.ok(chartStart > summaryLens && domainPanels > chartStart);
   assert.doesNotMatch(read('./pages/content-studio.jsx'), /GuidanceInlineTip/);
+});
+
+test('Home picks the tip from the field of the card being looked at, and says so', () => {
+  const sales = guidanceInlineTipModel('home', now, { type: 'deal', label: '거래' });
+  assert.equal(sales.card.id, selectGuidanceCard({ cadence: 'daily', domain: 'sales', now }).id);
+  assert.equal(sales.contextLabel, '거래 카드에 맞춘 관점');
+  const content = guidanceInlineTipModel('home', now, { type: 'content', label: '콘텐츠' });
+  assert.equal(content.card.domain, 'content');
+  const other = guidanceInlineTipModel('home', now, { type: 'automation', label: '자동화' });
+  assert.equal(other.card.id, guidanceInlineTipModel('home', now).card.id, 'other subjects keep the time-slot rotation');
+  assert.equal(other.contextLabel, null);
+  assert.equal(guidanceInlineTipModel('today', now, { type: 'deal', label: '거래' }).contextLabel, null, 'only Home links the tip to a card');
+  const html = renderToStaticMarkup(React.createElement(GuidanceInlineTip, { variant: 'home', context: { type: 'deal', label: '거래' }, now, onNavigate: () => {} }));
+  assert.match(html, /거래 카드에 맞춘 관점/);
+  assert.equal((html.match(/<button\b/g) || []).length, 1);
 });
