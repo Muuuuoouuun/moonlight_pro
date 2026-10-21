@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>홈 위쪽 디벨롭</title>
+<style>
+@font-face { font-family: 'SUIT Variable'; src: url('fonts/SUIT-Variable.woff2') format('woff2'), url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('fonts/JetBrainsMono-Variable.woff2') format('woff2'), url('../../../apps/hub/public/fonts/JetBrainsMono-Variable.woff2') format('woff2'); font-weight: 100 800; font-display: swap; }
+
+/* ── 토큰: hub-tokens.css 라이트/다크 값 + Components 5a(패널·버튼 입체감, 먹색 선택 슬라이드) ── */
+:root {
+  --canvas: oklch(0.95 0.004 250);
+  --frame-bg: linear-gradient(180deg, oklch(0.975 0.004 250), oklch(0.985 0.003 250));
+  --frame-shadow: 0 1px 2px oklch(0 0 0 / 0.05), 0 30px 80px -30px oklch(0 0 0 / 0.25);
+  --fg: oklch(0.20 0.008 250);
+  --fg-muted: oklch(0.42 0.008 250);
+  --fg-dim: oklch(0.47 0.008 250);
+  --fg-faint: oklch(0.52 0.007 250);
+  --side-bg: oklch(0.955 0.006 255);
+  --side-edge: oklch(1 0 0 / 0.7);
+  --side-shadow: -6px -6px 16px oklch(1 0 0 / 0.85), 10px 12px 28px -6px oklch(0.45 0.03 250 / 0.28), inset 0 1px 0 oklch(1 0 0);
+  --panel: oklch(1 0 0 / 0.66);
+  --panel-solid: oklch(0.995 0.002 250);
+  --panel-edge: oklch(1 0 0 / 0.9);
+  --panel-shadow: 0 1px 2px oklch(0.3 0.02 250 / 0.05), 0 18px 40px -22px oklch(0.3 0.03 250 / 0.32), inset 0 1px 0 oklch(1 0 0);
+  --raise: -3px -3px 7px oklch(1 0 0 / 0.9), 3px 3px 8px oklch(0.5 0.02 250 / 0.2);
+  --raise-hover: -4px -4px 10px oklch(1 0 0 / 0.95), 5px 6px 14px oklch(0.5 0.02 250 / 0.26);
+  --inset: inset 2px 2px 5px oklch(0.5 0.02 250 / 0.2), inset -2px -2px 5px oklch(1 0 0 / 0.9);
+  --inset-sm: inset 1px 1px 2px oklch(0.5 0.02 250 / 0.22), inset -1px -1px 2px oklch(1 0 0 / 0.9);
+  --btn-bg: oklch(0.20 0.008 250 / 0.05);
+  --btn-shadow: 0 1px 0 oklch(1 0 0 / 0.9), inset 0 1px 2px oklch(0.3 0.02 250 / 0.07);
+  --btn-hover-bg: oklch(1 0 0 / 0.92);
+  --btn-hover-shadow: 0 2px 4px oklch(0.3 0.02 250 / 0.08), 0 10px 20px -8px oklch(0.3 0.02 250 / 0.22), inset 0 1px 0 oklch(1 0 0);
+  --ink: oklch(0.20 0.008 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.31 0.012 250), oklch(0.20 0.008 250));
+  --ink-shadow: -2px -2px 5px oklch(1 0 0 / 0.7), 3px 4px 9px -2px oklch(0.25 0.05 250 / 0.45), inset 0 1px 0 oklch(1 0 0 / 0.16);
+  --on-ink: oklch(0.985 0.003 250);
+  --row-hover: oklch(1 0 0 / 0.78);
+  --line: oklch(0.30 0.008 250 / 0.12);
+  --line-strong: oklch(0.30 0.008 250 / 0.38);
+  --track: oklch(0.30 0.008 250 / 0.08);
+  --danger: oklch(0.55 0.19 25);
+  --danger-bg: oklch(0.55 0.19 25 / 0.07);
+  --accent: #5274a8;
+  --accent-fg: #365888;
+  --s1: oklch(0.24 0.01 250);
+  --s2: oklch(0.56 0.05 255);
+  --s3: oklch(0.80 0.03 255);
+  --heat-base: oklch(0.94 0.005 250);
+  --overlay: oklch(0.3 0.02 250 / 0.18);
+}
+:root[data-theme="dark"] {
+  --canvas: oklch(0.12 0.005 250);
+  --frame-bg: linear-gradient(180deg, oklch(0.165 0.006 250), oklch(0.15 0.005 250));
+  --frame-shadow: 0 0 0 1px oklch(1 0 0 / 0.05), 0 30px 80px -30px oklch(0 0 0 / 0.8);
+  --fg: oklch(0.92 0.005 250);
+  --fg-muted: oklch(0.72 0.009 250);
+  --fg-dim: oklch(0.65 0.010 250);
+  --fg-faint: oklch(0.60 0.009 250);
+  --side-bg: oklch(0.195 0.006 250);
+  --side-edge: oklch(1 0 0 / 0.06);
+  --side-shadow: 0 20px 40px -20px oklch(0 0 0 / 0.8), inset 0 1px 0 oklch(1 0 0 / 0.05);
+  --panel: oklch(0.205 0.006 250 / 0.9);
+  --panel-solid: oklch(0.215 0.007 250);
+  --panel-edge: oklch(1 0 0 / 0.06);
+  --panel-shadow: inset 0 1px 0 oklch(1 0 0 / 0.04), 0 18px 40px -22px oklch(0 0 0 / 0.75);
+  --raise: inset 0 1px 0 oklch(1 0 0 / 0.07), 0 4px 10px -4px oklch(0 0 0 / 0.65);
+  --raise-hover: inset 0 1px 0 oklch(1 0 0 / 0.1), 0 8px 16px -6px oklch(0 0 0 / 0.75);
+  --inset: inset 0 2px 4px oklch(0 0 0 / 0.45), inset 0 0 0 1px oklch(1 0 0 / 0.05);
+  --inset-sm: inset 0 1px 2px oklch(0 0 0 / 0.45), inset 0 0 0 1px oklch(1 0 0 / 0.05);
+  --btn-bg: oklch(1 0 0 / 0.05);
+  --btn-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
+  --btn-hover-bg: oklch(1 0 0 / 0.09);
+  --btn-hover-shadow: inset 0 1px 0 oklch(1 0 0 / 0.08), 0 8px 18px -8px oklch(0 0 0 / 0.7);
+  --ink: oklch(0.88 0.006 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.92 0.005 250), oklch(0.80 0.007 250));
+  --ink-shadow: 0 4px 12px -4px oklch(0 0 0 / 0.7), inset 0 1px 0 oklch(1 0 0 / 0.5);
+  --on-ink: oklch(0.17 0.006 250);
+  --row-hover: oklch(1 0 0 / 0.045);
+  --line: oklch(0.40 0.008 250 / 0.45);
+  --line-strong: oklch(0.58 0.008 250);
+  --track: oklch(1 0 0 / 0.07);
+  --danger: oklch(0.68 0.16 25);
+  --danger-bg: oklch(0.68 0.16 25 / 0.1);
+  --accent: #5274a8;
+  --accent-fg: oklch(0.74 0.07 255);
+  --s1: oklch(0.90 0.005 250);
+  --s2: oklch(0.62 0.04 255);
+  --s3: oklch(0.42 0.02 255);
+  --heat-base: oklch(0.24 0.007 250);
+  --overlay: oklch(0 0 0 / 0.45);
+}
+
+* { box-sizing: border-box; }
+html { background: var(--canvas); }
+body { margin: 0; background: var(--canvas); color: var(--fg); font-family: 'SUIT Variable', 'Inter Tight', ui-sans-serif, system-ui, sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; word-break: keep-all; transition: background-color 200ms; }
+button, input { font-family: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 1px solid var(--accent-fg); outline-offset: 2px; }
+.mono { font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.stat { font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; }
+.num { font-variant-numeric: tabular-nums; }
+svg.ic { flex-shrink: 0; display: block; }
+
+/* ── 문서 셸 ── */
+.doc { padding: 56px 48px 96px; display: flex; flex-direction: column; gap: 48px; max-width: 1600px; margin: 0 auto; }
+.doc-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.doc-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-dim); }
+.doc h1 { margin: 8px 0 6px; font-size: 32px; font-weight: 300; letter-spacing: -0.02em; }
+.doc-sub { font-size: 13px; color: var(--fg-muted); line-height: 1.6; max-width: 760px; }
+.doc-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.group-head { display: flex; flex-direction: column; gap: 6px; }
+.group-head h2 { margin: 0; font-size: 22px; font-weight: 400; letter-spacing: -0.01em; }
+.group-head p { margin: 0; font-size: 13px; color: var(--fg-muted); line-height: 1.6; max-width: 900px; }
+.option { display: flex; flex-direction: column; gap: 14px; }
+.cap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 20px 32px; align-items: start; }
+.cap-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cap-title b { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
+.cap-title .tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 9px; border-radius: 999px; background: var(--ink); color: var(--on-ink); }
+.cap-title .from { font-size: 12px; color: var(--fg-dim); }
+.cap-lede { margin: 6px 0 0; font-size: 13.5px; color: var(--fg-muted); line-height: 1.6; }
+.cap ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--fg-muted); line-height: 1.7; }
+.cap ul b { color: var(--fg); font-weight: 500; }
+.stage { width: 100%; overflow-x: auto; overflow-y: hidden; border-radius: 28px; }
+.stage-inner { width: 1440px; height: 900px; transform-origin: 0 0; }
+.held { border-top: 1px solid var(--line); padding-top: 20px; }
+.held summary { cursor: pointer; font-size: 13px; color: var(--fg-muted); padding: 6px 0; }
+.held summary:hover { color: var(--fg); }
+.sample-note { font-size: 11.5px; color: var(--fg-faint); }
+
+/* ── 프레임 ── */
+.frame { position: relative; width: 1440px; height: 900px; border-radius: 28px; overflow: hidden; background: var(--frame-bg); box-shadow: var(--frame-shadow); display: flex; padding: 12px; gap: 12px; }
+.frame-tag { position: absolute; bottom: 18px; right: 22px; z-index: 30; font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 4px 10px; border-radius: 999px; background: var(--ink); color: var(--on-ink); }
+.frame-sample { position: absolute; bottom: 20px; right: 64px; z-index: 30; font-size: 11px; color: var(--fg-faint); }
+.main { flex: 1; min-width: 0; padding: 28px 32px 24px; display: flex; flex-direction: column; gap: 18px; overflow: hidden; position: relative; }
+
+/* 사이드바 */
+.side { width: 224px; height: 100%; flex-shrink: 0; border-radius: 22px; background: var(--side-bg); border: 1px solid var(--side-edge); box-shadow: var(--side-shadow); display: flex; flex-direction: column; }
+.side-brand { padding: 16px 16px 12px; display: flex; align-items: center; gap: 10px; }
+.side-logo { width: 30px; height: 30px; border-radius: 9px; background: var(--ink-grad); display: grid; place-items: center; color: var(--on-ink); box-shadow: 0 6px 16px -6px oklch(0.3 0.05 250 / 0.5); }
+.side-search { margin: 0 12px 10px; height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; border: 0; border-radius: 999px; background: var(--side-bg); color: var(--fg-dim); font-size: 12.5px; box-shadow: var(--raise); }
+.kbd { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 3px 7px; border-radius: 999px; box-shadow: var(--inset-sm); color: var(--fg-muted); white-space: nowrap; }
+.side-nav { position: relative; flex: 1; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 4px; }
+.side-item { position: relative; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border: 0; background: transparent; border-radius: 999px; font-size: 13px; text-align: left; color: var(--fg-muted); }
+.side-item.on { background: var(--ink-grad); color: var(--on-ink); font-weight: 500; box-shadow: var(--ink-shadow); }
+.side-count { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: var(--accent); color: oklch(1 0 0); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+.side-user { margin: 4px 12px 12px; padding: 8px; display: flex; align-items: center; gap: 10px; border-radius: 999px; background: var(--side-bg); box-shadow: var(--raise); }
+.side-av { width: 30px; height: 30px; border-radius: 999px; background: var(--ink); color: var(--on-ink); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+
+/* 헤더 */
+.hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.hd-date { font-size: 12px; color: var(--fg-dim); display: flex; gap: 8px; align-items: center; }
+.hd h3 { font-size: 40px; font-weight: 200; letter-spacing: -0.035em; line-height: 1.08; margin: 10px 0 0; }
+.hd-sum { margin-top: 8px; font-size: 13px; color: var(--fg-muted); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.hd-sum .sep { width: 3px; height: 3px; border-radius: 999px; background: var(--fg-faint); }
+.hd-actions { display: flex; gap: 10px; align-items: center; }
+
+/* 패널 */
+.panel { border-radius: 24px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--panel-shadow); padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+.pt { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; min-height: 28px; }
+.pt-l { font-size: 12px; font-weight: 500; color: var(--fg-muted); display: flex; align-items: center; gap: 8px; }
+.pt-r { font-size: 12px; color: var(--fg-dim); display: flex; align-items: center; gap: 8px; }
+.scroll { overflow: auto; min-height: 0; }
+.grow { flex: 1; }
+
+/* 버튼 */
+.btn { height: 38px; border: 0; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; flex-shrink: 0; padding: 0 14px; background: var(--btn-bg); color: var(--fg); font-size: 12.5px; box-shadow: var(--btn-shadow); transition: transform 260ms cubic-bezier(0.3,1.3,0.5,1), box-shadow 200ms cubic-bezier(0.2,0.7,0.3,1), background-color 160ms; }
+.btn:hover { background: var(--btn-hover-bg); transform: translateY(-1px); box-shadow: var(--btn-hover-shadow); }
+.btn:active { transform: translateY(0) scale(0.97); }
+.btn--ink { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); font-weight: 500; }
+.btn--ink:hover { background: var(--ink-grad); filter: brightness(1.08); }
+.btn--sm { height: 32px; font-size: 12px; padding: 0 12px; }
+.btn--xs { height: 28px; font-size: 11.5px; padding: 0 10px; gap: 6px; }
+.btn--icon { width: 38px; padding: 0; justify-content: center; }
+.btn--icon.btn--sm { width: 32px; }
+.btn--raised { background: var(--side-bg); box-shadow: var(--raise); }
+.btn--raised:hover { background: var(--side-bg); box-shadow: var(--raise-hover); }
+.btn--danger-text { color: var(--danger); }
+.linkbtn { border: 0; background: none; padding: 4px 2px; font-size: 12px; color: var(--fg-dim); display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; }
+.linkbtn:hover { color: var(--fg); }
+
+/* 세그먼트(먹색 슬라이드) */
+.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; border-radius: 999px; background: var(--side-bg); box-shadow: var(--inset); }
+.seg-thumb { position: absolute; top: 4px; left: 4px; height: calc(100% - 8px); border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); transition: transform 340ms cubic-bezier(0.3,1.25,0.5,1); }
+.seg button { position: relative; flex: 1; height: 28px; border: 0; background: transparent; border-radius: 999px; font-size: 12.5px; color: var(--fg-dim); padding: 0 14px; white-space: nowrap; transition: color 200ms; }
+.seg button[aria-pressed="true"] { color: var(--on-ink); font-weight: 600; }
+
+/* 행·아바타·체크 */
+.row { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 16px; transition: background-color 160ms; position: relative; }
+.row:hover { background: var(--row-hover); }
+.row.rail { box-shadow: inset 1px 0 0 var(--danger); border-radius: 0 16px 16px 0; }
+.av { width: 36px; height: 36px; flex-shrink: 0; border-radius: 999px; display: grid; place-items: center; font-size: 13px; font-weight: 600; color: var(--fg-muted); background: var(--side-bg); box-shadow: var(--raise); }
+.av--sm { width: 28px; height: 28px; font-size: 11.5px; }
+.t1 { font-size: 13.5px; font-weight: 500; }
+.t2 { font-size: 12px; color: var(--fg-muted); margin-top: 3px; }
+.t3 { font-size: 11.5px; color: var(--fg-dim); }
+.due { font-size: 12px; color: var(--fg-dim); flex-shrink: 0; white-space: nowrap; }
+.due.urgent { color: var(--danger); font-weight: 500; }
+.ck { width: 22px; height: 22px; flex-shrink: 0; border: 0; padding: 0; border-radius: 999px; background: var(--side-bg); box-shadow: var(--inset-sm); display: grid; place-items: center; color: transparent; transition: background-color 160ms, box-shadow 160ms; }
+.ck[aria-checked="true"] { background: var(--ink-grad); box-shadow: var(--ink-shadow); color: var(--on-ink); }
+.done-t { text-decoration: line-through; color: var(--fg-dim); font-weight: 400; }
+
+/* 상태 칩: 색이 아니라 글리프 + 글 */
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; box-shadow: var(--inset-sm); font-size: 11.5px; color: var(--fg-muted); white-space: nowrap; flex-shrink: 0; }
+.chip--danger { color: var(--danger); }
+.chip--ink { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); }
+.cert { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; white-space: nowrap; }
+.cert--rec { border: 1px dashed var(--line-strong); color: var(--fg-muted); }
+.cert--ok { border: 1px solid var(--line-strong); color: var(--fg); }
+.cert--unk { border: 1px dotted var(--line-strong); color: var(--fg-dim); }
+.tip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px dashed var(--line-strong); font-size: 12.5px; color: var(--fg-muted); }
+.tip b { color: var(--fg); font-weight: 500; }
+
+/* 입력 */
+.capture { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 8px 0 18px; border-radius: 999px; background: var(--side-bg); box-shadow: var(--inset); }
+.capture input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: 14px; outline: none; height: 100%; }
+.capture input::placeholder { color: var(--fg-faint); }
+.capture:focus-within { box-shadow: var(--inset), 0 0 0 1px var(--accent-fg); }
+
+/* 트랙·게이지 */
+.track { position: relative; height: 6px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.track > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--fg); transition: width 200ms cubic-bezier(0.2,0.7,0.3,1); }
+.track.blocked > i { background: var(--danger); }
+.track .tick { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--fg-dim); }
+
+/* 토스트·드로어 */
+.toast { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 40; padding: 10px 16px; border-radius: 999px; background: var(--ink-grad); color: var(--on-ink); font-size: 12.5px; display: flex; align-items: center; gap: 8px; box-shadow: 0 16px 40px -12px oklch(0 0 0 / 0.45); animation: toastIn 200ms cubic-bezier(0.2,0.7,0.3,1); }
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px) scale(0.97); } to { opacity: 1; transform: translate(-50%, 0); } }
+.overlay { position: absolute; inset: 0; background: var(--overlay); z-index: 20; animation: fadeIn 160ms cubic-bezier(0.2,0.7,0.3,1); border-radius: 0 16px 16px 0; }
+.drawer { position: absolute; top: 12px; right: 12px; bottom: 12px; width: 440px; z-index: 21; border-radius: 22px; background: var(--panel-solid); border: 1px solid var(--panel-edge); box-shadow: 0 30px 60px -20px oklch(0 0 0 / 0.4); padding: 22px; display: flex; flex-direction: column; gap: 14px; animation: drawerIn 180ms cubic-bezier(0.2,0.7,0.3,1); }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawerIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+.fade-up { animation: fadeUp 200ms cubic-bezier(0.2,0.7,0.3,1) both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* 7b 시간축 */
+.rail-wrap { position: relative; height: 112px; margin: 4px 6px 0; }
+.rail-hours { position: absolute; inset: 0; }
+.rail-hour { position: absolute; top: 0; bottom: 18px; width: 1px; background: var(--line); }
+.rail-hour span { position: absolute; bottom: -18px; left: -14px; width: 28px; text-align: center; font-size: 10.5px; color: var(--fg-faint); }
+.rail-blk { position: absolute; top: 18px; height: 58px; border-radius: 14px; border: 0; padding: 8px 10px; text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 3px; overflow: hidden; background: var(--side-bg); box-shadow: var(--raise); font-size: 12px; transition: transform 200ms cubic-bezier(0.3,1.3,0.5,1), box-shadow 160ms; }
+.rail-blk:hover { transform: translateY(-2px); box-shadow: var(--raise-hover); }
+.rail-blk.past { opacity: 1; color: var(--fg-dim); background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.rail-blk.now { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); }
+.rail-blk.sel { outline: 1px solid var(--accent-fg); outline-offset: 2px; }
+.rail-gap { position: absolute; top: 18px; height: 58px; border-radius: 14px; border: 1px dashed var(--line-strong); display: flex; align-items: flex-end; padding: 6px 8px; font-size: 11px; color: var(--fg-dim); pointer-events: none; }
+.rail-task { position: absolute; top: 84px; height: 22px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel-solid); font-size: 11px; padding: 0 6px; display: flex; align-items: center; gap: 4px; overflow: hidden; white-space: nowrap; animation: fadeUp 200ms cubic-bezier(0.2,0.7,0.3,1) both; }
+.rail-now { position: absolute; top: 6px; bottom: 12px; width: 1px; background: var(--accent-fg); z-index: 3; }
+.rail-now::before { content: ''; position: absolute; top: -4px; left: -4px; width: 9px; height: 9px; border-radius: 999px; background: var(--accent-fg); }
+.rail-now b { position: absolute; top: -20px; left: 8px; font-size: 10.5px; font-weight: 500; color: var(--accent-fg); white-space: nowrap; }
+
+/* 차트 */
+.chart { position: relative; flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: var(--bar-gap, 14px); padding: 6px 4px 26px; outline: none; }
+.chart:focus-visible { outline: 1px solid var(--accent-fg); outline-offset: 2px; border-radius: 12px; }
+.bar { position: relative; flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; border: 0; background: transparent; padding: 0; border-radius: 10px; }
+.bar > i { display: block; width: 100%; border-radius: 4px; transform-origin: bottom; animation: barRise 200ms cubic-bezier(0.2,0.7,0.3,1) both; }
+.bar > i:first-child { border-radius: 8px 8px 4px 4px; }
+.bar .s1 { background: var(--s1); }
+.bar .s2 { background: var(--s2); }
+.bar .s3 { background: var(--s3); background-image: repeating-linear-gradient(135deg, transparent 0 4px, oklch(1 0 0 / 0.35) 4px 6px); }
+.bar .lbl { position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%); font-size: 10.5px; color: var(--fg-faint); white-space: nowrap; }
+.bar .lbl.on { color: var(--fg); font-weight: 600; }
+.bar.dim > i { opacity: 0.38; }
+.bar.on::after { content: ''; position: absolute; inset: -4px -4px -2px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--accent-fg); pointer-events: none; }
+.avg { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line-strong); pointer-events: none; }
+.avg span { position: absolute; right: 0; top: -18px; font-size: 10.5px; color: var(--fg-dim); }
+@keyframes barRise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--fg-muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.lg1 { background: var(--s1); } .lg2 { background: var(--s2); } .lg3 { background: var(--s3); background-image: repeating-linear-gradient(135deg, transparent 0 3px, oklch(1 0 0 / 0.4) 3px 4.5px); }
+
+/* KPI */
+.kpi { border-radius: 22px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--panel-shadow); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; border: 0; text-align: left; transition: transform 200ms cubic-bezier(0.3,1.3,0.5,1); }
+button.kpi:hover { transform: translateY(-2px); }
+.kpi-l { font-size: 12px; color: var(--fg-muted); }
+.kpi-v { font-size: 34px; font-weight: 300; line-height: 1.1; margin-top: 4px; }
+.kpi-d { font-size: 12px; color: var(--fg-dim); display: flex; align-items: center; gap: 6px; }
+
+/* 히트맵 */
+.heat { display: grid; gap: 5px; align-items: center; }
+.cell { height: 30px; border-radius: 8px; border: 0; padding: 0; background: var(--heat-base); transition: transform 160ms cubic-bezier(0.3,1.3,0.5,1); }
+.cell:hover, .cell.on { transform: scale(1.08); box-shadow: 0 0 0 1px var(--accent-fg); }
+.cell.today { box-shadow: inset 0 0 0 1px var(--accent-fg); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
+}
+@media (max-width: 900px) {
+  .doc { padding: 32px 16px 64px; gap: 36px; }
+  .cap { grid-template-columns: 1fr; }
+}
+
+/* ── 9안 추가 ── */
+.cols { flex: 1; min-height: 0; display: grid; gap: 16px; }
+.stack { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.slots { display: flex; flex-direction: column; gap: 8px; }
+.slot { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--side-bg); box-shadow: var(--raise); }
+.slot--empty { background: transparent; box-shadow: none; border: 1px dashed var(--line-strong); }
+.slot-n { width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; font-size: 11.5px; color: var(--fg-muted); box-shadow: var(--inset-sm); flex-shrink: 0; }
+.kv { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; padding: 9px 4px; border-top: 1px solid var(--line); align-items: baseline; }
+.kv:first-of-type { border-top: 0; }
+.strip { position: relative; height: 46px; margin: 2px 4px 0; flex-shrink: 0; }
+.strip-track { position: absolute; left: 0; right: 0; top: 22px; height: 8px; border-radius: 999px; background: var(--side-bg); box-shadow: var(--inset-sm); overflow: hidden; }
+.strip-track > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--ink-grad); transition: width 200ms cubic-bezier(0.2,0.7,0.3,1); }
+.strip-phase { position: absolute; top: 0; font-size: 11px; color: var(--fg-faint); padding-left: 2px; border-left: 1px solid var(--line); height: 34px; }
+.strip-phase.on { color: var(--fg); font-weight: 500; }
+.strip-ev { position: absolute; top: 20px; width: 4px; height: 12px; margin-left: -2px; border-radius: 2px; background: var(--fg-muted); }
+.strip-ev.past { background: var(--fg-faint); opacity: .6; }
+.strip-now { position: absolute; top: 16px; width: 2px; height: 20px; margin-left: -1px; background: var(--accent-fg); border-radius: 2px; }
+.strip-now b { position: absolute; top: 22px; left: -18px; font-size: 10.5px; color: var(--accent-fg); }
+.energy { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border: 0; border-radius: 16px; background: var(--side-bg); box-shadow: var(--raise); color: var(--fg-muted); font-size: 13px; transition: transform 200ms cubic-bezier(0.3,1.3,0.5,1); }
+.energy:hover { transform: translateY(-1px); }
+.energy.on { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); }
+.energy.on .t3 { color: var(--on-ink); opacity: .8; }
+.week { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 2px 4px; }
+.week > div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.wk { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; box-shadow: var(--inset-sm); }
+.wk.on { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); }
+.wk.today { border: 1px dashed var(--accent-fg); box-shadow: none; }
+.mini-tl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.mini-ev { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 14px; background: var(--side-bg); box-shadow: var(--raise); font-size: 12.5px; min-width: 0; }
+.mini-ev > span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.mini-ev .mono { font-size: 11px; color: var(--fg-dim); }
+.mini-ev.past { background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--fg-dim); }
+.mini-ev.past > span:nth-child(2) { font-weight: 400; }
+.mini-ev.now { box-shadow: var(--raise), inset 0 0 0 1px var(--accent-fg); }
+.rail-panel { min-height: 0; }
+.rail-panel .seg { display: grid; }
+.sig { padding: 12px 14px; border-radius: 16px; background: var(--side-bg); box-shadow: var(--raise); animation: fadeUp 200ms cubic-bezier(0.2,0.7,0.3,1) both; }
+.sig--danger { box-shadow: var(--raise), inset 1px 0 0 var(--danger); }
+.empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 10px; color: var(--fg-muted); font-size: 13px; text-align: center; }
+.tile { padding: 12px 14px; border-radius: 16px; box-shadow: var(--inset-sm); }
+.big-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; height: 262px; flex-shrink: 0; }
+.big-slot { display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: 24px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--panel-shadow); min-width: 0; }
+.big-slot.urgent { box-shadow: var(--panel-shadow), inset 1px 0 0 var(--danger); }
+.big-slot.running { box-shadow: var(--panel-shadow), inset 0 0 0 1px var(--accent-fg); }
+.big-slot.done .big-title { color: var(--fg-dim); }
+.big-slot--empty { background: transparent; border: 1px dashed var(--line-strong); box-shadow: none; justify-content: center; align-items: flex-start; }
+.big-title { font-size: 21px; font-weight: 300; letter-spacing: -0.015em; line-height: 1.35; margin-top: 6px; text-wrap: balance; }
+.timer { font-size: 26px; font-weight: 500; letter-spacing: 0; }
+.vtl { position: relative; display: flex; flex-direction: column; }
+.vtl::before { content: ''; position: absolute; left: 48px; top: 10px; bottom: 10px; width: 1px; background: var(--line); }
+.vtl-row { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; }
+.vtl-dot { position: relative; z-index: 1; margin-top: 4px; width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; background: var(--panel-solid); box-shadow: inset 0 0 0 1.5px var(--fg-dim); }
+.vtl-dot.past { background: var(--fg-faint); box-shadow: none; }
+.vtl-dot.now { background: var(--accent-fg); box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent-fg) 20%, transparent); }
+
+/* ── 12안 추가 ── */
+.kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; margin-right: 3px; border-radius: 6px; box-shadow: var(--inset-sm); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--fg-muted); }
+.dtabs { display: flex; align-items: center; gap: 6px; padding: 5px; border-radius: 999px; background: var(--side-bg); box-shadow: var(--inset); flex-shrink: 0; padding-right: 16px; }
+.dtab { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--fg-muted); font: inherit; font-size: 12.5px; transition: background-color 120ms, box-shadow 120ms, color 120ms; }
+.dtab:hover { background: var(--side-bg); box-shadow: var(--raise); }
+.dtab.on { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); font-weight: 500; }
+.dtab.urgent:not(.on) .dtab-g { color: var(--danger); }
+.dtab.done { color: var(--fg-faint); }
+.dtab.done span:last-child { text-decoration: line-through; }
+.dtab-g { display: inline-flex; }
+.deck { position: relative; height: 262px; flex-shrink: 0; margin-bottom: 18px; }
+.deck-under { position: absolute; left: 0; right: 0; top: 0; bottom: 0; border-radius: 26px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--panel-shadow); }
+.deck-under--1 { transform: translateY(9px) scale(0.975); opacity: .75; }
+.deck-under--2 { transform: translateY(17px) scale(0.95); opacity: .45; }
+.deck-card { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; border-radius: 26px; background: var(--panel-solid); border: 1px solid var(--panel-edge); box-shadow: var(--panel-shadow); overflow: hidden; }
+.deck-card.urgent { box-shadow: var(--panel-shadow), inset 1px 0 0 var(--danger); }
+.deck-card.in-r { animation: deckInR 200ms cubic-bezier(0.2,0.7,0.3,1); }
+.deck-card.in-l { animation: deckInL 200ms cubic-bezier(0.2,0.7,0.3,1); }
+@keyframes deckInR { from { transform: translateX(16px); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes deckInL { from { transform: translateX(-16px); opacity: .4; } to { transform: none; opacity: 1; } }
+.deck-main { display: flex; flex-direction: column; padding: 24px 30px 22px; min-width: 0; }
+.deck-side { display: flex; flex-direction: column; gap: 4px; padding: 22px 20px 18px; border-left: 1px solid var(--line); background: var(--side-bg); }
+.deck-fact { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 12.5px; align-items: baseline; }
+.deck-fact:first-of-type { border-top: 0; }
+.deck-next { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px 0 14px; border: 0; border-radius: 999px; background: var(--side-bg); box-shadow: var(--raise); color: var(--fg); font: inherit; font-size: 12.5px; text-align: left; }
+.deck-next:hover { box-shadow: var(--raise-hover); }
+.hd-est { font-size: 18px; font-weight: 300; color: var(--fg-dim); letter-spacing: -0.01em; }
+.kfilter { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.kf { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 13px; border: 0; border-radius: 999px; background: var(--side-bg); box-shadow: var(--raise); color: var(--fg-muted); font: inherit; font-size: 12.5px; }
+.kf .num { color: var(--fg); font-weight: 500; }
+.kf.on { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); }
+.kf.on .num { color: var(--on-ink); }
+.kf--urgent:not(.on) { color: var(--danger); }
+.kf--urgent:not(.on) .num { color: var(--danger); }
+.kf.zero { opacity: .55; }
+.tgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 144px; gap: 12px; flex-shrink: 0; }
+.tcard { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 20px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--panel-shadow); min-width: 0; cursor: default; transition: border-color 120ms; }
+.tcard.focus { border-color: var(--accent-fg); }
+.tcard.urgent { box-shadow: var(--panel-shadow), inset 1px 0 0 var(--danger); }
+.tcard.done { background: transparent; box-shadow: none; border: 1px dashed var(--line); }
+.tcard-title { flex: 1; font-size: 14.5px; line-height: 1.45; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tcard-primary { flex: 1; min-width: 0; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcard-more { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tcard--sum { background: transparent; box-shadow: var(--inset); border: 0; justify-content: center; gap: 4px; }
+.tcard--sum .linkbtn { align-self: flex-start; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <header class="doc-head">
+    <div>
+      <div class="doc-eyebrow">12 · 홈 위쪽 디벨롭</div>
+      <h1>홈 — 위쪽만 2안 더</h1>
+      <div class="doc-sub">지금 허브의 홈(7g)에서 <b>위쪽</b> — 제목 · 확인할 것 목록 · 결정 카드 — 만 바꿨습니다. 아래 멘토 한 줄과 오늘의 시간표는 세 아트보드 모두 같습니다. 맨 위는 비교용 지금 7g입니다. 결정 버튼은 실제로 눌리고, 숫자·이름은 전부 <b>예시 값</b>입니다.</div>
+    </div>
+    <div class="doc-tools">
+      <div class="seg" data-docseg="theme" role="group" aria-label="테마"><span class="seg-thumb" style="width: calc((100% - 8px) / 2); transform: translateX(0%);"></span><button aria-pressed="true" data-theme-btn="light">라이트</button><button aria-pressed="false" data-theme-btn="dark">다크</button></div>
+      <div class="seg" data-docseg="fit" role="group" aria-label="보기 크기"><span class="seg-thumb" style="width: calc((100% - 8px) / 2); transform: translateX(0%);"></span><button aria-pressed="true" data-fit-btn="fit">화면 맞춤</button><button aria-pressed="false" data-fit-btn="full">실제 크기</button></div>
+    </div>
+  </header>
+
+  <section style="display: flex; flex-direction: column; gap: 44px;">
+    <div class="option">
+      <div class="cap">
+        <div>
+          <div class="cap-title"><span class="tag">7g</span><b>지금 홈</b><span class="from">비교 기준</span></div>
+          <p class="cap-lede">2026-10-19 허브에 반영한 형태입니다. 왼쪽 목록에서 고르고 오른쪽 카드에서 결정합니다.</p>
+        </div>
+        <ul><li>목록 380px + 결정 카드 · 숫자키 1·2·3으로 결정 · 결정하면 다음 미처리 건으로 넘어갑니다.</li></ul>
+      </div>
+      <div class="stage"><div class="stage-inner"><div class="frame" id="f7g"></div></div></div>
+    </div>
+
+    <div class="option">
+      <div class="cap">
+        <div>
+          <div class="cap-title"><span class="tag">12a</span><b>한 장씩 · 덱</b><span class="from">목록을 탭 한 줄로 접기</span></div>
+          <p class="cap-lede">왼쪽 목록을 위쪽 <b>탭 한 줄</b>로 접고, 결정 카드를 화면 폭 전체로 넓혔습니다. 카드 뒤에 남은 장이 겹쳐 보여 "몇 장 남았나"를 모양으로 말하고, 카드 오른쪽에 <b>판단 근거</b> 네 줄과 다음 건 미리보기를 둡니다.</p>
+        </div>
+        <ul>
+          <li>숫자키 <b>1·2·3</b>으로 결정, <b>←/→</b>로 넘기기. 결정하면 카드가 오른쪽에서 밀려 들어오며 다음 미처리 건이 됩니다.</li>
+          <li>탭은 종류 글리프 + 이름. 처리한 건은 체크 + 취소선, 긴급은 종 글리프만 빨강 · 카드는 1px 위급 레일.</li>
+          <li>탭 줄 끝에 <b>남은 시간 약 N분</b> — 건별 예상 시간의 합입니다(목업은 고정값).</li>
+        </ul>
+      </div>
+      <div class="stage"><div class="stage-inner"><div class="frame" id="f12a"></div></div></div>
+    </div>
+
+    <div class="option">
+      <div class="cap">
+        <div>
+          <div class="cap-title"><span class="tag">12b</span><b>한눈에 · 결정 칸</b><span class="from">고르지 않고 바로 결정</span></div>
+          <p class="cap-lede">고르는 단계를 없앴습니다. 확인할 것이 <b>3열 카드</b>로 한눈에 펼쳐지고, 카드마다 첫 선택이 바로 눌리는 버튼입니다. 다른 선택과 보류는 <b>▾</b>로 그 자리에서 펼칩니다.</p>
+        </div>
+        <ul>
+          <li>제목 옆에 <b>약 N분</b>, 그 아래 <b>종류로 거르기</b>(전체 · 급한 것 · 매출 · 콘텐츠 …). 급한 것 칩만 빨강 글자입니다.</li>
+          <li>처리한 카드는 그 자리에서 점선 칸으로 바뀌고 되돌리기가 남습니다. 여섯째 칸은 <b>오늘 결정 N건</b> — 결정 일지에 남은 것만 셉니다.</li>
+          <li>마지막으로 만진 카드가 Moonstone 테두리를 얻고, 아래 멘토 한 줄이 그 카드의 분야를 따라갑니다.</li>
+        </ul>
+      </div>
+      <div class="stage"><div class="stage-inner"><div class="frame" id="f12b"></div></div></div>
+    </div>
+  </section>
+</div>
+<script>
+/* ── 아이콘 (hub-icons 계열 24px 선) ── */
+const C = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+const R = (x, y, w, h, rx) => `M${x + rx} ${y}h${w - 2 * rx}a${rx} ${rx} 0 0 1 ${rx} ${rx}v${h - 2 * rx}a${rx} ${rx} 0 0 1 ${-rx} ${rx}h${-(w - 2 * rx)}a${rx} ${rx} 0 0 1 ${-rx} ${-rx}v${-(h - 2 * rx)}a${rx} ${rx} 0 0 1 ${rx} ${-rx}Z`;
+const ICON = {
+  navHome: ['M19.3 15.7A8.7 8.7 0 0 1 8.3 4.7a8.7 8.7 0 1 0 11 11Z', 'M18.5 4v4m-2-2h4'],
+  navToday: [R(5, 3, 14, 18, 2), 'M8.5 8h7m-7 4h7m-7 4h4'],
+  navOverview: ['M4 19V13m5 6V8m5 11v-5m5 5V5M3 19h18'],
+  navTasks: ['m4 7 1.6 1.6L8 5.5M11 7h9m-16 6 1.6 1.6L8 11.5M11 13h9m-16 6 1.6 1.6L8 17.5M11 19h9'],
+  navRevenue: ['M4 19V15m5 4v-6m5 6v-8m5 8V7M3 19h18M5 10l5-4 4 2 5-4'],
+  navDiscovery: [C(12, 12, 9), 'm15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8 4.8-2.2Z'],
+  navProjects: [R(4, 7, 14, 13, 2), 'M7 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v10h-2M8 12h6m-6 4h4'],
+  navProducts: ['M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9Z', 'M3 5h18v4H3zM10 13h4'],
+  navBrand: ['m12 3 9 5v8l-9 5-9-5V8l9-5Z', 'm12 7 5 5-5 5-5-5 5-5Z'],
+  navContent: ['M5 3h10l4 4v14H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z', 'M15 3v5h4M8 12h8m-8 4h6'],
+  navAI: ['m12 3 1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3Z'],
+  navSettings: ['M4 6h3m4 0h9M4 12h10m4 0h2M4 18h4m4 0h8', C(9, 6, 2), C(16, 12, 2), C(10, 18, 2)],
+  search: [C(11, 11, 7), 'm20 20-3.5-3.5'],
+  moon: ['M19.3 15.7A8.7 8.7 0 0 1 8.3 4.7a8.7 8.7 0 1 0 11 11Z'],
+  check: ['M5 12.5l4.2 4.2L19 7'],
+  clock: [C(12, 12, 8.5), 'M12 7.5V12l3 2'],
+  arrowR: ['M5 12h14M13 6l6 6-6 6'],
+  plus: ['M12 5v14M5 12h14'],
+  pen: ['M4 20h4L19 9l-4-4L4 16v4Z', 'm13.5 6.5 4 4'],
+  bell: ['M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z', 'M10 20a2 2 0 0 0 4 0'],
+  chevL: ['M15 6l-6 6 6 6'], chevR: ['M9 6l6 6-6 6'], chevD: ['M6 9l6 6 6-6'], chevU: ['M6 15l6-6 6 6'],
+  calendar: [R(4, 5, 16, 15, 2), 'M4 10h16M9 3v4M15 3v4'],
+  pause: [C(12, 12, 8.5), 'M10 9v6M14 9v6'],
+  octagon: ['M8.5 3h7L21 8.5v7L15.5 21h-7L3 15.5v-7L8.5 3Z', 'M8.5 8.5l7 7'],
+  circle: [C(12, 12, 8)],
+  half: [C(12, 12, 8.5), 'M12 3.5v17'],
+  doneCircle: [C(12, 12, 8.5), 'M8 12.2l2.7 2.7L16 9.6'],
+  diamond: ['M12 4l8 8-8 8-8-8 8-8Z'],
+  dot: [C(12, 12, 3.5)],
+  flame: ['M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-3.8 2.5-5 .3 1.6 1 2.6 2 3 .4-3-.5-5.5.5-8Z'],
+  x: ['M6 6l12 12M18 6L6 18'],
+  phone: ['M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z'],
+  target: [C(12, 12, 8.5), C(12, 12, 3.5)],
+  more: [C(6, 12, 1), C(12, 12, 1), C(18, 12, 1)],
+  gear: [C(12, 12, 3), 'M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1'],
+  triangleUp: ['M12 7l6 10H6l6-10Z'],
+  triangleDown: ['M12 17L6 7h12l-6 10Z'],
+  focus: [C(12, 12, 8.5), 'M12 7.5V12l3 2'],
+};
+const ic = (name, size = 16, extra = '') => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${(ICON[name] || []).map((d) => `<path d="${d}"/>`).join('')}</svg>`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* 단색 불꽃 5단계(burning-streak) — 6일 = 2단계(3일+) 윤곽 불꽃 */
+function streak(days) {
+  const level = days >= 30 ? 5 : days >= 14 ? 4 : days >= 7 ? 3 : days >= 3 ? 2 : days >= 1 ? 1 : 0;
+  const fill = level >= 3 ? 'currentColor' : 'none';
+  return `<span class="chip" title="오늘 할 일 연속 완주 ${days}일"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="${ICON.flame[0]}"/></svg><span class="num">${days}</span>일 연속</span>`;
+}
+
+/* 세그먼트 — 이전 위치에서 새 위치로 미끄러지게 그린다 */
+const segPrev = {};
+function seg(key, options, value, act) {
+  const n = options.length;
+  const idx = Math.max(0, options.findIndex((o) => o.key === value));
+  const prev = segPrev[key] ?? idx;
+  segPrev[key] = idx;
+  return `<div class="seg" role="group" aria-label="${esc(key.split(':').pop())}">
+    <span class="seg-thumb" data-to="${idx * 100}" style="width: calc((100% - 8px) / ${n}); transform: translateX(${prev * 100}%);"></span>
+    ${options.map((o) => `<button aria-pressed="${o.key === value}" data-act="${act}" data-v="${o.key}">${o.label}</button>`).join('')}
+  </div>`;
+}
+
+/* 사이드바 */
+const NAV = [['홈', 'navHome'], ['오늘', 'navToday'], ['현황', 'navOverview'], ['내 작업', 'navTasks'], ['영업·매출', 'navRevenue', 3], ['기회 탐색', 'navDiscovery'], ['프로젝트', 'navProjects'], ['제품', 'navProducts'], ['브랜드', 'navBrand'], ['콘텐츠', 'navContent']];
+const UTIL = [['AI·자동화', 'navAI'], ['설정', 'navSettings']];
+function sidebar(active) {
+  const item = (n, i) => `<button class="side-item ${i === active ? 'on' : ''}" ${i === active ? 'aria-current="page"' : ''}>${ic(n[1], 17)}<span>${n[0]}</span>${n[2] ? `<span class="side-count">${n[2]}</span>` : ''}</button>`;
+  return `<aside class="side">
+    <div class="side-brand"><span class="side-logo">${ic('moon', 16)}</span><div><div style="font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em;">Moonlight</div><div style="font-size: 11px; color: var(--fg-faint);">Hub Pro</div></div></div>
+    <button class="side-search">${ic('search', 14)}<span style="flex: 1; text-align: left;">검색 · 바로 이동</span><span class="kbd">⌘K</span></button>
+    <div style="padding: 0 12px 12px;"><div class="seg" style="display: grid;"><span class="seg-thumb" style="width: calc((100% - 8px) / 3);"></span><button aria-pressed="true">전체</button><button aria-pressed="false">ClassIn</button><button aria-pressed="false">개인</button></div></div>
+    <nav class="side-nav">${NAV.map(item).join('')}</nav>
+    <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 4px;">${UTIL.map((n, i) => item(n, i + NAV.length)).join('')}</div>
+    <div class="side-user"><span class="side-av">문</span><div><div style="font-size: 12px; font-weight: 500;">문준혁</div><div style="font-size: 10.5px; color: var(--fg-faint);">Founder · Pro</div></div></div>
+  </aside>`;
+}
+
+/* ── 예시 값 (목업 전용 — 앱 코드로 옮길 때는 원장에서 읽는다) ── */
+const today = { label: '10월 16일 (금)', now: '14:20', nowMin: 14 * 60 + 20 };
+const tasksSeed = () => [
+  { id: 't1', title: '한빛학원 견적 v2 보내기', meta: '영업 · 17:00까지', focus: true, done: false, min: 30 },
+  { id: 't2', title: '파트너 미팅 회의록 → 결정 기록', meta: '기획 · ClassIn', focus: true, done: false, min: 20 },
+  { id: 't3', title: '스레드 원고 2편 검수', meta: '콘텐츠 · 시나브로', focus: true, done: true, min: 25 },
+  { id: 't4', title: '10월 정산 입금 확인', meta: '매출 · 개인', focus: false, done: false, min: 15 },
+  { id: 't5', title: '주간 리포트 초안', meta: '기획', focus: false, done: false, min: 45 },
+];
+const people = {
+  ka: [
+    { i: '김', name: '김지원', org: '한빛학원 원장', reason: '데모 일정 제안 회신 대기 · 3일 경과', due: '오늘', urgent: true },
+    { i: '박', name: '박서연', org: '교육청 산하 연수원', reason: '제휴 문의 회신 필요', due: '18:00까지', urgent: false },
+    { i: '이', name: '이도윤', org: '에듀포인트', reason: '견적 v2 피드백 대기', due: '내일', urgent: false },
+  ],
+  focus: [
+    { i: '최', name: '최하은', org: '리드앤런 어학원', reason: '계약 갱신 30일 전', due: '10/24', urgent: false },
+    { i: '정', name: '정우진', org: '스터디카페 연합', reason: '첫 미팅 후 자료 요청', due: '10/20', urgent: false },
+    { i: '한', name: '한소율', org: '온라인 과외 플랫폼', reason: '파일럿 결과 공유 예정', due: '10/22', urgent: false },
+  ],
+};
+const events = [
+  { id: 'e1', s: 9 * 60 + 30, e: 10 * 60, title: '주간 계획 확인', sub: '혼자 · 30분', kind: '작업 블록' },
+  { id: 'e2', s: 11 * 60, e: 12 * 60, title: 'ClassIn 파트너 미팅', sub: 'Google Meet · 3명', kind: '미팅', linked: '회의록 → 결정 기록이 오늘 할 일에 있습니다', prep: ['회의록 링크 붙이기', '결정 2건 기록'] },
+  { id: 'e3', s: 14 * 60, e: 15 * 60, title: '견적 검토 · 한빛학원', sub: '전화 · 김지원 원장', kind: '통화', customer: '김지원 · 긴급 KA · 3일 경과', linked: '견적 v2 좌석 수와 할인율을 함께 확인합니다.', prep: ['견적 v2 좌석 수 120 → 140 확인', '할인 상한 8% 유지(10/13 결정)', '데모 일정 후보 2개 준비'] },
+  { id: 'e4', s: 16 * 60 + 30, e: 17 * 60 + 30, title: '콘텐츠 원고 정리', sub: '작업 블록 · 집중', kind: '작업 블록', prep: ['검수 대기 2편', '다음 주 발행 3편 순서'] },
+  { id: 'e5', s: 19 * 60, e: 19 * 60 + 30, title: '하루 리뷰', sub: 'Moonlight 리뷰', kind: '리뷰', prep: ['에너지 1~5', '오늘 3개 돌아보기'] },
+];
+const dispatchSeed = () => [
+  { id: 'd1', title: '파트너 미팅 회의록 → 결정 기록으로 정리', who: 'AI · 비서', st: 'queued' },
+  { id: 'd2', title: '한빛학원 견적 v2 PDF 만들기', who: 'AI · 영업', st: 'waiting' },
+  { id: 'd3', title: '스레드 원고 이미지 2장 리사이즈', who: 'AI · 콘텐츠', st: 'done' },
+  { id: 'd4', title: '주간 리포트 초안 쓰기', who: 'AI · 비서', st: 'active' },
+];
+const LIFE = {
+  queued: { icon: 'circle', label: '대기' },
+  active: { icon: 'half', label: '실행 중' },
+  waiting: { icon: 'pause', label: '승인 대기' },
+  done: { icon: 'doneCircle', label: '완료' },
+  blocked: { icon: 'octagon', label: '막힘', danger: true },
+};
+const life = (st) => { const l = LIFE[st]; return `<span class="chip ${l.danger ? 'chip--danger' : ''}">${ic(l.icon, 12)}${l.label}</span>`; };
+const hm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`);
+
+/* 활동 원장 60일 — 마지막 7일은 KPI(19·5·3)와 맞춘다 */
+const DAYS = (() => {
+  let seed = 20261016;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  const end = new Date(2026, 9, 16);
+  const out = [];
+  for (let i = 59; i >= 0; i--) {
+    const d = new Date(end); d.setDate(end.getDate() - i);
+    const wk = d.getDay(); const off = wk === 0 || wk === 6;
+    out.push({ d, work: Math.round(off ? rnd() * 1.4 : 1 + rnd() * 4), decisions: Math.round(rnd() * (off ? 0.4 : 1.6)), content: Math.round(rnd() * (off ? 0.6 : 1.3)), fail: rnd() > 0.86 ? 1 : 0 });
+  }
+  const last = [[1, 0, 0, 0], [0, 0, 0, 0], [3, 2, 1, 1], [4, 1, 2, 0], [3, 1, 0, 1], [3, 0, 0, 2], [5, 1, 0, 0]];
+  last.forEach((v, k) => Object.assign(out[53 + k], { work: v[0], decisions: v[1], content: v[2], fail: v[3] }));
+  // 지난 7일(직전 기간)을 15·4·5로 맞춘다
+  const prev = [[1, 0, 1], [0, 0, 0], [3, 1, 1], [3, 1, 1], [3, 1, 1], [2, 0, 1], [3, 1, 0]];
+  prev.forEach((v, k) => Object.assign(out[46 + k], { work: v[0], decisions: v[1], content: v[2] }));
+  return out;
+})();
+const WK = ['일', '월', '화', '수', '목', '금', '토'];
+const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+function periodData(n) {
+  const cur = DAYS.slice(-n); const prev = DAYS.slice(-2 * n, -n);
+  const sum = (arr, k) => arr.reduce((a, b) => a + b[k], 0);
+  return { cur, prev, sum, s: { work: sum(cur, 'work'), decisions: sum(cur, 'decisions'), content: sum(cur, 'content'), fail: sum(cur, 'fail') }, p: { work: sum(prev, 'work'), decisions: sum(prev, 'decisions'), content: sum(prev, 'content'), fail: sum(prev, 'fail') } };
+}
+function spark(vals, w = 96, h = 30) {
+  const max = Math.max(1, ...vals);
+  const pts = vals.map((v, i) => `${(i / Math.max(1, vals.length - 1)) * w},${h - 3 - (v / max) * (h - 6)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--s2)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+function delta(cur, prev, n) {
+  const d = cur - prev;
+  if (d === 0) return `<span>지난 ${n}일과 같음</span>`;
+  return `${ic(d > 0 ? 'triangleUp' : 'triangleDown', 11)}<span>지난 ${n}일보다 <b class="num" style="font-weight: 600; color: var(--fg);">${d > 0 ? '+' : '−'}${Math.abs(d)}</b></span>`;
+}
+const PERIODS = [{ key: '7', label: '7일' }, { key: '14', label: '14일' }, { key: '30', label: '30일' }];
+const projects = [
+  { name: 'Moonlight 모바일 위젯', pct: 72, st: 'active', ago: '2시간 전' },
+  { name: '하반기 가격표 개편', pct: 88, st: 'active', ago: '3시간 전' },
+  { name: 'ClassIn 파트너 제안 패키지', pct: 45, st: 'active', ago: '어제' },
+  { name: '콘텐츠 운영 체계 정리', pct: 30, st: 'blocked', ago: '5일 전', reason: '검수 기준 미정' },
+  { name: '브랜드 가이드 v2', pct: 15, st: 'waiting', ago: '4일 전', reason: '디자이너 회신' },
+];
+const okr = [
+  { obj: '4분기 개인 매출 기반 만들기', elapsed: 18, krs: [{ name: '신규 계약 3건', pct: 33, pace: '비슷함' }, { name: '제안서 발송 12건', pct: 25, pace: '늦음' }] },
+  { obj: 'Moonlight를 매일 쓰는 도구로', elapsed: 18, krs: [{ name: '하루 리뷰 주 5일', pct: 60, pace: '앞섬' }, { name: '빠른 입력 하루 5건', pct: 40, pace: '비슷함' }] },
+];
+const activity = [
+  { t: '14:02', kind: '작업', icon: 'navTasks', text: '모바일 위젯 QA 11/12 통과 기록' },
+  { t: '13:40', kind: '결정', icon: 'diamond', text: '견적 할인 상한 8% 유지 결정' },
+  { t: '11:58', kind: '발행', icon: 'navContent', text: '스레드 「1인 운영 OS를 만들며」 19:00 예약' },
+  { t: '10:15', kind: '자동화', icon: 'gear', text: '문의 메일 → 문의함 동기화 실패 1건', danger: true },
+  { t: '09:31', kind: '작업', icon: 'navTasks', text: '가격표 개편 v3 시안 업로드' },
+];
+
+const frames = {};
+/* 7g 트리아지 + 멘토 한 줄 (홈 Futura 트리아지의 변주) */
+const GURU = {
+  voss: { kind: 'GURU', person: 'Chris Voss · 실행 조건', text: '좋다는 반응을 시작 약속으로 해석하지 마세요. 실제 진행에 필요한 조건을 상대의 말로 확인합니다.' },
+  ogilvy: { kind: 'GURU', person: 'David Ogilvy · 리서치 우선', text: '표현을 쓰기 전에 고객이 실제로 쓴 말, 현재 제공할 수 있는 사실, 아직 모르는 것을 따로 모으세요.' },
+  hill: { kind: 'GURU', person: 'Napoleon Hill · 목적 설정', text: '결과 목표 대신 이번에 내가 확인할 사실 한 가지를 먼저 적으세요.' },
+};
+const triageSeed = () => [
+  { id: 'q1', kind: '매출', icon: 'navRevenue', title: '클래스인 — 봄 코호트 계약서 회신 2일째 지연', meta: '거래 · 1,800만원 · 구매 검토', ref: 'DEAL-031', urgent: true, guru: 'voss',
+    desc: '계약 단계 회신이 평소보다 48시간 늦습니다. 다음 단계로 넘어갈 가능성이 낮아지는 중입니다.', opts: ['리마인드 메일 초안 만들기', '담당 임원에게 올리기', '24시간 더 기다리기'] },
+  { id: 'q2', kind: '콘텐츠', icon: 'navContent', title: '뉴스레터 #47 발행 예정 — 초안 상태, 4시간 남음', meta: '발행 · 18:30 마감 · 시나브로', ref: 'PUB-047', guru: 'ogilvy',
+    desc: '본문 초안은 있고 제목과 첫 문단이 비어 있습니다. 18:30 전에 검수까지 마쳐야 예약 발행이 됩니다.', opts: ['마무리 블록 1시간 잡기', '발행 하루 미루기', '지난 호 형식 재사용'] },
+  { id: 'q3', kind: '자동화', icon: 'navAI', title: 'Gmail → CRM 자동 연결, 지난밤 17건 처리', meta: '실행 기록 · 실패 0', ref: 'RUN-1188', guru: 'hill',
+    desc: '새 문의 17건이 고객 기록에 붙었습니다. 그중 3건은 기존 고객과 이름만 같아 확인이 필요합니다.', opts: ['겹치는 3건 확인', '그대로 두기'] },
+  { id: 'q4', kind: '오피스', icon: 'navAI', title: '오피스가 다음 주 로드맵 초안을 제안했습니다', meta: '초안 · 검토 전', ref: 'DRAFT-22', guru: 'hill',
+    desc: '이번 주 결정 5건과 막힌 프로젝트 1건을 근거로 다음 주 우선순위 3개를 제안했습니다. 확정 전까지는 초안입니다.', opts: ['초안 검토 열기', '다음 주 월요일로 넘기기'] },
+  { id: 'q5', kind: '리듬', icon: 'clock', title: '금요일 주간 리뷰 아직 시작 안 됨', meta: '루틴 · 주 1회', ref: 'RHY-W', guru: 'hill',
+    desc: '이번 주 하루 리뷰는 3/5일 했습니다. 주간 리뷰는 15분이면 끝납니다.', opts: ['지금 15분 시작', '19:00 하루 리뷰에 붙이기'] },
+];
+const schedule7g = [
+  { s: 9 * 60, title: 'Daily Brief 리뷰', kind: '루틴' },
+  { s: 10 * 60, title: '클래스인 김 대표 — 발굴 미팅', kind: '미팅' },
+  { s: 14 * 60, e: 15 * 60 + 30, title: 'Moonlight Web 랜딩 개선', kind: '집중 작업' },
+  { s: 16 * 60, title: '개인 코칭 — 지훈', kind: '미팅' },
+  { s: 18 * 60 + 30, title: '뉴스레터 #47 마감', kind: '마감' },
+  { s: 19 * 60, title: '하루 리뷰', kind: '루틴' },
+];
+frames.f7g = {
+  nav: 1,
+  state: { items: triageSeed(), sel: 'q1', done: {} },
+  render(s) {
+    const total = s.items.length;
+    const doneN = Object.keys(s.done).length;
+    const left = total - doneN;
+    const cur = s.items.find((x) => x.id === s.sel);
+    const g = GURU[cur?.guru || 'voss'];
+    const linked = cur && cur.guru !== 'hill';
+    return `
+    <header class="hd">
+      <div>
+        <div class="hd-date">오늘 · 10월 16일 (금) · <span class="mono">14:20</span></div>
+        <h3>${left ? `${left}건 남았습니다` : '오늘 확인할 것을 다 봤습니다'}</h3>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; width: 260px;">
+        <div class="track" style="flex: 1;" role="img" aria-label="확인 ${doneN}/${total}"><i style="width: ${(doneN / total) * 100}%"></i></div>
+        <span class="mono" style="font-size: 12px; color: var(--fg-muted);">${doneN}/${total}</span>
+      </div>
+    </header>
+    <div style="display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 20px; height: 352px; flex-shrink: 0;">
+      <div style="display: flex; flex-direction: column; gap: 4px; min-height: 0;" role="listbox" aria-label="확인할 것">
+        ${s.items.map((x) => { const on = x.id === s.sel; const dn = s.done[x.id]; return `<button role="option" aria-selected="${on}" data-act="pick" data-id="${x.id}" style="text-align: left; border: 0; padding: 12px 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 6px; background: ${on ? 'var(--panel-solid)' : 'transparent'}; box-shadow: ${on ? 'var(--panel-shadow)' + (x.urgent && !dn ? ', inset 1px 0 0 var(--danger)' : '') : (x.urgent && !dn ? 'inset 1px 0 0 var(--danger)' : 'none')}; transition: background-color 160ms, box-shadow 160ms;">
+          <span style="font-size: 11.5px; font-weight: 500; letter-spacing: 0.02em; display: inline-flex; gap: 6px; align-items: center; color: ${x.urgent && !dn ? 'var(--danger)' : 'var(--fg-dim)'};">${ic(dn ? 'check' : x.urgent ? 'bell' : x.icon, 12)}${x.kind}${dn ? ` · ${dn}` : ''}</span>
+          <span style="font-size: 13.5px; ${dn ? 'text-decoration: line-through; color: var(--fg-dim);' : on ? 'font-weight: 500;' : ''}">${x.title}</span>
+        </button>`; }).join('')}
+      </div>
+      ${cur ? `<section class="panel fade-up" style="padding: 28px 32px; gap: 0;" data-key="7g-card">
+        <div style="display: flex; justify-content: space-between; gap: 12px;"><span class="mono" style="font-size: 11.5px; color: ${cur.urgent && !s.done[cur.id] ? 'var(--danger)' : 'var(--fg-dim)'}; letter-spacing: 0.06em;">${cur.kind} <span style="color: var(--fg-dim);">· ${cur.meta}</span></span><span class="mono t3">${cur.ref}</span></div>
+        <div style="font-size: 30px; font-weight: 300; letter-spacing: -0.025em; line-height: 1.25; margin-top: 18px; max-width: 520px; text-wrap: balance;">${cur.title}</div>
+        <div style="font-size: 13.5px; color: var(--fg-muted); line-height: 1.7; margin-top: 14px; max-width: 560px;">${cur.desc}</div>
+        <div class="grow"></div>
+        ${s.done[cur.id] ? `<div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--fg-muted);">${ic('doneCircle', 16)}처리함 · ${s.done[cur.id]}<button class="linkbtn" data-act="undo" data-id="${cur.id}">되돌리기</button></div>` : `
+        <div class="t3" style="margin-bottom: 10px;">결정</div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          ${cur.opts.map((o, k) => `<button class="btn ${k === 0 ? 'btn--ink' : 'btn--raised'}" data-act="decide" data-v="${esc(o)}" style="height: 40px;">${o}<span class="mono" style="font-size: 10.5px; opacity: 0.6;">${k + 1}</span></button>`).join('')}
+          <button class="btn" data-act="decide" data-v="보류" style="height: 40px; background: transparent; box-shadow: none;">보류</button>
+        </div>`}
+      </section>` : '<section class="panel"></section>'}
+    </div>
+    <button class="fade-up" data-act="toast" data-msg="코칭·대화 › 카드 상세로 이동" aria-label="${g.kind} 자료 요약 · ${g.person} · ${g.text} · 상세 보기" style="flex-shrink: 0; border: 0; text-align: left; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 18px; align-items: center; padding: 14px 20px 14px 22px; border-radius: 20px; background: var(--side-bg); box-shadow: var(--inset);" key="${cur?.guru}">
+      <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 11.5px; font-weight: 500; color: var(--fg-dim);"><span class="mono" style="letter-spacing: 0.12em;">${g.kind}</span> · 자료 요약</span><span style="font-size: 11px; color: var(--fg-faint);">${linked ? `지금 보는 ${cur.kind} 항목과 연결` : '이번 시간대 관점'}</span></span>
+      <span style="font-size: 16px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.5; color: var(--fg);">${g.text}</span>
+      <span style="font-size: 12px; color: var(--fg-muted); white-space: nowrap;">${g.person}</span>
+      <span style="color: var(--fg-dim);">${ic('arrowR', 15)}</span>
+    </button>
+    <section style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px;"><span class="t3" style="font-weight: 500;">오늘의 시간표</span><button class="linkbtn">캘린더 ${ic('arrowR', 12)}</button></div>
+      <div class="panel" style="padding: 6px 22px; gap: 0; flex: 1;">
+        ${schedule7g.map((e, k) => { const end = e.e || e.s + 60; const now = today.nowMin >= e.s && today.nowMin < end; const past = today.nowMin >= end; return `<div style="display: flex; align-items: center; gap: 18px; height: 40px; ${k ? 'border-top: 1px solid var(--line);' : ''}">
+          <span class="mono" style="font-size: 12px; width: 44px; color: ${past ? 'var(--fg-faint)' : now ? 'var(--fg)' : 'var(--fg-muted)'}; ${now ? 'font-weight: 600;' : ''}">${hm(e.s)}</span>
+          <span style="font-size: 13.5px; white-space: nowrap; ${past ? 'text-decoration: line-through; color: var(--fg-dim);' : now ? 'font-weight: 500;' : ''}">${e.title}</span>
+          ${now ? `<span class="chip chip--ink">${ic('clock', 12)}진행 중</span>` : ''}
+          <span style="flex: 1; border-top: 1px dotted var(--line-strong); opacity: ${past ? 0.5 : 1};"></span>
+          <span class="mono" style="font-size: 11px; color: var(--fg-faint);">${e.kind}</span>
+        </div>`; }).join('')}
+      </div>
+    </section>`;
+  },
+  on(act, d, s, el, fr) {
+    if (act === 'pick') s.sel = d.id;
+    if (act === 'decide') {
+      s.done[s.sel] = d.v;
+      const next = s.items.find((x) => !s.done[x.id]);
+      toast(fr, d.v === '보류' ? '보류 · 목록에 남김' : `${d.v} · 결정 기록(목업)`);
+      if (next) s.sel = next.id;
+    }
+    if (act === 'undo') { delete s.done[d.id]; toast(fr, '되돌림'); }
+    if (act === 'toast') toast(fr, d.msg);
+  },
+};
+document.addEventListener('keydown', (e) => {
+  if (!document.activeElement?.closest?.('#f7g') || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  const s = frames.f7g.state; const cur = s.items.find((x) => x.id === s.sel);
+  const k = Number(e.key);
+  if (cur && !s.done[cur.id] && k >= 1 && k <= cur.opts.length) {
+    e.preventDefault();
+    frames.f7g.on('decide', { v: cur.opts[k - 1] }, s, null, document.getElementById('f7g'));
+    mount('f7g'); document.querySelector('#f7g [data-key="7g-card"] button')?.focus();
+  }
+});
+
+
+frames.f7g.nav = 0;
+/* ── 12안 공용: 홈 아래(멘토 한 줄 · 오늘의 시간표)는 7g 그대로 ── */
+const FACTS = {
+  q1: [['마지막 회신', '10/14 (화) · 2일 전'], ['금액', '1,800만원'], ['단계', '구매 검토 → 계약'], ['평소 회신', '하루 안']],
+  q2: [['마감', '18:30 · 4시간 남음'], ['비어 있는 것', '제목 · 첫 문단'], ['검수', '발행 전 필요'], ['지난 호', '#46 · 화 발행']],
+  q3: [['처리', '17건 · 실패 0'], ['확인 필요', '이름만 같은 3건'], ['실행', '지난밤 02:10'], ['다음 실행', '오늘 23:00']],
+  q4: [['근거', '결정 5 · 막힌 프로젝트 1'], ['제안', '다음 주 우선순위 3개'], ['상태', '초안 · 확정 전'], ['쓴 곳', '오피스']],
+  q5: [['이번 주', '하루 리뷰 3/5일'], ['걸리는 시간', '15분'], ['지난 주간 리뷰', '10/9 (금)'], ['다음 하루 리뷰', '19:00']],
+};
+const EST = { q1: 2, q2: 1, q3: 3, q4: 2, q5: 1 };
+function homeBottom(cur) {
+  const g = GURU[cur?.guru || 'voss'];
+  const linked = cur && cur.guru !== 'hill';
+  return `
+    <button class="fade-up" data-act="toast" data-msg="코칭·대화 › 카드 상세로 이동" aria-label="${g.kind} 자료 요약 · ${g.person} · ${g.text} · 상세 보기" style="flex-shrink: 0; border: 0; text-align: left; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 18px; align-items: center; padding: 14px 20px 14px 22px; border-radius: 20px; background: var(--side-bg); box-shadow: var(--inset);">
+      <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 11.5px; font-weight: 500; color: var(--fg-dim);"><span class="mono" style="letter-spacing: 0.12em;">${g.kind}</span> · 자료 요약</span><span style="font-size: 11px; color: var(--fg-faint);">${linked ? `지금 보는 ${cur.kind} 항목과 연결` : '이번 시간대 관점'}</span></span>
+      <span style="font-size: 16px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.5; color: var(--fg);">${g.text}</span>
+      <span style="font-size: 12px; color: var(--fg-muted); white-space: nowrap;">${g.person}</span>
+      <span style="color: var(--fg-dim);">${ic('arrowR', 15)}</span>
+    </button>
+    <section style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px;"><span class="t3" style="font-weight: 500;">오늘의 시간표</span><button class="linkbtn">캘린더 ${ic('arrowR', 12)}</button></div>
+      <div class="panel" style="padding: 6px 22px; gap: 0; flex: 1;">
+        ${schedule7g.map((e, k) => { const end = e.e || e.s + 60; const now = today.nowMin >= e.s && today.nowMin < end; const past = today.nowMin >= end; return `<div style="display: flex; align-items: center; gap: 18px; height: 40px; ${k ? 'border-top: 1px solid var(--line);' : ''}">
+          <span class="mono" style="font-size: 12px; width: 44px; color: ${past ? 'var(--fg-faint)' : now ? 'var(--fg)' : 'var(--fg-muted)'}; ${now ? 'font-weight: 600;' : ''}">${hm(e.s)}</span>
+          <span style="font-size: 13.5px; white-space: nowrap; ${past ? 'text-decoration: line-through; color: var(--fg-dim);' : now ? 'font-weight: 500;' : ''}">${e.title}</span>
+          ${now ? `<span class="chip chip--ink">${ic('clock', 12)}진행 중</span>` : ''}
+          <span style="flex: 1; border-top: 1px dotted var(--line-strong); opacity: ${past ? 0.5 : 1};"></span>
+          <span class="mono" style="font-size: 11px; color: var(--fg-faint);">${e.kind}</span>
+        </div>`; }).join('')}
+      </div>
+    </section>`;
+}
+function decideCommon(s, fr, v, id) {
+  s.done[id] = v;
+  toast(fr, v === '보류' ? '보류 · 목록에 남김' : `${v} · 결정 기록(목업)`);
+}
+
+/* 12a 한 장씩 · 덱 */
+frames.f12a = {
+  nav: 0,
+  state: { items: triageSeed(), sel: 'q1', done: {}, dir: 1 },
+  render(s) {
+    const total = s.items.length; const doneN = Object.keys(s.done).length; const left = total - doneN;
+    const idx = s.items.findIndex((x) => x.id === s.sel); const cur = s.items[idx];
+    const dn = s.done[cur.id];
+    const nextUndone = s.items.slice(idx + 1).concat(s.items.slice(0, idx)).find((x) => !s.done[x.id]);
+    const urgent = cur.urgent && !dn;
+    return `
+    <header class="hd">
+      <div><div class="hd-date">홈 · 10월 16일 (금) · <span class="mono">14:20</span></div>
+        <h3>${left ? `${left}건 남았습니다` : '오늘 확인할 것을 다 봤습니다'}</h3></div>
+      <div class="hd-actions t3" style="gap: 14px;"><span><span class="kbd">1</span><span class="kbd">2</span><span class="kbd">3</span> 결정</span><span><span class="kbd">←</span><span class="kbd">→</span> 넘기기</span></div>
+    </header>
+    <div class="dtabs" role="tablist" aria-label="확인할 것 ${total}건">
+      ${s.items.map((x, i) => { const on = x.id === s.sel; const d = s.done[x.id]; return `<button role="tab" aria-selected="${on}" class="dtab ${on ? 'on' : ''} ${d ? 'done' : ''} ${x.urgent && !d ? 'urgent' : ''}" data-act="pick" data-id="${x.id}" aria-label="${x.kind} · ${x.title}${d ? ' · 처리함' : ''}">
+        <span class="dtab-g">${ic(d ? 'check' : x.urgent ? 'bell' : x.icon, 12)}</span><span>${x.kind}</span>
+      </button>`; }).join('')}
+      <span class="grow"></span><span class="mono t3">${doneN}/${total} · 남은 시간 약 ${s.items.filter((x) => !s.done[x.id]).reduce((a, x) => a + EST[x.id], 0)}분</span>
+    </div>
+    <div class="deck">
+      <span class="deck-under deck-under--2" aria-hidden="true"></span><span class="deck-under deck-under--1" aria-hidden="true"></span>
+      <section class="deck-card ${urgent ? 'urgent' : ''} ${s.dir > 0 ? 'in-r' : 'in-l'}" data-key="12a-card">
+        <div class="deck-main">
+          <div style="display: flex; justify-content: space-between; gap: 12px;"><span class="mono" style="font-size: 11.5px; letter-spacing: 0.06em; color: ${urgent ? 'var(--danger)' : 'var(--fg-dim)'};">${urgent ? '긴급 · ' : ''}${cur.kind} <span style="color: var(--fg-dim);">· ${cur.meta}</span></span><span class="mono t3">${idx + 1} / ${total}</span></div>
+          <div style="font-size: 28px; font-weight: 300; letter-spacing: -0.025em; line-height: 1.25; margin-top: 14px; text-wrap: balance;">${cur.title}</div>
+          <div style="font-size: 13.5px; color: var(--fg-muted); line-height: 1.65; margin-top: 10px; max-width: 540px;">${cur.desc}</div>
+          <div class="grow"></div>
+          ${dn ? `<div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--fg-muted);">${ic('doneCircle', 16)}처리함 · ${esc(dn)}<button class="linkbtn" data-act="undo">되돌리기</button>${nextUndone ? `<button class="btn btn--sm btn--raised" data-act="go" data-id="${nextUndone.id}">다음 건 ${ic('arrowR', 12)}</button>` : ''}</div>`
+          : `<div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            ${cur.opts.map((o, k) => `<button class="btn ${k === 0 ? 'btn--ink' : 'btn--raised'}" data-act="decide" data-v="${esc(o)}" style="height: 40px;">${o}<span class="mono" style="font-size: 10.5px; opacity: 0.6;">${k + 1}</span></button>`).join('')}
+            <button class="btn" data-act="decide" data-v="보류" style="height: 40px; background: transparent; box-shadow: none;">보류</button></div>`}
+        </div>
+        <aside class="deck-side">
+          <div class="t3" style="font-weight: 500;">판단 근거 <span style="font-weight: 400;">· ${cur.ref}</span></div>
+          ${FACTS[cur.id].map(([k, v]) => `<div class="deck-fact"><span class="t3">${k}</span><span>${v}</span></div>`).join('')}
+          <div class="grow"></div>
+          ${nextUndone && !dn ? `<button class="deck-next" data-act="go" data-id="${nextUndone.id}"><span class="t3">다음</span><span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${nextUndone.kind} · ${nextUndone.title}</span>${ic('arrowR', 13)}</button>` : ''}
+        </aside>
+      </section>
+    </div>
+    ${homeBottom(cur)}`;
+  },
+  on(act, d, s, el, fr) {
+    const idx = s.items.findIndex((x) => x.id === s.sel);
+    if (act === 'pick' || act === 'go') { const ni = s.items.findIndex((x) => x.id === d.id); s.dir = ni >= idx ? 1 : -1; s.sel = d.id; }
+    if (act === 'decide') {
+      decideCommon(s, fr, d.v, s.sel);
+      const next = s.items.slice(idx + 1).concat(s.items.slice(0, idx)).find((x) => !s.done[x.id]);
+      if (next) { s.dir = 1; s.sel = next.id; }
+    }
+    if (act === 'undo') { delete s.done[s.sel]; toast(fr, '되돌림'); }
+    if (act === 'toast') toast(fr, d.msg);
+  },
+};
+let kbFrame = null;
+document.addEventListener('pointerdown', (e) => { kbFrame = e.target.closest?.('.frame')?.id || null; });
+document.addEventListener('focusin', (e) => { const id = e.target.closest?.('.frame')?.id; if (id) kbFrame = id; });
+document.addEventListener('keydown', (e) => {
+  if (kbFrame !== 'f12a' || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  const f = frames.f12a; const s = f.state; const fr = document.getElementById('f12a');
+  const idx = s.items.findIndex((x) => x.id === s.sel); const cur = s.items[idx];
+  const k = Number(e.key);
+  if (!s.done[cur.id] && k >= 1 && k <= cur.opts.length) { e.preventDefault(); f.on('decide', { v: cur.opts[k - 1] }, s, null, fr); }
+  else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); const ni = (idx + (e.key === 'ArrowRight' ? 1 : -1) + s.items.length) % s.items.length; f.on('pick', { id: s.items[ni].id }, s, null, fr); }
+  else return;
+  mount('f12a'); fr.querySelector('.dtab.on')?.focus();
+});
+
+/* 12b 한눈에 · 결정 칸 */
+frames.f12b = {
+  nav: 0,
+  state: { items: triageSeed(), focus: 'q1', done: {}, more: null, kind: 'all' },
+  render(s) {
+    const total = s.items.length; const doneN = Object.keys(s.done).length; const left = total - doneN;
+    const undone = s.items.filter((x) => !s.done[x.id]);
+    const kinds = [...new Set(s.items.map((x) => x.kind))];
+    const urgentN = undone.filter((x) => x.urgent).length;
+    const shown = s.items.filter((x) => s.kind === 'all' || (s.kind === 'urgent' ? x.urgent : x.kind === s.kind));
+    const cur = s.items.find((x) => x.id === s.focus);
+    return `
+    <header class="hd">
+      <div><div class="hd-date">홈 · 10월 16일 (금) · <span class="mono">14:20</span></div>
+        <h3>${left ? `${left}건 남았습니다` : '오늘 확인할 것을 다 봤습니다'}<span class="hd-est">${left ? ` · 약 ${undone.reduce((a, x) => a + EST[x.id], 0)}분` : ''}</span></h3></div>
+      <div style="display: flex; align-items: center; gap: 12px; width: 240px;">
+        <div class="track" style="flex: 1;" role="img" aria-label="확인 ${doneN}/${total}"><i style="width: ${(doneN / total) * 100}%"></i></div>
+        <span class="mono" style="font-size: 12px; color: var(--fg-muted);">${doneN}/${total}</span>
+      </div>
+    </header>
+    <div class="kfilter" role="group" aria-label="종류로 거르기">
+      <button class="kf ${s.kind === 'all' ? 'on' : ''}" data-act="kind" data-v="all" aria-pressed="${s.kind === 'all'}">전체 <span class="num">${left}</span></button>
+      ${urgentN ? `<button class="kf kf--urgent ${s.kind === 'urgent' ? 'on' : ''}" data-act="kind" data-v="urgent" aria-pressed="${s.kind === 'urgent'}">${ic('bell', 12)}급한 것 <span class="num">${urgentN}</span></button>` : ''}
+      ${kinds.map((k) => { const n = undone.filter((x) => x.kind === k).length; return `<button class="kf ${s.kind === k ? 'on' : ''} ${n ? '' : 'zero'}" data-act="kind" data-v="${k}" aria-pressed="${s.kind === k}">${k} <span class="num">${n}</span></button>`; }).join('')}
+      <span class="grow"></span><span class="t3">카드에서 바로 결정 · 다른 선택은 ▾</span>
+    </div>
+    <div class="tgrid">
+      ${shown.map((x) => { const d = s.done[x.id]; const urg = x.urgent && !d; const open = s.more === x.id; return `<article class="tcard ${urg ? 'urgent' : ''} ${d ? 'done' : ''} ${s.focus === x.id ? 'focus' : ''}" data-act="focus" data-id="${x.id}">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="font-size: 11.5px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; color: ${urg ? 'var(--danger)' : 'var(--fg-dim)'};">${ic(d ? 'check' : urg ? 'bell' : x.icon, 12)}${urg ? '긴급 · ' : ''}${x.kind}</span><span class="mono t3">${d ? '처리함' : `약 ${EST[x.id]}분`}</span></div>
+        <div class="tcard-title" style="${d ? 'text-decoration: line-through; color: var(--fg-dim);' : ''}">${x.title}</div>
+        ${d ? `<div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-muted);">${ic('doneCircle', 14)}<span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(d)}</span><button class="linkbtn" data-act="undo" data-id="${x.id}">되돌리기</button></div>`
+        : open ? `<div class="tcard-more fade-up">${x.opts.slice(1).map((o) => `<button class="btn btn--xs btn--raised" data-act="decide" data-id="${x.id}" data-v="${esc(o)}">${o}</button>`).join('')}<button class="btn btn--xs" style="background: transparent; box-shadow: none;" data-act="decide" data-id="${x.id}" data-v="보류">보류</button><button class="linkbtn" data-act="more" data-id="${x.id}" aria-label="접기">${ic('chevU', 13)}</button></div>`
+        : `<div style="display: flex; gap: 6px; align-items: center;"><button class="btn btn--sm ${s.focus === x.id ? 'btn--ink' : 'btn--raised'} tcard-primary" data-act="decide" data-id="${x.id}" data-v="${esc(x.opts[0])}">${x.opts[0]}</button><button class="btn btn--sm btn--raised" data-act="more" data-id="${x.id}" aria-label="다른 선택 ${x.opts.length - 1}개와 보류" aria-expanded="false">${ic('chevD', 13)}</button></div>`}
+      </article>`; }).join('')}
+      ${s.kind === 'all' ? `<div class="tcard tcard--sum"><span class="t3" style="font-weight: 500;">오늘 결정</span><span class="stat" style="font-size: 30px; font-weight: 300;">${doneN}<span style="font-size: 13px; color: var(--fg-dim);"> 건</span></span><span class="t3">${doneN ? '결정 일지에 남은 것만 셉니다' : '첫 결정을 내리면 여기 쌓입니다'}</span><button class="linkbtn" data-act="toast" data-msg="결정 일지로">결정 일지 ${ic('arrowR', 12)}</button></div>` : ''}
+    </div>
+    ${homeBottom(cur)}`;
+  },
+  on(act, d, s, el, fr) {
+    if (act === 'focus') s.focus = d.id;
+    if (act === 'kind') { s.kind = d.v; s.more = null; }
+    if (act === 'more') { s.more = s.more === d.id ? null : d.id; s.focus = d.id; }
+    if (act === 'decide') { decideCommon(s, fr, d.v, d.id); s.more = null; s.focus = d.id; }
+    if (act === 'undo') { delete s.done[d.id]; toast(fr, '되돌림'); }
+    if (act === 'toast') toast(fr, d.msg);
+  },
+};
+
+/* ── 마운트·이벤트 ── */
+function toast(fr, msg) {
+  fr.querySelectorAll('.toast').forEach((t) => t.remove());
+  const t = document.createElement('div');
+  t.className = 'toast'; t.setAttribute('role', 'status');
+  t.innerHTML = `${ic('check', 14)}<span>${esc(msg)}</span>`;
+  if (fr.classList.contains('frame--tall') && fr._lastY != null) { t.style.top = `${fr._lastY}px`; t.style.bottom = 'auto'; }
+  fr.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
+}
+function mount(id) {
+  const fr = document.getElementById(id); const f = frames[id];
+  if (f.tall) fr.classList.add('frame--tall');
+  let main = fr.querySelector('.main');
+  if (!main) {
+    fr.innerHTML = `${sidebar(f.nav)}<main class="main"></main><span class="frame-sample">예시 값 · 목업</span><span class="frame-tag">${id.slice(1)}</span>`;
+    main = fr.querySelector('.main');
+  }
+  main.innerHTML = f.render(f.state);
+  if (f.tall) applyFit();
+  requestAnimationFrame(() => main.querySelectorAll('[data-to]').forEach((t) => { t.style.transform = `translateX(${t.dataset.to}%)`; }));
+}
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-act]'); if (!t || t.disabled) return;
+  const fr = t.closest('.frame'); if (!fr) return;
+  const f = frames[fr.id];
+  { const fb = fr.getBoundingClientRect(); const sc = fb.height / fr.offsetHeight || 1; fr._lastY = Math.round((t.getBoundingClientRect().bottom - fb.top) / sc) + 12; }
+  f.on(t.dataset.act, t.dataset, f.state, t, fr);
+  mount(fr.id);
+});
+document.addEventListener('keydown', (e) => {
+  const fr = e.target.closest?.('.frame');
+  if (e.key === 'Enter' && e.target.dataset?.enter && fr) {
+    e.preventDefault();
+    const key = e.target.dataset.enter;
+    const f = frames[fr.id]; f.on(key, e.target.dataset, f.state, e.target, fr); mount(fr.id);
+    fr.querySelector(`[data-enter="${key}"]`)?.focus();
+    return;
+  }
+});
+function docSeg(group, idx) {
+  const segEl = document.querySelector(`[data-docseg="${group}"]`);
+  segEl.querySelector('.seg-thumb').style.transform = `translateX(${idx * 100}%)`;
+  segEl.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === idx)));
+}
+function setTheme(t) { document.documentElement.dataset.theme = t; docSeg('theme', t === 'dark' ? 1 : 0); try { localStorage.setItem('ml-mock-theme', t); } catch (_) {} }
+let fitMode = 'fit';
+function applyFit() {
+  document.querySelectorAll('.stage').forEach((st) => {
+    const inner = st.querySelector('.stage-inner');
+    const scale = fitMode === 'fit' ? Math.min(1, st.clientWidth / 1440) : 1;
+    const h = inner.querySelector('.frame')?.offsetHeight || 900;
+    inner.style.height = `${h}px`;
+    inner.style.transform = scale < 1 ? `scale(${scale})` : '';
+    st.style.height = `${h * scale}px`;
+  });
+}
+document.querySelectorAll('[data-theme-btn]').forEach((b) => b.addEventListener('click', () => setTheme(b.dataset.themeBtn)));
+document.querySelectorAll('[data-fit-btn]').forEach((b) => b.addEventListener('click', () => { fitMode = b.dataset.fitBtn; docSeg('fit', fitMode === 'fit' ? 0 : 1); applyFit(); }));
+window.addEventListener('resize', applyFit);
+(function init() {
+  let t = null;
+  try { t = localStorage.getItem('ml-mock-theme'); } catch (_) {}
+  if (!t) t = document.documentElement.dataset.theme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  setTheme(t);
+  Object.keys(frames).forEach(mount);
+  applyFit();
+})();
+</script>
+</body>
+</html>
