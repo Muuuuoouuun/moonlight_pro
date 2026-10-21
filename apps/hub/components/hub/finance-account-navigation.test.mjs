@@ -30,8 +30,9 @@ test('semantic separation does not add a sidebar anchor or revenue tab or change
   assert.equal(SIDEBAR_PRIMARY.length,10);assert.equal(SIDEBAR_UTILITIES.length,2);
   const nav=topNavigationForRoute('dashboard/revenue/cashflow?scope=personal&view=subscriptions','personal');
   assert.equal(nav.tabs.length,5);
-  assert.deepEqual(FINANCE_VIEWS.map(view=>view.key),['flow','subscriptions','claims']);
-  assert.equal(FINANCE_VIEWS[0].label,'소비 내역');assert.equal(FINANCE_VIEWS[1].label,'구독·고정비');
+  // 2026-10-19 현금 흐름 게이지(운영자 "다섯 안 모두 탭에 배치")가 `개인 소비` 보기를 더했다 — 화면 안 보기일 뿐 탑바 탭·사이드바는 그대로다.
+  assert.deepEqual(FINANCE_VIEWS.map(view=>view.key),['flow','personal','subscriptions','claims']);
+  assert.equal(FINANCE_VIEWS[0].label,'소비 내역');assert.equal(FINANCE_VIEWS[2].label,'구독·고정비');
 });
 
 test('Finance names the service alias without soliciting credentials or changing its review field',()=>{

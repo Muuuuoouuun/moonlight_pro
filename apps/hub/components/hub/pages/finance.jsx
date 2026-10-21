@@ -204,7 +204,7 @@ export function Finance({onNavigate}) {
     </>}
     {available && filters.view==='personal' && <>
       {gaugeMonth ? <PersonalGauge month={gaugeMonth} gauge={personalGauge} observed={observed} count={personalSpend.length} top={financeTopMerchants(personalSpend)} /> : <p className="finance-muted">이 기간의 소비 관측이 없습니다.</p>}
-      <p className="finance-muted">개인 = 사용 목적 개인·개인 사업 중 구독 계약 밖 · {labelProgress.groups.unclassified.count?`미분류 ${labelProgress.groups.unclassified.count}건은 빠져 있습니다 · 흐름 탭에서 분류`:'미분류 없음'}</p>
+      <p className="finance-muted">개인 = 사용 목적 개인·개인 사업 중 구독 계약 밖 · {labelProgress.groups.unclassified.count?`미분류 ${labelProgress.groups.unclassified.count}건은 빠져 있습니다 · 소비 내역 탭에서 분류`:'미분류 없음'}</p>
       {labelProgress.groups.unclassified.count>0 && <div><Button variant="outline" onClick={()=>changeFilter('view','flow')}>미분류 분류하러 가기</Button></div>}
     </>}
     {available && filters.view==='subscriptions' && <>
