@@ -44,6 +44,11 @@ export function withEntityRef(target, source) {
   if (target.startsWith('dashboard/revenue/leads') && from.startsWith('lead')) {
     return `${target}${join}lead=${encodeURIComponent(ref)}`;
   }
+  // 콘텐츠 신호의 `이어쓰기`·`Studio에서 확인`은 그 항목을 연다 — 빠지면 Studio가 빈 새 초안을 열었다
+  // (2026-10-21). 콘텐츠 큐 행과 같은 `?item=` 계약이고, 새 초안(`new=`) 대상은 그대로 둔다.
+  if (target.startsWith('dashboard/content/studio') && !target.includes('new=') && from.startsWith('content')) {
+    return `${target}${join}item=${encodeURIComponent(ref)}`;
+  }
   return target;
 }
 

@@ -268,7 +268,10 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     && taskToday.streak.todayDoneCount >= 0;
 
   // 오늘 3개는 위 세 자리(TodaySlots)가 그린다 — 목록에는 나머지만 둔다(같은 할 일을 두 번 그리지 않는다).
-  const listItems = items.filter((task) => !task.focusToday);
+  // 레인 밖(기한 없음·나중 기한)의 열린 할 일은 그 뒤에 "나중"으로 이어 붙여 ★로 오늘 3개에 넣게 한다.
+  const later = (Array.isArray(taskToday?.later) ? taskToday.later : []).filter((task) => !hiddenIds.has(task.id));
+  const listItems = [...items.filter((task) => !task.focusToday), ...later];
+  const moreCount = (Number(taskToday?.hiddenCount) || 0) + Math.max(0, (Number(taskToday?.laterCount) || 0) - later.length);
 
   // §5.2: missed is the only immediate-loss lane; today/inbox are ordinary stages → neutral.
   // focus = 운영자가 고른 "현재" 선택 → Moonstone(§5.2 selected 의미), 라벨 "오늘 3개"와 함께.
@@ -315,7 +318,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             <span>오늘 반드시 끝낼 핵심 3개 항목의 별표(★)를 눌러 집중 모드로 지정해 보세요.</span>
           </div>
         )}
-        {['loading', 'syncing'].includes(taskState) ? <Skeleton lines={3} label="오늘 할 일 확인 중" style={{ padding: 14 }} /> : items.length ? (
+        {['loading', 'syncing'].includes(taskState) ? <Skeleton lines={3} label="오늘 할 일 확인 중" style={{ padding: 14 }} /> : items.length || listItems.length ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {listItems.length === 0 && (
               <div style={{ padding: '14px 16px', fontSize: 12.5, color: 'var(--fg-muted)' }}>남은 할 일은 모두 위 세 자리에 있습니다.</div>
@@ -367,13 +370,13 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                 </Button>
               </div>
             ))}
-            {taskToday?.hiddenCount > 0 && (
+            {moreCount > 0 && (
               <button
                 type="button"
                 onClick={() => onNavigate?.('dashboard/work/my')}
                 style={{ width: '100%', border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5, padding: '9px 14px', cursor: 'pointer', textAlign: 'center' }}
               >
-                할 일 {taskToday.hiddenCount}건 더 보기
+                할 일 {moreCount}건 더 보기
               </button>
             )}
           </div>
@@ -1035,7 +1038,10 @@ function StatusLine({ state, onRetry }) {
 
 function BriefNavigation({ taskToday, onNavigate }) {
   const taskCount = Number(taskToday?.counts?.missed || 0) + Number(taskToday?.counts?.today || 0);
-  const taskDetail = taskToday?.state === 'live' ? `${taskCount}건 확인` : '기록 확인';
+  // 오늘·기한 지남이 0이어도 기한 없는 열린 할 일이 있으면 "0건"이라 말하지 않는다.
+  const laterCount = Number(taskToday?.laterCount || 0);
+  const taskDetail = taskToday?.state !== 'live' ? '기록 확인'
+    : taskCount === 0 && laterCount > 0 ? `열린 할 일 ${laterCount}건` : `${taskCount}건 확인`;
   const detailByKey = {
     tasks: taskDetail,
     'daily-review': `${REVIEW_EVENING_HOUR}:00 회고`,
