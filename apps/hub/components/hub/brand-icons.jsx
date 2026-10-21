@@ -66,8 +66,25 @@ function markFor(brand) {
   return { id: "generic", shape: GENERIC };
 }
 
+// 2026-10-21 운영자 "브랜드 아이콘 다시": 브랜드마다 Codex로 만든 앱 아이콘 타일(먹색 판 + 은빛 기호,
+// 위 MARKS와 같은 주제)을 쓴다. 판이 제 바탕을 갖고 있어 라이트·다크 어디서나 같은 모습이다. 그림이 없는
+// 새 브랜드는 아래 선 기호(학원·중립)로 떨어진다. 원본 1024px → 256px로 줄여 `public/icons/brands/`에 둔다.
+const IMAGE_KEYS = new Set(["22nomad", "bridgemaker", "classmoon", "classin_side", "holyfuncollector", "moonpm", "politicofficer", "studyseagull", "gore", "sinabro"]);
+
+export function brandIconSrc(brand) {
+  const key = String(brand?.key || brand?.slug || "").toLowerCase();
+  return IMAGE_KEYS.has(key) ? `/icons/brands/${key}.png` : null;
+}
+
 export function BrandIcon({ brand, size = 18, style }) {
   const mark = markFor(brand);
+  const src = brandIconSrc(brand);
+  if (src) {
+    return (
+      <img src={src} width={size} height={size} alt="" aria-hidden="true" draggable={false} data-brand-icon={mark.id}
+        style={{ flexShrink: 0, display: "block", borderRadius: Math.round(size * 0.24), objectFit: "cover", ...style }} />
+    );
+  }
   return (
     <svg width={size} height={size} viewBox={mark.viewBox || "0 0 24 24"} fill={mark.filled ? "currentColor" : "none"}
       stroke={mark.filled ? "none" : "currentColor"} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"

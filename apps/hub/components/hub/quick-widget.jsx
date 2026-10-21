@@ -176,7 +176,7 @@ export function FirstActionSlot({ status, signals, bridge = null, onRetry, onLog
 export function WidgetBar({ bridge = null, pinned = true, onPin, onClose }) {
   return (
     <header className="quick-widget__bar">
-      <img src="/icon.svg" alt="" aria-hidden="true" width={14} height={14} />
+      <img src="/icon-192.png" alt="" aria-hidden="true" width={14} height={14} />
       <h2 className="quick-widget__eyebrow">빠른 입력</h2>
       {bridge ? (
         <div className="quick-widget__actions">

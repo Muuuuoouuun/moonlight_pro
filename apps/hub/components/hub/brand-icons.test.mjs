@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import React from "react";
+import { existsSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { BrandIcon } from "./brand-icons.jsx";
@@ -23,9 +24,11 @@ test("canonical brands receive distinct recognizable vector marks", () => {
   for (const [key, identity] of expected) {
     const markup = renderToStaticMarkup(React.createElement(BrandIcon, { brand: { key }, size: 18 }));
     assert.match(markup, new RegExp(`data-brand-icon="${identity}"`), key);
-    assert.match(markup, /<svg[^>]+width="18"[^>]+height="18"/, key);
+    // 2026-10-21: 이름 있는 브랜드는 생성 이미지 타일(같은 주제)을 쓴다.
+    assert.match(markup, new RegExp(`<img[^>]+src="/icons/brands/${key}\\.png"`), key);
+    assert.match(markup, /width="18"[^>]+height="18"/, key);
     assert.match(markup, /aria-hidden="true"/, key);
-    assert.match(markup, /<path|<circle|<rect/, key);
+    assert.ok(existsSync(new URL(`../../public/icons/brands/${key}.png`, import.meta.url)), `${key}.png must ship`);
     drawings.add(markup.replace(/data-brand-icon="[^"]+"/, ""));
   }
   assert.equal(drawings.size, expected.size, "every brand should have its own geometry");
@@ -36,4 +39,5 @@ test("an academy without a brand mark receives an education symbol; other new br
   const unknown = renderToStaticMarkup(React.createElement(BrandIcon, { brand: { key: "new-brand", name: "새 브랜드" } }));
   assert.match(academy, /data-brand-icon="academy"/);
   assert.match(unknown, /data-brand-icon="generic"/);
+  assert.match(academy, /<svg/); assert.match(unknown, /<svg/);
 });

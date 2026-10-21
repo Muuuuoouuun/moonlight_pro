@@ -7,7 +7,7 @@ export const metadata = {
   applicationName: "Moonlight",
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
       { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
