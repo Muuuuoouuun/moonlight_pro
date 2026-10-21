@@ -72,13 +72,19 @@ test('undo and failed writes remove only their own optimistic completion', async
 test('the actual narrow task reread rejects an older response after newer completions', async () => {
   const source = read('./daily-brief.jsx'), start = source.indexOf('function useDailyBriefLedger(');
   const code = source.slice(start, source.indexOf('\nfunction ', start + 1));
-  const h = hooks(), requests = [], initial = { taskToday: taskModel.buildTaskToday([]) };
+  // Keep the real helper in the VM alongside the hook that now calls it.
+  // Do not replace pending/previous-value behavior with a test-only stub.
+  const helperStart = source.indexOf('function pendingTaskState(');
+  const helperEnd = source.indexOf('\n// /api/hub/daily-brief', helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart, 'extract the real pending task helper');
+  const helper = source.slice(helperStart, helperEnd);
+  const h = hooks(), requests = [], initial = { taskToday: { ...taskModel.buildTaskToday([]), state: 'live' } };
   const ctx = vm.createContext({ React: h.React, ...taskModel, Date,
     servableBriefState: () => initial, EMPTY_DAILY_BRIEF_STATE: initial, dailyBriefCache: null,
     getDailyBriefAuthVersion: () => 0, readDailyBrief: () => new Promise(() => {}),
     fetch: () => { const d = deferred(); requests.push(d); return d.promise; },
   });
-  const fn = vm.runInContext(`${code}; useDailyBriefLedger`, ctx);
+  const fn = vm.runInContext(`${helper}\n${code}; useDailyBriefLedger`, ctx);
   const render = () => h.render(() => fn(0));
   const first = render().refreshTasks(), second = render().refreshTasks();
   requests[1].resolve({ ok: true, status: 200, json: async () => ({ status: 'live', tasks: [{ id: 'isolated', status: 'done', completedAt: new Date().toISOString() }] }) });

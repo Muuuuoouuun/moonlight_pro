@@ -6,5 +6,10 @@ design-system
 .claude
 **/*.test.mjs
 **/.next*
-apps/desktop
+# 허브가 데스크톱 펫과 공유하는 순수 모듈(pet/shared — 예: office-meeting-pages.js)만 남기고 나머지 데스크톱은 뺀다.
+# 상위 폴더를 통째로 빼면 하위 파일을 되살릴 수 없어 단계마다 '/*' + '!'로 연다(2026-10-21 허브 운영 빌드 실패).
+apps/desktop/*
+!apps/desktop/pet
+apps/desktop/pet/*
+!apps/desktop/pet/shared
 apps/android
