@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>제품 탭 캔버스</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@font-face { font-family: 'SUIT Variable'; src: url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../../apps/hub/public/fonts/JetBrainsMono-Variable.woff2') format('woff2'); font-weight: 100 800; font-display: swap; }
+
+/* 캔버스: 위 12a-1 포트폴리오(확정), 아래 제품 상세 두 안. 토큰은 허브 depth C 값 그대로 */
+:root {
+  --page: oklch(0.93 0.006 255);
+  --canvas: oklch(0.905 0.007 255);
+  --canvas-dot: oklch(0.80 0.008 255);
+  --glow: radial-gradient(110% 70% at 88% -12%, oklch(0.91 0.03 250) 0%, oklch(0.94 0.008 255) 48%, oklch(0.935 0.007 255) 100%);
+  --face: oklch(0.95 0.006 255);
+  --panel-face: oklch(0.978 0.004 255);
+  --hi: oklch(1 0 0 / .96);
+  --lo: oklch(0.45 0.03 250 / .30);
+  --lo-sm: oklch(0.5 0.02 250 / .24);
+  --rim: inset 0 1px 0 oklch(1 0 0 / .9);
+  --fg: oklch(0.20 0.008 250);
+  --fg-muted: oklch(0.42 0.008 250);
+  --fg-dim: oklch(0.47 0.008 250);
+  --fg-faint: oklch(0.52 0.007 250);
+  --line: oklch(0.80 0.008 250 / .7);
+  --line-strong: oklch(0.62 0.008 250);
+  --ink: oklch(0.20 0.008 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.31 0.012 250), oklch(0.20 0.008 250));
+  --ink-fg: oklch(0.985 0.003 250);
+  --ink-shadow: -2px -2px 6px oklch(1 0 0 / .8), 4px 6px 12px -3px oklch(0.25 0.05 250 / .5), inset 0 1px 0 oklch(1 0 0 / .18);
+  --moon-300: oklch(0.50 0.06 252);
+  --accent: #5274a8;
+  --danger: oklch(0.55 0.19 25);
+  --trend: oklch(0.40 0.02 250);
+  --trend-end: oklch(0.30 0.03 252);
+  --tip-bg: oklch(0.20 0.008 250);
+  --tip-fg: oklch(0.97 0.003 250);
+}
+:root[data-theme="dark"] {
+  --page: oklch(0.16 0.008 252); --canvas: oklch(0.13 0.007 252); --canvas-dot: oklch(0.26 0.01 252);
+  --glow: radial-gradient(110% 70% at 88% -12%, oklch(0.26 0.035 255) 0%, oklch(0.19 0.012 252) 46%, oklch(0.17 0.008 250) 100%);
+  --face: oklch(0.21 0.010 252); --panel-face: oklch(0.24 0.011 252);
+  --hi: oklch(1 0 0 / .045); --lo: oklch(0 0 0 / .62); --lo-sm: oklch(0 0 0 / .5); --rim: inset 0 1px 0 oklch(1 0 0 / .08);
+  --fg: oklch(0.94 0.004 250); --fg-muted: oklch(0.76 0.008 250); --fg-dim: oklch(0.68 0.009 250); --fg-faint: oklch(0.62 0.009 250);
+  --line: oklch(0.36 0.01 250 / .7); --line-strong: oklch(0.55 0.01 250);
+  --ink: oklch(0.92 0.005 250); --ink-grad: linear-gradient(180deg, oklch(0.97 0.004 250), oklch(0.86 0.006 250)); --ink-fg: oklch(0.18 0.008 250);
+  --ink-shadow: 0 0 0 1px oklch(1 0 0 / .1), 0 6px 18px -6px oklch(0.85 0.03 250 / .35), inset 0 1px 0 oklch(1 0 0 / .6);
+  --moon-300: oklch(0.78 0.03 252); --danger: oklch(0.70 0.16 25);
+  --trend: oklch(0.80 0.01 250); --trend-end: oklch(0.90 0.03 252);
+  --tip-bg: oklch(0.94 0.004 250); --tip-fg: oklch(0.18 0.008 250);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: oklch(0.16 0.008 252); --canvas: oklch(0.13 0.007 252); --canvas-dot: oklch(0.26 0.01 252);
+  --glow: radial-gradient(110% 70% at 88% -12%, oklch(0.26 0.035 255) 0%, oklch(0.19 0.012 252) 46%, oklch(0.17 0.008 250) 100%);
+  --face: oklch(0.21 0.010 252); --panel-face: oklch(0.24 0.011 252);
+  --hi: oklch(1 0 0 / .045); --lo: oklch(0 0 0 / .62); --lo-sm: oklch(0 0 0 / .5); --rim: inset 0 1px 0 oklch(1 0 0 / .08);
+  --fg: oklch(0.94 0.004 250); --fg-muted: oklch(0.76 0.008 250); --fg-dim: oklch(0.68 0.009 250); --fg-faint: oklch(0.62 0.009 250);
+  --line: oklch(0.36 0.01 250 / .7); --line-strong: oklch(0.55 0.01 250);
+  --ink: oklch(0.92 0.005 250); --ink-grad: linear-gradient(180deg, oklch(0.97 0.004 250), oklch(0.86 0.006 250)); --ink-fg: oklch(0.18 0.008 250);
+  --ink-shadow: 0 0 0 1px oklch(1 0 0 / .1), 0 6px 18px -6px oklch(0.85 0.03 250 / .35), inset 0 1px 0 oklch(1 0 0 / .6);
+  --moon-300: oklch(0.78 0.03 252); --danger: oklch(0.70 0.16 25);
+  --trend: oklch(0.80 0.01 250); --trend-end: oklch(0.90 0.03 252);
+  --tip-bg: oklch(0.94 0.004 250); --tip-fg: oklch(0.18 0.008 250);
+  color-scheme: dark;
+} }
+
+.side, .panel, .kpi { --face: var(--panel-face); }
+[data-theme="dark"] .search, [data-theme="dark"] .me, [data-theme="dark"] .ibtn, [data-theme="dark"] .slot.is-filled,
+[data-theme="dark"] .chip:not(.chip--in), [data-theme="dark"] .btn:not(.btn--ink):not(.btn--ghost) {
+  background: linear-gradient(180deg, oklch(0.315 0.013 252), oklch(0.28 0.012 252));
+  box-shadow: 0 12px 26px -10px oklch(0 0 0 / .85), 0 3px 6px oklch(0 0 0 / .4), inset 0 1px 0 oklch(1 0 0 / .15), inset 0 0 0 1px oklch(1 0 0 / .04);
+}
+
+:root {
+  --raised: -7px -7px 18px var(--hi), 10px 13px 30px -8px var(--lo), var(--rim);
+  --raised-sm: -3px -3px 8px var(--hi), 4px 4px 10px -1px var(--lo-sm), var(--rim);
+  --inset: inset 2px 2px 6px var(--lo-sm), inset -2px -2px 6px var(--hi);
+  --inset-deep: inset 3px 3px 9px var(--lo-sm), inset -3px -3px 9px var(--hi);
+  --dur-hover: 120ms; --dur-enter: 200ms; --dur-panel: 180ms;
+  --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-slide: cubic-bezier(0.16, 1, 0.3, 1.04);
+  --sans: 'SUIT Variable', 'Apple SD Gothic Neo', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'SUIT Variable', ui-monospace, 'SF Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { background: var(--canvas); }
+body { margin: 0; font-family: var(--sans); color: var(--fg); background: var(--canvas); -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11','ss01','ss03'; word-break: keep-all; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--page); }
+button { font: inherit; color: inherit; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* ── 캔버스 틀 ─────────────────────────────────────────────── */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--page); border-bottom: 1px solid var(--line); padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.bar h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.bar .sub { font-size: 12px; color: var(--fg-dim); }
+.bar .grow { flex: 1; }
+.ctl { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--fg-dim); }
+.sample { font-size: 11px; padding: 3px 9px; border-radius: 999px; box-shadow: var(--inset); color: var(--fg-dim); white-space: nowrap; }
+.canvas { overflow: auto; background-color: var(--canvas); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1.2px); background-size: 22px 22px; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.lane { display: grid; gap: 44px 40px; width: max-content; margin: 0 auto; align-items: start; }
+.lane.is-grid { grid-template-columns: repeat(2, max-content); }
+.lane.is-grid > .frame:first-child { grid-column: 1 / -1; }
+.lane.is-row { grid-template-columns: repeat(3, max-content); }
+.lane.is-stack { grid-template-columns: max-content; }
+.frame { display: flex; flex-direction: column; gap: 14px; }
+.frame-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.frame-head b { font-size: 20px; font-weight: 300; letter-spacing: -0.02em; }
+.frame-head span { font-size: 12.5px; color: var(--fg-dim); }
+.badge-ok { font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--fg); color: var(--fg); font-weight: 600; }
+.badge-alt { font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px dashed var(--fg-dim); color: var(--fg-muted); }
+.stage { width: calc(1440px * var(--z, .5)); height: calc(900px * var(--z, .5)); }
+.stage > .board { transform: scale(var(--z, .5)); transform-origin: 0 0; }
+.notes { width: calc(1440px * var(--z, .5)); min-width: 300px; max-width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; font-size: 12.5px; color: var(--fg-muted); line-height: 1.5; margin: 0; padding: 0; list-style: none; }
+.notes li { display: flex; gap: 8px; }
+.notes li::before { content: ''; width: 5px; height: 5px; border-radius: 999px; background: var(--fg-dim); margin-top: 7px; flex-shrink: 0; }
+.notes b { color: var(--fg); font-weight: 600; }
+.compare { max-width: 1120px; margin: 40px auto 0; overflow-x: auto; }
+.compare table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+.compare th, .compare td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.5; }
+.compare th { font-size: 11px; letter-spacing: .12em; color: var(--fg-dim); font-weight: 500; }
+.compare td:first-child { color: var(--fg-dim); white-space: nowrap; }
+.compare caption { text-align: left; font-size: 13px; font-weight: 600; padding: 0 14px 10px; }
+
+/* ── 아트보드 · 셸 (depth C) ───────────────────────────────── */
+.board { width: 1440px; height: 900px; border-radius: 28px; overflow: hidden; background: var(--glow); display: flex; gap: 14px; padding: 14px; box-shadow: 0 1px 2px oklch(0 0 0 / .08), 0 36px 96px -36px oklch(0 0 0 / .45); }
+.side { width: 232px; flex-shrink: 0; border-radius: 22px; background: var(--face); box-shadow: var(--raised); display: flex; flex-direction: column; padding: 14px 10px 12px; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 4px; }
+.brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--ink-grad); display: grid; place-items: center; color: var(--ink-fg); }
+.brand b { font-size: 13.5px; font-weight: 600; display: block; }
+.brand small { font-size: 10.5px; color: var(--fg-faint); }
+.search { height: 38px; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; font-size: 12.5px; color: var(--fg-dim); }
+.kbd { font-size: 10.5px; padding: 3px 7px; border-radius: 999px; box-shadow: var(--inset); color: var(--fg-muted); font-family: var(--mono); }
+.nav { position: relative; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.nav button, .util button { position: relative; z-index: 1; height: 36px; border: 0; background: transparent; border-radius: 999px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 13px; color: var(--fg-muted); text-align: left; cursor: pointer; }
+.nav button[aria-current="page"] { color: var(--ink-fg); font-weight: 500; }
+.nav-pill { position: absolute; left: 0; right: 0; top: 0; height: 36px; border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); }
+.nav .count { margin-left: auto; min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; font-size: 10.5px; box-shadow: var(--inset); color: var(--fg-muted); padding: 0 5px; font-family: var(--mono); }
+.nav .count.is-broken { color: var(--danger); font-weight: 600; }
+.nav button[aria-current="page"] .count { background: var(--ink-fg); box-shadow: none; }
+.util { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; }
+.me { margin-top: 4px; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); }
+.me-av { width: 30px; height: 30px; border-radius: 999px; background: var(--ink-grad); color: var(--ink-fg); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.me b { display: block; font-size: 12px; font-weight: 500; }
+.me small { font-size: 10.5px; color: var(--fg-faint); }
+.seg { position: relative; display: flex; padding: 3px; border-radius: 999px; box-shadow: var(--inset); }
+.seg-thumb { position: absolute; top: 3px; left: 0; height: calc(100% - 6px); border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); transition: transform 300ms var(--ease-slide), width 300ms var(--ease-slide); }
+.seg button { position: relative; z-index: 1; flex: 1; height: 28px; padding: 0 14px; border: 0; background: transparent; border-radius: 999px; font-size: 12px; color: var(--fg-dim); cursor: pointer; white-space: nowrap; transition: color var(--dur-hover); }
+.seg button[aria-pressed="true"], .seg button[aria-selected="true"] { color: var(--ink-fg); font-weight: 500; }
+.seg--lg button { height: 34px; padding: 0 18px; font-size: 13px; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 6px 0 10px; }
+.crumb small { display: block; font-size: 10.5px; letter-spacing: .12em; color: var(--fg-faint); text-transform: uppercase; }
+.crumb b { font-size: 14px; font-weight: 500; }
+.topbar .grow { flex: 1; }
+.clock { height: 34px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 999px; box-shadow: var(--inset); font-size: 12px; color: var(--fg-muted); font-family: var(--mono); }
+.ibtn { width: 34px; height: 34px; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); display: grid; place-items: center; color: var(--fg-muted); }
+.scroll { flex: 1; overflow: auto; padding: 14px 26px 40px 22px; display: flex; flex-direction: column; gap: 18px; scrollbar-width: thin; }
+.btn { height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); font-size: 13px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; cursor: pointer; }
+.btn--ink { background: var(--ink-grad); color: var(--ink-fg); box-shadow: 0 1px 2px oklch(0 0 0 / .18), 0 7px 16px -7px oklch(0.2 0.03 250 / .55), inset 0 1px 0 oklch(1 0 0 / .18), inset 0 -1px 0 oklch(0 0 0 / .3); font-weight: 500; }
+.btn--sm { height: 32px; padding: 0 13px; font-size: 12px; }
+.btn--xs { height: 28px; padding: 0 11px; font-size: 11.5px; }
+.btn--ghost { background: transparent; box-shadow: none; color: var(--fg-muted); }
+.panel { border-radius: 24px; background: var(--face); box-shadow: var(--raised); padding: 20px 22px; }
+.panel--flat { box-shadow: var(--raised-sm); border-radius: 18px; padding: 14px 18px; }
+.chip { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 999px; font-size: 12px; color: var(--fg-muted); box-shadow: var(--raised-sm); background: var(--face); }
+.chip b { color: var(--fg); font-weight: 600; }
+.row { display: flex; align-items: center; gap: 10px; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dim { color: var(--fg-dim); } .faint { color: var(--fg-faint); } .muted { color: var(--fg-muted); }
+.danger { color: var(--danger); }
+.meta { font-size: 11.5px; color: var(--fg-dim); }
+.eyebrow { font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--fg-faint); font-weight: 500; }
+.diamond { width: 9px; height: 9px; border: 1px dashed var(--fg-dim); transform: rotate(45deg); flex-shrink: 0; display: inline-block; }
+
+/* 제품 어휘 */
+.pmark { width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.pmark.is-live { background: color-mix(in oklch, var(--fg) 14%, var(--face)); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--fg) 22%, transparent); }
+.pmark.is-dev { background: repeating-linear-gradient(135deg, color-mix(in oklch, var(--fg) 12%, transparent) 0 2px, transparent 2px 6px); border: 1px dashed var(--line-strong); color: var(--fg-muted); }
+.pmark.is-paused { border: 1px solid var(--line-strong); color: var(--fg-dim); }
+.pmark.is-idea { border: 1px dotted var(--line-strong); color: var(--fg-faint); }
+.pmark--sm { width: 26px; height: 26px; border-radius: 8px; font-size: 11.5px; }
+.pmark--lg { width: 56px; height: 56px; border-radius: 16px; font-size: 22px; font-weight: 600; }
+.ops { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+.ops i { font-style: normal; width: 12px; text-align: center; color: var(--fg); }
+.slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 6px; border-radius: 16px; box-shadow: var(--inset); }
+.slot { height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; }
+.slot.is-filled { background: var(--face); box-shadow: var(--raised-sm); }
+.lines { display: flex; flex-direction: column; }
+.line { display: grid; grid-template-columns: 120px 1fr auto; align-items: center; gap: 12px; padding: 10px 12px; font-size: 12.5px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.line + .line { border-top: 1px solid var(--line); }
+.line.is-urgent { box-shadow: inset 1px 0 0 var(--danger); }
+
+/* 차트 공용: 한 색 명도, 축·눈금은 mono 10.5px */
+svg.ch { display: block; overflow: visible; }
+.ch text { font-family: var(--mono); font-size: 10.5px; fill: var(--fg-faint); }
+.ch .grid { stroke: var(--line); stroke-width: 1; }
+.ch .base { stroke: var(--line-strong); stroke-width: 1; }
+.ch .ln { fill: none; stroke: var(--trend); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.ch .area { fill: color-mix(in oklch, var(--trend) 9%, transparent); }
+.ch .avg { stroke: var(--fg-faint); stroke-width: 1; stroke-dasharray: 2 3; }
+.ch .end { fill: var(--trend-end); }
+.ch .ring { fill: none; stroke: var(--trend-end); stroke-width: 1.2; transform-box: fill-box; transform-origin: center; animation: endPulse 1.4s ease-in-out infinite; }
+@keyframes endPulse { 0% { transform: scale(.6); opacity: .85; } 100% { transform: scale(2.6); opacity: 0; } }
+.ch .floor { stroke: var(--line-strong); stroke-dasharray: 2 3; }
+.ch .hatch { fill: url(#hatch); }
+.delta { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); white-space: nowrap; }
+
+/* ═════════ 12a-1 정밀 계기 (확정) ═════════ */
+.v1 .hero, .dt .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 4px 4px 0; }
+.v1 .hero h2 { margin: 10px 0 10px; font-size: 56px; font-weight: 200; letter-spacing: -0.045em; line-height: 1; }
+.v1 .hero p { margin: 0; font-size: 13.5px; color: var(--fg-muted); }
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.kpis--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kpi { padding: 16px 18px 14px; border-radius: 20px; background: var(--face); box-shadow: var(--raised-sm); display: flex; flex-direction: column; gap: 10px; min-height: 196px; }
+.kpi .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.kpi .v { font-size: 40px; font-weight: 250; letter-spacing: -0.04em; line-height: .95; font-variant-numeric: tabular-nums lining-nums; }
+.kpi .v .u { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--fg-dim); margin-left: 3px; }
+.kpi .v .of { font-size: 17px; font-weight: 300; color: var(--fg-faint); letter-spacing: -0.01em; }
+.kpi .s { font-size: 11.5px; color: var(--fg-dim); margin-top: auto; }
+.comp { display: flex; gap: 3px; height: 22px; }
+.comp i { flex: 1; border-radius: 5px; }
+.comp .is-live { background: var(--ink-grad); box-shadow: var(--ink-shadow); }
+.comp .is-dev { background: repeating-linear-gradient(135deg, color-mix(in oklch, var(--fg) 20%, transparent) 0 2px, transparent 2px 5px); border: 1px dashed var(--line-strong); }
+.comp .is-paused { border: 1px solid var(--line-strong); }
+.comp .is-idea { border: 1px dotted var(--line-strong); }
+.comp-legend { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10.5px; color: var(--fg-faint); }
+.dotgrid { display: grid; grid-template-columns: 52px 1fr; gap: 6px 8px; align-items: center; font-size: 11px; color: var(--fg-dim); }
+.dotgrid span:nth-child(odd) { font-family: var(--mono); }
+.dots { display: flex; gap: 5px; }
+.dots i { width: 11px; height: 11px; border-radius: 999px; border: 1px solid var(--fg-dim); }
+.dots i.new { background: var(--fg); border-color: var(--fg); }
+.dots i.wait { background: linear-gradient(90deg, var(--fg-dim) 50%, transparent 50%); }
+.tbl { display: flex; flex-direction: column; }
+.v1 .tr { display: grid; grid-template-columns: minmax(0, 1.6fr) 96px 150px 236px 150px 50px minmax(0, 1.4fr); gap: 14px; align-items: center; padding: 11px 12px; }
+.v1 .th { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.v1 .tr.is-row { cursor: pointer; border-radius: 12px; transition: background var(--dur-hover); }
+.v1 .tr.is-row:hover { background: color-mix(in oklch, var(--fg) 4%, transparent); }
+.v1 .tr.is-row + .tr.is-row { border-top: 1px solid var(--line); border-radius: 0; }
+.v1 .tr.is-urgent { box-shadow: inset 1px 0 0 var(--danger); }
+.grp { display: flex; align-items: baseline; gap: 10px; padding: 14px 12px 4px; }
+.grp b { font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; font-weight: 500; color: var(--fg-muted); }
+.grp span { font-size: 11.5px; color: var(--fg-faint); }
+.pn { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.ps { font-size: 11.5px; color: var(--fg-dim); margin-top: 1px; }
+.is-rest .pn { font-weight: 500; color: var(--fg-muted); }
+.num-cell { display: flex; align-items: center; gap: 10px; }
+.num-cell .n { font-family: var(--mono); font-size: 13px; min-width: 30px; text-align: right; }
+.money { display: flex; align-items: center; gap: 12px; }
+.money .n { font-family: var(--mono); font-size: 13px; color: var(--fg); }
+.work { display: flex; gap: 10px; font-size: 11.5px; color: var(--fg-dim); white-space: nowrap; }
+.work b { color: var(--fg); font-weight: 600; font-family: var(--mono); }
+.r { text-align: right; justify-self: end; }
+
+/* ═════════ 제품 상세 공용 ═════════ */
+.dt .back { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-dim); border: 0; background: transparent; padding: 0; cursor: pointer; }
+.dt .idrow { display: flex; align-items: center; gap: 18px; margin-top: 12px; }
+.dt .hero h2 { margin: 0; font-size: 52px; font-weight: 200; letter-spacing: -0.045em; line-height: 1; }
+.dt .facts { display: flex; align-items: center; gap: 14px; margin-top: 10px; font-size: 12.5px; color: var(--fg-muted); flex-wrap: wrap; }
+.dt .facts .sep { width: 1px; height: 12px; background: var(--line-strong); }
+.linkchip { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; font-size: 11.5px; color: var(--fg-muted); border: 1px solid var(--line-strong); }
+.linkchip.is-off { border-style: dashed; color: var(--fg-dim); }
+.linkchip .mono { font-size: 11px; }
+.sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sec-h .t { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+/* 종류: 색이 아니라 기호 + 글자 */
+.kind { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: 11px; color: var(--fg-muted); white-space: nowrap; }
+.kind i { font-style: normal; font-family: var(--mono); color: var(--fg); }
+.kind.is-inq { border-style: dashed; }
+.flow { display: flex; flex-direction: column; }
+.flow-h { display: flex; align-items: center; gap: 10px; padding: 14px 4px 6px; }
+.flow-h::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.flow-h .c { font-family: var(--mono); font-size: 10.5px; color: var(--fg-faint); }
+.flow-row { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto 74px; gap: 14px; align-items: center; padding: 10px 12px; border-radius: 12px; cursor: pointer; transition: background var(--dur-hover); }
+.flow-row:hover { background: color-mix(in oklch, var(--fg) 4%, transparent); }
+.flow-row .t { font-size: 13.5px; font-weight: 500; }
+.flow-row .m { font-size: 11.5px; color: var(--fg-dim); margin-top: 1px; }
+.flow-row .due { font-family: var(--mono); font-size: 11.5px; color: var(--fg-dim); text-align: right; }
+.flow-row.is-overdue { box-shadow: inset 1px 0 0 var(--danger); border-radius: 0 12px 12px 0; }
+.flow-row.is-overdue .due { color: var(--danger); }
+.prog { display: inline-flex; gap: 3px; }
+.prog i { width: 10px; height: 6px; border-radius: 999px; box-shadow: var(--inset); }
+.prog i.on { background: var(--ink-grad); box-shadow: none; }
+.disclose { border: 0; background: transparent; display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 4px 4px; font-size: 12.5px; color: var(--fg-muted); cursor: pointer; }
+.disclose svg { transition: transform var(--dur-panel) var(--ease-hub); }
+.disclose[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.reqbars { display: flex; flex-direction: column; gap: 10px; }
+.reqbar { display: grid; grid-template-columns: minmax(0, 1fr) 28px; gap: 4px 10px; align-items: center; font-size: 12.5px; }
+.reqbar .track { grid-column: 1 / -1; height: 8px; border-radius: 999px; box-shadow: var(--inset); position: relative; }
+.reqbar .track span { position: absolute; left: 0; top: 1px; bottom: 1px; border-radius: 999px; background: var(--ink-grad); }
+.reqbar .n { font-family: var(--mono); text-align: right; }
+/* 단계 트랙: 지난 단계는 작은 점, 출시는 굵은 점(제작 → 운영), 지금은 잉크 알약, 앞으로는 점선 */
+.stagetrack { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding-top: 4px; }
+.stagetrack::before { content: ''; position: absolute; left: 8.33%; right: 8.33%; top: 15px; height: 1px; background: var(--line-strong); }
+.st { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-muted); text-align: center; }
+.st i { width: 9px; height: 9px; margin: 7px 0; border-radius: 999px; background: var(--fg-dim); box-shadow: 0 0 0 3px var(--panel-face); }
+.st.is-launch i { width: 15px; height: 15px; margin: 4px 0; background: var(--fg); }
+.st.is-now i { width: auto; height: 24px; margin: -1px 0; padding: 0 12px; border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow), 0 0 0 3px var(--panel-face); color: var(--ink-fg); font-style: normal; font-size: 12px; font-weight: 600; display: grid; place-items: center; }
+.st.is-future i { background: var(--panel-face); border: 1px dashed var(--line-strong); }
+.st .d { font-family: var(--mono); font-size: 10.5px; color: var(--fg-faint); }
+/* 체크리스트 칸: 끝냄 = 잉크, 남음 = 홈, 확인 필요 = 점 테두리 */
+.cl { display: grid; grid-template-columns: repeat(5, auto); gap: 18px; align-items: end; justify-content: start; }
+.cl-g { display: flex; flex-direction: column; gap: 8px; }
+.cl-cells { display: flex; gap: 4px; }
+.cl-cells i { width: 18px; height: 18px; border-radius: 6px; box-shadow: var(--inset); }
+.cl-cells i.on { background: var(--ink-grad); box-shadow: var(--ink-shadow); }
+.cl-cells i.unk { box-shadow: none; border: 1px dotted var(--line-strong); }
+.cl-g small { font-family: var(--mono); font-size: 10.5px; color: var(--fg-faint); letter-spacing: .06em; }
+.cl-g small b { color: var(--fg); font-weight: 600; }
+.health { display: flex; flex-direction: column; }
+.hl { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 2px; font-size: 12.5px; }
+.hl + .hl { border-top: 1px solid var(--line); }
+.hl .g { font-family: var(--mono); text-align: center; color: var(--fg); }
+.hl .g.unk { color: var(--fg-faint); }
+.hl .v { font-family: var(--mono); font-size: 11.5px; color: var(--fg-dim); }
+.tip { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 14px; border: 1px dashed var(--line-strong); font-size: 12px; color: var(--fg-muted); }
+.tip .tag { font-size: 10.5px; letter-spacing: .12em; color: var(--fg-dim); white-space: nowrap; }
+
+/* 12d 흐름 */
+.d1-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+.rail { display: flex; flex-direction: column; gap: 14px; }
+.rail .panel--flat { padding: 16px 18px; }
+.fchips { display: flex; gap: 6px; }
+
+/* 12e 탭 계기판 */
+.tabbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.d2-top { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 14px; }
+.d2-big { font-size: 64px; font-weight: 200; letter-spacing: -0.05em; line-height: .9; font-variant-numeric: tabular-nums lining-nums; }
+.d2-big .u { font-size: 18px; font-weight: 400; color: var(--fg-dim); letter-spacing: 0; margin-left: 2px; }
+.d2-bottom { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.pane-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+.hc-plot { position: relative; }
+.hc-plot svg:focus-visible { outline-offset: 4px; border-radius: 8px; }
+.hc-tip { position: absolute; top: -8px; pointer-events: none; background: var(--tip-bg); color: var(--tip-fg); border-radius: 12px; padding: 10px 12px; font-size: 12px; line-height: 1.55; min-width: 150px; box-shadow: 0 12px 30px -10px oklch(0 0 0 / .45); transform: translateX(-50%); }
+.hc-tip .tr2 { display: flex; justify-content: space-between; gap: 14px; }
+.hc-tip .tr2 span:last-child { font-family: var(--mono); }
+.mtable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mtable th { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; color: var(--fg-faint); font-weight: 500; text-align: right; padding: 0 8px 8px; border-bottom: 1px solid var(--line); }
+.mtable th:first-child, .mtable td:first-child { text-align: left; }
+.mtable td { padding: 8px; text-align: right; font-family: var(--mono); border-bottom: 1px solid var(--line); }
+.mtable tr:last-child td { color: var(--fg); font-weight: 600; border-bottom: 0; }
+.runs { display: flex; gap: 6px; align-items: flex-end; }
+.runs i { width: 14px; height: 22px; border-radius: 5px; background: var(--ink-grad); box-shadow: var(--ink-shadow); font-style: normal; }
+.runs i.x { background: transparent; box-shadow: none; border: 1px solid var(--line-strong); position: relative; }
+.runs i.x::after { content: '×'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; color: var(--fg-dim); }
+.list { display: flex; flex-direction: column; }
+.li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 4px; font-size: 13px; }
+.li + .li { border-top: 1px solid var(--line); }
+.li .g { font-family: var(--mono); width: 18px; text-align: center; color: var(--fg); }
+.li .m { font-size: 11.5px; color: var(--fg-dim); }
+.li.is-rec { border: 1px dashed var(--line-strong); border-radius: 12px; padding: 10px 12px; margin-top: 6px; }
+.li.is-rec + .li.is-rec { border-top: 1px dashed var(--line-strong); }
+</style>
+</head>
+<body>
+
+
+<header class="bar">
+  <div><h1>제품 탭 — 12a-1 포트폴리오 + 제품 상세 두 안</h1><div class="sub">12a-1 정밀 계기(확정)의 어휘로 상세 화면을 그렸어요 · 제품 A 기준 · 글꼴은 SUIT · JetBrains Mono 그대로</div></div>
+  <span class="grow"></span>
+  <span class="sample">예시 값 · 목업</span>
+  <div class="ctl">배치<div class="seg" data-ctl="layout" role="group" aria-label="배치"><span class="seg-thumb"></span><button type="button" aria-pressed="true" data-v="grid">격자</button><button type="button" aria-pressed="false" data-v="row">나란히</button><button type="button" aria-pressed="false" data-v="stack">위아래</button></div></div>
+  <div class="ctl">크기<div class="seg" data-ctl="zoom" role="group" aria-label="크기"><span class="seg-thumb"></span><button type="button" aria-pressed="true" data-v="fit">맞춤</button><button type="button" aria-pressed="false" data-v="0.5">50%</button><button type="button" aria-pressed="false" data-v="0.75">75%</button><button type="button" aria-pressed="false" data-v="1">100%</button></div></div>
+  <div class="ctl">테마<div class="seg" data-ctl="theme" role="group" aria-label="테마"><span class="seg-thumb"></span><button type="button" aria-pressed="true" data-v="light">라이트</button><button type="button" aria-pressed="false" data-v="dark">다크</button></div></div>
+</header>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="transparent"/><line x1="0" y1="0" x2="0" y2="5" style="stroke:var(--fg-dim)" stroke-width="1.4"/></pattern>
+</defs></svg>
+
+<main class="canvas">
+  <div class="lane is-grid" data-lane>
+    <section class="frame" aria-label="12a-1 포트폴리오">
+      <div class="frame-head"><b>12a-1 포트폴리오</b><span class="badge-ok">확정</span><span>제품 탭 착지 · 행을 누르면 제품 A 상세 두 안으로 내려가요</span></div>
+      <div class="stage"><div class="board v1" data-board="v1"></div></div>
+    </section>
+    <section class="frame" id="d1" aria-label="12d 제품 상세 흐름">
+      <div class="frame-head"><b>12d 제품 상세 · 흐름</b><span class="badge-alt">시안</span><span>운영실 B안 구조를 계기 어휘로 · 한 화면 스크롤</span></div>
+      <div class="stage"><div class="board dt" data-board="d1"></div></div>
+      <ul class="notes">
+        <li><span><b>머리</b>: 큰 모노그램 + 52px/200 이름, 상태 · 단계 · 버전 · 연결 링크를 한 줄로</span></li>
+        <li><span><b>계기 4칸</b>: 사용자 12주 선 · 6개월 손익 막대 · 문의 점 · 운영 건강(연결 안 된 원천은 ○로 정직하게)</span></li>
+        <li><span><b>흐름</b>: 오늘 → 이번 주 → 다음 → 언젠가, 일과 문의가 한 줄에 섞여요. 종류 칩은 색이 아니라 기호 + 글자</span></li>
+        <li><span><b>오른쪽 레일</b>: 진행 중인 프로젝트 · 요청 많은 신기능 막대 · 단계 이력(출시는 굵은 점)</span></li>
+      </ul>
+    </section>
+    <section class="frame" id="d2" aria-label="12e 제품 상세 탭 계기판">
+      <div class="frame-head"><b>12e 제품 상세 · 탭 계기판</b><span class="badge-alt">시안</span><span>상세 탭 6개 — 개요 · 매출 · 콘텐츠 · 개발 · 고객 · 연결 링크</span></div>
+      <div class="stage"><div class="board dt" data-board="d2"></div></div>
+      <ul class="notes">
+        <li><span><b>개요</b>: 체크리스트 진척 91%(칸 수로) + 단계 트랙, 계기 4칸, 지금 할 것 + 운영 건강</span></li>
+        <li><span><b>매출 탭</b>: 6개월 손익 차트 — 가리키거나 ← → 키로 달마다 값, 아래 월별 장부</span></li>
+        <li><span><b>탭을 눌러 보세요</b>: 콘텐츠(○ 기획 · ◐ 초안 · ● 발행, 성과는 문의 수) · 개발(CI 실행 · 보수 주기) · 고객(◇ 적합 후보) · 연결 링크</span></li>
+        <li><span><b>잉크 pill 미끄러짐</b>은 세그먼트와 같은 곡선 — 탭 이동이 현재 위치를 잃지 않게</span></li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="compare">
+    <table>
+      <caption>제품 상세 두 안 비교</caption>
+      <thead><tr><th>항목</th><th>12d 흐름</th><th>12e 탭 계기판</th></tr></thead>
+      <tbody>
+        <tr><td>열자마자 보이는 것</td><td>오늘 할 일과 문의 — 손이 먼저 가는 화면</td><td>이 제품이 어디쯤인지(체크리스트 · 단계 · 숫자)</td></tr>
+        <tr><td>정보 깊이</td><td>한 화면에 다 있어요. 돈 · 카드는 접힘</td><td>탭마다 깊게. 매출 · 개발 · 콘텐츠 · 고객 · 링크가 따로</td></tr>
+        <tr><td>확정 스펙과의 거리</td><td>운영실 B안(§0 확정)을 그대로 다듬음</td><td>제품 렌즈 §14.2 상세 6탭(권장)을 처음 그림 — 확정 필요</td></tr>
+        <tr><td>새로 필요한 데이터</td><td>없음 — 지금 원장으로 그림</td><td>콘텐츠 → 제품 연결(§14.7-5)과 연결 링크 목록이 새로 필요</td></tr>
+        <tr><td>잘 맞는 때</td><td>제품 수가 적고 매일 손을 대는 지금</td><td>제품이 늘고 월간 리뷰를 상세에서 할 때</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+// ── 예시 값 (목업 전용 — 코드에 넣지 않는다) ─────────────────────────
+const MONTHS = ['5월', '6월', '7월', '8월', '9월', '10월'];
+const WEEKS = ['8/3', '8/10', '8/17', '8/24', '8/31', '9/7', '9/14', '9/21', '9/28', '10/5', '10/12', '10/19'];
+const P = {
+  A: { what: '시험지 자동 채점', ops: 'live', stage: '성장', rev: [18, 26, 31, 42, 58, 84], cost: [10, 10, 11, 11, 12, 12], users: [61, 66, 72, 70, 81, 88, 95, 99, 104, 112, 121, 128], inq: 3, fresh: 1, work: [2, 1, 1], next: '오답 노트 내보내기 · 요청 6건' },
+  B: { what: '수업 일정 알림', ops: 'live', stage: '출시', rev: [0, 0, 6, 9, 14, 18], cost: [6, 6, 8, 8, 9, 9], users: [0, 0, 0, 0, 8, 14, 19, 24, 29, 33, 38, 42], inq: 1, fresh: 0, work: [1, 2, 0], next: 'main CI 실패 고치기', broken: true },
+  D: { what: '학부모 주간 리포트', ops: 'paused', stage: '유지 · 다시 볼 날 11/15', rev: [6, 5, 4, 4, 3, 3], cost: [2, 2, 2, 2, 2, 2], users: [14, 13, 13, 12, 12, 11, 11, 10, 10, 10, 9, 9], inq: 0, next: '수요 확인 — 문의 0 · 30일' },
+};
+const sum = (...arrs) => arrs[0].map((_, i) => arrs.reduce((s, a) => s + a[i], 0));
+const REV = sum(P.A.rev, P.B.rev, P.D.rev), COST = sum(P.A.cost, P.B.cost, P.D.cost), NET = REV.map((v, i) => v - COST[i]);
+const USERS = sum(P.A.users, P.B.users, P.D.users);
+const won = m => m === 0 ? '0원' : m.toLocaleString('ko-KR') + '만원';
+const net = p => p.rev[5] - p.cost[5];
+const A = P.A, ANET = A.rev.map((v, i) => v - A.cost[i]);
+
+// 제품 A의 일과 문의 (흐름 · 지금 할 것)
+const KIND = { feature: ['◆', '신기능'], maint: ['↻', '보수'], contact: ['↗', '연락'], inq: ['?', '문의'] };
+const FLOW = [
+  { b: '오늘', k: 'maint', t: '결제 웹훅 재시도 확인', m: '↻ 매월 · 지난 회차 9/21', due: '1일 지남', over: true },
+  { b: '오늘', k: 'inq', t: '고객 B · 반 단위 일괄 업로드 되나요?', m: '새 문의 · 답장 전 · 같은 요청 2건', due: '오늘' },
+  { b: '이번 주', k: 'feature', t: '오답 노트 내보내기', m: '요청 6 · 할 일', prog: [3, 5], due: '10/30' },
+  { b: '이번 주', k: 'contact', t: '고객 C · 연 갱신 안내', m: '갱신일 11/3 · 지난 연락 3주 전', due: '금' },
+  { b: '이번 주', k: 'inq', t: '고객 D · 영수증 재발행', m: '답변 대기 · 내가 보낼 차례', due: '목' },
+  { b: '다음', k: 'feature', t: '반별 성적 통계', m: '요청 4 · 범위 정하기 전', due: '11월' },
+  { b: '다음', k: 'maint', t: '의존성 업데이트', m: '↻ 매주 · 다음 회차', due: '10/27' },
+  { b: '언젠가', k: 'feature', t: '휴대폰으로 채점하기', m: '요청 2', due: '—' },
+];
+
+// ── 차트 그리기 ─────────────────────────────────────────────
+const xs = (n, w, l = 0, r = 0) => i => l + i * (w - l - r) / (n - 1);
+function spark(vals, w, h, { axis = false, minmax = false, label } = {}) {
+  const max = Math.max(...vals), min = Math.min(...vals), top = 4, bot = axis ? 14 : 4;
+  const aria = label || vals.join(', ');
+  if (!max) return `<svg class="ch" width="${w}" height="${h}" role="img" aria-label="${aria}"><line class="floor" x1="0" x2="${w}" y1="${h - bot}" y2="${h - bot}"/>${axis ? `<text x="0" y="${h}">${MONTHS[0]}</text><text x="${w}" y="${h}" text-anchor="end">${MONTHS[5]}</text>` : ''}</svg>`;
+  const x = xs(vals.length, w, 3, 3), y = v => top + (1 - v / max) * (h - top - bot);
+  const pts = vals.map((v, i) => [x(i), y(v)]);
+  const d = pts.map(p => p.map(n => n.toFixed(1)).join(',')).join(' ');
+  const [ex, ey] = pts[pts.length - 1];
+  const lo = vals.indexOf(min);
+  return `<svg class="ch" width="${w}" height="${h}" role="img" aria-label="${aria}">
+    ${axis ? `<line class="base" x1="0" x2="${w}" y1="${h - bot}" y2="${h - bot}"/><text x="0" y="${h}">${MONTHS[0]}</text><text x="${w}" y="${h}" text-anchor="end">${MONTHS[5]}</text>` : ''}
+    <polygon class="area" points="${pts[0][0]},${h - bot} ${d} ${ex},${h - bot}"/><polyline class="ln" points="${d}"/>
+    ${minmax && lo !== vals.length - 1 ? `<circle cx="${pts[lo][0]}" cy="${pts[lo][1]}" r="2" fill="var(--panel-face)" stroke="var(--fg-dim)"/>` : ''}
+    <circle class="ring" cx="${ex}" cy="${ey}" r="3.5"/><circle class="end" cx="${ex}" cy="${ey}" r="3"/></svg>`;
+}
+function microBars(vals, w, h, label) {
+  const max = Math.max(...vals), bw = w / vals.length;
+  return `<svg class="ch" width="${w}" height="${h}" role="img" aria-label="${label}">${vals.map((v, i) => {
+    const bh = max ? Math.max(1, v / max * h) : 1;
+    return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5" fill="${i === vals.length - 1 ? 'var(--fg)' : 'color-mix(in oklch, var(--fg) 26%, transparent)'}"/>`;
+  }).join('')}</svg>`;
+}
+function usersLine(v, w, h) {
+  const max = Math.max(...v) * 1.08, bot = 14, x = xs(v.length, w, 2, 4), y = n => 4 + (1 - n / max) * (h - 4 - bot);
+  const avg = v.reduce((a, b) => a + b) / v.length;
+  const d = v.map((n, i) => `${x(i).toFixed(1)},${y(n).toFixed(1)}`).join(' ');
+  return `<svg class="ch" width="${w}" height="${h}" role="img" aria-label="최근 12주 주간 사용자 ${v.join(', ')}">
+    <line class="base" x1="0" x2="${w}" y1="${h - bot}" y2="${h - bot}"/>
+    <line class="avg" x1="0" x2="${w}" y1="${y(avg)}" y2="${y(avg)}"/><text x="0" y="${y(avg) - 4}">평균 ${Math.round(avg)}</text>
+    <polygon class="area" points="${x(0)},${h - bot} ${d} ${x(v.length - 1)},${h - bot}"/><polyline class="ln" points="${d}"/>
+    <circle class="ring" cx="${x(v.length - 1)}" cy="${y(v.at(-1))}" r="3.5"/><circle class="end" cx="${x(v.length - 1)}" cy="${y(v.at(-1))}" r="3"/>
+    <text x="0" y="${h}">${WEEKS[0]}</text><text x="${w}" y="${h}" text-anchor="end">${WEEKS.at(-1)}</text></svg>`;
+}
+// 6개월 손익 막대: 막대 = 매출, 아래 빗금 = 비용. 이번 달만 진하게
+function plColumns(rev, cost, w, h) {
+  const nets = rev.map((r, i) => r - cost[i]);
+  const max = Math.max(...rev) * 1.12, bot = 14, bw = 18, x = xs(6, w, bw / 2 + 2, bw / 2 + 2), y = n => (1 - n / max) * (h - bot);
+  return `<svg class="ch" width="${w}" height="${h}" role="img" aria-label="최근 6개월 순이익 ${MONTHS.map((m, i) => m + ' ' + won(nets[i])).join(', ')}">
+    <line class="base" x1="0" x2="${w}" y1="${h - bot}" y2="${h - bot}"/>
+    ${rev.map((r, i) => {
+      const cx = x(i) - bw / 2, now = i === 5;
+      return `<rect x="${cx}" y="${y(r)}" width="${bw}" height="${h - bot - y(r)}" rx="3" fill="${now ? 'var(--fg)' : 'color-mix(in oklch, var(--fg) 30%, transparent)'}"/>
+        <rect x="${cx}" y="${y(cost[i])}" width="${bw}" height="${h - bot - y(cost[i])}" fill="var(--panel-face)"/><rect class="hatch" x="${cx}" y="${y(cost[i])}" width="${bw}" height="${h - bot - y(cost[i])}"/>
+        <text x="${x(i)}" y="${h}" text-anchor="middle"${now ? ' style="fill:var(--fg)"' : ''}>${MONTHS[i].replace('월', '')}</text>`;
+    }).join('')}</svg>`;
+}
+// 제품 A 매출 탭 큰 차트: 매출 면 + 비용 점선 + 순이익 잉크 선
+function bigChart(w, h) {
+  const L = 44, R = 70, T = 10, B = 26, max = 100, x = xs(6, w, L, R), y = v => T + (1 - v / max) * (h - T - B);
+  const pt = vals => vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const grid = [0, 25, 50, 75, 100].map(v => `<line class="grid" x1="${L}" x2="${w - R + 4}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${v ? v + '만' : '0'}</text>`).join('');
+  return `<svg class="ch" width="${w}" height="${h}" tabindex="0" role="img" data-big aria-label="제품 A 최근 6개월. ${MONTHS.map((m, i) => `${m} 매출 ${won(A.rev[i])}, 비용 ${won(A.cost[i])}, 순이익 ${won(ANET[i])}`).join('. ')}">
+    ${grid}
+    <polygon points="${x(0)},${y(0)} ${pt(A.rev)} ${x(5)},${y(0)}" fill="color-mix(in oklch, var(--fg) 12%, transparent)"/>
+    <polyline points="${pt(A.rev)}" fill="none" style="stroke:var(--fg-muted)" stroke-width="1.2"/>
+    <polyline points="${pt(A.cost)}" fill="none" style="stroke:var(--fg-dim)" stroke-width="1.3" stroke-dasharray="4 3"/>
+    <polyline points="${pt(ANET)}" fill="none" style="stroke:var(--fg)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${ANET.map((v, i) => i < 5 ? `<circle cx="${x(i)}" cy="${y(v)}" r="2.6" style="fill:var(--panel-face);stroke:var(--fg)" stroke-width="1.4"/>` : '').join('')}
+    <circle class="ring" cx="${x(5)}" cy="${y(ANET[5])}" r="4.5"/><circle cx="${x(5)}" cy="${y(ANET[5])}" r="4" style="fill:var(--fg)"/>
+    <text x="${x(5) + 10}" y="${y(A.rev[5]) + 4}">매출 84만</text>
+    <text x="${x(5) + 10}" y="${y(ANET[5]) + 4}" style="fill:var(--fg);font-weight:600">순이익 72만</text>
+    <text x="${x(5) + 10}" y="${y(A.cost[5]) + 4}">비용 12만</text>
+    ${MONTHS.map((m, i) => `<text x="${x(i)}" y="${h - 6}" text-anchor="middle"${i === 5 ? ' style="fill:var(--fg)"' : ''}>${m}</text>`).join('')}
+    <line data-cross x1="0" x2="0" y1="${T}" y2="${h - B}" style="stroke:var(--fg-faint)" stroke-width="1" opacity="0"/></svg>`;
+}
+
+// ── 셸 ───────────────────────────────────────────────────────
+const NAV = ['홈', '오늘', '현황', '내 작업', '영업·매출', '기회 탐색', '프로젝트', '제품', '브랜드', '콘텐츠'];
+const ICONS = {
+  '홈': 'M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1Z', '오늘': 'M6 3h9l3 3v15H6Z M9 11h6 M9 15h4',
+  '현황': 'M4 20V10 M10 20V4 M16 20v-7 M3 20h18', '내 작업': 'M9 6h11 M9 12h11 M9 18h11 M4 6l1 1 2-2 M4 12l1 1 2-2 M4 18l1 1 2-2',
+  '영업·매출': 'M4 19h16 M6 15l4-5 3 3 5-7', '기회 탐색': 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M15 9l-2 4-4 2 2-4Z',
+  '프로젝트': 'M4 7h6l2 2h8v10H4Z', '제품': 'M4 8l8-4 8 4v8l-8 4-8-4Z M4 8l8 4 8-4 M12 12v8', '브랜드': 'M12 3 4 7v6c0 4 4 7 8 8 4-1 8-4 8-8V7Z',
+  '콘텐츠': 'M5 4h10l4 4v12H5Z M8 12h8 M8 16h6', 'AI·자동화': 'M12 3v3 M12 18v3 M3 12h3 M18 12h3 M7 7l2 2 M15 15l2 2 M7 17l2-2 M15 9l2-2',
+  '설정': 'M4 7h10 M18 7h2 M4 17h4 M12 17h8 M16 5v4 M10 15v4',
+};
+const icon = n => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n].split(' M').map((d, i) => `<path d="${i ? 'M' : ''}${d}"/>`).join('')}</svg>`;
+const shell = (crumb, body) => `<aside class="side">
+    <div class="brand"><span class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg></span><div><b>Moonlight</b><small>Hub · Pro</small></div></div>
+    <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex:1">검색 · 바로 이동</span><span class="kbd">⌘K</span></div>
+    <div class="seg" role="group" aria-label="범위"><span class="seg-thumb"></span><button type="button" aria-pressed="true">전체</button><button type="button" aria-pressed="false">ClassIn</button><button type="button" aria-pressed="false">개인</button></div>
+    <nav class="nav" aria-label="주요"><span class="nav-pill"></span>${NAV.map(n => `<button type="button"${n === '제품' ? ' aria-current="page"' : ''}>${icon(n)}${n}${n === '영업·매출' ? '<span class="count">3</span>' : ''}${n === '제품' ? '<span class="count is-broken" aria-label="고장 1">1</span>' : ''}</button>`).join('')}</nav>
+    <div class="util"><button type="button">${icon('AI·자동화')}AI·자동화</button><button type="button">${icon('설정')}설정</button></div>
+    <div class="me"><span class="me-av">N</span><div><b>운영자</b><small>Founder · Pro</small></div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><div class="crumb"><small>${crumb[0]}</small><b>${crumb[1]}</b></div><span class="grow"></span><span class="clock">수 · 10/21 · 08:15</span>
+      <span class="ibtn" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span>
+      <button class="btn btn--sm" type="button">빠른 입력 <span class="kbd">C</span></button><button class="btn btn--sm" type="button">+ New</button></div>
+    <div class="scroll">${body}</div>
+  </div>`;
+const slots = `<div class="slots">${[['A', 'live'], ['B', 'live'], ['C', 'dev']].map(([id, m]) => `<span class="slot is-filled"><span class="pmark pmark--sm is-${m}" style="width:22px;height:22px;font-size:10.5px">${id}</span></span>`).join('')}</div>`;
+const comp = `<div class="comp" role="img" aria-label="운영 2, 제작 2, 기획 1, 중지 1"><i class="is-live"></i><i class="is-live"></i><i class="is-dev"></i><i class="is-dev"></i><i class="is-idea"></i><i class="is-paused"></i></div>`;
+const inqDotsAll = `<div class="dotgrid" role="img" aria-label="열린 문의 7: 제품 A 새 1 답변 대기 1 열림 1, 제품 B 1, 제품 C 1, 제품 미정 새 2">
+  <span>A</span><span class="dots"><i class="new"></i><i class="wait"></i><i></i></span>
+  <span>B</span><span class="dots"><i></i></span><span>C</span><span class="dots"><i></i></span>
+  <span>미정</span><span class="dots"><i class="new"></i><i class="new"></i></span></div>`;
+const inqDotsA = `<div class="dotgrid" role="img" aria-label="열린 문의 3: 새 1, 답변 대기 1, 열림 1">
+  <span>새</span><span class="dots"><i class="new"></i></span><span>답변 대기</span><span class="dots"><i class="wait"></i></span><span>열림</span><span class="dots"><i></i></span></div>`;
+
+// ── 12a-1 포트폴리오 (확정) ─────────────────────────────────────
+function v1() {
+  const name = (id, mode, what) => `<span class="row" style="gap:12px"><span class="pmark is-${mode}">${id}</span><span><div class="pn">제품 ${id}</div><div class="ps">${what}</div></span></span>`;
+  const workCell = w => `<span class="work"><span>신 <b>${w[0]}</b></span><span>보 <b>${w[1]}</b></span><span>연 <b>${w[2]}</b></span></span>`;
+  const live = id => {
+    const p = P[id], d = Math.round((p.rev[5] - p.rev[2]) / p.rev[2] * 100);
+    return `<div class="tr is-row${p.broken ? ' is-urgent' : ''}" role="button" tabindex="0" data-open="d1" aria-label="제품 ${id} 열기">${name(id, 'live', p.what)}<span><span class="ops"><i>●</i>운영중</span><div class="meta" style="margin-top:2px">${p.stage}</div></span>
+      <span class="num-cell"><span class="n">${p.users.at(-1)}</span>${microBars(p.users, 96, 22, '12주 사용자 ' + p.users.join(', '))}</span>
+      <span class="money"><span style="min-width:52px"><div class="n">${won(net(p))}</div><div class="delta">▲${d}%</div></span>${spark(p.rev, 120, 34, { axis: true, minmax: true, label: '6개월 매출 ' + p.rev.map((v, i) => MONTHS[i] + ' ' + won(v)).join(', ') })}</span>
+      ${workCell(p.work)}<span class="r"><span class="mono">${p.inq}</span>${p.fresh ? `<span class="meta"> · 새 ${p.fresh}</span>` : ''}</span><span class="${p.broken ? 'danger' : 'muted'}" style="font-size:12.5px">${p.next}</span></div>`;
+  };
+  const devC = `<div class="tr is-row">${name('C', 'dev', '상담 기록 요약')}<span><span class="ops"><i>◐</i>제작중</span><div class="meta" style="margin-top:2px">MVP · D-12</div></span>
+    <span class="num-cell"><span class="n faint">—</span>${microBars(Array(12).fill(0), 96, 22, '출시 전')}</span>
+    <span class="money"><span class="n faint" style="min-width:52px">—</span>${spark([0, 0, 0, 0, 0, 0], 120, 34, { axis: true, label: '출시 전, 매출 없음' })}</span>
+    ${workCell([3, 0, 0])}<span class="r mono">1</span><span class="muted" style="font-size:12.5px">기능 점검 2개 남음</span></div>`;
+  const rest = (id, mode, what, ops, stage, inq, next) => {
+    const p = P[id];
+    return `<div class="tr is-row is-rest">${name(id, mode, what)}<span><span class="ops">${ops}</span><div class="meta" style="margin-top:2px">${stage}</div></span>
+      <span class="num-cell"><span class="n${p ? '' : ' faint'}">${p ? p.users.at(-1) : '—'}</span>${p ? microBars(p.users, 96, 22, '12주 사용자') : ''}</span>
+      <span class="money"><span class="n${p ? '' : ' faint'}" style="min-width:52px">${p ? won(net(p)) : '—'}</span>${p ? spark(p.rev, 120, 34, { axis: true, label: '6개월 매출' }) : ''}</span>
+      <span class="work faint">—</span><span class="r mono${inq ? '' : ' faint'}">${inq || '—'}</span><span class="muted" style="font-size:12.5px">${next}</span></div>`;
+  };
+  const dU = Math.round((USERS.at(-1) - USERS.at(-5)) / USERS.at(-5) * 100);
+  return shell(['Moonlight', '제품'], `
+    <div class="hero"><div><div class="eyebrow">제품 · 전체 · 2026 · 10월</div><h2>제품</h2>
+      <div class="row" style="gap:8px"><p style="margin-right:6px">파는 것마다 상태 · 돈 · 문의 · 다음 행동</p><span class="chip">파는 것 <b class="mono">6</b></span><span class="chip">집중 <b class="mono">3/3</b></span><span class="chip">고장 <b class="mono danger">1</b></span></div></div>
+      <div class="row"><div class="seg" role="group" aria-label="제품 화면"><span class="seg-thumb"></span><button type="button" aria-pressed="true">포트폴리오</button><button type="button" aria-pressed="false">문의함 <span class="mono">7</span></button></div><button class="btn btn--ink" type="button">+ 새 제품 <span class="kbd" style="box-shadow:none;color:inherit;opacity:.7">N</span></button></div></div>
+    <div class="kpis">
+      <div class="kpi"><div class="lab"><span class="eyebrow">사용 중</span></div><div class="v">2<span class="of"> / 6</span></div>${comp}<div class="comp-legend"><span>운영 2</span><span>제작 2</span><span>기획 1</span><span>중지 1</span></div></div>
+      <div class="kpi"><div class="lab"><span class="eyebrow">주간 사용자</span><span class="delta">▲${dU}% · 4주</span></div><div class="v">${USERS.at(-1)}</div>${usersLine(USERS, 172, 74)}</div>
+      <div class="kpi"><div class="lab"><span class="eyebrow">10월 순이익</span><span class="delta">▲${won(NET[5] - NET[4])}</span></div><div class="v">82<span class="u">만원</span></div>${plColumns(REV, COST, 172, 74)}<div class="s">매출 ${won(REV[5])} · 비용 ${won(COST[5])} <span class="faint">(빗금)</span></div></div>
+      <div class="kpi"><div class="lab"><span class="eyebrow">열린 문의</span><span class="delta">새 3 · 대기 1</span></div><div class="v">7</div>${inqDotsAll}</div>
+      <div class="kpi"><div class="lab"><span class="eyebrow">집중 칸</span><span class="delta">3/3</span></div><div class="v">3<span class="of"> / 3</span></div>${slots}<div class="s">MVP · 출시 · 성장 — 올리려면 하나를 내려요</div></div>
+    </div>
+    <div class="panel panel--flat">
+      <div class="between" style="margin-bottom:6px"><span class="eyebrow">지금 볼 것</span><span class="meta">깨졌거나 기한이 닥친 것만 · <span class="mono">3</span></span></div>
+      <div class="lines">
+        <button class="line is-urgent" type="button"><span class="row" style="gap:8px"><span class="pmark pmark--sm is-live">B</span><b style="font-size:12.5px">제품 B</b></span><span><span class="danger">main CI 실패</span> <span class="dim">· 유료 고객 9 영향 가능</span></span><span class="mono faint" style="font-size:11.5px">2시간 전</span></button>
+        <button class="line" type="button"><span class="row" style="gap:8px"><span class="pmark pmark--sm is-dev">C</span><b style="font-size:12.5px">제품 C</b></span><span class="muted">목표 출시 D-12 · 남은 칸 3 (기능 점검 2 · 가격)</span><span class="mono faint" style="font-size:11.5px">11/2</span></button>
+        <button class="line" type="button"><span class="row" style="gap:8px"><span class="pmark pmark--sm is-idea">?</span><b style="font-size:12.5px">문의함</b></span><span class="muted">제품 미정 문의 2건 — 어느 제품인지 골라 주세요</span><span class="mono faint" style="font-size:11.5px">새 2</span></button>
+      </div></div>
+    <div class="panel" style="padding:14px 14px 10px"><div class="tbl">
+      <div class="tr th"><span>제품</span><span>상태</span><span>주간 사용자 · 12주</span><span>10월 순이익 · 6개월 매출</span><span>신기능 · 보수 · 연락</span><span class="r">문의</span><span>다음 행동</span></div>
+      <div class="grp"><b>집중 구간</b><span class="mono">3/3</span><span>MVP · 출시 · 성장</span></div>
+      ${live('A')}${live('B')}${devC}
+      <div class="grp"><b>나머지</b><span class="mono">3</span><span>칸이 비면 올릴 후보</span></div>
+      ${rest('D', 'paused', P.D.what, '<i>⏸</i>일시 중지', '유지 · 11/15', 0, P.D.next)}
+      ${rest('E', 'dev', '견적서 생성', '<i>◐</i>제작중', '검증', 2, 'MVP로 가려면 저장소 · 프로젝트')}
+      ${rest('F', 'idea', '콘텐츠 재활용', '<i>○</i>기획', '아이디어', 0, '해결하는 문제 적기')}
+    </div></div>`);
+}
+
+// ── 제품 상세 공용 조각 ───────────────────────────────────────
+const detailHead = actions => `<div class="hero"><div>
+    <button class="back" type="button">← 제품 <span class="faint">· 포트폴리오</span></button>
+    <div class="idrow"><span class="pmark pmark--lg is-live">A</span><div><h2>제품 A</h2>
+      <div class="facts"><span class="ops"><i>●</i>운영중</span><span class="sep"></span><span>성장 단계</span><span class="sep"></span><span class="mono">v1.4.2</span><span class="sep"></span><span>시험지 자동 채점 · 교육 · 중소 학원 원장</span></div></div></div>
+  </div><div class="row">${actions}</div></div>`;
+const linkRow = `<div class="row" style="gap:8px;flex-wrap:wrap"><span class="linkchip">GitHub <span class="mono">product-a</span></span><span class="linkchip">배포 주소 <span class="mono">연결됨</span></span><span class="linkchip">결제 대시보드</span><span class="linkchip is-off">에러 수집 · 도구 미정</span><span class="linkchip is-off">가동 체크 · 연결 전</span></div>`;
+const kpisA = () => {
+  const dU = Math.round((A.users.at(-1) - A.users.at(-5)) / A.users.at(-5) * 100);
+  return `<div class="kpis kpis--4">
+    <div class="kpi"><div class="lab"><span class="eyebrow">주간 사용자</span><span class="delta">▲${dU}% · 4주</span></div><div class="v">128</div>${usersLine(A.users, 230, 74)}</div>
+    <div class="kpi"><div class="lab"><span class="eyebrow">10월 순이익</span><span class="delta">▲${won(ANET[5] - ANET[4])}</span></div><div class="v">72<span class="u">만원</span></div>${plColumns(A.rev, A.cost, 230, 74)}<div class="s">매출 84만원 · 비용 12만원 <span class="faint">(빗금)</span> · 유료 22</div></div>
+    <div class="kpi"><div class="lab"><span class="eyebrow">열린 문의</span><span class="delta">해지 0 · 30일</span></div><div class="v">3</div>${inqDotsA}<div class="s">같은 요청이 쌓인 문의 2건 → 신기능 근거</div></div>
+    <div class="kpi"><div class="lab"><span class="eyebrow">운영 건강</span><span class="delta">원천 1/3</span></div><div class="health">
+      <div class="hl"><span class="g">✓</span><span>CI 통과 · main</span><span class="v">3시간 전</span></div>
+      <div class="hl"><span class="g unk">○</span><span class="dim">가동 체크</span><span class="v">연결 전</span></div>
+      <div class="hl"><span class="g unk">○</span><span class="dim">에러 수집</span><span class="v">도구 미정</span></div></div></div>
+  </div>`;
+};
+const flowRow = f => `<div class="flow-row${f.over ? ' is-overdue' : ''}" role="button" tabindex="0" data-kind="${f.k}">
+  <span class="kind${f.k === 'inq' ? ' is-inq' : ''}"><i>${KIND[f.k][0]}</i>${KIND[f.k][1]}</span>
+  <span><div class="t">${f.t}</div><div class="m">${f.m}</div></span>
+  <span>${f.prog ? `<span class="prog" role="img" aria-label="할 일 ${f.prog[0]}/${f.prog[1]}">${Array.from({ length: f.prog[1] }, (_, i) => `<i class="${i < f.prog[0] ? 'on' : ''}"></i>`).join('')}</span> <span class="mono meta">${f.prog[0]}/${f.prog[1]}</span>` : ''}</span>
+  <span class="due">${f.due}</span></div>`;
+const stageTrack = `<div class="stagetrack" role="img" aria-label="단계 이력: 아이디어 5/2, 검증 5/20, MVP 6/14, 출시 8/1, 성장 9/18 지금, 유지 앞으로">
+  <div class="st"><i></i><span>아이디어</span><span class="d">5/2</span></div><div class="st"><i></i><span>검증</span><span class="d">5/20</span></div>
+  <div class="st"><i></i><span>MVP</span><span class="d">6/14</span></div><div class="st is-launch"><i></i><span><b>출시</b> · 운영 시작</span><span class="d">8/1</span></div>
+  <div class="st is-now"><i>성장</i><span>지금 · 34일째</span><span class="d">9/18</span></div><div class="st is-future"><i></i><span class="faint">유지 · 종료</span><span class="d">—</span></div></div>`;
+const reqBars = `<div class="reqbars">${[['오답 노트 내보내기', 6, '진행 중'], ['반별 성적 통계', 4, '다음'], ['휴대폰으로 채점하기', 2, '언젠가']].map(([t, n, s]) => `<div class="reqbar"><span>${t} <span class="meta">· ${s}</span></span><span class="n">${n}</span><span class="track"><span style="width:${n / 6 * 100}%"></span></span></div>`).join('')}</div>`;
+
+// ── 12d 흐름 ───────────────────────────────────────────────────
+function d1() {
+  const buckets = ['오늘', '이번 주', '다음', '언젠가'];
+  return shell(['제품', '제품 A'], `
+    ${detailHead('<button class="btn" type="button">보드로 보기</button><button class="btn btn--ink" type="button">+ 일 <span class="kbd" style="box-shadow:none;color:inherit;opacity:.7">N</span></button>')}
+    ${linkRow}
+    ${kpisA()}
+    <div class="d1-grid">
+      <section class="panel" aria-label="흐름">
+        <div class="sec-h"><span class="t">흐름 <span class="meta" style="font-weight:400">· 일과 문의가 한 줄로</span></span>
+          <div class="seg" data-filter role="group" aria-label="거르기"><span class="seg-thumb"></span><button type="button" aria-pressed="true" data-f="all">전체 <span class="mono">8</span></button><button type="button" aria-pressed="false" data-f="feature">신기능</button><button type="button" aria-pressed="false" data-f="maint">보수</button><button type="button" aria-pressed="false" data-f="contact">연락</button><button type="button" aria-pressed="false" data-f="inq">문의</button></div></div>
+        <div class="flow">
+          ${buckets.map(b => { const rows = FLOW.filter(f => f.b === b); return `<div class="flow-group"><div class="flow-h"><span class="eyebrow">${b}</span><span class="c">${rows.length}</span></div>${rows.map(flowRow).join('')}</div>`; }).join('')}
+          <button class="disclose" type="button" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg><span class="eyebrow" style="color:var(--fg-muted)">지난</span><span class="mono meta">12</span><span class="meta" style="margin-left:auto">끝낸 일 · 닫은 문의</span></button>
+        </div>
+      </section>
+      <aside class="rail">
+        <div class="panel--flat" style="background:var(--panel-face);border-radius:18px">
+          <div class="between" style="margin-bottom:10px"><span class="eyebrow">진행 중인 프로젝트</span><span class="mono meta">1</span></div>
+          <div style="font-size:14px;font-weight:600">오답 노트 내보내기</div>
+          <div class="meta" style="margin:2px 0 10px">신기능 · 요청 6 · 목표 10/30 · D-9</div>
+          <div class="row" style="gap:10px"><span class="prog" style="gap:4px">${[1, 1, 1, 0, 0].map(o => `<i class="${o ? 'on' : ''}" style="width:34px;height:10px"></i>`).join('')}</span><span class="mono meta">3/5</span></div>
+        </div>
+        <div class="panel--flat" style="background:var(--panel-face);border-radius:18px">
+          <div class="between" style="margin-bottom:12px"><span class="eyebrow">요청 많은 신기능</span><span class="meta">문의에서 쌓인 수</span></div>${reqBars}
+        </div>
+        <div class="panel--flat" style="background:var(--panel-face);border-radius:18px">
+          <div class="between" style="margin-bottom:12px"><span class="eyebrow">단계 이력</span><span class="meta">성장 34일째</span></div>
+          <div class="list">${[['●', '9/18', '출시 → 성장', '확정 매출 22건'], ['◉', '8/1', 'MVP → 출시 · 운영 시작', '굵은 점 = 모드 전환'], ['·', '6/14', '검증 → MVP', '저장소 · 프로젝트 연결']].map(([g, d, t, m]) => `<div class="li"><span class="g">${g}</span><span><div style="font-size:12.5px">${t}</div><div class="m">${m}</div></span><span class="mono meta">${d}</span></div>`).join('')}</div>
+        </div>
+        <button class="disclose" type="button" aria-expanded="false" style="padding:4px 4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>제품 카드 · 돈<span class="meta" style="margin-left:auto">가격 월 구독 · 체크리스트 10/11</span></button>
+      </aside>
+    </div>`);
+}
+
+// ── 12e 탭 계기판 ──────────────────────────────────────────────
+const TABS = ['개요', '매출', '콘텐츠', '개발', '고객', '연결 링크'];
+function d2() {
+  const cl = [['기획', 4, 4, 0], ['기능', 1, 2, 0], ['개발', 3, 3, 0], ['출시', 2, 2, 0], ['운영', 0, 1, 1]];
+  const clHtml = `<div class="cl" role="img" aria-label="체크리스트: 기획 4/4, 기능 1/2, 개발 3/3, 출시 2/2, 운영 확인 필요 1">${cl.map(([g, d, t, u]) => `<div class="cl-g"><div class="cl-cells">${Array.from({ length: t }, (_, i) => `<i class="${u ? 'unk' : i < d ? 'on' : ''}"></i>`).join('')}</div><small>${g} <b>${u ? '?' : d + '/' + t}</b></small></div>`).join('')}</div>`;
+  const overview = `
+    <div class="d2-top">
+      <section class="panel"><div class="sec-h"><span class="eyebrow">체크리스트</span><span class="meta">확인 필요 1은 분모에서 뺌</span></div>
+        <div class="row" style="align-items:flex-end;gap:28px"><div><div class="d2-big">91<span class="u">%</span></div><div class="meta mono" style="margin-top:8px">10 / 11 끝냄</div></div>${clHtml}</div>
+        <div class="tip" style="margin-top:16px"><span class="diamond" aria-hidden="true"></span><span class="tag">남은 칸</span><span>기능 점검 1개 — 「반 단위 업로드」를 점검하면 100%예요</span></div></section>
+      <section class="panel"><div class="sec-h"><span class="eyebrow">단계</span><span class="meta">출시 82일 · 성장 34일째</span></div>${stageTrack}
+        <div class="tip" style="margin-top:22px"><span class="diamond" aria-hidden="true"></span><span class="tag">권장</span><span>30일 연속 성장 중 — 월간 리뷰에서 다음 분기 투자 정하기</span></div></section>
+    </div>
+    ${kpisA()}
+    <div class="d2-bottom">
+      <section class="panel"><div class="sec-h"><span class="t">지금 할 것 <span class="meta" style="font-weight:400">· 오늘 · 이번 주</span></span><button class="btn btn--ghost btn--sm" type="button">흐름 전체 →</button></div>
+        <div class="flow">${FLOW.filter(f => f.b === '오늘' || f.b === '이번 주').slice(0, 4).map(flowRow).join('')}</div></section>
+      <section class="panel"><div class="sec-h"><span class="t">요청 많은 신기능</span><span class="meta">문의에서 쌓인 수</span></div>${reqBars}
+        <div class="sec-h" style="margin:20px 0 6px"><span class="t">보수 주기</span><span class="meta">↻ 반복</span></div>
+        <div class="list">${[['↻', '의존성 업데이트', '매주', '10/27'], ['↻', '결제 웹훅 재시도 확인', '매월', '1일 지남'], ['↻', '백업 복구 시험', '분기', '12/1']].map(([g, t, c, d], i) => `<div class="li"${i === 1 ? ' style="box-shadow:inset 1px 0 0 var(--danger);padding-left:10px"' : ''}><span class="g">${g}</span><span><div>${t}</div><div class="m">${c}</div></span><span class="mono meta${i === 1 ? ' danger' : ''}">${d}</span></div>`).join('')}</div></section>
+    </div>`;
+  const revenue = `
+    <div class="pane-grid">
+      <section class="panel"><div class="sec-h"><span class="t">6개월 손익</span><span class="meta">가리키거나 ← → 키로 달마다</span></div>
+        <div class="hc-plot" data-plot>${bigChart(700, 260)}<div class="hc-tip" data-tip hidden></div></div>
+        <div class="row meta" style="gap:18px;margin-top:10px"><span class="row" style="gap:6px"><i style="width:16px;height:9px;border-radius:3px;background:color-mix(in oklch, var(--fg) 12%, transparent)"></i>매출</span><span class="row" style="gap:6px"><i style="width:16px;border-top:1.5px dashed var(--fg-dim)"></i>비용</span><span class="row" style="gap:6px"><i style="width:16px;border-top:2.2px solid var(--fg)"></i>순이익</span></div></section>
+      <aside class="rail">
+        <div class="kpi" style="min-height:0"><div class="lab"><span class="eyebrow">10월 순이익</span><span class="delta">▲${won(ANET[5] - ANET[4])}</span></div><div class="v">72<span class="u">만원</span></div><div class="s">3개월 전보다 ▲${Math.round((ANET[5] - ANET[2]) / ANET[2] * 100)}%</div></div>
+        <div class="kpi" style="min-height:0"><div class="lab"><span class="eyebrow">유료 고객</span><span class="delta">해지 0 · 30일</span></div><div class="v">22</div><div class="s">고객당 월 3.8만원</div></div>
+        <div class="tip"><span class="diamond" aria-hidden="true"></span><span class="tag">진행 딜</span><span>계약 전 2건 · 18만원 — 확정 매출에 더하지 않아요</span></div>
+      </aside>
+    </div>
+    <section class="panel"><table class="mtable"><thead><tr><th>달</th><th>매출</th><th>비용</th><th>순이익</th><th>유료 고객</th></tr></thead><tbody>
+      ${MONTHS.map((m, i) => `<tr><td>${m}</td><td>${won(A.rev[i])}</td><td>${won(A.cost[i])}</td><td>${won(ANET[i])}</td><td>${[5, 7, 9, 12, 16, 22][i]}</td></tr>`).join('')}</tbody></table></section>`;
+  const content = `<section class="panel"><div class="sec-h"><span class="t">이 제품 콘텐츠</span><span class="meta">성과는 조회보다 문의 수</span></div><div class="list">
+    ${[['●', '채점 10분 → 1분, 원장님 하루 바꾸기', '발행 · 10/14 · 블로그', '문의 2'], ['●', '오답 노트로 상담 시간 줄이기', '발행 · 9/28 · 인스타그램', '문의 1'], ['◐', '반 단위 업로드 사용법', '초안 · 고칠 곳 2', '—'], ['○', '학원 성적표 자동화 사례', '기획', '—']].map(([g, t, m, n]) => `<div class="li"><span class="g">${g}</span><span><div>${t}</div><div class="m">${m}</div></span><span class="mono meta">${n}</span></div>`).join('')}</div>
+    <div class="tip" style="margin-top:12px"><span class="diamond" aria-hidden="true"></span><span class="tag">새로 필요</span><span>콘텐츠에 제품 연결 칸이 아직 없어요 — Studio 더보기에서 붙이는 안(§14.7-5)</span></div></section>`;
+  const dev = `<div class="pane-grid"><section class="panel"><div class="sec-h"><span class="t">저장소 · product-a</span><span class="meta mono">main · PR 열림 2</span></div>
+      <div class="row" style="gap:16px;align-items:flex-end"><div class="runs" role="img" aria-label="최근 CI 10회: 9회 통과, 1회 실패 뒤 다음 실행에서 통과">${[1, 1, 1, 0, 1, 1, 1, 1, 1, 1].map(o => `<i class="${o ? '' : 'x'}"></i>`).join('')}</div><span class="meta">최근 10회 · 실패 1회는 다음 실행에서 통과</span></div>
+      <div class="list" style="margin-top:14px">${[['✓', 'CI 통과 · 오답 노트 내보내기 #42', '3시간 전'], ['◐', 'PR · 반 단위 업로드 검증', '리뷰 대기'], ['◐', 'PR · 의존성 업데이트', '자동 · 리뷰 대기']].map(([g, t, d]) => `<div class="li"><span class="g">${g}</span><span>${t}</span><span class="mono meta">${d}</span></div>`).join('')}</div></section>
+    <aside class="rail"><div class="kpi" style="min-height:0"><div class="lab"><span class="eyebrow">기능 점검</span></div><div class="v">2<span class="of"> / 3</span></div><div class="s">남은 1 · 반 단위 업로드</div></div>
+      <div class="kpi" style="min-height:0"><div class="lab"><span class="eyebrow">운영 원천</span></div><div class="health"><div class="hl"><span class="g">✓</span><span>GitHub</span><span class="v">연결</span></div><div class="hl"><span class="g unk">○</span><span class="dim">가동 체크</span><span class="v">연결 전</span></div><div class="hl"><span class="g unk">○</span><span class="dim">에러 수집</span><span class="v">도구 미정</span></div></div></div></aside></div>`;
+  const cust = `<section class="panel"><div class="sec-h"><span class="t">고객</span><span class="meta">유료 22 · 같은 소속끼리만 후보</span></div><div class="list">
+    ${[['●', '고객 A', '유료 · 8월부터 · 문의 1', '갱신 11/3'], ['●', '고객 C', '유료 · 9월부터', '갱신 12/9']].map(([g, t, m, d]) => `<div class="li"><span class="g">${g}</span><span><div>${t}</div><div class="m">${m}</div></span><span class="mono meta">${d}</span></div>`).join('')}
+    ${[['고객 E', '중소 학원 · 시험 채점을 손으로 함'], ['고객 F', '같은 요청 「반 단위 업로드」']].map(([t, m]) => `<div class="li is-rec"><span class="diamond" aria-hidden="true"></span><span><div>${t} <span class="meta">· 적합 후보 · 권장</span></div><div class="m">${m}</div></span><button class="btn btn--xs" type="button">확인하기</button></div>`).join('')}</div></section>`;
+  const links = `<section class="panel"><div class="sec-h"><span class="t">연결 링크</span><button class="btn btn--sm" type="button">+ 링크 추가</button></div><div class="list">
+    ${[['✓', 'GitHub 저장소', 'product-a · 저장소 1개는 제품 하나에만'], ['✓', '배포 주소', '열림 확인 10/21'], ['✓', '결제 대시보드', '로그인 필요'], ['○', '에러 수집', '도구 미정 · 연결 전'], ['○', '가동 체크', '연결 전']].map(([g, t, m]) => `<div class="li"><span class="g${g === '○' ? ' faint' : ''}">${g}</span><span><div>${t}</div><div class="m">${m}</div></span><span class="linkchip${g === '○' ? ' is-off' : ''}">${g === '○' ? '연결하기' : '열기 ↗'}</span></div>`).join('')}</div>
+    <div class="tip" style="margin-top:12px"><span class="diamond" aria-hidden="true"></span><span>주소에 token= · key= 같은 비밀 값이 있으면 저장하지 않아요</span></div></section>`;
+  const panes = [overview, revenue, content, dev, cust, links];
+  return shell(['제품', '제품 A'], `
+    ${detailHead('<button class="btn" type="button">보드로 보기</button><button class="btn btn--ink" type="button">+ 일</button>')}
+    <div class="tabbar"><div class="seg seg--lg" data-tabs role="tablist" aria-label="제품 상세"><span class="seg-thumb"></span>${TABS.map((t, i) => `<button type="button" role="tab" aria-selected="${i === 0}" data-i="${i}">${t}</button>`).join('')}</div>${linkRow}</div>
+    ${panes.map((p, i) => `<div role="tabpanel" data-pane="${i}" style="display:flex;flex-direction:column;gap:18px"${i ? ' hidden' : ''}>${p}</div>`).join('')}`);
+}
+
+document.querySelector('[data-board="v1"]').innerHTML = v1();
+document.querySelector('[data-board="d1"]').innerHTML = d1();
+document.querySelector('[data-board="d2"]').innerHTML = d2();
+
+// ── 인터랙션 ─────────────────────────────────────────────────
+function placeThumb(seg) {
+  const on = seg.querySelector('button[aria-pressed="true"], button[aria-selected="true"]'), th = seg.querySelector('.seg-thumb');
+  if (on && th) { th.style.transform = `translateX(${on.offsetLeft}px)`; th.style.width = on.offsetWidth + 'px'; }
+}
+// 12d 거르기
+document.querySelectorAll('[data-filter]').forEach(seg => seg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  const f = b.dataset.f, flow = seg.closest('section').querySelector('.flow');
+  flow.querySelectorAll('.flow-row').forEach(r => { r.hidden = f !== 'all' && r.dataset.kind !== f; });
+  flow.querySelectorAll('.flow-group').forEach(g => { const n = [...g.querySelectorAll('.flow-row')].filter(r => !r.hidden).length; g.hidden = !n; g.querySelector('.c').textContent = n; });
+  placeThumb(seg);
+}));
+// 12e 탭 (← → 키로도)
+document.querySelectorAll('[data-tabs]').forEach(seg => {
+  const board = seg.closest('.board');
+  const select = i => {
+    seg.querySelectorAll('button').forEach(x => { const on = Number(x.dataset.i) === i; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; });
+    board.querySelectorAll('[data-pane]').forEach(p => { p.hidden = Number(p.dataset.pane) !== i; });
+    placeThumb(seg);
+  };
+  seg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) select(Number(b.dataset.i)); });
+  seg.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const cur = Number(seg.querySelector('[aria-selected="true"]').dataset.i), n = (cur + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length;
+    select(n); seg.querySelector(`[data-i="${n}"]`).focus();
+  });
+  select(0);
+});
+// 접기 (목업: 열림 표시만 바꾼다)
+document.querySelectorAll('.disclose').forEach(b => b.addEventListener('click', () => b.setAttribute('aria-expanded', String(b.getAttribute('aria-expanded') !== 'true'))));
+// 포트폴리오 행 → 상세로
+document.querySelectorAll('[data-open]').forEach(r => {
+  const go = () => document.getElementById(r.dataset.open).scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  r.addEventListener('click', go);
+  r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+});
+// 매출 탭 큰 차트: 가리키기 · ← → 키
+(() => {
+  const plot = document.querySelector('[data-plot]'), svg = plot.querySelector('svg'), tip = plot.querySelector('[data-tip]'), cross = svg.querySelector('[data-cross]');
+  const w = 700, L = 44, R = 70, x = i => L + i * (w - L - R) / 5;
+  let cur = -1;
+  const show = i => {
+    cur = i; cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('opacity', '1');
+    tip.hidden = false; tip.style.left = Math.min(Math.max(x(i), 80), w - 80) + 'px';
+    tip.innerHTML = `<b>${MONTHS[i]}</b><div class="tr2"><span>매출</span><span>${won(A.rev[i])}</span></div><div class="tr2"><span>비용</span><span>${won(A.cost[i])}</span></div><div class="tr2"><b>순이익</b><span><b>${won(ANET[i])}</b></span></div>`;
+  };
+  const hide = () => { cur = -1; tip.hidden = true; cross.setAttribute('opacity', '0'); };
+  svg.addEventListener('pointermove', e => { const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (w / r.width); show(Math.max(0, Math.min(5, Math.round((px - L) / ((w - L - R) / 5))))); });
+  svg.addEventListener('pointerleave', hide);
+  svg.addEventListener('focus', () => show(5));
+  svg.addEventListener('blur', hide);
+  svg.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); show(Math.max(0, Math.min(5, (cur < 0 ? 5 : cur) + (e.key === 'ArrowRight' ? 1 : -1)))); }
+    if (e.key === 'Escape') hide();
+  });
+})();
+
+// ── 테마 · 크기 · 배치 ────────────────────────────────────────
+const root = document.documentElement;
+if (!root.dataset.theme) root.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+let zoom = 'fit', layout = 'grid';
+function applyZoom() {
+  const lane = document.querySelector('[data-lane]');
+  lane.className = 'lane is-' + layout;
+  let z = Number(zoom);
+  if (zoom === 'fit') {
+    const avail = document.querySelector('.canvas').clientWidth - 40;
+    const cols = layout === 'row' ? 3 : layout === 'grid' ? 2 : 1;
+    z = Math.max(0.2, Math.min(1, (avail - 40 * (cols - 1)) / (1440 * cols)));
+  }
+  document.querySelectorAll('.frame').forEach(f => f.style.setProperty('--z', z.toFixed(4)));
+  // 격자에서 포트폴리오는 두 칸 폭으로
+  const first = document.querySelector('.frame');
+  if (layout === 'grid') first.style.setProperty('--z', Math.min(1, (z * 2880 + 40) / 1440).toFixed(4));
+}
+document.querySelectorAll('[data-ctl]').forEach(seg => {
+  const kind = seg.dataset.ctl;
+  if (kind === 'theme') seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === root.dataset.theme)));
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    if (kind === 'theme') root.dataset.theme = b.dataset.v;
+    if (kind === 'zoom') zoom = b.dataset.v;
+    if (kind === 'layout') layout = b.dataset.v;
+    applyZoom(); placeThumb(seg);
+  });
+});
+function layoutAll() {
+  applyZoom();
+  document.querySelectorAll('.seg').forEach(placeThumb);
+  document.querySelectorAll('.nav').forEach(nav => {
+    const cur = nav.querySelector('[aria-current="page"]'), pill = nav.querySelector('.nav-pill');
+    pill.style.transform = `translateY(${cur.offsetTop}px)`; pill.style.height = cur.offsetHeight + 'px';
+  });
+}
+document.fonts.ready.then(layoutAll);
+layoutAll();
+window.addEventListener('resize', applyZoom);
+</script>
+
+</body>
+</html>
