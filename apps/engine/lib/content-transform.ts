@@ -375,7 +375,7 @@ export async function executeContentTransform(input: unknown, context: Context, 
   const existing = await exactRow(dependencies, "content_transform_runs", command.requestId, command.workspaceId);
   if (existing.failure) return existing.failure;
   if (existing.row) return inspectExistingRun(existing.row, existingRequestHash(existing.row, command), dependencies);
-  if (!dependencies.provider.configured) return response("preview", "gemini-not-configured", { message: "Engine의 GEMINI_API_KEY 또는 GOOGLE_GENERATIVE_AI_API_KEY를 설정해주세요." });
+  if (!dependencies.provider.configured) return response("preview", "gemini-not-configured", { message: "AI 연결 설정이 필요합니다." });
   if (!context.recoverySecret) return response("error", "recovery-secret-not-configured");
   const assembled = await assembleContext(command, dependencies);
   if (assembled.failure) return assembled.failure;

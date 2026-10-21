@@ -1,4 +1,5 @@
 import { recordAiUsage } from "./ai-usage-log.ts";
+import { getGenaiStatus, prepareGenaiRequest } from '@com-moon/genai-transport';
 
 export interface GeminiMediaPart {
   mimeType: string;
@@ -82,6 +83,8 @@ export function getGeminiResponseDiagnostics(value: unknown) {
 export function classifyGeminiFailure(value: unknown, signal?: AbortSignal): string {
   const data = asRecord(value);
   if (typeof data.failureCategory === 'string' && FAILURE_CATEGORIES.has(data.failureCategory)) return data.failureCategory;
+  if (data.code === 'GENAI_AUTHENTICATION') return 'authentication';
+  if (data.code === 'GENAI_CONFIGURATION') return 'invalid-request';
   const abortName = asRecord(signal?.reason).name;
   if (signal?.aborted) return abortName === 'TimeoutError' ? 'timeout' : 'aborted';
   if (data.name === 'TimeoutError' || data.code === 'ETIMEDOUT' || data.code === 'UND_ERR_CONNECT_TIMEOUT' || data.code === 'UND_ERR_HEADERS_TIMEOUT' || data.code === 'UND_ERR_BODY_TIMEOUT') return 'timeout';
@@ -103,25 +106,14 @@ export function classifyGeminiFailure(value: unknown, signal?: AbortSignal): str
   return 'provider-error';
 }
 
-function resolveGeminiApiKey() {
-  return (
-    process.env.GEMINI_API_KEY?.trim() ||
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
-    ""
-  );
-}
-
 export function getGeminiIntegrationStatus() {
   return {
-    configured: Boolean(resolveGeminiApiKey()),
+    ...getGenaiStatus(),
     provider: "gemini",
     model:
       process.env.GEMINI_MODEL?.trim() ||
       process.env.AI_DEFAULT_MODEL?.trim() ||
       "gemini-3.5-flash",
-    apiBaseUrl:
-      process.env.GEMINI_API_BASE_URL?.trim() ||
-      "https://generativelanguage.googleapis.com/v1beta",
   };
 }
 
@@ -142,17 +134,16 @@ function extractGeminiText(data: unknown) {
 }
 
 export async function generateGeminiText(input: GeminiGenerateInput) {
-  const apiKey = resolveGeminiApiKey();
   const status = getGeminiIntegrationStatus();
   const targetModel = input.model?.trim() || status.model;
   const emptyDiagnostics = getGeminiResponseDiagnostics(null);
 
-  if (!apiKey) {
+  if (!status.configured) {
     return {
       ok: false,
       status: null,
-      reason: "missing-api-key",
-      failureCategory: 'missing-api-key',
+      reason: status.backend === 'vertex' ? 'missing-vertex-configuration' : 'missing-api-key',
+      failureCategory: status.backend === 'vertex' ? 'invalid-request' : 'missing-api-key',
       ...emptyDiagnostics,
       text: "",
       model: targetModel,
@@ -227,14 +218,12 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
   const maxRetries = typeof input.retries === 'number' && input.retries > 0 ? Math.min(input.retries, 2) : 0;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      const request = await prepareGenaiRequest(targetModel, { signal });
       const response = await fetch(
-        `${status.apiBaseUrl.replace(/\/$/, "")}/models/${targetModel}:generateContent`,
+        request.url,
         {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
+          headers: request.headers,
           body: JSON.stringify(body),
           cache: "no-store",
           signal,

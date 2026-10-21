@@ -1,0 +1,10 @@
+{
+  "name": "@com-moon/genai-transport",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": { ".": { "types": "./index.d.ts", "default": "./index.js" } },
+  "dependencies": { "@vercel/oidc": "^4.0.2", "google-auth-library": "^11.3.1" }
+}
