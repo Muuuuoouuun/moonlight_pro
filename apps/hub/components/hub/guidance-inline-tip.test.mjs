@@ -94,7 +94,7 @@ test('the inline tip renders as one source-backed accessible button without requ
     globalThis.fetch = previous;
   }
   const css = read('./guidance-inline-tip.css');
-  assert.match(css, /min-height:\s*44px/);
+  assert.match(css, /min-height:\s*(4[4-9]|[5-9]\d)px/); // 44px 터치 플로어 이상
   assert.match(css, /var\(--line/);
   assert.match(css, /var\(--surface/);
   assert.doesNotMatch(css, /#[\da-fA-F]{3,8}\b|rgba?\(|oklch\(/);

@@ -6,11 +6,11 @@
 .hub-app .guidance-inline-tip {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
-  min-height: 44px;
+  min-height: 52px;
   width: 100%;
-  padding: 10px 14px;
+  padding: 14px 18px;
   border: 1px solid var(--line-soft);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -26,29 +26,15 @@
   border-radius: 0;
   background: transparent;
   padding: 14px 0 18px;
-  gap: 16px;
 }
 
-/* 홈 한 줄 팁은 아침 브리핑 위 단독 줄이라 한 단계 크게 읽힌다(운영자 요청 2026-10-21). */
-.guidance-inline-tip--home .guidance-inline-tip__kind {
-  color: var(--fg-muted);
-  font-size: 12px;
-}
-
-.guidance-inline-tip--home .guidance-inline-tip__copy {
-  font-size: 15px;
-  font-weight: 500;
-}
-
-.guidance-inline-tip--home .guidance-inline-tip__person {
-  font-size: 12.5px;
-}
-
+/* 한 줄 팁은 화면마다 단독 줄이라 한 단계 크게, 라벨도 본문과 같은 sans로 읽힌다(운영자 요청 2026-10-21). */
 .guidance-inline-tip__kind {
   flex: none;
-  color: var(--fg-dim);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
@@ -57,7 +43,8 @@
   min-width: 0;
   overflow: hidden;
   color: var(--fg);
-  font-size: 12.5px;
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1.55;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -65,10 +52,10 @@
 
 .guidance-inline-tip__person {
   flex: none;
-  max-width: 190px;
+  max-width: 220px;
   overflow: hidden;
   color: var(--fg-muted);
-  font-size: 11px;
+  font-size: 12.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -80,8 +67,8 @@
 
 @media (max-width: 600px) {
   .hub-app .guidance-inline-tip {
-    gap: 9px;
-    padding: 10px 12px;
+    gap: 10px;
+    padding: 12px 14px;
   }
 
   .guidance-inline-tip__copy {

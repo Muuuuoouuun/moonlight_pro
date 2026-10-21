@@ -69,7 +69,7 @@ export function GuidanceInlineTip({ variant, onNavigate, now: fixedNow }) {
       aria-label={`${kind} 자료 요약 · ${card.person} · ${card.text} · 상세 보기`}
       onClick={() => onNavigate?.(href)}
     >
-      <span className={`guidance-inline-tip__kind${variant === 'home' ? '' : ' mono'}`}>{kind}<span className="guidance-inline-tip__kind-detail"> · 자료 요약</span></span>
+      <span className="guidance-inline-tip__kind">{kind}<span className="guidance-inline-tip__kind-detail"> · 자료 요약</span></span>
       <span className="guidance-inline-tip__copy">{card.text}</span>
       <span className="guidance-inline-tip__person">{card.person}</span>
       <span className="guidance-inline-tip__arrow" aria-hidden="true"><Iconed name="arrowRight" size={15} /></span>
