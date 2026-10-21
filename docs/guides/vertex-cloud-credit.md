@@ -1,6 +1,6 @@
 # Moonlight Vertex Cloud 연결
 
-상태: 코드/로컬 빌드 검증, 정상화 계정 ADC 로그인, 운영 IAM 생성 완료. 로컬에서 Vertex의 gemini-3.5-flash와 gemini-3.1-pro-preview 실제 호출 HTTP 200 확인. Vercel 배포/운영 호출과 결제 반영 확인은 진행 중이다.
+상태: 정상화 계정 ADC 로그인, 운영 IAM 생성, Hub/Engine 운영 배포 및 실제 운영 함수의 Vertex 호출 검증 완료(2026-10-21). Billing 보고서는 아직 사용 비용/차감액을 표시하지 않아 실제 크레딧 차감액은 미확인이다.
 
 ## 대상과 과금 경로
 
@@ -23,7 +23,7 @@ GOOGLE_CLOUD_PROJECT=project-1dd9933a-77b3-4f19-b3f
 GOOGLE_CLOUD_LOCATION=global
 ```
 
-모델 별칭은 기존 설정과 호출자가 요청한 값을 유지한다. 실제 Vertex에서 해당 모델의 제공 여부를 검증하고, 미지원 모델이면 운영자가 승인한 모델로 설정을 조정한다. `GEMINI_MODEL`과 별도 품질 모델 `COM_MOON_CONTENT_QUALITY_MODEL`을 각각 확인한다.
+모델 별칭은 기존 설정과 호출자가 요청한 값을 유지한다. 현재 두 운영 앱의 `GEMINI_MODEL=gemini-3-flash-preview` 실제 호출에 성공했다. 코드 기본값 `gemini-3.5-flash`와 품질 모델 `gemini-3.1-pro-preview`도 로컬 ADC로 호출에 성공했다.
 
 ## 로컬 ADC
 
@@ -85,7 +85,18 @@ GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID=vercel
 
 Vercel에서는 `VERCEL=1`이면 OIDC 인증을 사용하며 불완전한 연동은 설정 오류로 닫힌다. Google Auth Library가 짧은 수명의 Google 토큰을 캐시/갱신하고, Vercel OIDC supplier는 토큰 교환 시마다 현재 토큰을 가져온다.
 
-환경 변수 반영·배포는 `vercel-deploy.md`의 기존 스크립트와 절차를 따른다. 두 운영 배포의 identity를 확인한 뒤 Gemini 호출을 검증한다. 실패하면 `GEMINI_BACKEND`를 명시적으로 원래 값으로 되돌리고 재배포하며, Vertex 실패를 자동으로 Developer API 과금으로 돌리지 않는다.
+환경 변수 반영·배포는 `vercel-deploy.md`의 기존 스크립트와 절차를 따른다. 두 운영 배포의 identity와 실제 운영 함수의 Gemini 호출을 검증했다. 실패하면 `GEMINI_BACKEND`를 명시적으로 원래 값으로 되돌리고 재배포하며, Vertex 실패를 자동으로 Developer API 과금으로 돌리지 않는다.
+
+## 운영 검증
+
+- Hub: https://moonlight-pro-hub.vercel.app — 건강 상태 정상, Gemini configured.
+- Engine: https://moonlight-pro-engine.vercel.app — 건강 상태 정상, Vertex / vercel-oidc / 기존 GCP 프로젝트 확인.
+- 운영 배포 ID: Hub `dpl_GkprGmwSBq1DhwFJocGov93tQ1f3`, Engine `dpl_9b6fwAUQ6ZmKyc6tQcSvA78wQSUE`를 운영 도메인으로 승격했다.
+- Vercel 빌드 환경 안에서 기존 앱 인증을 사용해 프로덕션 서버를 시작하고 Hub/Engine 각각 실제 생성 요청 HTTP 200을 확인했다. 운영 Secret은 내려받거나 출력하지 않았다.
+- 이후 두 정식 운영 URL의 실제 배포 함수에 요청하여 재검증했다. Engine `/api/ai/assist`: HTTP 200, `generated`, 총 617토큰(2026-10-21 11:01 KST). Hub `/api/hub/intake/multimodal`: HTTP 200, `ok`, 구조화된 제목/요약/회의 필드 반환(11:02 KST).
+- 개발 환경 OIDC 토큰은 같은 Google 권한 교환에서 인증 실패로 차단됨을 확인했다.
+- `scripts/check-vertex-server.mjs <hub|engine>`는 Vercel 운영 빌드 내부에서 서버를 시작해 점검한다. `--remote`는 해당 앱의 고정 운영 URL만 점검하며 리디렉션을 거부한다. 일반 빌드에는 자동으로 붙이지 않았으며, 일회성 배포의 buildCommand에서만 실행했다. 임의 URL·문서·비밀값을 출력하지 않는다.
+- 결제 계정은 Free Trial 상태를 유지한다. Cloud Billing 보고서에 아직 비용 행이 없고 ₩407,626 잔액이 표시되므로, 실제 $300 크레딧 차감액은 후속 보고서 반영이 필요하다.
 
 ## 검증 기록
 
