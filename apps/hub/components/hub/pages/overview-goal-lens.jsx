@@ -109,7 +109,7 @@ function WeekActivity({ ledger, status, onLens }) {
   const known = (status === "live" || status === "partial") && days.length > 0;
   return (
     <Card style={PANEL_STYLE} className="ogl-panel ogl-panel--activity">
-      <div className="ogl-panel__head"><span className="ogl-panel__title">이번 주 전체 활동</span><span className="ogl-panel__meta">최근 7일 · 목표 연결과 무관</span></div>
+      <div className="ogl-panel__head"><span className="ogl-panel__title">이번 주 전체 활동</span><span className="ogl-panel__meta">최근 7일</span></div>
       <div className="ogl-activity">
         {known ? (
           <>
@@ -155,7 +155,7 @@ export function OverviewGoalLens({ model, ledger, ledgerStatus, onLens }) {
       <EmptyState
         icon="signal"
         title={model.status === "live" ? "진행 중인 목표가 없습니다" : "목표 목록을 모두 확인하지 못했습니다"}
-        description="목표가 생기면 이 화면이 목표부터 보여 줍니다. 그 전에는 집계로 활동을 볼 수 있습니다."
+        description="목표를 만들면 진행 상황이 여기에 보입니다."
         action={<div className="ogl-row-actions"><Link className="hub-btn hub-btn--primary ogl-link-btn" href={goalHref(null, "all", { create: true, base: GOAL_WORK_BASE })}>목표 만들기</Link><Button variant="ghost" size="sm" onClick={onLens}>집계 보기</Button></div>}
         style={{ minHeight: 220 }}
       />
@@ -241,19 +241,18 @@ export function OverviewGoalLens({ model, ledger, ledgerStatus, onLens }) {
           </Card>
 
           <Card style={PANEL_STYLE} className="ogl-panel">
-            <div className="ogl-panel__head"><span className="ogl-panel__title">멈춘 핵심 결과</span><span className="ogl-panel__meta">직접 기록 · {STALE_DAYS}일 넘게 없음</span></div>
+            <div className="ogl-panel__head"><span className="ogl-panel__title">멈춘 핵심 결과</span><span className="ogl-panel__meta">{STALE_DAYS}일 넘게 기록 없음</span></div>
             {stale.length ? (
               <ul className="ogl-stale">
                 {stale.map(kr => (
                   <li key={kr.metric.id} className="ogl-stale__row">
-                    <Iconed name="pause" size={14} />
-                    <span className="ogl-stale__body"><b>{kr.metric.name}</b><span>{kr.since === null ? "아직 기록 없음" : `마지막 기록 ${kr.since}일 전`} · {PACE_TONE_LABEL[kr.tone]}</span></span>
+                    <span className="ogl-stale__icon" aria-hidden="true"><Iconed name="pause" size={13} /></span>
+                    <span className="ogl-stale__body"><b>{kr.metric.name}</b><span>{kr.since === null ? "아직 기록 없음" : `마지막 기록 ${kr.since}일 전`}{kr.tone !== "wait" ? ` · ${PACE_TONE_LABEL[kr.tone]}` : ""}</span></span>
                     <Link className="hub-btn hub-btn--secondary ogl-link-btn ogl-link-btn--sm" href={goalHref(selected.objective.id, selected.objective.scope, { check: true, base: GOAL_WORK_BASE })}>체크인 적기</Link>
                   </li>
                 ))}
               </ul>
-            ) : <p className="ogl-muted ogl-panel__empty"><Iconed name="check" size={13} /> 멈춘 핵심 결과가 없습니다</p>}
-            <span className="ogl-note">늦음은 색이 아니라 글로 — 빨강은 지키는 선 밖에만</span>
+            ) : <p className="ogl-muted ogl-panel__empty"><Iconed name="check" size={13} /> 모든 핵심 결과에 최근 기록이 있습니다</p>}
           </Card>
 
           <WeekActivity ledger={ledger} status={ledgerStatus} onLens={onLens} />
