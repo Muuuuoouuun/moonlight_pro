@@ -1,7 +1,5 @@
 // Gemini multimodal: photo/audio/text -> structured fields. Raw fetch, no SDK.
-// Matches the hub lib/google-vision pattern (x-goog-api-key header).
-
-const BASE = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
+import { getGenaiStatus, prepareGenaiRequest, resolveGenaiApiKey } from '@com-moon/genai-transport';
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 export const MAX_MULTIMODAL_MEDIA_BYTES = 14 * 1024 * 1024;
@@ -138,25 +136,11 @@ const SYSTEM_INSTRUCTION = `당신은 1인 운영자의 개인 운영체제(Moon
 10. [detectedEntities]: 언급된 프로젝트명, 인물, 회사명을 분리 추출합니다.
 11. 요약·전사·결정사항을 합친 메모는 구분 제목을 포함하여 20,000자 이하여야 합니다. 원문을 임의로 잘라내지 마십시오.`;
 
-export function formatMeetingBriefForShare(data) {
-  if (!isObject(data)) return "";
-  const lines = [];
-  if (data.title) lines.push(`📌 [회의/메모] ${data.title}`);
-  if (data.summary) lines.push(`\n■ 핵심 요약\n${data.summary}`);
-  if (data.keyDecisions?.length) lines.push(`\n■ 합의 및 결정사항\n${data.keyDecisions.map((d) => `• ${d}`).join("\n")}`);
-  if (data.openIssues?.length) lines.push(`\n■ 미결/후속 논의 안건\n${data.openIssues.map((i) => `• ${i}`).join("\n")}`);
-  if (data.actionItems?.length) {
-    lines.push(`\n■ 후속 실행 과제 (Action Items)\n${data.actionItems.map((a) => `□ ${a.task}${a.suggestedDue ? ` (기한: ${a.suggestedDue})` : ""}`).join("\n")}`);
-  }
-  if (data.detectedEntities?.peopleOrCompanies?.length) {
-    lines.push(`\n■ 관련자: ${data.detectedEntities.peopleOrCompanies.join(", ")}`);
-  }
-  return lines.join("\n").trim();
-}
+export { formatMeetingBriefForShare } from './meeting-brief-format.js';
 
 export function getMultimodalStatus() {
-  const apiKey = process.env.GEMINI_API_KEY?.trim() || "";
-  return { configured: Boolean(apiKey), apiKey, model: MODEL, base: BASE };
+  const status = getGenaiStatus();
+  return { ...status, apiKey: status.backend === 'developer' ? resolveGenaiApiKey() : '', model: MODEL, base: status.apiBaseUrl };
 }
 
 function safeJson(raw) {
@@ -197,9 +181,9 @@ export async function extractMultimodalIntakeHub(input = {}) {
   if (invalid) return invalid;
   const { mediaBase64, text = "", instruction = "", fetchImpl = fetch } = input;
   const mimeType = MIME_ALIASES[input.mimeType] || input.mimeType;
-  const { configured, apiKey, model, base } = getMultimodalStatus();
+  const { configured, model } = getMultimodalStatus();
   if (!configured) {
-    return { ok: false, reason: "gemini-not-configured", error: "GEMINI_API_KEY not configured", data: null };
+    return { ok: false, reason: "gemini-not-configured", error: "AI connection not configured", data: null };
   }
 
   const hasMedia = Boolean(mediaBase64);
@@ -247,9 +231,10 @@ export async function extractMultimodalIntakeHub(input = {}) {
     : AbortSignal.timeout(45_000);
   try {
     signal.throwIfAborted();
-    response = await fetchImpl(`${base}/models/${model}:generateContent`, {
+    const request = await prepareGenaiRequest(model, { signal });
+    response = await fetchImpl(request.url, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      headers: request.headers,
       cache: "no-store",
       body: JSON.stringify(body),
       signal,
@@ -261,8 +246,7 @@ export async function extractMultimodalIntakeHub(input = {}) {
 
   const parsedResponse = raw ? safeJson(raw) : null;
   // Token counts only, fire-and-forget: the usage log never delays or fails this answer.
-  // Loaded lazily because a client page imports this file for formatMeetingBriefForShare;
-  // the Supabase write client must not enter that bundle's static graph.
+  // Usage logging is best-effort and must not delay extraction.
   const usageRecord = { surface: "hub-multimodal-intake", model, usageMetadata: parsedResponse?.usageMetadata };
   if (typeof input.recordUsage === "function") {
     try { input.recordUsage(usageRecord); } catch { /* never block the answer */ }

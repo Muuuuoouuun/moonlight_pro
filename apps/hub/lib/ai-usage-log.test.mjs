@@ -55,10 +55,10 @@ test("each Hub path that calls Gemini directly records its usage", async () => {
   const expected = { "./multimodal-intake-core.js": "hub-multimodal-intake", "./meeting-review-extractor.js": "hub-meeting-review", "./google-vision.js": "hub-business-card" };
   for (const [file, surface] of Object.entries(expected)) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");
-    assert.match(source, /:generateContent/);
+    assert.match(source, /prepareGenaiRequest\(model/);
     assert.match(source, new RegExp(`surface: "${surface}"`), file);
   }
-  // A client page imports multimodal-intake-core; the Supabase writer stays out of its static graph.
-  const multimodal = await readFile(new URL("./multimodal-intake-core.js", import.meta.url), "utf8");
-  assert.doesNotMatch(multimodal, /^import .*ai-usage-log/m);
+  // Client formatting must not pull Cloud authentication or Supabase into its graph.
+  const formatter = await readFile(new URL("./meeting-brief-format.js", import.meta.url), "utf8");
+  assert.doesNotMatch(formatter, /genai-transport|ai-usage-log|process\.env/);
 });

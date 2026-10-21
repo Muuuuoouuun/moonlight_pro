@@ -16,6 +16,18 @@ registerHooks({
 });
 const { GET } = await import('../app/api/health/route.js');
 
+test('health recognizes Vertex ADC configuration without an API key', async t => {
+  const values = { GEMINI_BACKEND: 'vertex', GOOGLE_CLOUD_PROJECT: 'moonlight-test', GOOGLE_CLOUD_LOCATION: 'global', GCP_AUTH_MODE: 'adc', VERCEL: '', GEMINI_API_KEY: '', GOOGLE_GENERATIVE_AI_API_KEY: '' };
+  for (const [key, value] of Object.entries(values)) {
+    const previous = process.env[key];
+    process.env[key] = value;
+    t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
+  }
+  t.mock.method(globalThis, 'fetch', async () => new Response('{}'));
+  const body = await (await GET()).json();
+  assert.equal(body.config.geminiConfigured, true);
+});
+
 test('health probe uses a deadline and reports timeout as degraded', async t => {
   const previousUrl = process.env.SUPABASE_URL;
   const previousKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

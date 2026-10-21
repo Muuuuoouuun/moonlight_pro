@@ -1,10 +1,7 @@
 // Gemini vision: business-card image -> structured fields. Raw fetch, no SDK.
-// Matches the engine's lib/gemini auth/parsing pattern (x-goog-api-key header).
+// Provider routing/authentication is shared with Engine.
 import { recordAiUsage } from "./ai-usage-log.js";
-
-function resolveBaseUrl() {
-  return (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-}
+import { getGenaiStatus, prepareGenaiRequest, resolveGenaiApiKey } from '@com-moon/genai-transport';
 
 function resolveModel() {
   return process.env.GEMINI_MODEL || "gemini-3.5-flash";
@@ -14,12 +11,8 @@ const PROMPT = `이 명함 이미지에서 아래 필드를 추출해 JSON만 �
 {"name": 사람 이름 또는 null, "company": 회사/학원/기관명 또는 null, "phone": 전화번호 또는 null, "email": 이메일 또는 null, "title": 직책 또는 null, "address": 주소 또는 null}`;
 
 export function getVisionStatus() {
-  const apiKey = (
-    process.env.GEMINI_API_KEY?.trim() ||
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
-    ""
-  );
-  return { configured: Boolean(apiKey), apiKey, model: resolveModel(), base: resolveBaseUrl() };
+  const status = getGenaiStatus();
+  return { ...status, apiKey: status.backend === 'developer' ? resolveGenaiApiKey() : '', model: resolveModel(), base: status.apiBaseUrl };
 }
 
 function extractText(data) {
@@ -30,9 +23,9 @@ function extractText(data) {
 
 // imageBase64: base64 string (no data: prefix). Returns { ok, fields, error }.
 export async function extractBusinessCard(imageBase64, mimeType = "image/jpeg") {
-  const { configured, apiKey, model, base } = getVisionStatus();
+  const { configured, model } = getVisionStatus();
   if (!configured) {
-    return { ok: false, error: "GEMINI_API_KEY not configured", fields: null };
+    return { ok: false, error: "AI connection not configured", fields: null };
   }
   if (!imageBase64) {
     return { ok: false, error: "missing image data", fields: null };
@@ -41,11 +34,13 @@ export async function extractBusinessCard(imageBase64, mimeType = "image/jpeg") 
   let response;
   let raw;
   try {
-    response = await fetch(`${base}/models/${model}:generateContent`, {
+    const signal = AbortSignal.timeout(30_000);
+    const request = await prepareGenaiRequest(model, { signal });
+    response = await fetch(request.url, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      headers: request.headers,
       cache: "no-store",
-      signal: AbortSignal.timeout(30_000),
+      signal,
       body: JSON.stringify({
         contents: [
           {

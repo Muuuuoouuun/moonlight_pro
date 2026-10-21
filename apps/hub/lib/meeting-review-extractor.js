@@ -1,6 +1,7 @@
 // Manual, text-only meeting analysis. The source text remains the authority:
 // model-provided quotes are accepted only when they anchor to one exact span.
 import { recordAiUsage } from "./ai-usage-log.js";
+import { getGenaiStatus, prepareGenaiRequest } from '@com-moon/genai-transport';
 
 export const MAX_MEETING_REVIEW_TEXT_LENGTH = 20_000;
 
@@ -265,10 +266,8 @@ export async function extractMeetingReviewText(input = {}) {
   if (!isBoundedText(sourceText, MAX_MEETING_REVIEW_TEXT_LENGTH) || !sourceText.trim()) {
     return { ok: false, status: 400, reason: "invalid-input", error: `원문은 1~${MAX_MEETING_REVIEW_TEXT_LENGTH}자의 텍스트여야 합니다.`, data: null };
   }
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) return { ok: false, reason: "gemini-not-configured", error: "GEMINI_API_KEY not configured", data: null };
+  if (!getGenaiStatus().configured) return { ok: false, reason: "gemini-not-configured", error: "AI connection not configured", data: null };
 
-  const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
   const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
   const body = {
     system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
@@ -284,12 +283,14 @@ export async function extractMeetingReviewText(input = {}) {
   let response;
   let raw;
   try {
-    response = await (input.fetchImpl || fetch)(`${base}/models/${model}:generateContent`, {
+    const signal = AbortSignal.timeout(45_000);
+    const request = await prepareGenaiRequest(model, { signal });
+    response = await (input.fetchImpl || fetch)(request.url, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      headers: request.headers,
       cache: "no-store",
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
+      signal,
     });
     raw = await response.text();
   } catch {

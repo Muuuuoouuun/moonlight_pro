@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getGenaiStatus } from "@com-moon/genai-transport";
 
 import {
   resolveControlPlaneReadiness,
@@ -74,10 +75,7 @@ export async function GET() {
       secretsSeparated: secrets.separated,
       googleOAuthConfigured: googleOAuth.calendar.configured,
       githubConfigured: Boolean(process.env.GITHUB_REPOSITORIES?.trim()),
-      geminiConfigured: Boolean(
-        process.env.GEMINI_API_KEY?.trim() ||
-        process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim(),
-      ),
+      geminiConfigured: getGenaiStatus().configured,
     },
     integrations: {
       engine: controlPlane.engine,

@@ -41,7 +41,7 @@ export async function POST(req) {
         {
           status: "preview",
           reason: "gemini-not-configured",
-          message: "GEMINI_API_KEY 설정이 필요합니다.",
+          message: "AI 연결 설정이 필요합니다.",
         },
         { status: 200 },
       );

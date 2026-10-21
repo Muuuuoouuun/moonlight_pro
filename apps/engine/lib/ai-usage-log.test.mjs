@@ -99,8 +99,10 @@ test('every Engine Gemini entry point tags its calls with a surface key', async 
     const source = await readFile(new URL(file, import.meta.url), 'utf8');
     assert.match(source, new RegExp(`usageSurface[^\\n]*["']${surface}["']`), `${file} → ${surface}`);
   }
-  // gemini.ts is the one Engine place that talks to the provider, and it records every response.
+  // Gemini records every response; the shared transport owns provider routing.
   const gemini = await readFile(new URL('./gemini.ts', import.meta.url), 'utf8');
-  assert.equal((gemini.match(/:generateContent/g) || []).length, 1);
+  const transport = await readFile(new URL('../../../packages/genai-transport/index.js', import.meta.url), 'utf8');
+  assert.equal((transport.match(/:generateContent/g) || []).length, 1);
+  assert.match(gemini, /prepareGenaiRequest\(targetModel/);
   assert.match(gemini, /recordAiUsage\(\{ surface: input\.usageSurface/);
 });

@@ -16,7 +16,7 @@ import {
 import styles from "./memo-capture.module.css";
 import { memoHref, saveMemoAndVerify } from "@/lib/memo-save";
 import { memoIntakeTaskSummary, prepareMemoIntakeTasks, saveMemoIntakeTasks } from "@/lib/memo-intake-tasks";
-import { formatMeetingBriefForShare } from "@/lib/multimodal-intake-core";
+import { formatMeetingBriefForShare } from "@/lib/meeting-brief-format";
 
 export function MemoCapture({ onSaved, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);
@@ -130,7 +130,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
           return;
         }
         if (envelope.status === "preview") {
-          setMessage(envelope.message || "GEMINI_API_KEY 설정이 필요합니다.");
+          setMessage(envelope.message || "AI 연결 설정이 필요합니다.");
           return;
         }
         const data = envelope.status === "ok" ? envelope.data : null;
