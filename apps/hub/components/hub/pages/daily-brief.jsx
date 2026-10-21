@@ -2,6 +2,7 @@
 
 import React from "react";
 import { TodayTimeFlow } from "./today-time-flow";
+import { DayStrip, TodayHeadline, TodayModePanel, TodaySlots } from "./today-deck";
 import "./workflow-pages.css";
 import { ReviewWaitingList } from "../review-waiting";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
@@ -29,7 +30,6 @@ import { ContactRecordDrawer } from "../contact-record-form";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
-import { DailyReviewCue } from "../daily-review-cue";
 import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
 import { formatWonShort } from "@/lib/won-format";
 import { briefEnvelope, getDailyBriefAuthVersion, invalidateDailyBriefAuth, peekDailyBrief, readDailyBrief } from "../daily-brief-signals";
@@ -42,17 +42,6 @@ import {
   resolveRhythmCheckResult,
   sortRitualsByTimeOfDay,
 } from "@/lib/rhythm-ui";
-
-function formatBriefDate(date) {
-  const parts = new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  }).format(date);
-  return `${parts} · KST`;
-}
 
 function greetingFor(date) {
   const hour = date.getHours();
@@ -278,6 +267,12 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     && taskToday.streak.streak >= 0 && Number.isInteger(taskToday?.streak?.todayDoneCount)
     && taskToday.streak.todayDoneCount >= 0;
 
+  // 오늘 3개는 위 세 자리(TodaySlots)가 그린다 — 목록에는 나머지만 둔다(같은 할 일을 두 번 그리지 않는다).
+  // 레인 밖(기한 없음·나중 기한)의 열린 할 일은 그 뒤에 "나중"으로 이어 붙여 ★로 오늘 3개에 넣게 한다.
+  const later = (Array.isArray(taskToday?.later) ? taskToday.later : []).filter((task) => !hiddenIds.has(task.id));
+  const listItems = [...items.filter((task) => !task.focusToday), ...later];
+  const moreCount = (Number(taskToday?.hiddenCount) || 0) + Math.max(0, (Number(taskToday?.laterCount) || 0) - later.length);
+
   // §5.2: missed is the only immediate-loss lane; today/inbox are ordinary stages → neutral.
   // focus = 운영자가 고른 "현재" 선택 → Moonstone(§5.2 selected 의미), 라벨 "오늘 3개"와 함께.
   const laneTone = {
@@ -323,9 +318,12 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             <span>오늘 반드시 끝낼 핵심 3개 항목의 별표(★)를 눌러 집중 모드로 지정해 보세요.</span>
           </div>
         )}
-        {['loading', 'syncing'].includes(taskState) ? <Skeleton lines={3} label="오늘 할 일 확인 중" style={{ padding: 14 }} /> : items.length ? (
+        {['loading', 'syncing'].includes(taskState) ? <Skeleton lines={3} label="오늘 할 일 확인 중" style={{ padding: 14 }} /> : items.length || listItems.length ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {items.map((task, index) => (
+            {listItems.length === 0 && (
+              <div style={{ padding: '14px 16px', fontSize: 12.5, color: 'var(--fg-muted)' }}>남은 할 일은 모두 위 세 자리에 있습니다.</div>
+            )}
+            {listItems.map((task, index) => (
               <div
                 key={task.id}
                 className="hub-row hub-stackable-row"
@@ -335,7 +333,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                   alignItems: 'center',
                   gap: 12,
                   padding: '11px 16px',
-                  borderBottom: index < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                  borderBottom: index < listItems.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 }}
               >
                 <Badge tone={laneTone[task.lane] || 'neutral'} size="xs">{task.laneLabel}</Badge>
@@ -372,13 +370,13 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                 </Button>
               </div>
             ))}
-            {taskToday?.hiddenCount > 0 && (
+            {moreCount > 0 && (
               <button
                 type="button"
                 onClick={() => onNavigate?.('dashboard/work/my')}
                 style={{ width: '100%', border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5, padding: '9px 14px', cursor: 'pointer', textAlign: 'center' }}
               >
-                할 일 {taskToday.hiddenCount}건 더 보기
+                할 일 {moreCount}건 더 보기
               </button>
             )}
           </div>
@@ -1040,7 +1038,10 @@ function StatusLine({ state, onRetry }) {
 
 function BriefNavigation({ taskToday, onNavigate }) {
   const taskCount = Number(taskToday?.counts?.missed || 0) + Number(taskToday?.counts?.today || 0);
-  const taskDetail = taskToday?.state === 'live' ? `${taskCount}건 확인` : '기록 확인';
+  // 오늘·기한 지남이 0이어도 기한 없는 열린 할 일이 있으면 "0건"이라 말하지 않는다.
+  const laterCount = Number(taskToday?.laterCount || 0);
+  const taskDetail = taskToday?.state !== 'live' ? '기록 확인'
+    : taskCount === 0 && laterCount > 0 ? `열린 할 일 ${laterCount}건` : `${taskCount}건 확인`;
   const detailByKey = {
     tasks: taskDetail,
     'daily-review': `${REVIEW_EVENING_HOUR}:00 회고`,
@@ -1866,13 +1867,9 @@ function BriefClock({ signalCount, urgentCount, todayCount, state }) {
     const id = window.setInterval(() => setNow(new Date()), 60000);
     return () => window.clearInterval(id);
   }, []);
+  // 날짜·시각과 시간대 제목은 TodayHeadline(13a)이 그린다 — 여기는 그 아래 요약 줄이다.
   return (
     <>
-      <div className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', display: 'inline-block' }} />
-        <span>{formatBriefDate(now)}</span>
-      </div>
-      <h2 style={{ margin: 0, fontSize: 'clamp(26px, 3.2vw, 32px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.1 }}>오늘의 실행</h2>
       <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--fg-muted)' }}>
         <span>{greetingFor(now)}, 준혁</span>
         <span style={{ color: 'var(--line-strong)', opacity: 0.6 }}>·</span>
@@ -2050,37 +2047,37 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
   const waiting = ranked.slice(1);
   return (
     <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 'var(--section-gap)', maxWidth: 1160, margin: '0 auto', width: '100%' }}>
-      <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
-        <div>
-          <BriefClock signalCount={signalCount} urgentCount={screenUrgentCount} todayCount={todayCount} state={ledger} />
-        </div>
-        <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
-          {/* 보류 스코프(Council)가 히어로 CTA를 점유하던 것을 코어 루프(고객 연락)로 교체
-              — README §4 보류 표면은 첫 화면 프라임 자리에서 뺀다(2026-08-05 system-eval B-10). */}
-          <Button variant="ghost" size="md" icon="bell" onClick={() => onNavigate('dashboard/revenue/followups')}>오늘 연락</Button>
-          <Button variant="primary" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>15분 집중</Button>
-        </div>
+      {/* 13a "하루 시계 위에 세 자리"(2026-10-21 운영자 확정): 머리 → 빠른 입력 | 하루 띠 → 세 자리 →
+          시간대 칸 | 오늘 할 일. 아침 고르기 · 낮 하기 · 저녁 닫기는 기기 시계가 정한다. 세 자리가
+          15분 집중을 맡아 머리의 '15분 집중'·'오늘 연락' 버튼은 걷었다(오늘 연락은 빠른 이동에 남는다). */}
+      <div className="hub-page-header daily-brief__intro fade-up">
+        <TodayHeadline taskToday={ledger.taskToday} agenda={ledger.dailyFocus?.todayAgenda} />
+        <BriefClock signalCount={signalCount} urgentCount={screenUrgentCount} todayCount={todayCount} state={ledger} />
       </div>
 
       <StatusLine state={ledger} onRetry={refreshLedger} />
 
-      {/* 슬롯 순서: Quick Capture → 오늘 할 일 → 긴급 KA·집중 고객·일정 → 신호.
-          입력과 결과를 붙인다 — 할 일을 여기서 적는데 목록은 9번째 슬롯(신호 아래)에 있어서
-          방금 적은 것이 보이지 않았다. docs/README.md 의 운영자 확정 "첫 화면은 **할 일**,
-          매출, 메시지, 기획, 콘텐츠 순서의 판단을 돕는다"도 할 일을 1순위로 적고 있다
-          (2026-09-20 운영자 재확정). 긴급 KA·집중 고객 ≤5 제한은 그대로다. */}
-      <QuickCaptureForm layout="inline" inputId="daily-brief-quick-task" inputClassName="daily-brief__quick-input" onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+      {/* 슬롯 순서: Quick Capture → 오늘 3개 → 오늘 할 일 → 긴급 KA·집중 고객·일정 → 신호.
+          입력과 결과를 붙인다 — 할 일을 여기서 적는데 목록이 신호 아래에 있으면 방금 적은 것이
+          보이지 않는다. docs/README.md 의 운영자 확정 "첫 화면은 **할 일**, 매출, 메시지, 기획,
+          콘텐츠 순서의 판단을 돕는다"(2026-09-20 재확정). 긴급 KA·집중 고객 ≤5 제한은 그대로다. */}
+      <div className="today-deck__bar">
+        <QuickCaptureForm layout="inline" inputId="daily-brief-quick-task" inputClassName="daily-brief__quick-input" onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+        <DayStrip agenda={ledger.dailyFocus?.todayAgenda} />
+      </div>
 
-      <section className="workflow-step" aria-label="지금 할 일">
-        <p className="workflow-step__label"><span className="mono">01</span> 지금 · 오늘 고른 일부터</p>
+      <TodaySlots taskToday={ledger.taskToday} onChanged={ledger.refreshTasks} />
+
+      <div className="today-deck__below">
+        <TodayModePanel taskToday={ledger.taskToday} agenda={ledger.dailyFocus?.todayAgenda} onNavigate={onNavigate} />
         <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
-      </section>
+      </div>
       <GuidanceInlineTip variant="today" onNavigate={onNavigate} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
         {/* 약속과 일정은 지금 고른 일 다음, 신호 요약보다 먼저 확인한다. */}
         <section className="workflow-step" aria-label="이어서 약속과 일정">
-          <p className="workflow-step__label"><span className="mono">02</span> 이어서 · 약속과 일정</p>
+          <p className="workflow-step__label">이어서 · 약속과 일정</p>
           <FocusSlots
             dailyFocus={ledger.dailyFocus}
             onNavigate={onNavigate}
@@ -2126,12 +2123,6 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
             {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
           </div>
         </div>
-
-        <section className="workflow-step" aria-label="하루 마무리">
-          <p className="workflow-step__label"><span className="mono">03</span> 마무리 · 오늘의 기록</p>
-          <DailyReviewCue />
-          <Button variant="ghost" iconRight="arrowRight" onClick={() => onNavigate('dashboard/work/daily-review')}>하루 리뷰 열기</Button>
-        </section>
 
         <MoreDetail title="더보기 · 주간 정리, 실행 오더, 문의, 보조 정보" summary={approvalSummary}>
           <WeeklyReportCard onNavigate={onNavigate} onAdvisorOpen={setAdvisorSignal} onTaskCreated={ledger.refreshTasks} />

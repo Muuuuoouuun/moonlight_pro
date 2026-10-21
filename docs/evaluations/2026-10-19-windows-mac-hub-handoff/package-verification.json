@@ -1,0 +1,11 @@
+{
+  "archive": "Moonlight-Windows-Mac-Hub-followup-evidence-2026-10-19.zip",
+  "bytes": 764811,
+  "sha256": "237df3bf4b91ef248c1dc0942d6db1306de90effdb9a579b2ea26a828550c4d5",
+  "members": 70,
+  "manifest_records": 69,
+  "crc": "pass",
+  "all_file_bytes_and_sha256": "pass",
+  "previous_zip_preserved_sha256": "a1f442ecfe9038a2de261c46b73c040feac98cd7565268898ff2a2b08ceb85ad",
+  "library_status": "not uploaded; same-path auth HTTP401"
+}

@@ -1,0 +1,72 @@
+{
+  "base": "12103a76eadef632a57f0da151487d8076fcecdd",
+  "patch_sha256": "cbe38eb1153836d00f2fdd81894b4ac3278fb369aa7761dffa64e96e978ecf10",
+  "changed_paths": [
+    {
+      "path": "apps/desktop/hub-session-bridge.js",
+      "sha256": "04a387ae084ebe359c62b87baa9f9052c377de624e2710732c6a1ae336d4e69b",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/desktop/hub-session-snapshot.test.js",
+      "sha256": "95bfeb3b530ea95f1573bea74dc7eac7d50430eb3a744a345e17d567671e1cf2",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/desktop/pet/main/pet-hub-cancellation.test.js",
+      "sha256": "7dd2bedb280149e8179fd71c57dcc13191bbc21d6c0ebd1446caaed1f4d5643b",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/desktop/pet/main/pet-hub-client.js",
+      "sha256": "3649f9f76864e02b676878cafef9669f29dba0f75c90ed79a3738e2382a3b21a",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/desktop/pet/main/pet-hub-generation.test.js",
+      "sha256": "86d67bc134034d98a32f298db478912d4244a3952895c3b4d3d59c5ae8c47b92",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/desktop/pet/main/pet-hub.js",
+      "sha256": "f9a022d12561f91b96b7dd27feb77352bd1cff329b0366c3130961d7661f85b9",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/desktop/pet/renderer/model/envelope-view.js",
+      "sha256": "8243e1f8311e53f9fd6e5b0374d7bd8f2e798a6a63ef53aa2bc743c990517ca5",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/desktop/pet/renderer/modes/office.js",
+      "sha256": "61e74378c93d461d37ab9df968eabfa5aa0e71aba81e4745417adb1cacf28f8f",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/desktop/pet/renderer/office-recovery.test.js",
+      "sha256": "72228e77e68feef95d45d15478f25092c4a06a9de33d146d8d45af272aa98e3d",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/hub/lib/office/engine-client-retry.test.mjs",
+      "sha256": "8ef0905fe9647f6ed6617005d9618198fc916b42f6f65898bd0a4ff71c785b32",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "apps/hub/lib/office/engine-client.js",
+      "sha256": "b77c8e10b01fe2328e89760e69b134a1f93e2c3df134c16e95aa7087e60e2f67",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "prototypes/moonlight-pet-macos/Sources/MoonlightPetPreview/Support/HubTransport.swift",
+      "sha256": "f6f538d7b0961d7780c5dd2842b56f7e071e1010c9ef95d4bdbfce942d7b03a1",
+      "matches_tested_candidate_plus_six": true
+    },
+    {
+      "path": "prototypes/moonlight-pet-macos/Tests/MoonlightPetPreviewTests/HubTransportTests.swift",
+      "sha256": "574d8d1d68a1ca8f36372c70c9cf3aee2503a696f2eba3b2e447db45303f52f2",
+      "matches_tested_candidate_plus_six": true
+    }
+  ],
+  "lockfile_matches_locked_validation": true
+}

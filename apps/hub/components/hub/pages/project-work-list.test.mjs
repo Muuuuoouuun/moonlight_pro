@@ -5,6 +5,7 @@ import ts from 'typescript';
 import * as checklist from '../../../lib/task-checklist.js';
 import * as indexOrder from '../../../lib/project-index-order.js';
 import { appendProjectChecklistItem } from '../../../lib/project-direct-work.js';
+import { projectGroupSpan } from '../../../lib/project-next-step.js';
 
 const source = readFileSync(new URL('./project-work-list.jsx', import.meta.url), 'utf8');
 const orderSource = readFileSync(new URL('./project-work-order.jsx', import.meta.url), 'utf8');
@@ -56,7 +57,7 @@ function mount(options = {}) {
     useLayoutEffect(fn, deps) { this.useEffect(fn, deps); } };
 
   const scope = { React, Button: 'Button', Checkbox: 'Checkbox', IconButton: 'IconButton', Input: 'Input', LifecycleBadge: 'LifecycleBadge', Iconed: 'Iconed', GitHubPrMark: 'GitHubPrMark',
-    localStorage, window, cancelAnimationFrame() {}, ...indexOrder, styles: new Proxy({}, { get: (_, key) => key }), requestAnimationFrame: callback => frames.push(callback), ...checklist };
+    localStorage, window, cancelAnimationFrame() {}, ...indexOrder, styles: new Proxy({}, { get: (_, key) => key }), requestAnimationFrame: callback => frames.push(callback), ...checklist, projectGroupSpan };
   const Component = new Function(...Object.keys(scope), `${compiled}\nreturn ProjectWorkList;`)(...Object.values(scope));
   const render = (next = {}) => { props = { ...props, ...next }; cursor = 0; tree = Component(props, handle); effects.splice(0).forEach(fn => fn()); return tree; };
   const find = predicate => walk(tree, predicate)?.node;

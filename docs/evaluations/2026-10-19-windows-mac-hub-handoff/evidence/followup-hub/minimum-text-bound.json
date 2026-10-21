@@ -1,0 +1,13 @@
+{
+  "base": "67eb1d9b316843f5acd70de513d5a7b8d823bfdc",
+  "desktopEnvelopeBytesLimit": 262144,
+  "turnCount": 8,
+  "questionCharactersPerTurn": 1000,
+  "answerCharactersPerTurn": 10000,
+  "minimumRequiredTextBytesWithoutAnyJSONOrMetadata": 264000,
+  "minimumExcessBytes": 1856,
+  "losslessMetadataProjectionCanFit": false,
+  "rawEnvelopeBytes": 267322,
+  "providerCalls": 0,
+  "databaseCalls": 0
+}

@@ -1,0 +1,14 @@
+✔ exact preclaim revision and closed conflicts retain code and false persistence without generation (8.285605ms)
+✔ postgeneration finish conflicts become unknown, not a safe preclaim 409 (1.859794ms)
+✔ request-ID reuse conflict can coexist with a stored unknown turn (0.856043ms)
+✔ finish conflict followed by a persisted generated reread returns the actual saved turn (1.150698ms)
+✔ a persisted unknown replay stays unknown and does not call the provider (1.229854ms)
+✔ the handler error persistence flag alone does not prove a request was never executed (0.899177ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 199.784706

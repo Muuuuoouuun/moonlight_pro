@@ -163,6 +163,8 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
         id: event?.id || String(index),
         title: event?.summary || "(제목 없는 일정)",
         whenAt: start,
+        // 오늘 탭 하루 띠가 일정 폭을 그린다 — 없으면 화면이 시작 시각만 쓴다.
+        endAt: event?.end?.dateTime || null,
         whenLabel: allDay ? "종일" : startDay === todayKey ? timeLabel(start) : `${startDay} ${timeLabel(start)} 시작`,
         allDay,
         calendarLink: event?.htmlLink || null,

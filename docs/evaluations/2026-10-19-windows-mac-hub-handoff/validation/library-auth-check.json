@@ -1,0 +1,8 @@
+{
+  "utc": "2026-10-19T12:53:20.130042+00:00",
+  "action": "read-only tools/list on unchanged HostedAppsClient endpoint/auth path",
+  "upload_requested": false,
+  "different_identity_or_endpoint": false,
+  "status": "blocked",
+  "error": "hosted apps tools/list request failed with HTTP status 401"
+}

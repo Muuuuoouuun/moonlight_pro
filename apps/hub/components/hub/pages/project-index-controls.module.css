@@ -1,5 +1,4 @@
 .row { position: relative; user-select: none; -webkit-user-select: none; transition: transform var(--dur-panel) var(--ease-hub), box-shadow var(--dur-panel) var(--ease-hub), background var(--dur-hover) var(--ease-hub); }
-.row[data-selected="true"] { box-shadow: inset 1px 0 0 var(--accent); background: var(--surface-2); }
 .row :global(button.hub-project-portfolio-index-row) { padding-right: 38px; cursor: grab; }
 /* The lifted row follows the pointer 1:1 (no transform transition) and floats above the
    rows sliding aside for it. */
@@ -128,7 +127,6 @@
   .index .row :global(.hub-project-portfolio-index-row__heading) { grid-template-columns: 19px minmax(0, 1fr); gap: 7px; padding-right: 24px; }
   .index .row[data-done="true"] :global(.hub-project-portfolio-index-row__heading) { grid-template-columns: 19px minmax(0, 1fr) auto; }
   .index .doneHead { padding: 14px 12px 6px; }
-  .row[data-done="true"] .miniProgress > span { background: var(--fg-muted); }
   .index .row :global(.hub-project-portfolio-index-row__heading) > :global(.mono),
   .index .row :global(.hub-project-portfolio-index-row__progress), .index .legacyMeta { display: none; }
   .index .row .mark { visibility: visible; }
@@ -137,14 +135,17 @@
   .index .row[data-dragging="true"] :global(button.hub-project-portfolio-index-row) { cursor: grabbing; }
   .index .more { top: 6px; right: 6px; opacity: 0; transition: opacity var(--dur-hover) var(--ease-hub); }
   .index .row:hover .more, .index .row:focus-within .more, .index .row[data-selected="true"] .more, .index .more[aria-expanded="true"] { opacity: 1; }
-  .index .compactMeta { display: grid; grid-template-columns: minmax(0, 1fr) 48px 34px; align-items: center; gap: 6px; margin-left: 26px; min-height: 14px; color: var(--fg-muted); font-size: 10.5px; }
+  .index .compactMeta { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-left: 26px; min-height: 14px; color: var(--fg-muted); font-size: 11px; }
+  .compactMeta > span:last-child { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; white-space: nowrap; }
+  /* 2026-10-19 Projects B Focus — 목록은 바탕(--bg) 위의 행, 선택한 프로젝트만 떠 있는 카드다. */
+  .index .list { padding: 4px 8px 8px; }
+  .index .row { margin-bottom: 2px; border-radius: var(--r); }
+  .index .row :global(button.hub-project-portfolio-index-row) { border-bottom: 0; border-radius: var(--r); }
+  .index .row[data-selected="true"] :global(button.hub-project-portfolio-index-row) { background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 1px var(--line-soft); }
   .compactMeta > span:first-child { display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; }
   .compactMeta > span:first-child > svg { flex-shrink: 0; }
   .compactMeta > span[data-risk="true"] { color: var(--danger); }
   .compactMeta > :global(.mono) { text-align: right; font-size: 12px; line-height: 1; color: var(--fg-muted); }
-  .miniProgress { height: 3px; overflow: hidden; border-radius: 999px; background: var(--line-soft); }
-  .miniProgress > span { display: block; height: 100%; border-radius: inherit; background: var(--fg-dim); transition: width var(--dur-gauge) var(--ease-gauge), background var(--dur-hover) var(--ease-hub); }
-  .row[data-selected="true"] .miniProgress > span { background: var(--accent); }
   .row[data-selected="true"] .compactMeta > :global(.mono) { color: var(--fg); font-weight: 600; }
   .index .notice { position: absolute; z-index: 3; bottom: 54px; left: 8px; right: 8px; padding: 8px 6px 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-pop); }
   .menu { width: 232px; padding: 6px; }

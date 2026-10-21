@@ -158,3 +158,29 @@ test("focus summary only credits completions that landed on the picked day", () 
   assert.deepEqual(summary, { date: "2026-09-21", picked: 3, done: 1, limit: 3, remaining: 0 });
   assert.deepEqual(taskToday.focusDatesOf({ meta: { focus_dates: ["2026-09-21", 7, "nope"] } }), ["2026-09-21"]);
 });
+
+// 2026-10-21 "할 일 큐가 안 쌓인다": 기한 없이 만든 할 일은 어느 레인에도 들지 않아 첫 화면에서 사라졌고,
+// 오늘 3개가 표시 다섯 칸을 먹어 나머지가 밀려났다.
+test("open tasks outside the lanes ride along as `later` (newest first) without joining lane counts", () => {
+  const result = taskToday.buildTaskToday([
+    { id: "undated-old", title: "기한 없음 · 예전", status: "todo", dueAt: "", updatedAt: "2026-07-10T00:00:00Z" },
+    { id: "undated-new", title: "기한 없음 · 방금", status: "todo", dueAt: "", updatedAt: "2026-07-15T00:05:00Z" },
+    { id: "future", title: "다음 주", status: "todo", dueAt: "2026-07-22", updatedAt: "2026-07-12T00:00:00Z" },
+    { id: "done", title: "끝남", status: "done", dueAt: "" },
+    { id: "today", title: "오늘", status: "todo", dueAt: "2026-07-15" },
+  ], { now: new Date("2026-07-15T00:00:00Z"), timeZone: "Asia/Seoul" });
+
+  assert.deepEqual(result.items.map((t) => t.id), ["today"]);
+  assert.equal(result.counts.total, 1, "later tasks are not a Today lane");
+  assert.deepEqual(result.later.map((t) => [t.id, t.lane]), [["undated-new", "later"], ["future", "later"], ["undated-old", "later"]]);
+  assert.equal(result.laterCount, 3);
+});
+
+test("today's picks do not consume the display limit of the other lanes", () => {
+  const picks = ["a", "b", "c"].map((id) => ({ id, title: id, status: "todo", focusDates: ["2026-07-15"] }));
+  const inbox = ["x", "y"].map((id, i) => ({ id, title: id, status: "inbox", updatedAt: `2026-07-15T00:0${i}:00Z` }));
+  const result = taskToday.buildTaskToday([...picks, ...inbox], { now: new Date("2026-07-15T00:00:00Z"), timeZone: "Asia/Seoul", limit: 2 });
+  assert.deepEqual(result.items.filter((t) => !t.focusToday).map((t) => t.id), ["y", "x"]);
+  assert.equal(result.items.filter((t) => t.focusToday).length, 3);
+  assert.equal(result.hiddenCount, 0);
+});

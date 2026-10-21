@@ -188,9 +188,23 @@ export function buildTaskToday(
       return String(left.id).localeCompare(String(right.id));
     });
 
+  // 오늘 3개는 표시 limit 밖이다 — 고른 일이 목록의 다섯 칸을 먹어 빠른 입력이 밀려나지 않게
+  // limit은 나머지 레인에만 건다(2026-10-21: 오늘 3개를 세 자리로 따로 그리면서 목록이 2건으로 줄었다).
+  const picked = candidates.filter((task) => task.lane === "focus");
+  const rest = candidates.filter((task) => task.lane !== "focus");
+  const shownRest = rest.slice(0, Math.max(0, limit));
+
+  // 레인 밖의 열린 할 일(기한 없음·나중 기한) — 레인 집계에는 넣지 않고, 오늘 3개를 고를 후보로만
+  // 따로 싣는다. 이게 없으면 기한 없이 만든 할 일이 첫 화면 어디에도 보이지 않았다(2026-10-21).
+  const later = (Array.isArray(todos) ? todos : [])
+    .filter((task) => !isDoneTask(task) && !laneForTask(task, todayKey, timeZone))
+    .sort((left, right) => descendingTime(right.updatedAt) - descendingTime(left.updatedAt)
+      || String(left.id).localeCompare(String(right.id)))
+    .map((task) => ({ ...task, lane: "later", laneLabel: "나중", focusToday: false }));
+
   const counts = {
     total: candidates.length,
-    shown: Math.min(candidates.length, Math.max(0, limit)),
+    shown: picked.length + shownRest.length,
     focus: candidates.filter((task) => task.lane === "focus").length,
     missed: candidates.filter((task) => task.lane === "missed").length,
     today: candidates.filter((task) => task.lane === "today").length,
@@ -202,7 +216,7 @@ export function buildTaskToday(
   const focus = summarizeFocusDay(todos, { now, timeZone });
 
   return {
-    items: candidates.slice(0, counts.shown),
+    items: [...picked, ...shownRest],
     counts,
     hiddenCount: counts.total - counts.shown,
     streak,
@@ -211,6 +225,8 @@ export function buildTaskToday(
     // 완료된 선택은 여기서 빠지므로 분모·분자는 `focus` 요약(summarizeFocusDay)을 쓴다.
     focusItems: candidates.filter((task) => task.lane === "focus"),
     focus,
+    later: later.slice(0, Math.max(0, limit)),
+    laterCount: later.length,
   };
 }
 

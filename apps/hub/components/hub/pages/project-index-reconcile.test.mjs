@@ -7,6 +7,7 @@ import * as actionState from '../../../lib/project-action-state.js';
 import * as metrics from './project-pms-metrics.js';
 import { readTaskChecklist } from '../../../lib/task-checklist.js';
 import { selectUrgentProjectItems } from '../../../lib/project-urgent-items.js';
+import { selectProjectNextStep } from '../../../lib/project-next-step.js';
 import { buildCurrentMonthProjectPreview } from '../../../lib/project-monthly-preview.js';
 
 const controlsSource = readFileSync(new URL('./project-index-controls.jsx', import.meta.url), 'utf8');
@@ -45,10 +46,10 @@ function mounted(kind, initial, { storage = new Map(), reduced = false } = {}) {
   };
   const styles = new Proxy({}, { get: (_, key) => key });
   const scope = { React, localStorage, window: browser, document, globalThis: { window: browser, document }, ...order, ...metrics, ...actionState,
-    styles, indexStyles: styles, workStyles: styles, deliveryStyles: styles,
+    styles, indexStyles: styles, workStyles: styles, deliveryStyles: styles, stageStyles: styles,
     Button: 'Button', Badge: 'Badge', Drawer: 'Drawer', EmptyState: 'EmptyState', IconButton: 'IconButton', Input: 'Input', SegmentedControl: 'SegmentedControl', Iconed: 'Iconed', BrandMark: 'BrandMark', ProjectWorkList: 'ProjectWorkList', ProjectDeliverySummary: 'ProjectDeliverySummary',
     projectGenreLabel: () => '', projectGenreTint: () => undefined, projectStatusLabel: value => value,
-    readTaskChecklist, selectUrgentProjectItems, buildCurrentMonthProjectPreview,
+    readTaskChecklist, selectUrgentProjectItems, selectProjectNextStep, buildCurrentMonthProjectPreview,
     setTimeout(callback) { const id = ++timerId; timers.set(id, callback); return id; }, clearTimeout(id) { timers.delete(id); },
     requestAnimationFrame: () => 1, cancelAnimationFrame() {},
   };
@@ -229,8 +230,8 @@ test('selected or focused row scrolls into view on exact completion even without
 test('project group uses token motion, 44px touch controls and reduced-motion final state', () => {
   const css = readFileSync(new URL('./project-index-controls.module.css', import.meta.url), 'utf8');
   assert.match(css, /\.doneHead\s*\{\s*min-height:\s*44px/);
-  // 선택 행 레일은 DESIGN.md §8.1의 1px inset이다(굵게 하지 않는다).
-  assert.match(css, /\.row\[data-selected="true"\]\s*\{[^}]*inset 1px 0 0 var\(--accent\)/);
+  // 선택 행은 레일이 아니라 떠 있는 카드다(2026-10-19 Projects B Focus) — 굵은 레일은 어디에도 없다.
+  assert.match(css, /\.row\[data-selected="true"\][^{]*\{[^}]*var\(--shadow-card\)/);
   assert.doesNotMatch(css, /inset\s+(?:[2-9]|1\.\d)\S*px\s+0\s+0/);
   assert.match(css, /\.doneHead:focus-visible\s*\{\s*outline:\s*1px solid var\(--moon-300\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/);
@@ -254,11 +255,14 @@ test('all-task-done group truthfully awaits results and stale snapshots do not p
 
 test('next-action callbacks focus existing tasks, disambiguate duplicates and keep unmatched text an explicit draft', () => {
   const cases = [
-    { title: '제안서 전달', tasks: [{ id: 'a', title: '제안서  전달', done: false }], label: '목록에서 보기', expect: ['task', 'a'] },
+    // B Focus `다음` 띠(2026-10-19): 맞는 열린 할 일은 제목 단추가 목록에서 보여 준다.
+    { title: '제안서 전달', tasks: [{ id: 'a', title: '제안서  전달', done: false }], titleButton: '목록에서 보기', expect: ['task', 'a'] },
+    // 이미 처리한 할 일과 같은 제목이면 같은 할 일을 다시 만들지 않는다.
     { title: '촬영', tasks: [{ id: 'a', title: '촬영', done: true }, { id: 'b', title: '검토', done: false }], label: '처리한 할 일 확인', expect: ['task', 'a'] },
+    // 같은 제목이 둘이면 어느 것을 처리할지 고르지 않는다.
     { title: '고객 확인', tasks: [{ id: 'a', title: '고객 확인', done: false }, { id: 'b', title: '고객 확인', done: false }], label: '같은 제목 · 목록에서 선택', expect: ['list'] },
     // F6: renaming a task does not create a guessed ID relationship to old project text.
-    { title: '고객 데모 준비', tasks: [{ id: 'a', title: '고객 데모 자료·계정 준비', done: false }], label: '새 할 일 초안', expect: ['draft', '고객 데모 준비'] },
+    { title: '고객 데모 준비', tasks: [{ id: 'a', title: '고객 데모 자료·계정 준비', done: false }], label: '할 일로 추가', expect: ['draft', '고객 데모 준비'] },
   ];
   for (const item of cases) {
     const p = { ...project('p'), displayNextAction: item.title };
@@ -267,9 +271,12 @@ test('next-action callbacks focus existing tasks, disambiguate duplicates and ke
     nodes(view.output, node => node.type === 'ProjectWorkList')[0].props.ref.current = {
       focusTask: id => calls.push(['task', id]), focusList: () => calls.push(['list']), focusNewTask: title => calls.push(['draft', title]),
     };
-    nodes(view.output, node => node.type === 'Button' && text(node) === item.label)[0].props.onClick();
+    const target = item.titleButton
+      ? nodes(view.output, node => node.type === 'button' && node.props.title === item.titleButton)[0]
+      : nodes(view.output, node => node.type === 'Button' && text(node) === item.label)[0];
+    target.props.onClick();
     assert.deepEqual(calls, [item.expect]);
-    if (item.label === '새 할 일 초안') {
+    if (item.label === '할 일로 추가') {
       assert.match(text(view.output), /제목을 바꾼 할 일이 있는지/);
       nodes(view.output, node => node.type === 'Button' && text(node) === '기존 목록 확인')[0].props.onClick();
       assert.deepEqual(calls.at(-1), ['list']);

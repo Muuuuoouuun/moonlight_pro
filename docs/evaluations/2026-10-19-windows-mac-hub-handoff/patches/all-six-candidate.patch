@@ -1,0 +1,991 @@
+diff --git a/apps/desktop/hub-session-bridge.js b/apps/desktop/hub-session-bridge.js
+index 234e2e1d..35bea0aa 100644
+--- a/apps/desktop/hub-session-bridge.js
++++ b/apps/desktop/hub-session-bridge.js
+@@ -54,28 +54,54 @@ async function startHubSessionBridge({ session, getHubUrl, directory = bridgeDir
+         if (request.origin !== url.origin || !['read', 'write'].includes(request.action)) throw new Error('Rejected bridge request');
+         const cookieUrl = `${url.origin}/`;
+         if (request.action === 'write') {
+-          if (request.session === null) {
+-            signedOutOrigins.add(url.origin);
+-            await session.cookies.remove(cookieUrl, COOKIE);
++          if (request.session !== null && !validSession(request.session)) throw new Error('Invalid session');
++          advanceSessionRevision(url.origin);
++          pendingSessionWrites.set(url.origin, (pendingSessionWrites.get(url.origin) || 0) + 1);
++          try {
++            if (request.session === null) {
++              signedOutOrigins.add(url.origin);
++              await session.cookies.remove(cookieUrl, COOKIE);
++            }
++            else {
++              signedOutOrigins.delete(url.origin);
++              await session.cookies.set({ url: cookieUrl, name: COOKIE, value: request.session.value,
++                expirationDate: request.session.expiresAt, path: '/', httpOnly: true,
++                secure: url.protocol === 'https:', sameSite: 'lax' });
++            }
++            await session.cookies.flushStore();
++          } finally {
++            const remaining = pendingSessionWrites.get(url.origin) - 1;
++            if (remaining) pendingSessionWrites.set(url.origin, remaining);
++            else pendingSessionWrites.delete(url.origin);
++            advanceSessionRevision(url.origin);
+           }
+-          else {
+-            if (!validSession(request.session)) throw new Error('Invalid session');
+-            signedOutOrigins.delete(url.origin);
+-            await session.cookies.set({ url: cookieUrl, name: COOKIE, value: request.session.value,
+-              expirationDate: request.session.expiresAt, path: '/', httpOnly: true,
+-              secure: url.protocol === 'https:', sameSite: 'lax' });
+-          }
+-          await session.cookies.flushStore();
+         }
+-        const cookies = await session.cookies.get({ url: cookieUrl, name: COOKIE });
+-        const cookie = cookies.find((item) => item.name === COOKIE && item.path === '/');
+-        const saved = cookie ? { value: cookie.value, expiresAt: cookie.expirationDate } : null;
+-        socket.end(`${JSON.stringify({ origin: url.origin, session: validSession(saved) ? saved : null,
+-          signedOut: signedOutOrigins.has(url.origin) })}\n`);
++        socket.end(`${JSON.stringify(await readSessionSnapshot(url.origin, cookieUrl))}\n`);
+       } catch { socket.end('{"error":"rejected"}\n'); }
+     });
+   });
+   const signedOutOrigins = new Set();
++  const sessionRevisions = new Map();
++  const pendingSessionWrites = new Map();
++  const advanceSessionRevision = (origin) => sessionRevisions.set(origin, (sessionRevisions.get(origin) || 0) + 1);
++  async function readSessionSnapshot(origin, cookieUrl) {
++    for (let attempt = 0; attempt < 2; attempt++) {
++      if (signedOutOrigins.has(origin)) return { origin, session: null, signedOut: true };
++      if (pendingSessionWrites.has(origin)) throw new Error('Session write is still pending');
++      const revision = sessionRevisions.get(origin) || 0;
++      const cookies = await session.cookies.get({ url: cookieUrl, name: COOKIE });
++      // Explicit logout dominates any cookie snapshot captured before it.
++      if (signedOutOrigins.has(origin)) return { origin, session: null, signedOut: true };
++      if (pendingSessionWrites.has(origin)) throw new Error('Session write is still pending');
++      // A logout/login cycle may clear that marker while lookup is suspended.
++      // Re-read once rather than attaching an older cookie to the new state.
++      if (revision !== (sessionRevisions.get(origin) || 0)) continue;
++      const cookie = cookies.find((item) => item.name === COOKIE && item.path === '/');
++      const saved = cookie ? { value: cookie.value, expiresAt: cookie.expirationDate } : null;
++      return { origin, session: validSession(saved) ? saved : null, signedOut: false };
++    }
++    throw new Error('Session changed during bridge read');
++  }
+   const onCookieChanged = (_event, cookie, cause, removed) => {
+     if (cookie.name !== COOKIE) return;
+     let origin;
+@@ -83,6 +109,7 @@ async function startHubSessionBridge({ session, getHubUrl, directory = bridgeDir
+     const host = new URL(origin).hostname;
+     const domain = cookie.domain?.replace(/^\./, '');
+     if (domain && host !== domain && !host.endsWith(`.${domain}`)) return;
++    advanceSessionRevision(origin);
+     if (!removed) signedOutOrigins.delete(origin);
+     else if (['explicit', 'expired-overwrite'].includes(cause)) signedOutOrigins.add(origin);
+   };
+diff --git a/apps/desktop/pet/main/pet-hub-client.js b/apps/desktop/pet/main/pet-hub-client.js
+index 5cd0ddb4..f009d8fc 100644
+--- a/apps/desktop/pet/main/pet-hub-client.js
++++ b/apps/desktop/pet/main/pet-hub-client.js
+@@ -203,7 +203,16 @@ function createHubClient(options = {}) {
+       if (httpStatus === 401 || httpStatus === 403 || status === 'unauthorized' || status === 'forbidden') {
+         throw fail('unauthorized', 'unauthorized', httpStatus);
+       }
+-      if (httpStatus === 409) throw fail('conflict', 'conflict', httpStatus);
++      if (httpStatus === 409) {
++        // These claim-RPC failures occur only after checking that this request ID
++        // has no existing turn. Other conflicts can refer to an accepted request.
++        const unclaimed = method === 'POST' && /^\/api\/hub\/office\/meetings\/[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}\/turns$/i.test(path)
++          && status === 'conflict' && envelope?.persisted === false
++          && ['meeting-revision-changed', 'meeting-closed'].includes(envelope.error)
++          && Object.keys(envelope).every(key => ['status', 'error', 'persisted', 'businessWrites'].includes(key))
++          && (envelope.businessWrites === undefined || envelope.businessWrites === false);
++        throw fail('conflict', unclaimed ? envelope.error : 'conflict', httpStatus);
++      }
+       if (httpStatus < 200 || httpStatus >= 300 || status === 'error' || source === 'error') throw fail('error', 'server', httpStatus);
+       if (!envelope && httpStatus !== 204) throw fail('invalid', 'invalid-response', httpStatus);
+ 
+diff --git a/apps/desktop/pet/main/pet-hub.js b/apps/desktop/pet/main/pet-hub.js
+index d01b625b..f38bb880 100644
+--- a/apps/desktop/pet/main/pet-hub.js
++++ b/apps/desktop/pet/main/pet-hub.js
+@@ -156,6 +156,7 @@ function createPetHub(input = {}) {
+   let lastBadge = 0;
+   let stopPollingFn = null;
+   let pollInFlight = null;
++  let chatRequest = null; // Reserve a single send before connection preparation finishes.
+ 
+   function emit(name, payload) {
+     try {
+@@ -205,6 +206,7 @@ function createPetHub(input = {}) {
+     const previous = conn;
+     conn = null;
+     pollInFlight = null;
++    chatRequest = null;
+     if (!origin) {
+       chat.configure({ service: null, origin: null });
+       const ready = activity.configure({ service: null, origin: null });
+@@ -389,14 +391,26 @@ function createPetHub(input = {}) {
+     // 'pet:chat-send' {ownerId, scope, message} → { turn, userTurn }
+     async chatSend(input) {
+       const current = conn;
+-      if (current) await current.ready;
+-      const envelope = await chat.send(payloadOf(input));
+-      if (current && current === conn) setHubStatus(statusFromEnvelope(envelope));
+-      return envelope;
++      if (chatRequest) return errorEnvelope(fail('error', 'busy'));
++      const ticket = {};
++      chatRequest = ticket;
++      try {
++        if (current) await current.ready;
++        if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
++        if (chatRequest !== ticket) return errorEnvelope(fail('error', 'cancelled'));
++        const envelope = await chat.send(payloadOf(input));
++        if (current && current === conn && chatRequest === ticket) setHubStatus(statusFromEnvelope(envelope));
++        return envelope;
++      } finally {
++        if (chatRequest === ticket) chatRequest = null;
++      }
+     },
+     // 'pet:chat-cancel' {} → { cancelled }
+     chatCancel() {
+-      return Promise.resolve(okEnvelope('live', { cancelled: chat.cancel() }));
++      const queued = chatRequest !== null;
++      chatRequest = null;
++      const active = chat.cancel();
++      return Promise.resolve(okEnvelope('live', { cancelled: queued || active }));
+     },
+     // 'pet:chat-session' {ownerId, scope, draft?} → { turns, draft, busy(이 대화가 보내는 중: boolean), sending(=busy), busyWith(보내는 대화 {ownerId,scope,message}|null), error }
+     // 이 대화를 '보고 있음'으로 표시하고 그 대화의 답변 알림을 거둔다. 실제로 보이는지는 isChatVisible()(셸 ctx 면
+@@ -463,6 +477,7 @@ function createPetHub(input = {}) {
+       const current = conn;
+       if (!current) return { skipped: true };
+       await current.ready;
++      if (current !== conn) return { skipped: true };
+       if (pollInFlight) return pollInFlight;
+       const flight = (async () => {
+         if (PROBE_ONLY_STATUSES.includes(hubStatus)) {
+@@ -556,6 +571,7 @@ function createPetHub(input = {}) {
+     },
+     dispose() {
+       hub.stopPolling();
++      chatRequest = null;
+       chat.configure({ service: null, origin: null });
+       activity.configure({ service: null, origin: null }).catch(() => {});
+       conn = null;
+diff --git a/apps/desktop/pet/renderer/model/envelope-view.js b/apps/desktop/pet/renderer/model/envelope-view.js
+index 675de334..5b7f617a 100644
+--- a/apps/desktop/pet/renderer/model/envelope-view.js
++++ b/apps/desktop/pet/renderer/model/envelope-view.js
+@@ -31,6 +31,8 @@
+     'pending-memo': '확인이 필요한 앞 메모가 있어요. 먼저 ‘저장 확인’을 눌러 주세요.',
+     'memo-conflict': 'Hub에서 먼저 바뀌었어요. 입력은 보관했어요.',
+     conflict: 'Hub에서 먼저 바뀌었어요. 입력은 보관했어요.',
++    'meeting-revision-changed': '대화가 먼저 바뀌어 질문이 접수되지 않았어요. 입력은 보관했어요. 다시 불러온 뒤 보내 주세요.',
++    'meeting-closed': '종료된 대화라 질문이 접수되지 않았어요. 입력은 보관했어요. 새 대화에서 이어 주세요.',
+     'missing-version': '할 일의 버전을 몰라 다시 불러와야 해요.',
+     'stale-origin': 'Hub 주소가 바뀌어 이 결과는 쓰지 않았어요.',
+     'redirect-rejected': 'Hub가 다른 주소로 보내려 해서 멈췄어요.',
+diff --git a/apps/desktop/pet/renderer/modes/office.js b/apps/desktop/pet/renderer/modes/office.js
+index cff7a9aa..85a854aa 100644
+--- a/apps/desktop/pet/renderer/modes/office.js
++++ b/apps/desktop/pet/renderer/modes/office.js
+@@ -216,8 +216,11 @@
+         if (!alive) return;
+         if (ticket !== seq) { busy = false; render(); return; }
+         busy = false; view = M.envelope.describeRead(res, 'Office 답변');
++        // Only the transport's verified preclaim failures prove this ID was not
++        // accepted. Keep the draft and require refresh plus another explicit send.
++        if (res.kind === 'conflict' && ['meeting-revision-changed', 'meeting-closed'].includes(res.error)) savePending(null);
+         if (view.showData) { detail = res.data; reconcile(); synced = new Date(); }
+-        // Timeout/conflict keeps both draft and command. Recovery is GET only.
++        // Ambiguous outcomes keep both draft and command. Recovery is GET only.
+         render();
+       }
+       async function recoverCreate() {
+diff --git a/apps/hub/lib/office/engine-client.js b/apps/hub/lib/office/engine-client.js
+index db85b2e3..603ee481 100644
+--- a/apps/hub/lib/office/engine-client.js
++++ b/apps/hub/lib/office/engine-client.js
+@@ -41,7 +41,10 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
+    // A durable caller must not pay for another generation when the first
+    // response was lost or timed out. Legacy freeform callers keep their status.
+    if(unknownOnTransportFailure && !responseRead) return {status:'unknown',error:'오피스 응답 수신을 확인하지 못했습니다. 저장된 회의 상태를 다시 확인해 주세요.'};
+-   if(attempt<attempts) {
++   // Once an answer or rejection was received, a contract/policy failure is
++   // not transient. Retrying this POST would create a new model generation.
++   // Explicit 502/503 retries above and legacy transport retries remain bounded.
++   if(attempt<attempts && !responseRead) {
+     await new Promise(r=>setTimeout(r,600));
+     continue;
+    }
+diff --git a/prototypes/moonlight-pet-macos/Sources/MoonlightPetPreview/Support/HubTransport.swift b/prototypes/moonlight-pet-macos/Sources/MoonlightPetPreview/Support/HubTransport.swift
+index 54a94666..03374d27 100644
+--- a/prototypes/moonlight-pet-macos/Sources/MoonlightPetPreview/Support/HubTransport.swift
++++ b/prototypes/moonlight-pet-macos/Sources/MoonlightPetPreview/Support/HubTransport.swift
+@@ -249,15 +249,21 @@ actor HubTransport: HubTransporting {
+         let url = try requestURL(path)
+         let method = method.uppercased()
+         guard ["GET", "POST", "PATCH", "DELETE"].contains(method) else { throw HubTransportError.rejectedURL }
+-        if !desktopSessionAvailable, !(path.hasPrefix("/api/operator/session") && method != "GET"), let shared = await sharedSession(),
+-           shared.origin == baseURL {
+-            for cookie in cookies.cookies ?? [] where cookie.name == "com_moon_operator_session" {
+-                cookies.deleteCookie(cookie)
++        if !desktopSessionAvailable, !(path.hasPrefix("/api/operator/session") && method != "GET") {
++            let shared = await sharedSession()
++            // A bridge read may finish after disconnect/sign-out. Reject it
++            // before importing its cookie or sending the original request.
++            guard generation == sessionGeneration else { throw CancellationError() }
++            try Task.checkCancellation()
++            if let shared, shared.origin == baseURL {
++                for cookie in cookies.cookies ?? [] where cookie.name == "com_moon_operator_session" {
++                    cookies.deleteCookie(cookie)
++                }
++                guard let value = shared.cookie else { throw HubTransportError.unauthorized }
++                let header = "com_moon_operator_session=\(value); Path=/; HttpOnly" + (baseURL.scheme == "https" ? "; Secure" : "")
++                cookies.setCookies(HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": header], for: baseURL),
++                                   for: baseURL, mainDocumentURL: baseURL)
+             }
+-            guard let value = shared.cookie else { throw HubTransportError.unauthorized }
+-            let header = "com_moon_operator_session=\(value); Path=/; HttpOnly" + (baseURL.scheme == "https" ? "; Secure" : "")
+-            cookies.setCookies(HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": header], for: baseURL),
+-                               for: baseURL, mainDocumentURL: baseURL)
+         }
+         let selectedSession = sessionForRequest(path: path, method: method)
+         var request = URLRequest(url: url, timeoutInterval: selectedSession.configuration.timeoutIntervalForRequest)
+@@ -407,11 +413,15 @@ actor HubTransport: HubTransporting {
+ 
+     private func syncDesktopSession() async throws {
+         let generation = sessionGeneration
+-        guard let shared = await desktopSession?.read(origin: origin), shared.origin == origin else {
++        let shared = await desktopSession?.read(origin: origin)
++        // Unavailable and foreign-origin reads are asynchronous too; neither
++        // may let an operation from a discarded connection continue.
++        guard generation == sessionGeneration else { throw CancellationError() }
++        try Task.checkCancellation()
++        guard let shared, shared.origin == origin else {
+             desktopSessionAvailable = false
+             return
+         }
+-        guard generation == sessionGeneration else { throw CancellationError() }
+         desktopSessionAvailable = true
+         if let saved = shared.session, saved.isValid {
+             if cookies.cookies(for: baseURL)?.first(where: { $0.name == "com_moon_operator_session" })?.value != saved.value {
+diff --git a/prototypes/moonlight-pet-macos/Tests/MoonlightPetPreviewTests/HubTransportTests.swift b/prototypes/moonlight-pet-macos/Tests/MoonlightPetPreviewTests/HubTransportTests.swift
+index 2c1db90d..0bf1e68f 100644
+--- a/prototypes/moonlight-pet-macos/Tests/MoonlightPetPreviewTests/HubTransportTests.swift
++++ b/prototypes/moonlight-pet-macos/Tests/MoonlightPetPreviewTests/HubTransportTests.swift
+@@ -192,6 +192,69 @@ struct HubTransportTests {
+         _ = try await client.request(path: "/api/hub/tasks")
+     }
+ 
++    func testSharedSessionPreflightCannotSendAfterDisconnectOrSignOut() async throws {
++        let origin = URL(string: "https://hub.example.test")!
++        let snapshots: [HubSharedSession?] = [nil,
++            HubSharedSession(origin: URL(string: "https://other.example.test")!, cookie: "other.signature"),
++            HubSharedSession(origin: origin, cookie: "previous.signature")]
++        for forget in [false, true] {
++            for snapshot in snapshots {
++                let gate = HeldSessionRead(snapshot)
++                let configuration = URLSessionConfiguration.ephemeral
++                configuration.protocolClasses = [TransportURLProtocol.self]
++                let client = try HubTransport(baseURL: origin, configuration: configuration,
++                    credentialStore: MemoryHubCredentials(), sharedSession: { await gate.read() })
++                var requests = 0
++                TransportURLProtocol.handler = { _, response in
++                    requests += 1
++                    response.respond(json: "{\"status\":\"live\"}")
++                }
++                let pending = Task { try await client.request(path: "/api/hub/journal", method: "POST", body: Data("{}".utf8)) }
++                while !(await gate.started) { await Task.yield() }
++                if forget { try await client.clearSession() } else { await client.disconnect() }
++                await gate.release()
++                do { _ = try await pending.value; recordFailure("An invalidated preflight must cancel before sending") }
++                catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
++                expectEqual(requests, 0)
++                TransportURLProtocol.handler = { request, response in
++                    expectNil(request.value(forHTTPHeaderField: "Cookie"))
++                    response.respond(json: "{\"status\":\"live\"}")
++                }
++                _ = try await client.request(path: "/api/hub/tasks")
++            }
++        }
++    }
++
++    func testDesktopPreflightCannotSendAfterDisconnectOrSignOut() async throws {
++        let origin = "https://hub.example.test"
++        let saved = HubSavedSession(value: "previous.signature", expiresAt: Date().timeIntervalSince1970 + 86400)
++        let snapshots: [HubDesktopSession?] = [nil,
++            HubDesktopSession(origin: "https://other.example.test", session: saved),
++            HubDesktopSession(origin: origin, session: saved)]
++        for forget in [false, true] {
++            for snapshot in snapshots {
++                let gate = HeldSessionRead(snapshot)
++                let configuration = URLSessionConfiguration.ephemeral
++                configuration.protocolClasses = [TransportURLProtocol.self]
++                let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration,
++                    credentialStore: MemoryHubCredentials(), desktopSession: HeldDesktopSession(gate: gate),
++                    sharedSession: { nil })
++                var requests = 0
++                TransportURLProtocol.handler = { _, response in
++                    requests += 1
++                    response.respond(json: "{\"status\":\"live\"}")
++                }
++                let pending = Task { try await client.request(path: "/api/hub/journal", method: "POST", body: Data("{}".utf8)) }
++                while !(await gate.started) { await Task.yield() }
++                if forget { try await client.clearSession() } else { await client.disconnect() }
++                await gate.release()
++                do { _ = try await pending.value; recordFailure("An invalidated desktop preflight must not send") }
++                catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
++                expectEqual(requests, 0)
++            }
++        }
++    }
++
+     func testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials() async throws {
+         for forget in [false, true] {
+             let store = MemoryHubCredentials()
+@@ -657,6 +720,30 @@ private final class TestFailures: @unchecked Sendable {
+ }
+ private let testFailures = TestFailures()
+ 
++private actor HeldSessionRead<Value: Sendable> {
++    private let snapshot: Value?
++    private var continuation: CheckedContinuation<Value?, Never>?
++    private var released = false
++    private(set) var started = false
++    init(_ snapshot: Value?) { self.snapshot = snapshot }
++    func read() async -> Value? {
++        if released { return nil }
++        started = true
++        return await withCheckedContinuation { continuation = $0 }
++    }
++    func release() {
++        released = true
++        continuation?.resume(returning: snapshot)
++        continuation = nil
++    }
++}
++
++private struct HeldDesktopSession: HubDesktopSessionSharing {
++    let gate: HeldSessionRead<HubDesktopSession>
++    func read(origin: String) async -> HubDesktopSession? { await gate.read() }
++    func write(_ session: HubSavedSession?, origin: String) async {}
++}
++
+ private actor MemoryDesktopSession: HubDesktopSessionSharing {
+     private var snapshot: HubDesktopSession?
+     func set(_ value: HubDesktopSession?) { snapshot = value }
+@@ -696,6 +783,8 @@ private struct HubTransportTestRunner {
+             ("rejected credentials are neither saved nor retried forever", tests.testRejectedLoginNeverReplacesAcceptedCredentialsOrLoops),
+             ("uncertain writes and model generation never replay", tests.testUncertainWritesAndModelGenerationAreNeverAutomaticallyReplayed),
+             ("late responses cannot restore logout cookies", tests.testLateResponseCannotRestoreCookiesAfterSignOut),
++            ("shared bridge preflight cannot send after disconnect/sign-out", tests.testSharedSessionPreflightCannotSendAfterDisconnectOrSignOut),
++            ("desktop bridge preflight cannot send after disconnect/sign-out", tests.testDesktopPreflightCannotSendAfterDisconnectOrSignOut),
+             ("disconnect cancels authentication without losing origin credentials", tests.testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials),
+             ("concurrent reads share automatic login", tests.testSimultaneousReadsShareOneAutomaticLogin),
+             ("expired session renews without changing memo", tests.testExpiredSessionAuthenticatesOnceAndReplaysIdenticalMemoCommand),
+diff --git a/apps/desktop/hub-session-snapshot.test.js b/apps/desktop/hub-session-snapshot.test.js
+new file mode 100644
+index 00000000..658dc79f
+--- /dev/null
++++ b/apps/desktop/hub-session-snapshot.test.js
+@@ -0,0 +1,184 @@
++'use strict';
++// Executes the JS Unix-socket protocol on Linux/macOS with an in-memory cookie
++// double. It does not exercise Electron, native login, Keychain, or Swift.
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const fs = require('node:fs/promises');
++const net = require('node:net');
++const { EventEmitter } = require('node:events');
++const { startHubSessionBridge } = require('./hub-session-bridge');
++
++const origin = 'https://hub.example.test';
++const cookieName = 'com_moon_operator_session';
++const originalSession = { value: 'previous.signature', expiresAt: Date.now() / 1000 + 3600 };
++const nextSession = { value: 'renewed.signature', expiresAt: originalSession.expiresAt };
++const socketOptions = { skip: process.platform === 'win32', timeout: 5000 };
++
++function deferred() {
++  let resolve;
++  const promise = new Promise((done) => { resolve = done; });
++  return { promise, resolve };
++}
++
++function exchange(socketPath, value = { action: 'read', origin }) {
++  return new Promise((resolve, reject) => {
++    const socket = net.createConnection(socketPath);
++    let body = '';
++    socket.on('connect', () => socket.write(`${JSON.stringify(value)}\n`));
++    socket.on('data', (chunk) => { body += chunk; });
++    socket.on('end', () => {
++      try { resolve(JSON.parse(body)); } catch (error) { reject(error); }
++    });
++    socket.on('error', reject);
++  });
++}
++
++async function createBridge(t) {
++  const directory = await fs.mkdtemp('/tmp/moonlight-session-snapshot-');
++  const cookies = new EventEmitter();
++  let current;
++  const replace = (value) => {
++    current = value ? { name: cookieName, value: value.value, expirationDate: value.expiresAt,
++      domain: 'hub.example.test', path: '/' } : null;
++  };
++  replace(originalSession);
++  cookies.get = async () => current ? [current] : [];
++  cookies.set = async (value) => replace({ value: value.value, expiresAt: value.expirationDate });
++  cookies.remove = async () => replace(null);
++  cookies.flushStore = async () => {};
++  const changed = (value, cause = 'explicit', name = cookieName, domain = 'hub.example.test') => {
++    if (name === cookieName && domain === 'hub.example.test') replace(value);
++    cookies.emit('changed', {}, { name, domain, path: '/' }, cause, value === null);
++  };
++  const bridge = await startHubSessionBridge({ directory, session: { cookies }, getHubUrl: () => origin });
++  t.after(() => bridge.close()); // Retain the isolated temporary directory; no recursive removal.
++  return { bridge, cookies, changed };
++}
++
++async function holdFirstRead(cookies) {
++  const read = cookies.get;
++  const began = deferred(), release = deferred();
++  let reads = 0;
++  cookies.get = async (...args) => {
++    reads++;
++    const snapshot = await read(...args);
++    if (reads === 1) { began.resolve(); await release.promise; }
++    return snapshot;
++  };
++  return { began: began.promise, release: release.resolve, reads: () => reads };
++}
++
++test('session snapshot discards a prior cookie when logout arrives during lookup', socketOptions, async (t) => {
++  const { bridge, cookies, changed } = await createBridge(t);
++  const gate = await holdFirstRead(cookies);
++  const pending = exchange(bridge.socketPath);
++  await gate.began;
++  changed(null);
++  gate.release();
++  assert.deepEqual(await pending, { origin, session: null, signedOut: true });
++  const login = await exchange(bridge.socketPath, { action: 'write', origin, session: nextSession });
++  assert.deepEqual(login, { origin, session: nextSession, signedOut: false });
++});
++
++test('session snapshot rereads after logout then login instead of exporting the older cookie', socketOptions, async (t) => {
++  const { bridge, cookies, changed } = await createBridge(t);
++  const gate = await holdFirstRead(cookies);
++  const pending = exchange(bridge.socketPath);
++  await gate.began;
++  changed(null);
++  changed(nextSession);
++  gate.release();
++  assert.deepEqual(await pending, { origin, session: nextSession, signedOut: false });
++  assert.equal(gate.reads(), 2);
++});
++
++test('session snapshot preserves natural expiry without inventing explicit logout', socketOptions, async (t) => {
++  const { bridge, cookies, changed } = await createBridge(t);
++  const gate = await holdFirstRead(cookies);
++  const pending = exchange(bridge.socketPath);
++  await gate.began;
++  changed(null, 'expired');
++  gate.release();
++  assert.deepEqual(await pending, { origin, session: null, signedOut: false });
++  assert.equal(gate.reads(), 2);
++});
++
++test('session snapshot bounds repeated rotation and recovers on the next stable read', socketOptions, async (t) => {
++  const { bridge, cookies, changed } = await createBridge(t);
++  const read = cookies.get;
++  let reads = 0;
++  cookies.get = async (...args) => {
++    reads++;
++    const snapshot = await read(...args);
++    changed(reads === 1 ? nextSession : originalSession);
++    return snapshot;
++  };
++  assert.deepEqual(await exchange(bridge.socketPath), { error: 'rejected' });
++  assert.equal(reads, 2);
++  cookies.get = read;
++  assert.deepEqual(await exchange(bridge.socketPath), { origin, session: originalSession, signedOut: false });
++});
++
++test('session snapshot observes a concurrent bridge write even without a cookie event', socketOptions, async (t) => {
++  const { bridge, cookies } = await createBridge(t);
++  const gate = await holdFirstRead(cookies);
++  const pending = exchange(bridge.socketPath);
++  await gate.began;
++  assert.deepEqual(await exchange(bridge.socketPath, { action: 'write', origin, session: nextSession }),
++    { origin, session: nextSession, signedOut: false });
++  gate.release();
++  assert.deepEqual(await pending, { origin, session: nextSession, signedOut: false });
++});
++
++test('session snapshot ignores unrelated cookie changes', socketOptions, async (t) => {
++  const { bridge, cookies, changed } = await createBridge(t);
++  const gate = await holdFirstRead(cookies);
++  const pending = exchange(bridge.socketPath);
++  await gate.began;
++  changed(null, 'explicit', 'unrelated_cookie');
++  changed(null, 'explicit', cookieName, 'other.example.test');
++  gate.release();
++  assert.deepEqual(await pending, { origin, session: originalSession, signedOut: false });
++  assert.equal(gate.reads(), 1);
++});
++
++test('session snapshots begun before or during a pending login reject until the cookie write settles', socketOptions, async (t) => {
++  const { bridge, cookies } = await createBridge(t);
++  const readGate = await holdFirstRead(cookies);
++  const earlierRead = exchange(bridge.socketPath);
++  await readGate.began;
++  const set = cookies.set;
++  const beganSet = deferred(), releaseSet = deferred();
++  cookies.set = async (...args) => { beganSet.resolve(); await releaseSet.promise; await set(...args); };
++  const writing = exchange(bridge.socketPath, { action: 'write', origin, session: nextSession });
++  await beganSet.promise;
++  const duringRead = await exchange(bridge.socketPath);
++  readGate.release();
++  const earlierResponse = await earlierRead;
++  releaseSet.resolve();
++  assert.deepEqual(await writing, { origin, session: nextSession, signedOut: false });
++  assert.deepEqual(duringRead, { error: 'rejected' });
++  assert.deepEqual(earlierResponse, { error: 'rejected' });
++  assert.deepEqual(await exchange(bridge.socketPath), { origin, session: nextSession, signedOut: false });
++});
++
++test('session snapshot retains all overlapping write reservations and clears failed writes', socketOptions, async (t) => {
++  const { bridge, cookies } = await createBridge(t);
++  const set = cookies.set;
++  const beganSet = deferred(), releaseSet = deferred();
++  let writes = 0;
++  cookies.set = async (...args) => {
++    writes++;
++    if (writes === 1) { beganSet.resolve(); await releaseSet.promise; throw new Error('Isolated write failure'); }
++    await set(...args);
++  };
++  const firstWrite = exchange(bridge.socketPath, { action: 'write', origin, session: originalSession });
++  await beganSet.promise;
++  const secondWrite = await exchange(bridge.socketPath, { action: 'write', origin, session: nextSession });
++  const duringRead = await exchange(bridge.socketPath);
++  releaseSet.resolve();
++  assert.deepEqual(await firstWrite, { error: 'rejected' });
++  assert.deepEqual(secondWrite, { error: 'rejected' });
++  assert.deepEqual(duringRead, { error: 'rejected' });
++  assert.deepEqual(await exchange(bridge.socketPath), { origin, session: nextSession, signedOut: false });
++});
+diff --git a/apps/desktop/pet/main/pet-hub-cancellation.test.js b/apps/desktop/pet/main/pet-hub-cancellation.test.js
+new file mode 100644
+index 00000000..4292e034
+--- /dev/null
++++ b/apps/desktop/pet/main/pet-hub-cancellation.test.js
+@@ -0,0 +1,157 @@
++'use strict';
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const { createPetHub } = require('./pet-hub');
++
++const origin = 'https://hub.example.test';
++const question = { ownerId: 'eevee', scope: 'personal', message: '준비를 기다리던 질문' };
++function deferred() {
++  let resolve;
++  const promise = new Promise(done => { resolve = done; });
++  return { promise, resolve };
++}
++const tick = () => new Promise(resolve => setImmediate(resolve));
++function response(body, answer = '확인한 답변') {
++  return new Response(JSON.stringify({ status: 'generated', version: '2026-09-22.v3',
++    ownerId: body.ownerId, scope: body.scope, mode: 'chat', lens: null, simulation: false,
++    participants: [], answer, nextAction: '검토하기', context: { source: 'provided', scope: body.scope, projects: [], note: '입력 기준' },
++    log: { persisted: false, runId: null }, businessWrites: false }));
++}
++function harness(t, { holdReplies = false } = {}) {
++  const ready = deferred();
++  const calls = [], replies = [], events = [];
++  const hub = createPetHub({ origin,
++    store: { get: async key => { if (key === `petHub.pending.v1.${origin}`) await ready.promise; return null; }, set: async () => {} },
++    onEvent: (name, payload) => events.push({ name, payload }),
++    fetch: async (url, init) => {
++      const body = init.body ? JSON.parse(init.body) : null;
++      calls.push({ url, method: init.method, body, signal: init.signal });
++      if (init.method !== 'POST') return new Response(JSON.stringify({ status: 'anonymous', configured: true }));
++      if (!holdReplies) return response(body);
++      const gate = deferred(); replies.push({ gate, body });
++      return gate.promise;
++    },
++  });
++  t.after(() => { ready.resolve(); for (const entry of replies) entry.gate.resolve(response(entry.body)); hub.dispose(); });
++  return { hub, ready, calls, replies, events };
++}
++const posts = calls => calls.filter(call => call.method === 'POST');
++
++test('cancel during connection preparation invalidates the queued send before any POST', async t => {
++  const { hub, ready, calls } = harness(t);
++  const pending = hub.chatSend(question);
++  const cancelled = await hub.chatCancel();
++  ready.resolve();
++  const result = await pending;
++  assert.deepEqual({ cancelled: cancelled.data.cancelled, error: result.error, posts: posts(calls).length },
++    { cancelled: true, error: 'cancelled', posts: 0 });
++});
++
++test('repeated cancel is idempotent and an explicit replacement send may start before preparation completes', async t => {
++  const { hub, ready, calls } = harness(t);
++  const old = hub.chatSend(question);
++  const first = await hub.chatCancel();
++  const repeated = await hub.chatCancel();
++  const newer = hub.chatSend({ ...question, message: '명시적으로 다시 보낸 질문' });
++  ready.resolve();
++  const [oldResult, newResult] = await Promise.all([old, newer]);
++  assert.equal(first.data.cancelled, true);
++  assert.equal(repeated.data.cancelled, false);
++  assert.equal(oldResult.error, 'cancelled');
++  assert.equal(newResult.kind, 'live');
++  assert.deepEqual(posts(calls).map(call => call.body.message), ['명시적으로 다시 보낸 질문']);
++  assert.equal((await hub.chatCancel()).data.cancelled, false);
++});
++
++test('one send reservation covers preparation as well as the network request', async t => {
++  const { hub, ready, calls } = harness(t);
++  const first = hub.chatSend(question);
++  let duplicate;
++  const second = hub.chatSend({ ...question, message: '중복 클릭' }).then(value => { duplicate = value; return value; });
++  await tick();
++  const rejectedBeforeReady = duplicate?.error;
++  ready.resolve();
++  await Promise.all([first, second]);
++  assert.equal(rejectedBeforeReady, 'busy');
++  assert.equal(posts(calls).length, 1);
++});
++
++test('an old queued completion cannot clear or cancel the newer in-flight request', async t => {
++  const { hub, ready, calls, replies } = harness(t, { holdReplies: true });
++  const old = hub.chatSend(question);
++  await hub.chatCancel();
++  const newer = hub.chatSend({ ...question, message: '새로 보낸 질문' });
++  ready.resolve();
++  await tick();
++  // Release all transport gates so the pre-fix reproduction cannot hang.
++  const oldRace = await Promise.race([old, Promise.resolve(null)]);
++  const state = await hub.chatSession(question);
++  const duplicate = hub.chatSend({ ...question, message: '진행 중 중복' });
++  const cancelled = await hub.chatCancel();
++  for (const entry of replies) entry.gate.resolve(response(entry.body, '늦은 답변'));
++  const [oldResult, newResult, duplicateResult] = await Promise.all([old, newer, duplicate]);
++  assert.equal(oldRace?.error, 'cancelled');
++  assert.equal(oldResult.error, 'cancelled');
++  assert.equal(state.data.busyWith.message, '새로 보낸 질문');
++  assert.equal(duplicateResult.error, 'busy');
++  assert.equal(cancelled.data.cancelled, true);
++  assert.equal(newResult.error, 'cancelled');
++  assert.deepEqual(posts(calls).map(call => call.body.message), ['새로 보낸 질문']);
++  assert.deepEqual((await hub.chatSession(question)).data.turns, []);
++});
++
++test('origin replacement releases old preparation reservation without waiting for old storage', async t => {
++  const { hub, ready, calls } = harness(t);
++  const old = hub.chatSend(question);
++  await hub.setOrigin('https://replacement.example.test');
++  const newer = await hub.chatSend({ ...question, message: '새 허브 질문' });
++  ready.resolve();
++  assert.equal((await old).error, 'stale-origin');
++  assert.equal(newer.kind, 'live');
++  assert.deepEqual(posts(calls).map(call => new URL(call.url).origin), ['https://replacement.example.test']);
++});
++
++test('same-origin session replacement invalidates the old reservation and admits an explicit new send', async t => {
++  const { hub, ready, calls } = harness(t);
++  const old = hub.chatSend(question);
++  const changed = hub.sessionChanged();
++  const newer = hub.chatSend({ ...question, message: '새 세션 질문' });
++  ready.resolve();
++  const [oldResult, newResult] = await Promise.all([old, newer, changed]);
++  assert.equal(oldResult.error, 'stale-origin');
++  assert.equal(newResult.kind, 'live');
++  assert.deepEqual(posts(calls).map(call => call.body.message), ['새 세션 질문']);
++});
++
++test('dispose invalidates queued sends and leaves no cancellable reservation', async t => {
++  const { hub, ready, calls } = harness(t);
++  const old = hub.chatSend(question);
++  hub.dispose();
++  const cancelled = await hub.chatCancel();
++  ready.resolve();
++  assert.equal((await old).error, 'stale-origin');
++  assert.equal(cancelled.data.cancelled, false);
++  assert.equal(posts(calls).length, 0);
++});
++
++test('in-flight cancellation keeps abort behavior and ignores a late reply after a new send', async t => {
++  const { hub, ready, calls, replies, events } = harness(t, { holdReplies: true });
++  ready.resolve();
++  const old = hub.chatSend(question);
++  await tick();
++  const cancelled = await hub.chatCancel();
++  const newer = hub.chatSend({ ...question, message: '취소 후 새 질문' });
++  await tick();
++  replies[0].gate.resolve(response(replies[0].body, '취소된 늦은 답'));
++  const oldResult = await old;
++  const busy = (await hub.chatSession(question)).data.busy;
++  replies[1].gate.resolve(response(replies[1].body, '새 요청의 답'));
++  const newerResult = await newer;
++  assert.equal(cancelled.data.cancelled, true);
++  assert.equal(posts(calls)[0].signal.aborted, true);
++  assert.equal(oldResult.error, 'cancelled');
++  assert.equal(busy, true);
++  assert.equal(newerResult.data.turn.text, '새 요청의 답');
++  assert.deepEqual(events.filter(entry => entry.name === 'pet:chat-reply').map(entry => entry.payload.turn.text), ['새 요청의 답']);
++  assert.deepEqual((await hub.chatSession(question)).data.turns.map(turn => turn.text), ['취소 후 새 질문', '새 요청의 답']);
++});
+diff --git a/apps/desktop/pet/main/pet-hub-generation.test.js b/apps/desktop/pet/main/pet-hub-generation.test.js
+new file mode 100644
+index 00000000..c1e0ab67
+--- /dev/null
++++ b/apps/desktop/pet/main/pet-hub-generation.test.js
+@@ -0,0 +1,52 @@
++'use strict';
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const { createPetHub } = require('./pet-hub');
++
++const question = { ownerId: 'eevee', scope: 'personal', message: '이전 연결에서 시작한 질문' };
++
++function harness(t) {
++  const calls = [];
++  const hub = createPetHub({
++    origin: 'https://original.example.test',
++    fetch: async (url, init) => {
++      calls.push({ url, method: init.method });
++      return new Response(JSON.stringify({ status: 'error' }), { status: 503 });
++    },
++  });
++  t.after(() => hub.dispose());
++  return { hub, calls };
++}
++
++test('queued Council send never follows an origin replacement', async (t) => {
++  const { hub, calls } = harness(t);
++  const queued = hub.chatSend(question);
++  await hub.setOrigin('https://replacement.example.test');
++  assert.equal((await queued).error, 'stale-origin');
++  assert.deepEqual(calls, [], 'the old question must not reach the replacement Hub');
++});
++
++test('queued Council send never follows a same-origin session replacement', async (t) => {
++  const { hub, calls } = harness(t);
++  const queued = hub.chatSend(question);
++  await hub.sessionChanged();
++  assert.equal((await queued).error, 'stale-origin');
++  assert.equal(calls.filter(call => call.method === 'POST').length, 0,
++    'a replacement session may probe but cannot inherit an old send');
++});
++
++test('disposing the connection invalidates a queued Council send', async (t) => {
++  const { hub, calls } = harness(t);
++  const queued = hub.chatSend(question);
++  hub.dispose();
++  assert.equal((await queued).error, 'stale-origin');
++  assert.deepEqual(calls, []);
++});
++
++test('queued polling never reads a replacement origin before its own poll', async (t) => {
++  const { hub, calls } = harness(t);
++  const queued = hub.tick();
++  await hub.setOrigin('https://replacement.example.test');
++  assert.equal((await queued).skipped, true);
++  assert.deepEqual(calls, [], 'an invalidated tick must not read from the new connection');
++});
+diff --git a/apps/desktop/pet/renderer/office-recovery.test.js b/apps/desktop/pet/renderer/office-recovery.test.js
+new file mode 100644
+index 00000000..d7ff3d41
+--- /dev/null
++++ b/apps/desktop/pet/renderer/office-recovery.test.js
+@@ -0,0 +1,134 @@
++'use strict';
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const vm = require('node:vm');
++const { randomUUID } = require('node:crypto');
++const { createHubClient } = require('../main/pet-hub-client');
++const { createPetHub } = require('../main/pet-hub');
++const { createHubBridge } = require('../main/pet-hub-bridge');
++const C = require('../shared/contract');
++const envelope = require('./model/envelope-view');
++const flush = () => new Promise(resolve => setImmediate(resolve));
++const rejected = error => ({ status: 409, body: { status: 'conflict', error, persisted: false } });
++
++async function setup(t, firstReply) {
++  const elements = [], segments = [], requests = [], stored = new Map(), timers = new Set();
++  const store = {
++    get: async key => structuredClone(stored.get(key)),
++    set: async (key, value) => { stored.set(key, structuredClone(value)); return { ok: true }; },
++  };
++  let detail;
++  const hub = createPetHub({ origin: 'https://hub.example.test', store,
++    setTimeout: fn => { const timer = { fn }; timers.add(timer); return timer; }, clearTimeout: timer => timers.delete(timer),
++    fetch: async (url, init) => {
++    const route = new URL(url).pathname, input = init.body ? JSON.parse(init.body) : null;
++    requests.push({ route, method: init.method, input });
++    const reply = body => new Response(JSON.stringify(body), { status: 200 });
++    if (route === '/api/hub/office/inbox') return reply({ status: 'ready', source: 'live', items: [], hasMore: false, nextCursor: null });
++    if (route === '/api/hub/office/meetings' && init.method === 'GET') return reply({ status: 'ready', meetings: detail ? [detail.meeting] : [], nextCursor: null });
++    if (route === '/api/hub/office/meetings' && init.method === 'POST') {
++      detail = { status: 'ready', persisted: true, meeting: { meetingId: input.meetingId, title: input.title, scope: input.scope,
++        ownerId: input.ownerId, reviewers: [], mode: 'chat', revision: 1, state: 'open',
++        createdAt: '2026-10-19T00:00:00Z', updatedAt: '2026-10-19T00:00:00Z' }, turns: [] };
++      return reply(detail);
++    }
++    if (route.endsWith('/turns')) {
++      if (firstReply) {
++        const response = firstReply; firstReply = null;
++        detail.meeting.revision = 2;
++        if (response.body?.error === 'meeting-closed') detail.meeting.state = 'closed';
++        if (response.timeout) { for (const timer of timers) timer.fn(); throw new Error('isolated timeout'); }
++        if (response.offline) throw new Error('isolated response lost');
++        return new Response(JSON.stringify(response.body), { status: response.status });
++      }
++      detail = { ...detail, status: 'generated', turns: [{ id: input.requestId, roundNumber: 1, state: 'generated',
++        request: { message: input.message, ownerId: 'eevee', mode: 'chat' },
++        result: { scope: 'personal', ownerId: 'eevee', mode: 'chat', answer: '확인된 답변', nextAction: '검토하기' } }] };
++      return reply(detail);
++    }
++    if (detail && route.endsWith(`/${detail.meeting.meetingId}`)) return reply({ ...detail, status: 'ready' });
++    throw new Error(`Unexpected isolated request: ${route}`);
++  } });
++  function element(tag, attrs = {}, ...children) {
++    const el = { tag, children: [], value: '', disabled: false, hidden: false, classList: { toggle() {} },
++      append(...next) { this.children.push(...next.filter(Boolean)); }, querySelector() { return null; },
++      querySelectorAll() { return []; }, remove() {}, focus() {}, addEventListener() {}, ...attrs };
++    el.textContent = attrs.text || ''; el.append(...children); elements.push(el); return el;
++  }
++  const U = { h: element, clear: el => { el.children = []; return el; },
++    segmented: (_items, _value, change) => { const el = element('nav'); el.select = () => {}; el.choose = change; segments.push(el); return el; },
++    quiet: (text, options = {}) => element('button', { text, ...options }),
++    action: (text, options = {}) => element('button', { text, ...options }),
++    notice: view => element('div', { text: view.message }), skeleton: () => element('div'), clock: () => '12:00' };
++  const context = { window: {}, crypto: { randomUUID }, setInterval: () => 1, clearInterval() {}, navigator: {} };
++  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'modes/office.js'), 'utf8'), context);
++  const surface = context.window.PetModes.office.create({ B: { store, invoke: createHubBridge(() => hub) }, U, C,
++    M: { platform: { isMac: () => false }, envelope }, state: { hubUrl: hub.origin, hubStatus: 'connected', character: 'brown' },
++    openHub() {}, handleAction() {}, isShown: () => true });
++  t.after(() => { surface.destroy(); hub.dispose(); });
++  await flush(); segments[0].choose('chat'); await flush();
++  const editor = elements.find(el => el.tag === 'textarea');
++  editor.value = '충돌 뒤에도 보존할 질문';
++  await surface.primary(); await flush();
++  return { surface, editor, stored, sends: () => requests.filter(req => req.route.endsWith('/turns')) };
++}
++
++for (const code of ['meeting-revision-changed', 'meeting-closed']) {
++  test(`verified preclaim ${code} releases only the unsent pending command`, async t => {
++    const state = await setup(t, rejected(code));
++    assert.equal(state.stored.get('petOffice.pending'), null);
++    assert.equal(state.editor.value, '충돌 뒤에도 보존할 질문');
++    assert.equal(state.sends().length, 1, 'no automatic resend after rejection');
++    await state.surface.primary();
++    assert.equal(state.sends().length, 1, 'refresh is required before another explicit send');
++    await state.surface.refresh(); await flush();
++    assert.equal(state.sends().length, 1, 'GET recovery does not generate a turn');
++    if (code === 'meeting-closed') {
++      assert.equal(state.editor.disabled, true, 'closed meeting remains read-only');
++      await state.surface.primary();
++      assert.equal(state.sends().length, 1);
++    } else {
++      assert.equal(state.editor.disabled, false);
++      await state.surface.primary();
++      assert.equal(state.sends().length, 2);
++      assert.notEqual(state.sends()[0].input.requestId, state.sends()[1].input.requestId);
++      assert.equal(state.sends()[1].input.expectedRevision, 2);
++      assert.equal(state.editor.value, '', 'only verified generated result clears the draft');
++    }
++  });
++}
++
++for (const [name, reply] of [
++  ['unclassified conflict', rejected('conflict')],
++  ['reused request ID', rejected('meeting-request-id-reused')],
++  ['missing persistence assertion', { status: 409, body: { status: 'conflict', error: 'meeting-revision-changed' } }],
++  ['contradictory persistence', { status: 409, body: { ...rejected('meeting-revision-changed').body, persisted: true } }],
++  ['conflict with existing receipt', { status: 409, body: { ...rejected('meeting-revision-changed').body, turn: { id: randomUUID() } } }],
++  ['unknown claim outcome', { status: 202, body: { status: 'unknown', error: 'office-meeting-outcome-unknown', persisted: null } }],
++  ['server failure', { status: 502, body: { status: 'error', persisted: false } }],
++  ['lost response', { offline: true }],
++  ['timeout', { timeout: true }],
++  ['preview before generation', { status: 202, body: { status: 'preview', error: 'office-engine-not-configured', persisted: false } }],
++]) {
++  test(`${name} keeps pending identity and input after GET recovery`, async t => {
++    const state = await setup(t, reply), pending = state.stored.get('petOffice.pending');
++    assert.equal(pending.phase, 'send');
++    await state.surface.refresh(); await flush();
++    assert.deepEqual(state.stored.get('petOffice.pending'), pending);
++    assert.equal(state.editor.value, '충돌 뒤에도 보존할 질문');
++    assert.equal(state.editor.disabled, true);
++    await state.surface.primary();
++    assert.equal(state.sends().length, 1);
++  });
++}
++
++test('preclaim classification is restricted to the exact Office turn POST contract', async () => {
++  const id = randomUUID(), exact = `/api/hub/office/meetings/${id}/turns`;
++  for (const [route, method, code] of [[exact, 'POST', 'meeting-revision-changed'], [exact, 'GET', 'conflict'],
++    [exact + '?retry=1', 'POST', 'conflict'], ['/api/hub/journal', 'POST', 'conflict']]) {
++    const client = createHubClient({ origin: 'https://hub.example.test', fetch: async () => new Response(JSON.stringify(rejected('meeting-revision-changed').body), { status: 409 }) });
++    await assert.rejects(client.request(route, { method, body: { requestId: randomUUID() } }), error => error.kind === 'conflict' && error.error === code);
++  }
++});
+diff --git a/apps/hub/lib/office/engine-client-retry.test.mjs b/apps/hub/lib/office/engine-client-retry.test.mjs
+new file mode 100644
+index 00000000..1801bf63
+--- /dev/null
++++ b/apps/hub/lib/office/engine-client-retry.test.mjs
+@@ -0,0 +1,49 @@
++import assert from 'node:assert/strict';
++import { test } from 'node:test';
++import { OFFICE_VERSION, parseOfficeRequest } from '@com-moon/agent-contracts/office';
++import { callOfficeEngine } from './engine-client.js';
++
++const request = parseOfficeRequest({ ownerId: 'eevee', scope: 'personal', message: '입력 검토' });
++const context = { source: 'provided', scope: 'personal', projects: [], note: '직접 입력만 참고' };
++const generated = { status: 'generated', version: OFFICE_VERSION, ownerId: request.ownerId, mode: request.mode,
++  scope: request.scope, participants: [], lens: null, simulation: false, answer: '검토 내용', nextAction: '직접 확인', context };
++const options = { engineUrl: 'https://engine.invalid', secret: 'isolated-test', retries: 1 };
++
++test('known client rejections do not repeat a generation POST', async () => {
++  for (const status of [400, 401, 403, 404, 409]) {
++    let calls = 0;
++    const result = await callOfficeEngine(request, context, { ...options, fetcher: async () => {
++      calls += 1; return Response.json({ status: 'error' }, { status });
++    } });
++    assert.equal(result.status, 'error');
++    assert.equal(calls, 1, `HTTP ${status} must not be retried`);
++  }
++});
++
++test('a received incompatible answer does not cause another model generation', async () => {
++  for (const body of [
++    { ...generated, version: 'older-policy' },
++    { ...generated, ownerId: 'flareon' },
++    { ...generated, context: { ...context, note: '다른 문맥' } },
++    { ...generated, answer: '' },
++  ]) {
++    let calls = 0;
++    const result = await callOfficeEngine(request, context, { ...options, fetcher: async () => {
++      calls += 1; return Response.json(body);
++    } });
++    assert.equal(result.status, 'error'); assert.equal(calls, 1);
++  }
++});
++
++test('legacy transient gateway and transport retry behavior remains bounded', async () => {
++  for (const failure of [502, 503, 'transport']) {
++    let calls = 0;
++    const result = await callOfficeEngine(request, context, { ...options, fetcher: async () => {
++      calls += 1;
++      if (calls > 1) return Response.json(generated);
++      if (failure === 'transport') throw new TypeError('isolated connection loss');
++      return Response.json({ status: 'error' }, { status: failure });
++    } });
++    assert.equal(result.status, 'generated'); assert.equal(calls, 2);
++  }
++});

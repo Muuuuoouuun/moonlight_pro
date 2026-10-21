@@ -35,3 +35,14 @@ test('no signal action leads to the life-routine Rhythm page or nowhere', () => 
   assert.doesNotMatch(route, /"오늘 보류"|"리마인드 초안"|"Rhythm 보기"/);
   assert.doesNotMatch(route, /work-decision-missing/, '결정 기록 0건을 재촉하는 신호는 의례였다');
 });
+
+// 2026-10-21: 콘텐츠 신호의 `이어쓰기`가 항목 id 없이 Studio를 열어 빈 새 초안이 떴다.
+test('content signals open their own Studio item; new drafts and other records are untouched', async () => {
+  const { withEntityRef, SIGNAL_TARGETS } = await import('./signal-targets.js');
+  const ref = 'content-item-1';
+  assert.equal(withEntityRef(SIGNAL_TARGETS.write, { from: 'Content Queue', ref }), 'dashboard/content/studio?item=content-item-1');
+  assert.equal(withEntityRef(SIGNAL_TARGETS.write, { from: 'Content', ref }), 'dashboard/content/studio?item=content-item-1');
+  assert.equal(withEntityRef(SIGNAL_TARGETS.draft, { from: 'Content Queue', ref }), SIGNAL_TARGETS.draft);
+  assert.equal(withEntityRef(SIGNAL_TARGETS.write, { from: 'Deal', ref }), SIGNAL_TARGETS.write);
+  assert.equal(withEntityRef(SIGNAL_TARGETS.write, { from: 'Content Queue', ref: 'QUEUE' }), SIGNAL_TARGETS.write);
+});
