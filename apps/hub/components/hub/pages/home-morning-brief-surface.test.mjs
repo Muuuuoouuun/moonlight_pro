@@ -10,7 +10,7 @@ const component = existsSync(componentUrl) ? await import(componentUrl.href) : {
 const { HomeMorningBrief } = component;
 
 test('Home places its one morning brief below the tip and before shortcuts', () => {
-  assert.match(source, /<TodaySchedule\b[\s\S]*?<GuidanceInlineTip\b[\s\S]*?<HomeMorningBrief\b[\s\S]*?<footer\b/);
+  assert.match(source, /<GuidanceInlineTip\b[\s\S]*?<TodaySchedule\b[\s\S]*?<HomeMorningBrief\b[\s\S]*?<footer\b/);
   assert.equal((source.match(/<HomeMorningBrief\b/g) || []).length, 1);
 });
 

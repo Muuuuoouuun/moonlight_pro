@@ -122,6 +122,12 @@ function useNavIndicator(regionRef, placementKey) {
     }
     const instant = !shown.current;
     if (instant) indicator.dataset.instant = 'true';
+    // 이동 거리(px)를 싣는다 — depth 층이 거리 비례 시간(--slide-dur)을 계산한다(가까우면 짧게, 멀면 조금 길게).
+    const distance = Math.hypot(row.offsetLeft - (indicator._slideX ?? row.offsetLeft), row.offsetTop - (indicator._slideY ?? row.offsetTop));
+    // 같은 자리로 다시 맞출 때(라우트 확정·크기 관찰)는 진행 중인 미끄러짐의 거리를 지우지 않는다.
+    if (distance > 0) region.style.setProperty('--slide-dist', String(Math.round(distance)));
+    indicator._slideX = row.offsetLeft;
+    indicator._slideY = row.offsetTop;
     indicator.style.width = `${row.offsetWidth}px`;
     indicator.style.height = `${row.offsetHeight}px`;
     indicator.style.transform = `translate(${row.offsetLeft}px, ${row.offsetTop}px)`;
@@ -280,7 +286,6 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
       // 면 색은 .hub-sidebar-futura(hub-futura.css)가 소유한다 — 인라인 background는 그 규칙을 이긴다.
       // 펼친 폭은 셸의 --hub-sidebar-w(경계 드래그로 조절, hub-app.jsx)가 소유한다.
       width: collapsed ? 56 : 'var(--hub-sidebar-w, 232px)', flexShrink: 0,
-      borderRight: '1px solid var(--line-soft)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
     }}>

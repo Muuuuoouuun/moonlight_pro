@@ -11,6 +11,7 @@ import { clearSubmittedQuickTaskDraft, shouldSubmitQuickTask } from '../../../li
 import { QUICK_TASK_RECOVERY_KEY, resetQuickTasks } from '../../../lib/quick-task-recovery.js';
 import { persistDesktopLogout } from '../../../lib/desktop-session-intent.js';
 import { MAX_FOCUS_PER_DAY, focusLimitMessage } from '../../../lib/task-today.js';
+import { buildNowModel } from './my-work-now.jsx';
 const source=readFileSync(new URL('./my-work.jsx',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source.replace(/^import[^\n]+\n/gm,'').replace(/^export /gm,''),{compilerOptions:{jsx:ts.JsxEmit.React,target:ts.ScriptTarget.ES2022}}).outputText;
 const WORK='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',ID='11111111-1111-4111-8111-111111111111';
@@ -36,7 +37,7 @@ function harness(storage,fetchImpl){
   const read={items:[],sources:{tasks:'live',deals:'live',calendar:'live'},projects:[],focusToday:null,state:'ready',reload:async()=>({items:[{lane:'task',entityId:'22222222-2222-4222-8222-222222222222',title:'합성 첫 요청',id:'wrong-row',bucket:'today'}]})};
   const scope={...primitives,...mute,React:hookReact,Iconed,createMyWorkQuickTask,clearSubmittedQuickTaskDraft,shouldSubmitQuickTask,MAX_FOCUS_PER_DAY,focusLimitMessage,
     fetch:fetchImpl,useSearchParams:()=>new URLSearchParams(),useRouter:()=>({replace:noAction}),usePathname:()=>'/dashboard/work/my',useToast:()=>({success:()=>{},error:()=>{}}),
-    useUndoableAction:()=>({schedule:noAction,cancel:noAction}),UNDO_WINDOW_MS:3500,JournalSources:()=>null,MeetingWatchCard:()=>null,TASK_PRIORITY_OPTIONS:[],TASK_STATUS_OPTIONS:[],TASK_OUTCOME:{},
+    useUndoableAction:()=>({schedule:noAction,cancel:noAction}),UNDO_WINDOW_MS:3500,JournalSources:()=>null,MeetingWatchCard:()=>null,MyWorkNow:()=>null,buildNowModel,TASK_PRIORITY_OPTIONS:[],TASK_STATUS_OPTIONS:[],TASK_OUTCOME:{},
     freezeTaskCommand:noAction,saveTaskCommand:noAction,triggerCelebration:noAction,triggerSparkleAt:noAction,requestPersonaChat:noAction,buildMyWorkChecklistToggle:noAction,readMyWorkChecklistReceipt:noAction};
   // read is intentionally passed as a real captured dependency, not a rewritten loader.
   const evaluate=new Function(...Object.keys(scope),'read',`${compiled}\nuseAttentionLedger=()=>read;return MyWork;`)(...Object.values(scope),read);

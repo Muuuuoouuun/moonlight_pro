@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오늘·현황 깊이감 시안</title>
+<style>
+@font-face { font-family: 'SUIT Variable'; src: url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../../apps/hub/public/fonts/JetBrainsMono-Variable.woff2') format('woff2'); font-weight: 100 800; font-display: swap; }
+
+/* ── 깊이 토큰 (Components 5a 라이트 · 8a 다크와 같은 어휘) ───────────── */
+:root, [data-theme="light"] {
+  --page: oklch(0.93 0.006 255);
+  --glow: radial-gradient(110% 70% at 88% -12%, oklch(0.91 0.03 250) 0%, oklch(0.94 0.008 255) 48%, oklch(0.935 0.007 255) 100%);
+  --face: oklch(0.95 0.006 255);
+  --panel-face: oklch(0.978 0.004 255);
+  --face-2: oklch(0.97 0.005 255);
+  --hi: oklch(1 0 0 / .96);
+  --lo: oklch(0.45 0.03 250 / .30);
+  --lo-sm: oklch(0.5 0.02 250 / .24);
+  --rim: inset 0 1px 0 oklch(1 0 0 / .9);
+  --fg: oklch(0.20 0.008 250);
+  --fg-muted: oklch(0.42 0.008 250);
+  --fg-dim: oklch(0.47 0.008 250);
+  --fg-faint: oklch(0.52 0.007 250);
+  --line: oklch(0.80 0.008 250 / .7);
+  --ink: oklch(0.20 0.008 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.31 0.012 250), oklch(0.20 0.008 250));
+  --ink-fg: oklch(0.985 0.003 250);
+  --ink-shadow: -2px -2px 6px oklch(1 0 0 / .8), 4px 6px 12px -3px oklch(0.25 0.05 250 / .5), inset 0 1px 0 oklch(1 0 0 / .18);
+  --moon-300: oklch(0.50 0.06 252);
+  --accent: #5274a8;
+  --danger: oklch(0.55 0.19 25);
+  --danger-line: oklch(0.62 0.16 25 / .8);
+}
+[data-theme="dark"] {
+  --page: oklch(0.16 0.008 252);
+  --glow: radial-gradient(110% 70% at 88% -12%, oklch(0.26 0.035 255) 0%, oklch(0.19 0.012 252) 46%, oklch(0.17 0.008 250) 100%);
+  --face: oklch(0.21 0.010 252);
+  --panel-face: oklch(0.24 0.011 252);
+  --face-2: oklch(0.235 0.011 252);
+  --hi: oklch(1 0 0 / .045);
+  --lo: oklch(0 0 0 / .62);
+  --lo-sm: oklch(0 0 0 / .5);
+  --rim: inset 0 1px 0 oklch(1 0 0 / .08);
+  --fg: oklch(0.94 0.004 250);
+  --fg-muted: oklch(0.76 0.008 250);
+  --fg-dim: oklch(0.68 0.009 250);
+  --fg-faint: oklch(0.62 0.009 250);
+  --line: oklch(0.36 0.01 250 / .7);
+  --ink: oklch(0.92 0.005 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.97 0.004 250), oklch(0.86 0.006 250));
+  --ink-fg: oklch(0.18 0.008 250);
+  --ink-shadow: 0 0 0 1px oklch(1 0 0 / .1), 0 6px 18px -6px oklch(0.85 0.03 250 / .35), inset 0 1px 0 oklch(1 0 0 / .6);
+  --moon-300: oklch(0.78 0.03 252);
+  --danger: oklch(0.70 0.16 25);
+  --danger-line: oklch(0.68 0.16 25 / .8);
+}
+
+/* 상자(패널)는 바탕보다 한 단계 밝은 면 — 안쪽 요소는 같은 면에서 솟는다 */
+.side, .panel, .kpi, .area, .tip { --face: var(--panel-face); }
+
+/* 다크: 어두운 면에선 빛 그림자가 약해 솟음이 묻힌다 — 솟은 요소만 한 단계 밝은 면 + 위쪽 빛 가장자리 */
+[data-theme="dark"] .task, [data-theme="dark"] .search, [data-theme="dark"] .me, [data-theme="dark"] .ev,
+[data-theme="dark"] .chip:not(.chip--in), [data-theme="dark"] .ibtn, [data-theme="dark"] .cell.is-now,
+[data-theme="dark"] .btn:not(.btn--ink):not(.btn--ghost) {
+  background: linear-gradient(180deg, oklch(0.315 0.013 252), oklch(0.28 0.012 252));
+  box-shadow: 0 12px 26px -10px oklch(0 0 0 / .85), 0 3px 6px oklch(0 0 0 / .4), inset 0 1px 0 oklch(1 0 0 / .15), inset 0 0 0 1px oklch(1 0 0 / .04);
+}
+[data-theme="dark"] .task.is-urgent { box-shadow: inset 1px 0 0 var(--danger), 0 12px 26px -10px oklch(0 0 0 / .85), 0 3px 6px oklch(0 0 0 / .4), inset 0 1px 0 oklch(1 0 0 / .15); }
+[data-theme="dark"] .task:hover { background: linear-gradient(180deg, oklch(0.335 0.013 252), oklch(0.30 0.012 252)); }
+[data-theme="dark"] .cell.is-now { outline: 1px solid var(--accent); outline-offset: -1px; }
+[data-theme="dark"] .btn:not(.btn--ink):not(.btn--ghost):active, [data-theme="dark"] .ibtn:active, [data-theme="dark"] .search:active { background: transparent; box-shadow: var(--inset); }
+
+/* 솟은 면 · 낮게 솟은 면 · 눌린 홈 · 잉크 */
+:root {
+  --raised: -7px -7px 18px var(--hi), 10px 13px 30px -8px var(--lo), var(--rim);
+  --raised-sm: -3px -3px 8px var(--hi), 4px 4px 10px -1px var(--lo-sm), var(--rim);
+  --raised-hover: -8px -8px 20px var(--hi), 12px 16px 34px -8px var(--lo), var(--rim);
+  --inset: inset 2px 2px 6px var(--lo-sm), inset -2px -2px 6px var(--hi);
+  --inset-deep: inset 3px 3px 9px var(--lo-sm), inset -3px -3px 9px var(--hi);
+  --dur-hover: 120ms; --dur-enter: 200ms; --dur-panel: 180ms;
+  --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-spring: cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+* { box-sizing: border-box; }
+html { background: var(--page); }
+body { margin: 0; font-family: 'SUIT Variable', ui-sans-serif, system-ui, sans-serif; color: var(--fg); background: var(--page); -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11','ss01','ss03'; word-break: keep-all; }
+button { font: inherit; color: inherit; }
+.mono { font-family: 'JetBrains Mono', 'SUIT Variable', ui-monospace, monospace; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.stat { font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; }
+:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* ── 시안 바깥 틀 ─────────────────────────────────────────────── */
+.deck { padding: 40px 48px 80px; display: flex; flex-direction: column; gap: 28px; }
+.deck-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.deck-head h1 { margin: 0; font-size: 26px; font-weight: 300; letter-spacing: -0.02em; }
+.deck-head p { margin: 6px 0 0; font-size: 13px; color: var(--fg-dim); max-width: 760px; line-height: 1.6; }
+.board-label { display: flex; align-items: baseline; gap: 12px; margin-top: 24px; }
+.board-label b { font-size: 22px; font-weight: 300; }
+.board-label span { font-size: 12.5px; color: var(--fg-dim); }
+.sample { font-size: 11px; padding: 3px 9px; border-radius: 999px; box-shadow: var(--inset); color: var(--fg-dim); }
+
+/* ── 아트보드 ─────────────────────────────────────────────────── */
+.board { width: 1440px; height: 900px; border-radius: 28px; overflow: hidden; background: var(--glow); display: flex; gap: 14px; padding: 14px; position: relative; box-shadow: 0 1px 2px oklch(0 0 0 / .08), 0 36px 96px -36px oklch(0 0 0 / .45); }
+
+/* 사이드바: 떠 있는 판 */
+.side { width: 232px; flex-shrink: 0; border-radius: 22px; background: var(--face); box-shadow: var(--raised); display: flex; flex-direction: column; padding: 14px 10px 12px; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 4px; }
+.brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--ink-grad); display: grid; place-items: center; color: var(--ink-fg); box-shadow: 0 6px 16px -6px oklch(0.3 0.05 250 / .55); }
+.brand b { font-size: 13.5px; font-weight: 600; display: block; letter-spacing: -0.01em; }
+.brand small { font-size: 10.5px; color: var(--fg-faint); }
+.search { height: 38px; border: 0; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; font-size: 12.5px; color: var(--fg-dim); cursor: pointer; transition: transform var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub); }
+.search:hover { transform: translateY(-1px); }
+.search:active { transform: none; box-shadow: var(--inset); }
+.kbd { font-size: 10.5px; padding: 3px 7px; border-radius: 999px; box-shadow: var(--inset); color: var(--fg-muted); }
+.nav { position: relative; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.nav button, .util button { position: relative; z-index: 1; height: 36px; border: 0; background: transparent; border-radius: 999px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 13px; color: var(--fg-muted); cursor: pointer; text-align: left; transition: color var(--dur-hover) var(--ease-hub); }
+.nav button:hover, .util button:hover { color: var(--fg); }
+/* 현재 항목 글자는 pill이 도착할 즈음 반전 (--slide-dur는 JS가 이동 거리로 정한다) */
+.nav button[aria-current="page"] { color: var(--ink-fg); font-weight: 500; transition: color calc(var(--slide-dur, 300ms) * .5) var(--ease-hub) calc(var(--slide-dur, 300ms) * .35); }
+.nav-pill { position: absolute; left: 0; right: 0; top: 0; height: 36px; border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); will-change: transform, height; }
+.nav .count { margin-left: auto; min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; font-size: 10.5px; box-shadow: var(--inset); color: var(--fg-muted); padding: 0 5px; }
+.util { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; }
+.me { margin-top: 4px; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); }
+.me-av { width: 30px; height: 30px; border-radius: 999px; background: var(--ink-grad); color: var(--ink-fg); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.me b { display: block; font-size: 12px; font-weight: 500; }
+.me small { font-size: 10.5px; color: var(--fg-faint); }
+
+/* 세그먼트: 눌린 홈 + 잉크 thumb */
+.seg { position: relative; display: flex; padding: 3px; border-radius: 999px; box-shadow: var(--inset); }
+.seg-thumb { position: absolute; top: 3px; left: 0; height: calc(100% - 6px); border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); will-change: transform, width; }
+.seg button[aria-pressed="true"] { transition: color calc(var(--slide-dur, 260ms) * .5) var(--ease-hub) calc(var(--slide-dur, 260ms) * .3); }
+.seg button { position: relative; z-index: 1; flex: 1; height: 28px; padding: 0 14px; border: 0; background: transparent; border-radius: 999px; font-size: 12px; color: var(--fg-dim); cursor: pointer; transition: color var(--dur-hover); white-space: nowrap; }
+.seg button[aria-pressed="true"] { color: var(--ink-fg); font-weight: 500; }
+
+/* 본문 */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 6px 0 10px; }
+.crumb small { display: block; font-size: 10.5px; letter-spacing: .12em; color: var(--fg-faint); text-transform: uppercase; }
+.crumb b { font-size: 14px; font-weight: 500; }
+.topbar .grow { flex: 1; }
+.clock { height: 34px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; box-shadow: var(--inset); font-size: 12px; color: var(--fg-muted); }
+.ibtn { width: 34px; height: 34px; border: 0; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); display: grid; place-items: center; color: var(--fg-muted); cursor: pointer; transition: transform var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub); }
+.ibtn:hover { transform: translateY(-1px); color: var(--fg); }
+.ibtn:active { transform: none; box-shadow: var(--inset); }
+.scroll { flex: 1; overflow: auto; padding: 18px 26px 40px 22px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+
+.btn { height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: transform var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub); }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.98); box-shadow: var(--inset); }
+.btn--ink { background: var(--ink-grad); color: var(--ink-fg); box-shadow: 0 1px 2px oklch(0 0 0 / .18), 0 7px 16px -7px oklch(0.2 0.03 250 / .55), inset 0 1px 0 oklch(1 0 0 / .18), inset 0 -1px 0 oklch(0 0 0 / .3); font-weight: 500; }
+.btn--ink:active { box-shadow: inset 0 2px 5px oklch(0 0 0 / .45); }
+.btn--sm { height: 32px; padding: 0 13px; font-size: 12px; }
+.btn--ghost { background: transparent; box-shadow: none; color: var(--fg-muted); }
+.btn--ghost:hover { color: var(--fg); background: color-mix(in oklch, var(--fg) 5%, transparent); }
+
+.panel { border-radius: 24px; background: var(--face); box-shadow: var(--raised); padding: 22px 24px; }
+.panel--flat { box-shadow: var(--raised-sm); border-radius: 18px; padding: 14px 18px; }
+.well { border-radius: 16px; box-shadow: var(--inset); }
+.eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg-dim); font-weight: 500; }
+.sec { display: flex; align-items: baseline; gap: 12px; margin: 6px 0 -6px 4px; }
+.sec .n { font-size: 12px; color: var(--fg-faint); }
+.sec b { font-size: 13px; font-weight: 600; }
+.sec span { font-size: 12.5px; color: var(--fg-dim); }
+.chip { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 999px; font-size: 12px; color: var(--fg-muted); box-shadow: var(--raised-sm); background: var(--face); }
+.chip--in { box-shadow: var(--inset); background: transparent; }
+.chip b { color: var(--fg); font-weight: 600; }
+.row { display: flex; align-items: center; gap: 10px; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.muted { color: var(--fg-muted); } .dim { color: var(--fg-dim); } .faint { color: var(--fg-faint); }
+
+/* 페이지 머리 */
+.hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 6px 4px 0; }
+.hero small { font-size: 11px; letter-spacing: .14em; color: var(--fg-faint); }
+.hero h2 { margin: 8px 0 6px; font-size: 44px; font-weight: 200; letter-spacing: -0.035em; line-height: 1.05; }
+.hero p { margin: 0; font-size: 13.5px; color: var(--fg-muted); }
+
+/* 빠른 캡처 */
+.capture-input { flex: 1; height: 50px; border: 0; border-radius: 999px; background: transparent; box-shadow: var(--inset-deep); padding: 0 22px; font: inherit; font-size: 15px; color: var(--fg); outline: none; transition: box-shadow var(--dur-panel) var(--ease-hub); }
+.capture-input::placeholder { color: var(--fg-faint); }
+.capture-input:focus-visible { box-shadow: var(--inset-deep), 0 0 0 1px var(--moon-300); outline: none; }
+
+/* 할 일 */
+.tasks { display: flex; flex-direction: column; gap: 10px; }
+.task { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 18px; background: var(--face); box-shadow: var(--raised-sm); cursor: pointer; transition: transform var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub); }
+.task:hover { transform: translateY(-1px); box-shadow: -4px -4px 10px var(--hi), 6px 7px 14px -2px var(--lo-sm), var(--rim); }
+.task.is-urgent { box-shadow: inset 1px 0 0 var(--danger), var(--raised-sm); }
+.check { width: 24px; height: 24px; flex-shrink: 0; border-radius: 999px; box-shadow: var(--inset); display: grid; place-items: center; color: transparent; transition: background var(--dur-hover), box-shadow var(--dur-hover); }
+.task[aria-checked="true"] .check { background: var(--ink-grad); box-shadow: var(--ink-shadow); color: var(--ink-fg); }
+.task[aria-checked="true"] .t-title { color: var(--fg-dim); text-decoration: line-through; text-decoration-color: var(--fg-faint); }
+.t-title { font-size: 14px; font-weight: 500; }
+.t-meta { font-size: 11.5px; color: var(--fg-dim); margin-top: 2px; }
+.streak { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+.streak .bars { display: flex; gap: 4px; margin-left: auto; }
+.streak .bars i { width: 8px; height: 18px; border-radius: 4px; box-shadow: var(--inset); }
+.streak .bars i.on { background: var(--ink-grad); box-shadow: var(--ink-shadow); }
+
+/* 제안 팁 줄 */
+.tip { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); font-size: 13px; }
+.tip .tag { font-size: 10.5px; letter-spacing: .12em; color: var(--fg-dim); white-space: nowrap; }
+.tip .diamond { width: 9px; height: 9px; border: 1px dashed var(--fg-dim); transform: rotate(45deg); flex-shrink: 0; }
+.tip .src { margin-left: auto; font-size: 11.5px; color: var(--fg-faint); white-space: nowrap; }
+
+/* 일정 타임라인 */
+.timeline { position: relative; height: 128px; border-radius: 18px; box-shadow: var(--inset); margin-top: 14px; }
+.timeline .hours { position: absolute; inset: 0; display: flex; }
+.timeline .hours span { flex: 1; border-left: 1px solid var(--line); font-size: 10.5px; color: var(--fg-faint); padding: 6px 0 0 6px; }
+.timeline .hours span:first-child { border-left: 0; }
+.ev { position: absolute; height: 34px; border-radius: 12px; background: var(--face); box-shadow: var(--raised-sm); padding: 0 12px; display: flex; align-items: center; font-size: 12px; gap: 6px; white-space: nowrap; overflow: hidden; }
+.now-line { position: absolute; top: 8px; bottom: 8px; width: 1px; background: var(--accent); }
+.now-line::before { content: ''; position: absolute; top: -4px; left: -4px; width: 9px; height: 9px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 25%, transparent); }
+
+/* 지표 타일 */
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.kpi { padding: 16px 18px; border-radius: 20px; background: var(--face); box-shadow: var(--raised-sm); }
+.kpi small { font-size: 10.5px; letter-spacing: .12em; color: var(--fg-dim); }
+.kpi .v { display: block; font-size: 26px; font-weight: 600; margin: 8px 0 2px; }
+.kpi .s { font-size: 11.5px; color: var(--fg-dim); }
+
+/* 하루 리뷰 주간 */
+.week { display: flex; gap: 12px; }
+.day { width: 48px; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-dim); }
+.day i { width: 36px; height: 36px; border-radius: 999px; box-shadow: var(--inset); display: grid; place-items: center; }
+.day i.on { background: var(--ink-grad); box-shadow: var(--ink-shadow); color: var(--ink-fg); }
+.day i.today { box-shadow: var(--inset), 0 0 0 1px var(--moon-300); }
+
+/* 현황: 탭 · 게이지 · 주간 칸 */
+.tabs-row { padding: 0 4px; }
+.gauge { position: relative; height: 16px; border-radius: 999px; box-shadow: var(--inset-deep); margin: 26px 0 8px; }
+.gauge .pace { position: absolute; top: 3px; bottom: 3px; left: 3px; border-radius: 999px; border: 1px dashed var(--fg-faint); }
+.gauge .fill { position: absolute; top: 3px; bottom: 3px; left: 3px; border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); transition: width 600ms var(--ease-hub); }
+.gauge .mark { position: absolute; top: -6px; bottom: -6px; width: 1px; background: var(--fg-muted); }
+.gauge .mark span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 10.5px; color: var(--fg-dim); white-space: nowrap; }
+.scale { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--fg-faint); }
+.kr { margin-top: 22px; }
+.kr-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.kr-head b { font-weight: 600; }
+.cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+.cell { height: 54px; border: 0; border-radius: 16px; background: transparent; box-shadow: var(--inset); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; color: var(--fg-muted); }
+.cell b { font-size: 13px; font-weight: 500; color: var(--fg); }
+.cell small { font-size: 10.5px; color: var(--fg-faint); }
+.cell.is-now { box-shadow: var(--raised-sm); background: var(--face); outline: 1px solid var(--accent); outline-offset: -1px; }
+.cell.is-future { box-shadow: none; border: 1px dashed var(--line); }
+.cell[aria-pressed="true"] { box-shadow: var(--inset-deep); }
+.areas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.area { padding: 18px 20px; border-radius: 22px; background: var(--face); box-shadow: var(--raised-sm); display: flex; flex-direction: column; gap: 10px; transition: transform var(--dur-hover) var(--ease-hub); }
+.area:hover { transform: translateY(-2px); }
+.area.is-out { box-shadow: inset 1px 0 0 var(--danger), var(--raised-sm); }
+.area .big { font-size: 34px; font-weight: 600; line-height: 1; }
+.area .line { font-size: 12.5px; color: var(--fg-muted); display: flex; gap: 6px; align-items: center; }
+.spark { height: 34px; border-radius: 12px; box-shadow: var(--inset); padding: 6px 8px; display: flex; align-items: flex-end; gap: 4px; }
+.spark i { flex: 1; border-radius: 3px; background: var(--fg-faint); opacity: .55; }
+.spark i:last-child { background: var(--ink); opacity: 1; }
+.badge-partial { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 999px; border: 1px dashed var(--fg-faint); font-size: 11.5px; color: var(--fg-muted); }
+.out-line { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 14px; box-shadow: inset 1px 0 0 var(--danger), var(--inset); font-size: 12.5px; }
+.out-line b { color: var(--danger); font-weight: 600; }
+.toggle-wrap { display: flex; gap: 10px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <header class="deck-head">
+    <div>
+      <h1>오늘 · 현황 — 깊이감 시안 11a · 11b</h1>
+      <p>지금 허브(depth B: 패널만 입체, 컨트롤은 평면)에 Components 5a·8a의 뉴모피즘 어휘를 더했습니다. 바탕과 같은 면이 솟고(패널·타일·버튼), 입력·트랙·주간 칸은 눌린 홈이 되고, 현재 위치는 잉크 pill로 반전합니다. 색·상태 문법은 그대로입니다.</p>
+    </div>
+    <div class="toggle-wrap">
+      <span class="sample">예시 값 · 목업</span>
+      <div class="seg" data-seg role="group" aria-label="테마">
+        <span class="seg-thumb"></span>
+        <button type="button" aria-pressed="true" data-theme-set="light">라이트</button>
+        <button type="button" aria-pressed="false" data-theme-set="dark">다크</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════ 11a 오늘 ═══════════════════════ -->
+  <div class="board-label"><b>11a 오늘</b><span>세 덩어리(지금 · 이어서 · 마무리)는 그대로, 각 덩어리를 솟은 판 하나로 묶음</span></div>
+  <section class="board" aria-label="오늘 시안">
+    <aside class="side" data-nav="1">
+      <div class="brand"><span class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg></span><div><b>Moonlight</b><small>Hub · Pro</small></div></div>
+      <button class="search" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex:1;text-align:left">검색 · 바로 이동</span><span class="kbd mono">⌘K</span></button>
+      <div class="seg" data-seg role="group" aria-label="범위"><span class="seg-thumb"></span><button type="button" aria-pressed="true">전체</button><button type="button" aria-pressed="false">ClassIn</button><button type="button" aria-pressed="false">개인</button></div>
+      <nav class="nav" aria-label="주요"><span class="nav-pill"></span>
+        <button type="button">홈</button><button type="button" aria-current="page">오늘</button><button type="button">현황</button><button type="button">내 작업</button><button type="button">영업·매출<span class="count mono">3</span></button><button type="button">기회 탐색</button><button type="button">프로젝트</button><button type="button">제품</button><button type="button">브랜드</button><button type="button">콘텐츠</button>
+      </nav>
+      <div class="util"><button type="button">AI·자동화</button><button type="button">설정</button></div>
+      <div class="me"><span class="me-av">N</span><div><b>운영자</b><small>Founder · Pro</small></div></div>
+    </aside>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="crumb"><small>Moonlight</small><b>오늘</b></div>
+        <span class="grow"></span>
+        <span class="clock mono">수 · 10/21 · 08:15</span>
+        <button class="ibtn" type="button" aria-label="알림"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></button>
+        <button class="btn btn--sm" type="button">빠른 입력 <span class="kbd mono">C</span></button>
+        <button class="btn btn--sm" type="button">+ New</button>
+      </div>
+
+      <div class="scroll">
+        <div class="hero">
+          <div>
+            <small class="mono">2026년 10월 21일 수요일 · KST</small>
+            <h2>오늘의 실행</h2>
+            <div class="row" style="gap:8px">
+              <p style="margin-right:6px">좋은 아침입니다.</p>
+              <span class="chip">신호 <b class="mono">1</b></span><span class="chip">즉시 <b class="mono">0</b></span><span class="chip">오늘 <b class="mono">3</b></span>
+            </div>
+          </div>
+          <div class="row"><button class="btn" type="button">오늘 연락</button><button class="btn btn--ink" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/></svg>15분 집중</button></div>
+        </div>
+
+        <div class="panel">
+          <div class="between"><span class="eyebrow">Quick capture <span class="mono faint" style="letter-spacing:0">↵ 저장</span></span>
+            <div class="seg" data-seg role="group" aria-label="캡처 종류"><span class="seg-thumb"></span><button type="button" aria-pressed="true">할 일</button><button type="button" aria-pressed="false">정리 전</button></div>
+          </div>
+          <div class="row" style="margin-top:14px; gap:14px">
+            <input class="capture-input" placeholder="지금 놓치면 안 되는 할 일을 한 줄로 입력" aria-label="빠른 캡처">
+            <button class="btn btn--ink" type="button" style="height:50px;padding:0 22px">할 일 저장</button>
+          </div>
+          <div class="row" style="margin-top:10px;font-size:11.5px" ><span class="dim">● 실시간 · 모든 운영 기록 실시간</span><span class="chip chip--in mono" style="height:22px;font-size:11px">기록 8</span></div>
+        </div>
+
+        <div class="sec"><span class="n mono">01</span><b>지금</b><span>오늘 고른 일부터</span></div>
+        <div class="panel">
+          <div class="between">
+            <div class="row" style="gap:8px"><b style="font-size:14px">오늘 할 일</b><span class="chip chip--in">오늘 3개 <b class="mono">1/3</b></span><span class="chip chip--in">놓침 <b class="mono">0</b></span></div>
+            <button class="btn btn--ghost btn--sm" type="button">모두 보기 →</button>
+          </div>
+          <div class="well streak" style="margin-top:14px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 2-7 1.5 1 2 2 3-3Z"/></svg>
+            <div><div style="font-size:13px;font-weight:500">이어가는 중 · 1일</div><div class="t-meta">하루 한 건 완료하면 이어집니다</div></div>
+            <div class="bars" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="tasks" style="margin-top:14px" role="list">
+            <div class="task" role="checkbox" tabindex="0" aria-checked="true"><span class="check"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="m5 12 5 5 9-10"/></svg></span><div><div class="t-title">설명회 샘플 자료 정리</div><div class="t-meta">프로젝트 · 고객 A · 완료 09:40</div></div></div>
+            <div class="task is-urgent" role="checkbox" tabindex="0" aria-checked="false"><span class="check"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="m5 12 5 5 9-10"/></svg></span><div><div class="t-title">고객 A 다음 행동 회신</div><div class="t-meta" style="color:var(--danger)">기한 1일 지남 · 약속</div></div><span class="mono faint" style="margin-left:auto;font-size:11.5px">e 기록</span></div>
+            <div class="task" role="checkbox" tabindex="0" aria-checked="false"><span class="check"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="m5 12 5 5 9-10"/></svg></span><div><div class="t-title">결정 노트 구조 — 발행 준비</div><div class="t-meta">콘텐츠 큐 · Ready</div></div></div>
+          </div>
+        </div>
+        <div class="tip"><span class="diamond" aria-hidden="true"></span><span class="tag">GURU · 자료 요약</span><span>고객이 말한 현재 방식과 원하는 변화를 나란히 놓고, 제안으로 줄일 수 없는 차이도 남겨 두세요.</span><span class="src">Keenan · GAP Selling →</span></div>
+
+        <div class="sec"><span class="n mono">02</span><b>이어서</b><span>약속과 일정</span></div>
+        <div style="display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:18px">
+          <div class="panel">
+            <div class="between"><span class="eyebrow">집중 고객</span><span class="dim" style="font-size:11.5px">긴급 KA 없음</span></div>
+            <div class="row" style="margin-top:14px;gap:14px">
+              <span class="me-av" style="width:40px;height:40px;font-size:14px">A</span>
+              <div style="flex:1"><div style="font-size:14px;font-weight:600">고객 A</div><div class="t-meta">→ 설명회 샘플 관련 논의</div></div>
+              <button class="btn btn--sm" type="button">기록</button>
+            </div>
+            <div class="well" style="margin-top:14px;padding:10px 14px;font-size:12px;box-shadow:inset 1px 0 0 var(--danger), var(--inset)">
+              <span style="color:var(--danger)">다음 행동 기한 1일 지남</span> <span class="dim">· 최근 3주 전 · 반응 긍정</span>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="between"><span class="eyebrow">오늘 일정 · 시간 흐름</span><button class="btn btn--ghost btn--sm" type="button">캘린더 열기 →</button></div>
+            <div class="timeline">
+              <div class="hours"><span class="mono">09</span><span class="mono">11</span><span class="mono">13</span><span class="mono">15</span><span class="mono">17</span><span class="mono">19</span></div>
+              <div class="ev" style="left:11%;top:34px;width:20%">10:00 · 주간 점검</div>
+              <div class="ev" style="left:42%;top:78px;width:26%">14:00 · 고객 A 통화</div>
+              <span class="now-line" style="left:4%" aria-label="지금 08:15"></span>
+            </div>
+          </div>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><small>MRR</small><span class="v stat">1.2만원</span><span class="s">원장</span></div>
+          <div class="kpi"><small>PIPELINE</small><span class="v stat">5.6만원</span><span class="s mono">12 deals</span></div>
+          <div class="kpi"><small>PUBLISHED</small><span class="v stat">0</span><span class="s mono">14 drafts</span></div>
+          <div class="kpi"><small>자동화 확인</small><span class="v stat">0</span><span class="s">최근 24시간 · 미회복</span></div>
+          <div class="kpi"><small>OPEN WORK</small><span class="v stat">16</span><span class="s">진행 프로젝트</span></div>
+        </div>
+
+        <div class="sec"><span class="n mono">03</span><b>마무리</b><span>오늘의 기록</span></div>
+        <div class="panel between">
+          <div><div style="font-size:15px;font-weight:600">어제 기록이 비어 있어요</div><div class="t-meta">지금 남겨도 그날 기록이 돼요 · 이번 주 2/5일</div></div>
+          <div class="week" aria-label="이번 주 기록"><div class="day"><i class="on">✓</i>월</div><div class="day"><i class="on">✓</i>화</div><div class="day"><i class="today"></i>수</div><div class="day"><i></i>목</div><div class="day"><i></i>금</div></div>
+          <div class="row"><button class="btn" type="button">어제 남기기</button><button class="btn btn--ink" type="button">하루 리뷰 열기</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ 11b 현황 ═══════════════════════ -->
+  <div class="board-label"><b>11b 현황</b><span>목표 → 측정 근거 → 이번 주 행동. 게이지·주간 칸은 눌린 홈, 이번 주만 솟음</span></div>
+  <section class="board" aria-label="현황 시안">
+    <aside class="side" data-nav="2">
+      <div class="brand"><span class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg></span><div><b>Moonlight</b><small>Hub · Pro</small></div></div>
+      <button class="search" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex:1;text-align:left">검색 · 바로 이동</span><span class="kbd mono">⌘K</span></button>
+      <div class="seg" data-seg role="group" aria-label="범위"><span class="seg-thumb"></span><button type="button" aria-pressed="false">전체</button><button type="button" aria-pressed="false">ClassIn</button><button type="button" aria-pressed="true">개인</button></div>
+      <nav class="nav" aria-label="주요"><span class="nav-pill"></span>
+        <button type="button">홈</button><button type="button">오늘</button><button type="button" aria-current="page">현황</button><button type="button">내 작업</button><button type="button">영업·매출<span class="count mono">3</span></button><button type="button">기회 탐색</button><button type="button">프로젝트</button><button type="button">제품</button><button type="button">브랜드</button><button type="button">콘텐츠</button>
+      </nav>
+      <div class="util"><button type="button">AI·자동화</button><button type="button">설정</button></div>
+      <div class="me"><span class="me-av">N</span><div><b>운영자</b><small>Founder · Pro</small></div></div>
+    </aside>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="crumb"><small>현황</small><b>집계</b></div>
+        <div class="seg" data-seg role="group" aria-label="현황 탭" style="margin-left:18px"><span class="seg-thumb"></span><button type="button" aria-pressed="true">집계</button><button type="button" aria-pressed="false">OKR·KPI</button></div>
+        <span class="grow"></span>
+        <span class="clock mono">수 · 10/21 · 08:15</span>
+        <button class="btn btn--sm" type="button">빠른 입력 <span class="kbd mono">C</span></button>
+        <button class="btn btn--sm" type="button">+ New</button>
+      </div>
+
+      <div class="scroll">
+        <div class="hero">
+          <div>
+            <small>현황 · 개인</small>
+            <h2>현황</h2>
+            <div class="row"><p>목표의 근거와 다음 행동을 먼저 확인합니다</p><span class="badge-partial"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /></svg>일부 데이터 · automation_runs</span></div>
+          </div>
+          <button class="btn btn--ink" type="button">실제값 기록하기 →</button>
+        </div>
+
+        <div class="row dim" style="font-size:12.5px;padding:0 4px;gap:8px"><span class="chip chip--in">목표</span>→<span class="chip chip--in">측정 근거</span>→<span class="chip chip--in">이번 주 행동</span><span style="margin-left:6px">실제값과 미측정을 구분해 봅니다.</span></div>
+
+        <div class="panel">
+          <div class="between"><div><span class="eyebrow">OKR · KPI</span><div class="t-meta">진행 중 목표 1 · 결과와 이번 주 행동</div></div><button class="btn btn--sm" type="button">OKR·KPI 열기 →</button></div>
+          <div style="margin-top:18px"><div style="font-size:19px;font-weight:600;letter-spacing:-0.01em">10월 · 만들지 않고 이미 가진 것을 돈으로</div>
+          <div class="t-meta mono" style="margin-top:4px">개인 · 2026-10-01–10-31 · 미측정 3 · 바닥 0.7 · 천장 미등록</div></div>
+          <div class="gauge" aria-label="진행 점수, 지금쯤 0.47, 바닥 0.7">
+            <span class="pace" style="width:calc(47% - 3px)"></span>
+            <span class="fill" data-fill="22%" style="width:0"></span>
+            <span class="mark" style="left:47%"><span class="mono">지금쯤 0.47</span></span>
+            <span class="mark" style="left:70%"><span class="mono">0.7 바닥</span></span>
+          </div>
+          <div class="scale mono"><span>0</span><span>1.0</span></div>
+
+          <div class="kr">
+            <div class="kr-head"><b>고객 대화 (15분 이상)</b><span class="dim mono" style="font-size:11.5px">관측 차이 —건 · 균등 몫 약 1.8건</span></div>
+            <div class="cells">
+              <button class="cell" type="button"><b class="mono">1/≈1.0</b><small class="mono">10/1–4</small></button>
+              <button class="cell" type="button"><b class="mono">2/≈1.8</b><small class="mono">10/5</small></button>
+              <button class="cell" type="button"><b class="mono">·/≈1.8</b><small class="mono">10/12</small></button>
+              <button class="cell is-now" type="button"><b class="mono">·/≈1.8</b><small class="mono">10/19 이번 주</small></button>
+              <button class="cell is-future" type="button"><b class="mono faint">·/≈1.5</b><small class="mono">10/26</small></button>
+            </div>
+          </div>
+          <div class="kr">
+            <div class="kr-head"><b>가격 제시 제안·모집</b><span class="dim mono" style="font-size:11.5px">관측 차이 —건 · 균등 몫 약 1.4건</span></div>
+            <div class="cells">
+              <button class="cell" type="button"><b class="mono">·/≈0.8</b><small class="mono">10/1–4</small></button>
+              <button class="cell" type="button"><b class="mono">1/≈1.4</b><small class="mono">10/5</small></button>
+              <button class="cell" type="button"><b class="mono">·/≈1.4</b><small class="mono">10/12</small></button>
+              <button class="cell is-now" type="button"><b class="mono">·/≈1.4</b><small class="mono">10/19 이번 주</small></button>
+              <button class="cell is-future" type="button"><b class="mono faint">·/≈1.2</b><small class="mono">10/26</small></button>
+            </div>
+          </div>
+          <div class="out-line" style="margin-top:18px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2.2"><path d="M12 4 2 20h20Z"/><path d="M12 10v4"/></svg><b>KPI 선 밖 1</b><span class="dim">· 확인 필요 3</span><button class="btn btn--ghost btn--sm" type="button" style="margin-left:auto">KPI 보기 →</button></div>
+        </div>
+
+        <div class="tip"><span class="diamond" aria-hidden="true"></span><span class="tag">LEGEND · 자료 요약</span><span>새 기회를 받아들일 때 내가 이해하고 책임질 범위와 이번 주 포기할 일을 함께 적으세요.</span><span class="src">Warren Buffett · 집중 →</span></div>
+
+        <div class="sec"><b>활동 · 운영 기록</b><span>영역마다 큰 숫자 · 상태 한 줄 · 행동 하나</span></div>
+        <div class="areas">
+          <div class="area is-out"><span class="eyebrow">프로젝트</span><span class="big stat">16</span><span class="line"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M8 8l8 8"/></svg><span style="color:var(--danger)">막힘 1</span> · 진행 16</span><div class="spark" aria-hidden="true"><i style="height:40%"></i><i style="height:55%"></i><i style="height:48%"></i><i style="height:70%"></i></div><button class="btn btn--sm" type="button">막힌 것 보기</button></div>
+          <div class="area"><span class="eyebrow">콘텐츠</span><span class="big stat">0<small class="dim" style="font-size:14px;font-weight:400"> / 14</small></span><span class="line">◐ 발행 0 · 초안 14</span><div class="spark" aria-hidden="true"><i style="height:30%"></i><i style="height:22%"></i><i style="height:10%"></i><i style="height:6%"></i></div><button class="btn btn--sm" type="button">큐 열기</button></div>
+          <div class="area"><span class="eyebrow">매출</span><span class="big stat">5.6만원</span><span class="line">파이프라인 · 12건</span><div class="spark" aria-hidden="true"><i style="height:35%"></i><i style="height:50%"></i><i style="height:62%"></i><i style="height:58%"></i></div><button class="btn btn--sm" type="button">거래 보기</button></div>
+          <div class="area"><span class="eyebrow">자동화</span><span class="big stat">0</span><span class="line">✓ 실패 없음 · 최근 24시간</span><div class="spark" aria-hidden="true"><i style="height:20%"></i><i style="height:20%"></i><i style="height:20%"></i><i style="height:20%"></i></div><button class="btn btn--sm" type="button">실행 기록</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+// 세그먼트: 잉크 thumb을 눌린 버튼 아래로
+// ── 미끄러짐: 거리 비례 시간(가까우면 짧게, 멀면 조금 길게) + 깊은 감속, 끝에서 아주 살짝 넘쳤다 놓임
+const SLIDE_EASE = 'cubic-bezier(0.16, 1, 0.3, 1.04)';
+const slideDur = d => Math.round(Math.min(520, 280 + d * 0.75));
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+// el을 axis 방향 pos 위치, size 크기로 옮긴다. 처음 배치·창 크기 변경은 애니메이션 없이.
+function slide(el, axis, pos, size, host, animate = true) {
+  const sizeProp = axis === 'y' ? 'height' : 'width';
+  const tr = v => (axis === 'y' ? 'translateY(' : 'translateX(') + v + 'px)';
+  const from = parseFloat(el.dataset.pos), fromSize = parseFloat(el.dataset.size);
+  el.dataset.pos = pos; el.dataset.size = size;
+  el.style.transform = tr(pos); el.style[sizeProp] = size + 'px';
+  el.getAnimations().forEach(a => a.cancel());
+  if (!animate || isNaN(from) || from === pos || reduceMotion.matches) return;
+  const dur = slideDur(Math.abs(pos - from));
+  host.style.setProperty('--slide-dur', dur + 'ms');
+  el.animate([{ transform: tr(from), [sizeProp]: fromSize + 'px' }, { transform: tr(pos), [sizeProp]: size + 'px' }], { duration: dur, easing: SLIDE_EASE });
+}
+
+function placeThumb(seg, animate = true) {
+  const on = seg.querySelector('button[aria-pressed="true"]');
+  const th = seg.querySelector('.seg-thumb');
+  if (!on || !th) return;
+  slide(th, 'x', on.offsetLeft, on.offsetWidth, seg, animate);
+}
+document.querySelectorAll('[data-seg]').forEach(seg => {
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    if (b.dataset.themeSet) { document.documentElement.dataset.theme = b.dataset.themeSet; }
+    placeThumb(seg);
+  });
+});
+// 사이드바 아이콘 (허브 nav* 아이콘의 단순화)
+const ICONS = {
+  '홈': 'M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1Z',
+  '오늘': 'M6 3h9l3 3v15H6Z M9 11h6 M9 15h4',
+  '현황': 'M4 20V10 M10 20V4 M16 20v-7 M3 20h18',
+  '내 작업': 'M9 6h11 M9 12h11 M9 18h11 M4 6l1 1 2-2 M4 12l1 1 2-2 M4 18l1 1 2-2',
+  '영업·매출': 'M4 19h16 M6 15l4-5 3 3 5-7',
+  '기회 탐색': 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M15 9l-2 4-4 2 2-4Z',
+  '프로젝트': 'M4 7h6l2 2h8v10H4Z',
+  '제품': 'M4 8l8-4 8 4v8l-8 4-8-4Z M4 8l8 4 8-4 M12 12v8',
+  '브랜드': 'M12 3 4 7v6c0 4 4 7 8 8 4-1 8-4 8-8V7Z',
+  '콘텐츠': 'M5 4h10l4 4v12H5Z M8 12h8 M8 16h6',
+  'AI·자동화': 'M12 3v3 M12 18v3 M3 12h3 M18 12h3 M7 7l2 2 M15 15l2 2 M7 17l2-2 M15 9l2-2',
+  '설정': 'M4 7h10 M18 7h2 M4 17h4 M12 17h8 M16 5v4 M10 15v4',
+};
+document.querySelectorAll('.nav button, .util button').forEach(b => {
+  const label = b.firstChild.textContent.trim();
+  if (!ICONS[label]) return;
+  b.insertAdjacentHTML('afterbegin', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[label].split(' M').map((d, i) => '<path d="' + (i ? 'M' : '') + d + '"/>').join('') + '</svg>');
+});
+// 사이드바 잉크 pill
+function placeNav(nav, animate = true) {
+  const cur = nav.querySelector('[aria-current="page"]');
+  slide(nav.querySelector('.nav-pill'), 'y', cur.offsetTop, cur.offsetHeight, nav, animate);
+}
+document.querySelectorAll('.nav').forEach(nav => {
+  nav.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    nav.querySelectorAll('button').forEach(x => x.removeAttribute('aria-current'));
+    b.setAttribute('aria-current', 'page'); placeNav(nav);
+  });
+});
+// 할 일 체크 (목업: 실제로는 서버 확인 뒤 확정)
+document.querySelectorAll('.task').forEach(t => {
+  const flip = () => t.setAttribute('aria-checked', String(t.getAttribute('aria-checked') !== 'true'));
+  t.addEventListener('click', flip);
+  t.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); } });
+});
+// 주간 칸: 고르면 눌린 상태
+document.querySelectorAll('.cells').forEach(row => row.addEventListener('click', e => {
+  const c = e.target.closest('.cell'); if (!c || c.classList.contains('is-future')) return;
+  row.querySelectorAll('.cell').forEach(x => x.setAttribute('aria-pressed', String(x === c)));
+}));
+function layout() { document.querySelectorAll('[data-seg]').forEach(s => placeThumb(s, false)); document.querySelectorAll('.nav').forEach(n => placeNav(n, false)); }
+document.fonts.ready.then(() => {
+  layout();
+  requestAnimationFrame(() => document.querySelectorAll('.gauge .fill').forEach(f => f.style.width = 'calc(' + f.dataset.fill + ' - 3px)'));
+});
+window.addEventListener('resize', layout);
+</script>
+</body>
+</html>

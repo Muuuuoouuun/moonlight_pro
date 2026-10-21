@@ -16,6 +16,7 @@ import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMute
 import { requestPersonaChat } from "../persona-client";
 import { buildMyWorkChecklistToggle, readMyWorkChecklistReceipt } from './my-work-checklist';
 import { MeetingWatchCard } from './meeting-watch-card';
+import { MyWorkNow, buildNowModel } from './my-work-now';
 
 // 내 작업 — one personal operating surface, three attention lenses plus a separate
 // meeting-watch lens. The attention model combines tasks, open deals and calendar week.
@@ -32,6 +33,8 @@ import { MeetingWatchCard } from './meeting-watch-card';
 // 같은 프로젝트 할 일이 한 버킷에 2개 이상이면 프로젝트 아코디언으로 접힌다.
 
 const LENSES = [
+  // 지금(시안 E, 2026-10-21) — 지금 할 일 하나를 크게. 착지 렌즈다.
+  { key: 'now', label: '지금' },
   { key: 'list', label: '리스트' },
   { key: 'board', label: '보드' },
   { key: 'week', label: '주간' },
@@ -874,10 +877,10 @@ export function MyWork({ onNavigate }) {
 
   // Lens lives in the URL (?lens=) so a view is bookmarkable, same contract as Projects ?view.
   const lensParam = searchParams?.get('lens');
-  const lens = LENSES.some((l) => l.key === lensParam) ? lensParam : 'list';
+  const lens = LENSES.some((l) => l.key === lensParam) ? lensParam : 'now';
   const setLens = (next) => {
     const params = new URLSearchParams(searchParams?.toString() || '');
-    if (next === 'list') params.delete('lens'); else params.set('lens', next);
+    if (next === 'now') params.delete('lens'); else params.set('lens', next);
     router.replace(`${pathname}${params.size ? `?${params}` : ''}`);
   };
 
@@ -1046,7 +1049,8 @@ export function MyWork({ onNavigate }) {
         // 새 할 일이 무조건 화면에 보이도록: 리스트 렌즈로, 그리고 방금 만든 (대개 기한 없는)
         // 항목을 가릴 수 있는 레인·기한 필터를 해제한다. board/week나 'today' 필터 상태에서
         // 추가하면 새 항목이 안 보여 "추가가 안 된다"고 느끼던 문제(2026-07-18)를 막는다.
-        if (lens !== 'list') setLens('list');
+        // 지금 렌즈는 지금 하는 일을 그대로 둔다 — 새 할 일은 다음 순서·목록에 쌓인다.
+        if (lens !== 'list' && lens !== 'now') setLens('list');
         if (lane !== 'all' && lane !== 'task') setLane('all');
         if (bucketFilter !== 'all') setBucketFilter('all');
         const fresh = await reload();
@@ -1726,15 +1730,30 @@ export function MyWork({ onNavigate }) {
     return sections;
   }, [bucketFilter, visible, groupEvents]);
 
+  // 지금 렌즈 — 레인·기한·검색 필터와 무관하게, 숨김만 뺀 전체에서 고른다.
+  const nowModel = React.useMemo(() => buildNowModel(
+    items.map((i) => (itemPatches[i.id] ? { ...i, ...itemPatches[i.id] } : i)).filter((i) => !hiddenIds.has(i.id) && !mutedIds.has(i.id)),
+    { completingIds, dueBucketOf: visibleDueBucket },
+  ), [items, itemPatches, hiddenIds, mutedIds, completingIds]);
+  const sourcesLive = ['tasks', 'deals', 'calendar'].every((key) => sources[key] === 'live');
+  const headDate = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
+  const headTime = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', maxWidth: 1080, margin: '0 auto', width: '100%' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>내 작업</h2>
-          {lens !== 'watch' && <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span>할 일<SyncBadge state={sources.tasks || (state === 'loading' ? 'loading' : 'error')} /></span>
-            <span>딜<SyncBadge state={sources.deals || (state === 'loading' ? 'loading' : 'error')} /></span>
-            <span>일정<SyncBadge state={sources.calendar || (state === 'loading' ? 'loading' : 'error')} /></span>
+          <div className="mwork-head__eyebrow">{headDate} · 지금 <span className="mono">{headTime}</span></div>
+          <h2 className="mwork-head__title">내 작업</h2>
+          {lens !== 'watch' && <div className="mwork-head__sum">
+            {nowModel.focusIndex && <span>오늘 3개 중 <span className="mono">{nowModel.focusIndex}</span>번째</span>}
+            {nowModel.minutesToNext !== null && <span>다음 일정까지 <span className="mono">{nowModel.minutesToNext >= 60 ? `${Math.floor(nowModel.minutesToNext / 60)}시간 ${nowModel.minutesToNext % 60}분` : `${nowModel.minutesToNext}분`}</span></span>}
+            {/* 원천이 모두 실시간이면 조용히, 아니면 어느 것이 아닌지 밝힌다(§5.3 source truth). */}
+            {!sourcesLive && <>
+              <span>할 일<SyncBadge state={sources.tasks || (state === 'loading' ? 'loading' : 'error')} /></span>
+              <span>딜<SyncBadge state={sources.deals || (state === 'loading' ? 'loading' : 'error')} /></span>
+              <span>일정<SyncBadge state={sources.calendar || (state === 'loading' ? 'loading' : 'error')} /></span>
+            </>}
           </div>}
         </div>
         <div style={{ flex: 1 }} />
@@ -1743,7 +1762,7 @@ export function MyWork({ onNavigate }) {
 
       {/* 시그널 스트립 — "지금 뭐가 급한가"를 숫자로 먼저 답한다 (DESIGN.md 경험 원칙 1).
           타일 클릭 = 리스트 렌즈 + 해당 기한 필터, 다시 클릭하면 전체로 복귀. */}
-      {lens !== 'watch' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--gap)' }}>
+      {lens !== 'watch' && lens !== 'now' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--gap)' }}>
         {SIGNAL_TILES.map((t) => {
           const count = bucketCounts[t.key] || 0;
           // 오늘 3개 타일만 표시 숫자가 서버 요약(완료한 선택 포함)이고 버킷 카운트는 미완료만
@@ -1779,7 +1798,8 @@ export function MyWork({ onNavigate }) {
 
       {/* Quick capture — Enter saves a durable task; N focuses. 상세 토글로 기한·우선순위 추가. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="mwork-capture">
+          <Iconed name="plus" size={16} style={{ color: 'var(--fg-dim)', flexShrink: 0 }} />
           <input
             ref={quickRef}
             aria-label="새 할 일 제목"
@@ -1787,13 +1807,8 @@ export function MyWork({ onNavigate }) {
             value={quickTitle}
             onChange={(e) => setQuickTitle(e.target.value)}
             onKeyDown={(e) => { if (shouldSubmitQuickTask(e, quickSavingRef.current)) { e.preventDefault(); createTask(); } }}
-            placeholder="새 할 일 — Enter로 저장"
-            // outline을 죽이지 않는다 — 전역 :focus-visible 링(§11)이 키보드 포커스를 표시한다.
-            style={{
-              flex: 1, height: 36, padding: '0 12px', fontSize: 13,
-              background: 'var(--surface)', border: '1px solid var(--line)',
-              borderRadius: 'var(--r-sm)',
-            }}
+            placeholder={lens === 'now' ? '새 할 일 — Enter로 저장 · 지금 하는 일은 그대로 둠' : '새 할 일 — Enter로 저장'}
+            // 포커스는 알약 테두리(.mwork-capture:focus-within)가 보여 준다.
           />
           <IconButton
             icon={showQuickDetail ? 'x' : 'clock'}
@@ -1801,7 +1816,7 @@ export function MyWork({ onNavigate }) {
             onClick={() => setShowQuickDetail((v) => !v)}
           />
           <Button variant="primary" size="sm" icon="plus" onClick={createTask} disabled={saving || quickRecovery.status !== 'ready' || (!quickTitle.trim() && !quickRecovery.recoverable)}>
-            {quickRecovery.recoverable ? '이전 요청 확인' : quickRecovery.status === 'loading' ? '범위 확인 중' : '할 일'} <Kbd>N</Kbd>
+            {quickRecovery.recoverable ? '이전 요청 확인' : quickRecovery.status === 'loading' ? '범위 확인 중' : '할 일 추가'} <Kbd>N</Kbd>
           </Button>
         </div>
         {showQuickDetail && (
@@ -1856,7 +1871,7 @@ export function MyWork({ onNavigate }) {
       {lens === 'watch' ? <MeetingWatchCard /> : (
       <>
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      {lens !== 'now' && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <Input ref={searchRef} icon="search" placeholder="제목 검색" kbd="/" clearable value={search} onChange={setSearch} style={{ width: 190 }} />
         <SegmentedControl
           label="레인 필터"
@@ -1887,7 +1902,7 @@ export function MyWork({ onNavigate }) {
             숨김 <span className="num">{mutedCount}</span>
           </Button>
         )}
-      </div>
+      </div>}
 
       {/* 본문 그리드 — 상세 패널이 열리면 우측 300px 칼럼이 생긴다 (모바일은 세로 스택,
           hub-tokens.css .hub-mywork-grid). */}
@@ -1920,6 +1935,21 @@ export function MyWork({ onNavigate }) {
           <span style={{ flex: 1 }}>재검증에 실패해 마지막으로 읽은 데이터를 표시 중입니다.</span>
           <Button variant="secondary" size="sm" onClick={reload}>다시 읽기</Button>
         </div>
+      )}
+
+      {['ready', 'stale'].includes(state) && lens === 'now' && (
+        <MyWorkNow
+          model={nowModel}
+          deferLabel={deferTarget.label}
+          focusFull={focusFull}
+          checklistSavingId={checklistSavingId}
+          onComplete={scheduleComplete}
+          onDefer={handleItemDefer}
+          onOpen={openItem}
+          onToggleFocus={toggleFocus}
+          onToggleChecklist={toggleChecklist}
+          onShowList={() => setLens('list')}
+        />
       )}
 
       {['ready', 'stale'].includes(state) && lens === 'list' && (

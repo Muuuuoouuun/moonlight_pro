@@ -1,0 +1,199 @@
+/* 현황 · 목표 렌즈 (10c, 2026-10-21). 깊이 토큰(--raise-face·--shadow-*·--ink-face·--well)은 depth C가
+ * 준다. 표지가 없을 때를 위해 기본 토큰으로 물러선다. 색은 §5.2: 선택 = Moonstone 1px, 빨강 = 선 밖 KPI뿐. */
+
+.hub-app .overview-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.hub-app .overview-head__eyebrow { font-size: 12px; color: var(--fg-dim); }
+.hub-app .overview-head__title {
+  margin: 8px 0 0;
+  font-size: 40px;
+  font-weight: 200;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+.hub-app .overview-head__truth { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--fg-muted); }
+
+.hub-app .ogl { display: flex; flex-direction: column; gap: 16px; }
+.hub-app .ogl-grow { flex: 1; }
+.hub-app .ogl-muted { color: var(--fg-dim); font-size: 12.5px; }
+.hub-app .ogl-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hub-app .ogl-link { font-size: 12.5px; color: var(--fg-muted); padding: 4px 6px; border-radius: var(--r-sm); white-space: nowrap; }
+.hub-app .ogl-link-btn { display: inline-flex; align-items: center; height: 32px; padding: 0 14px; font-size: 12.5px; border-radius: 999px; white-space: nowrap; }
+.hub-app .ogl-link-btn--sm { height: 28px; padding: 0 11px; font-size: 12px; }
+.hub-app .ogl-row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
+
+/* 지키는 선 — 눌린 홈 한 줄, KPI는 솟은 칩 */
+.hub-app .ogl-kpi-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px 10px 18px;
+  border-radius: 28px;
+  background: var(--well, var(--surface-2));
+  box-shadow: var(--shadow-inset, inset 0 0 0 1px var(--line-soft));
+}
+.hub-app .ogl-kpi-line__label { font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .ogl-kpi-line__count { font-size: 12px; color: var(--danger); }
+.hub-app .ogl-kpi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--raise-face, var(--surface));
+  box-shadow: var(--shadow-raise, var(--shadow-soft));
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.hub-app .ogl-kpi-chip b { color: var(--fg); font-weight: 500; }
+.hub-app .ogl-kpi-chip__glyph { display: inline-flex; align-items: center; }
+.hub-app .ogl-kpi-chip--out,
+.hub-app .ogl-kpi-chip--out b { color: var(--danger); }
+
+.hub-app .ogl-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.hub-app .ogl-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* 목표 카드 — 고르면 Moonstone 1px(§5.3 선택) */
+.hub-app .ogl-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 18px 20px;
+  text-align: left;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub);
+}
+.hub-app .ogl-goal:hover { transform: translateY(-1px); }
+.hub-app .ogl-goal--on { border-color: var(--accent); }
+.hub-app .ogl-goal__head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.hub-app .ogl-goal__title { font-size: 16px; font-weight: 500; }
+.hub-app .ogl-goal__pct { font-size: 34px; font-weight: 300; line-height: 1; }
+.hub-app .ogl-goal__pct small { font-size: 14px; color: var(--fg-dim); }
+.hub-app .ogl-goal__meta { font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .ogl-goal__meta b { color: var(--fg); font-weight: 600; }
+
+/* 게이지 — 눌린 트랙 + 잉크 채움 + 기간 경과 눈금 */
+.hub-app .ogl-gauge {
+  position: relative;
+  display: block;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--well, var(--surface-3));
+  box-shadow: var(--shadow-inset, none);
+  flex-shrink: 0;
+}
+.hub-app .ogl-gauge--sm { height: 8px; width: 120px; }
+.hub-app .ogl-gauge__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--ink-face, var(--fg));
+  transition: width var(--dur-enter) var(--ease-hub);
+}
+.hub-app .ogl-gauge__tick { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--fg-muted); }
+.hub-app .ogl-gauge--sm .ogl-gauge__tick { top: -3px; bottom: -3px; }
+
+.hub-app .ogl-krs { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.hub-app .ogl-kr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 40px 88px 96px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 2px;
+  border-top: 1px solid var(--line-soft);
+}
+.hub-app .ogl-kr__name { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .ogl-kr__pct { font-size: 12.5px; text-align: right; }
+.hub-app .ogl-kr__last { font-size: 11.5px; color: var(--fg-dim); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-app .ogl-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-inset, inset 0 0 0 1px var(--line));
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* 체크인 줄 — 알약 모양 상자 */
+.hub-app .ogl-checkin {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--fg-muted);
+}
+.hub-app .ogl-checkin__text { flex: 1; font-size: 13px; color: var(--fg); }
+
+.hub-app .ogl-panel { display: flex; flex-direction: column; gap: 10px; }
+.hub-app .ogl-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; }
+.hub-app .ogl-panel__title { font-size: 12.5px; font-weight: 500; color: var(--fg-muted); }
+.hub-app .ogl-panel__meta { font-size: 12px; color: var(--fg-dim); }
+.hub-app .ogl-panel__empty { margin: 0; padding: 14px 4px; display: flex; align-items: center; gap: 6px; }
+
+.hub-app .ogl-records,
+.hub-app .ogl-stale { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.hub-app .ogl-record { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r); color: var(--fg-muted); }
+.hub-app .ogl-record__kind { width: 30px; font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .ogl-record__text { flex: 1; min-width: 0; font-size: 13px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .ogl-record__at { font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .ogl-stale__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  color: var(--fg-muted);
+}
+.hub-app .ogl-stale__row + .ogl-stale__row { border-top: 1px solid var(--line-soft); }
+/* 멈춤 표시는 눌린 원 — 색이 아니라 모양(§5.3 lifecycle waiting) */
+.hub-app .ogl-stale__icon {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--well, var(--surface-2));
+  box-shadow: var(--shadow-inset, inset 0 0 0 1px var(--line));
+  color: var(--fg-dim);
+}
+.hub-app .ogl-stale__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hub-app .ogl-stale__body b { font-size: 13.5px; font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .ogl-stale__body span { font-size: 12px; color: var(--fg-dim); }
+
+.hub-app .ogl-activity { display: flex; align-items: center; gap: 18px; padding: 0 4px; font-size: 13px; color: var(--fg-muted); flex-wrap: wrap; }
+.hub-app .ogl-activity b { color: var(--fg); font-weight: 600; }
+
+.hub-app .ogl-feedback { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hub-app .ogl-feedback p { margin: 0; flex: 1; font-size: 13px; color: var(--fg-muted); }
+
+@media (max-width: 900px) {
+  .hub-app .overview-head__title { font-size: 30px; }
+  .hub-app .ogl-cols { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .hub-app .ogl-kr { grid-template-columns: minmax(0, 1fr) 40px 88px; }
+  .hub-app .ogl-kr .ogl-gauge,
+  .hub-app .ogl-kr__last { display: none; }
+}

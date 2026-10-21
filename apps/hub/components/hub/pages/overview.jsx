@@ -3,7 +3,8 @@
 import React from "react";
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { OkrSummaryCard } from "../okr-summary-card";
+import { OverviewGoalLens, goalLensEyebrow } from "./overview-goal-lens";
+import { useGoals } from "../use-goals";
 import { activityAxis, activityDateTicks } from "./overview-activity";
 import "./overview-activity.css";
 import "./workflow-pages.css";
@@ -578,11 +579,14 @@ function ActivityRow({ item, onNavigate }) {
 const GoalsView = dynamic(() => import('./goals').then(module => module.Goals), { ssr: false, loading: () => <div className="goals-page"><Skeleton lines={4} height={18} label="목표 화면 불러오는 중" /></div> });
 export function Overview(props) {
   const params = useSearchParams();
-  return params.get('view') === 'goals' ? <GoalsView /> : <OverviewSummary {...props} />;
+  const view = params.get('view');
+  // 현황 탭(10c, 2026-10-21): 목표(기본) · 집계(?view=summary) · OKR·KPI(?view=goals). 탭은 탑바가 그린다.
+  return view === 'goals' ? <GoalsView /> : <OverviewSummary {...props} lens={view === 'summary' ? 'sum' : 'goal'} />;
 }
 
-function OverviewSummary({ onNavigate }) {
+function OverviewSummary({ onNavigate, lens }) {
   const { ledger, syncState, reload } = useOverviewLedger();
+  const goalModel = useGoals("", lens === 'goal');
   const [period, setPeriod] = React.useState('14');
   const [activityExpanded, setActivityExpanded] = React.useState(false);
 
@@ -650,32 +654,29 @@ function OverviewSummary({ onNavigate }) {
 
   return (
     <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
+      <div className="hub-page-header overview-head">
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>현황</h2>
-          <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-            목표의 근거와 다음 행동을 먼저 확인합니다
-          </div>
-          <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--fg-muted)' }}>활동 데이터 <TruthBadge state={syncState} /></div>
-          {disclosureMessages.map((message) => (
-            <div key={message.kind} role="status" style={{ marginTop: 5, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-              {message.text}
+          <div className="overview-head__eyebrow">현황{lens === 'goal' && goalLensEyebrow(goalModel) ? ` · ${goalLensEyebrow(goalModel)}` : ' · 활동과 운영 기록'}</div>
+          <h2 className="overview-head__title">{lens === 'goal' ? '이번 달 목표는 어디쯤' : '운영 집계'}</h2>
+          {lens === 'sum' && (
+            <div className="overview-head__truth">
+              <div>활동 데이터 <TruthBadge state={syncState} /></div>
+              {disclosureMessages.map((message) => (
+                <div key={message.kind} role="status">{message.text}</div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-        <Button variant="outline" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/goals?check=1')}>실제값 기록하기</Button>
       </div>
 
-      {/* OKR·KPI — 추적 본체는 내 작업 › OKR·KPI. 현황에는 핵심 지표만 띄운다(2026-09-23). */}
-      <section className="workflow-goal-lens" aria-label="목표로 보는 현황">
-        <p className="workflow-goal-lens__intro">목표 → 측정 근거 → 이번 주 행동. 실제값과 미측정을 구분해 봅니다.</p>
-        <OkrSummaryCard />
-      </section>
+      {/* 목표 렌즈 — 지키는 선 → 목표·핵심 결과 → 이번 주 기록. 본체는 내 작업 › OKR·KPI. */}
+      {lens === 'goal' && (
+        <OverviewGoalLens model={goalModel} ledger={ledger} ledgerStatus={overviewStatus} onLens={() => onNavigate?.('dashboard/overview?view=summary')} />
+      )}
       <GuidanceInlineTip variant="overview" onNavigate={onNavigate} />
 
-      <details className="workflow-disclosure">
-        <summary>활동·운영 기록 자세히 · 프로젝트, 콘텐츠, 매출, 자동화</summary>
-        <div className="workflow-disclosure__body">
+      {lens === 'sum' && (
+        <div className="workflow-disclosure__body overview-sum">
           <SectionTitle right={<SegmentedControl label="활동 집계 기간" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />}>활동 기록 · 목표 점수와 별도</SectionTitle>
 
       <Card>
@@ -787,7 +788,7 @@ function OverviewSummary({ onNavigate }) {
         {kpiCards.map((k) => <KpiCard key={k.label} k={k} onNavigate={onNavigate} />)}
       </div>
         </div>
-      </details>
+      )}
     </div>
   );
 }

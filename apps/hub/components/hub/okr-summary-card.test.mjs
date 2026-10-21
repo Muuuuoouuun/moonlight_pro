@@ -5,11 +5,10 @@ import { test } from "node:test";
 const card = await readFile(new URL("./okr-summary-card.jsx", import.meta.url), "utf8");
 const overview = await readFile(new URL("./pages/overview.jsx", import.meta.url), "utf8");
 
-test("현황 surfaces the OKR·KPI summary and links into 내 작업 › OKR·KPI", () => {
-  assert.match(overview, /import \{ OkrSummaryCard \} from "\.\.\/okr-summary-card"/);
-  assert.match(overview, /<OkrSummaryCard \/>/);
-  // 링크는 본체 탭(내 작업 하위)으로 간다 — 현황 안의 view=goals가 아니라.
+test("OKR·KPI summary card links into 내 작업 › OKR·KPI", () => {
+  // 현황의 첫 화면은 10c 목표 렌즈로 바뀌었다(overview-goal-lens.test.mjs). 카드는 다른 표면용으로 남는다.
   assert.match(card, /goalHref\(null, "all", \{ base: GOAL_WORK_BASE \}\)/);
+  assert.doesNotMatch(overview, /<OkrSummaryCard/);
 });
 
 test("OKR·KPI summary keeps read truth honest: loading → Skeleton, error/preview → TruthBadge, never an empty state", () => {

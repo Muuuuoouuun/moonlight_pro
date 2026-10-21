@@ -1,88 +1,316 @@
-/* Approved depth B: dashboard panels carry depth; controls stay flat.
- * The explicit marker is intentional. Login shares the base primitives and
- * must remain unchanged even when this stylesheet survives client navigation.
- * Palette, typography scales, layout, focus rings and motion stay canonical. */
-.hub-app[data-visual-system="depth-b"] {
+/* Depth C — 운영자 확정 2026-10-21 (시안 docs/design-studies/2026-10-21-today-overview-depth).
+ * depth B(패널만 입체, 컨트롤 평면)를 대체한다. Components 5a·8a의 뉴모피즘 어휘:
+ *   · 상자(패널)는 바탕보다 한 단계 밝은 면이고, 위-왼쪽 빛 + 아래-오른쪽 그림자로 솟는다.
+ *   · 보조 버튼·검색·사용자 카드는 낮게 솟고, 누르는 순간 눌린 홈이 된다.
+ *   · 입력·세그먼트 트랙·진척 트랙은 눌린 홈이다.
+ *   · 현재 위치(사이드바 현재 항목·세그먼트 선택·primary)는 잉크 pill — 라이트 먹색, 다크 은색.
+ * 색 의미(§5.2·§5.3)·글자 크기·포커스 링은 그대로다. 로그인은 표지(data-visual-system)를
+ * 그리지 않으므로 이 층을 받지 않는다. */
+
+.hub-app[data-visual-system="depth-c"] {
+  /* 면 — 바탕은 내려가고 상자는 올라간다. 바탕의 빛 번짐은 오른쪽 위 Moonstone 한 곳. */
+  --bg: oklch(0.165 0.008 252);
+  --surface: oklch(0.24 0.011 252);
+  --surface-2: oklch(0.265 0.012 252);
+  --surface-3: oklch(0.29 0.012 252);
+  --elevated: oklch(0.31 0.013 252);
+  --bg-glow: radial-gradient(110% 70% at 88% -12%, oklch(0.26 0.035 255) 0%, oklch(0.19 0.012 252) 46%, var(--bg) 100%);
+  /* 밝아진 면 위에서도 보조 글자가 AA(4.5:1)를 지키도록 한 계단 올린다. */
+  --fg-muted: oklch(0.76 0.008 250);
+  --fg-dim: oklch(0.69 0.009 250);
+  --fg-faint: oklch(0.645 0.009 250);
+
+  /* 눌린 홈 바닥 — 상자 면보다 바탕 쪽으로 한 걸음 */
+  /* srgb로 섞는다 — oklch 혼합은 무채에 가까운 두 색에서 색상각을 잃어(none → 0°) 붉은 기가 돌았다. */
+  --well: color-mix(in srgb, var(--surface) 55%, var(--bg));
+
   --shadow-panel:
-    0 1px 0 oklch(1 0 0 / .10) inset,
-    -4px -4px 16px oklch(1 0 0 / .025),
-    6px 10px 28px -10px oklch(0 0 0 / .55);
-  --shadow-nav:
-    0 1px 0 oklch(1 0 0 / .10) inset,
-    0 5px 16px -7px oklch(0 0 0 / .45);
-  --shadow-control: none;
-  /* Menus and the mobile revenue drawer keep their pre-B overlay depth. */
-  --shadow-card-legacy:
-    0 1px 0 0 oklch(1 0 0 / .04) inset,
-    0 8px 24px -12px oklch(0 0 0 / .4);
+    -7px -7px 18px oklch(1 0 0 / .045),
+    10px 13px 30px -8px oklch(0 0 0 / .62),
+    inset 0 1px 0 oklch(1 0 0 / .08);
+  /* 어두운 면에선 빛 그림자가 묻힌다 — 솟은 컨트롤은 한 단계 밝은 면 + 위쪽 빛 가장자리 + 깊은 그림자 */
+  --raise-face: linear-gradient(180deg, oklch(0.315 0.013 252), oklch(0.28 0.012 252));
+  --raise-face-hover: linear-gradient(180deg, oklch(0.335 0.013 252), oklch(0.30 0.012 252));
+  --shadow-raise:
+    0 12px 26px -10px oklch(0 0 0 / .85),
+    0 3px 6px oklch(0 0 0 / .4),
+    inset 0 1px 0 oklch(1 0 0 / .15),
+    inset 0 0 0 1px oklch(1 0 0 / .04);
+  --shadow-raise-hover:
+    0 16px 30px -10px oklch(0 0 0 / .9),
+    0 4px 8px oklch(0 0 0 / .42),
+    inset 0 1px 0 oklch(1 0 0 / .17),
+    inset 0 0 0 1px oklch(1 0 0 / .05);
+  --shadow-inset:
+    inset 2px 2px 6px oklch(0 0 0 / .5),
+    inset -2px -2px 6px oklch(1 0 0 / .045);
+  --ink-face: linear-gradient(180deg, oklch(0.96 0.004 250), oklch(0.85 0.006 250));
+  --ink-fg: oklch(0.18 0.008 250);
+  --shadow-ink:
+    0 0 0 1px oklch(1 0 0 / .1),
+    0 6px 18px -6px oklch(0.85 0.03 250 / .35),
+    inset 0 1px 0 oklch(1 0 0 / .6);
+
   --shadow-card: var(--shadow-panel);
   --shadow-soft: var(--shadow-panel);
   --fx-shadow: var(--shadow-panel);
   --fx-shadow-lift: var(--shadow-panel);
+  /* 메뉴·모바일 매출 드로어는 겹쳐 뜨는 면이라 이전 들림을 유지한다. */
+  --shadow-card-legacy:
+    0 1px 0 0 oklch(1 0 0 / .04) inset,
+    0 8px 24px -12px oklch(0 0 0 / .4);
+
+  --r-lg: 18px;
+  --r-xl: 24px;
+
   /* JetBrains has no Hangul: use the bundled UI face before OS fallbacks. */
   --font-mono: 'JetBrains Mono', 'SUIT Variable', 'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace;
 }
 
-.hub-app[data-visual-system="depth-b"][data-theme="light"] {
+.hub-app[data-visual-system="depth-c"][data-theme="light"] {
+  --bg: oklch(0.94 0.007 255);
+  --surface: oklch(0.978 0.004 255);
+  --surface-2: oklch(0.955 0.005 255);
+  --surface-3: oklch(0.935 0.006 255);
+  --elevated: oklch(0.99 0.003 255);
+  --bg-glow: radial-gradient(110% 70% at 88% -12%, oklch(0.91 0.03 250) 0%, oklch(0.945 0.008 255) 48%, var(--bg) 100%);
+  --fg-muted: oklch(0.42 0.008 250);
+  --fg-dim: oklch(0.46 0.008 250);
+  --fg-faint: oklch(0.505 0.007 250);
+
   --shadow-panel:
-    0 1px 0 oklch(1 0 0 / .8) inset,
-    -4px -4px 14px oklch(1 0 0),
-    5px 9px 24px -12px oklch(0 0 0 / .17);
-  --shadow-nav:
-    0 1px 0 oklch(1 0 0 / .8) inset,
-    0 5px 16px -7px oklch(0 0 0 / .45);
+    -7px -7px 18px oklch(1 0 0 / .96),
+    10px 13px 30px -8px oklch(0.45 0.03 250 / .30),
+    inset 0 1px 0 oklch(1 0 0 / .9);
+  --raise-face: var(--surface);
+  --raise-face-hover: oklch(0.985 0.003 255);
+  --shadow-raise:
+    -3px -3px 8px oklch(1 0 0 / .96),
+    4px 4px 10px -1px oklch(0.5 0.02 250 / .24),
+    inset 0 1px 0 oklch(1 0 0 / .9);
+  --shadow-raise-hover:
+    -4px -4px 10px oklch(1 0 0 / .96),
+    6px 7px 14px -2px oklch(0.5 0.02 250 / .28),
+    inset 0 1px 0 oklch(1 0 0 / .9);
+  --shadow-inset:
+    inset 2px 2px 6px oklch(0.5 0.02 250 / .24),
+    inset -2px -2px 6px oklch(1 0 0 / .96);
+  --ink-face: linear-gradient(180deg, oklch(0.31 0.012 250), oklch(0.20 0.008 250));
+  --ink-fg: oklch(0.985 0.003 250);
+  --shadow-ink:
+    -2px -2px 6px oklch(1 0 0 / .8),
+    4px 6px 12px -3px oklch(0.25 0.05 250 / .5),
+    inset 0 1px 0 oklch(1 0 0 / .18);
   --shadow-card-legacy:
     0 1px 0 0 oklch(1 0 0 / .8) inset,
     0 8px 24px -14px oklch(.3 .01 250 / .1);
 }
 
-/* Local aliases preserve the existing dark outline and the indicator-ready
- * rule that removes the selected row's own shadow. Never draw two pills. */
-.hub-app[data-visual-system="depth-b"] .hub-nav-indicator,
-.hub-app[data-visual-system="depth-b"] .hub-nav-item[aria-current="page"] {
-  --fx-shadow: var(--shadow-nav);
+/* ── 바탕: 셸이 빛 번짐을 칠하고 본문·탑바는 비켜선다 ─────────────── */
+.hub-app[data-visual-system="depth-c"] .hub-shell { background: var(--bg-glow), var(--bg); }
+.hub-app[data-visual-system="depth-c"] .hub-content { background: transparent; }
+.hub-app[data-visual-system="depth-c"] .hub-topbar { background: transparent; border-bottom-color: transparent; }
+
+/* ── 사이드바: 데스크톱에서 떠 있는 판 ─────────────────────────── */
+.hub-app[data-visual-system="depth-c"] .hub-sidebar-futura {
+  background: var(--surface);
+  box-shadow: var(--shadow-panel);
+  border-right-color: transparent;
+}
+@media (min-width: 901px) {
+  .hub-app[data-visual-system="depth-c"] .hub-sidebar-futura {
+    margin: 12px 4px 12px 12px;
+    border-radius: 22px;
+  }
 }
 
-/* Futura supporting actions have more-specific selectors than .hub-btn.
- * Split their local shadow tokens rather than fighting that specificity.
- * Expanded Check Items retain their separate inset selection ring. */
-.hub-app[data-visual-system="depth-b"] .hub-btn,
-.hub-app[data-visual-system="depth-b"] .fx-pill-btn,
-.hub-app[data-visual-system="depth-b"] .fx-tab,
-.hub-app[data-visual-system="depth-b"] .ci-outcome {
-  --fx-shadow: var(--shadow-control);
-  --fx-shadow-lift: var(--shadow-control);
+/* 검색 · 사용자 카드: 낮게 솟은 면 */
+.hub-app[data-visual-system="depth-c"] .fx-shell-card {
+  background: var(--raise-face);
+  box-shadow: var(--shadow-raise);
 }
-.hub-app[data-visual-system="depth-b"] .hub-btn {
-  box-shadow: var(--shadow-control);
+
+/* 잉크 pill 미끄러짐 — 거리 비례. JS(useNavIndicator)가 영역에 --slide-dist(px 수)를 싣고, 같은 영역에서
+ * 시간을 계산해야 한다(커스텀 속성의 var()는 선언한 요소에서 풀린다). 깊은 감속 + 아주 살짝 넘침. */
+.hub-app[data-visual-system="depth-c"] .hub-sidebar-nav,
+.hub-app[data-visual-system="depth-c"] .hub-sidebar-utilities {
+  --slide-dur: min(var(--dur-slide-max), calc(var(--dur-slide-base) + var(--slide-dist, 0) * var(--dur-slide-per-px)));
 }
-.hub-app[data-visual-system="depth-b"] .fx-pill-btn,
-.hub-app[data-visual-system="depth-b"] .fx-pill-btn:hover,
-.hub-app[data-visual-system="depth-b"] .ci-outcome,
-.hub-app[data-visual-system="depth-b"] .ci-outcome:hover {
+
+/* 현재 항목: 잉크 pill. JS가 자리를 잡기 전에는 행 자신이 잉크, 잡은 뒤에는 미끄러지는 면이 잉크 */
+.hub-app[data-visual-system="depth-c"] .hub-nav-item[aria-current="page"],
+.hub-app[data-visual-system="depth-c"] .hub-nav-indicator {
+  background: var(--ink-face);
+  box-shadow: var(--shadow-ink);
+}
+.hub-app[data-visual-system="depth-c"] .hub-nav-item[aria-current="page"] {
+  color: var(--ink-fg);
+  /* 글자는 pill이 도착할 즈음 반전한다 */
+  transition: color calc(var(--slide-dur) * .5) var(--ease-hub) calc(var(--slide-dur) * .35);
+}
+.hub-app[data-visual-system="depth-c"] [data-indicator="on"] > .hub-nav-item[aria-current="page"] {
+  background: transparent;
+  box-shadow: none;
+}
+.hub-app[data-visual-system="depth-c"] .hub-nav-indicator {
+  border-radius: var(--fx-pill);
+  transition:
+    transform var(--slide-dur) var(--ease-slide),
+    width var(--slide-dur) var(--ease-slide),
+    height var(--slide-dur) var(--ease-slide),
+    opacity var(--dur-hover) var(--ease-hub);
+}
+/* 처음 놓일 때는 제자리에 바로(미끄럼 없음) */
+.hub-app[data-visual-system="depth-c"] .hub-nav-indicator[data-instant] { transition: opacity var(--dur-hover) var(--ease-hub); }
+.hub-app[data-visual-system="depth-c"] .hub-nav-item { border-radius: var(--fx-pill); }
+
+/* ── 버튼 ──────────────────────────────────────────────────────── */
+.hub-app[data-visual-system="depth-c"] .hub-btn {
+  /* Futura의 보조 버튼 hover 규칙(특이도가 더 높다)이 읽는 지역 토큰을 솟은 면으로 바꾼다. */
+  --fx-shadow: var(--shadow-raise);
+  --fx-shadow-lift: var(--shadow-raise-hover);
+  transition:
+    background var(--dur-hover) var(--ease-hub),
+    border-color var(--dur-hover) var(--ease-hub),
+    color var(--dur-hover) var(--ease-hub),
+    opacity var(--dur-hover) var(--ease-hub),
+    transform var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub);
+}
+.hub-app[data-visual-system="depth-c"] .hub-btn--secondary:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .hub-btn--outline:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .hub-btn--danger:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .fx-pill-btn:not(.fx-pill-btn--primary):not(.fx-pill-btn--ghost):not(:disabled),
+.hub-app[data-visual-system="depth-c"] .ci-outcome:not(.ci-outcome--primary):not(:disabled),
+.hub-app[data-visual-system="depth-c"] .daily-brief__jump {
+  background: var(--raise-face);
+  border-color: transparent;
+  box-shadow: var(--shadow-raise);
+}
+/* 위험 동작은 위험 선을 지킨다(§5.2) */
+.hub-app[data-visual-system="depth-c"] .hub-btn--danger:not(:disabled) { border-color: var(--danger-line); }
+
+.hub-app[data-visual-system="depth-c"] .hub-btn--secondary:hover:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .hub-btn--outline:hover:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .hub-btn--danger:hover:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .fx-pill-btn:hover:not(.fx-pill-btn--primary):not(.fx-pill-btn--ghost):not(:disabled),
+.hub-app[data-visual-system="depth-c"] .ci-outcome:hover:not(.ci-outcome--primary):not(:disabled),
+.hub-app[data-visual-system="depth-c"] .daily-brief__jump:hover {
+  background: var(--raise-face-hover);
+  box-shadow: var(--shadow-raise-hover);
+  transform: translateY(-1px);
+}
+/* 누르는 순간 눌린 홈 */
+.hub-app[data-visual-system="depth-c"] .hub-btn--secondary:active:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .hub-btn--outline:active:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .hub-btn--danger:active:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .fx-pill-btn:active:not(.fx-pill-btn--primary):not(.fx-pill-btn--ghost):not(:disabled),
+.hub-app[data-visual-system="depth-c"] .ci-outcome:active:not(.ci-outcome--primary):not(:disabled),
+.hub-app[data-visual-system="depth-c"] .daily-brief__jump:active {
+  background: var(--well);
+  box-shadow: var(--shadow-inset);
   transform: none;
 }
-.hub-app[data-visual-system="depth-b"] .fx-pill-btn:hover:not(:disabled):not(.fx-pill-btn--primary):not(.fx-pill-btn--ghost),
-.hub-app[data-visual-system="depth-b"] .ci-outcome:hover:not(:disabled):not(.ci-outcome--primary) {
-  background: var(--surface-3);
-}
-.hub-app[data-visual-system="depth-b"] .fx-pill-btn--primary:hover:not(:disabled),
-.hub-app[data-visual-system="depth-b"] .ci-outcome--primary:hover:not(:disabled) {
-  background: var(--moon-50);
+/* 펼친 체크 항목은 선택 링을 지킨다 */
+.hub-app[data-visual-system="depth-c"] .ci-outcome[aria-expanded="true"]:not(.ci-outcome--primary):not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--accent), var(--shadow-raise);
 }
 
-/* Today owns a distinct panel token, not a distinct depth system. Its links
- * keep their existing neutral color/border feedback without a raised button. */
-.hub-app[data-visual-system="depth-b"] .daily-brief {
+/* primary = 잉크 */
+.hub-app[data-visual-system="depth-c"] .hub-btn--primary:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .fx-pill-btn--primary:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .ci-outcome--primary:not(:disabled) {
+  color: var(--ink-fg);
+  background: var(--ink-face);
+  border-color: transparent;
+  box-shadow: var(--shadow-ink);
+}
+.hub-app[data-visual-system="depth-c"] .hub-btn--primary:hover:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .fx-pill-btn--primary:hover:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .ci-outcome--primary:hover:not(:disabled) {
+  background: var(--ink-face);
+  transform: translateY(-1px);
+}
+.hub-app[data-visual-system="depth-c"] .hub-btn--primary:active:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .fx-pill-btn--primary:active:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .ci-outcome--primary:active:not(:disabled) {
+  transform: none;
+  box-shadow: inset 0 2px 5px oklch(0 0 0 / .4);
+}
+
+/* ghost·비활성은 평면 */
+.hub-app[data-visual-system="depth-c"] .hub-btn--ghost,
+.hub-app[data-visual-system="depth-c"] .hub-btn:disabled,
+.hub-app[data-visual-system="depth-c"] .fx-pill-btn--ghost,
+.hub-app[data-visual-system="depth-c"] .fx-pill-btn:disabled,
+.hub-app[data-visual-system="depth-c"] .ci-outcome:disabled {
+  box-shadow: none;
+  transform: none;
+}
+
+/* 탑바 아이콘 버튼은 솟는다 — 행 안 아이콘 버튼은 평면 그대로 */
+.hub-app[data-visual-system="depth-c"] .hub-topbar .hub-iconbtn {
+  background: var(--raise-face);
+  box-shadow: var(--shadow-raise);
+  border-color: transparent;
+}
+.hub-app[data-visual-system="depth-c"] .hub-topbar .hub-iconbtn:hover {
+  background: var(--raise-face-hover);
+  box-shadow: var(--shadow-raise-hover);
+}
+
+/* ── 세그먼트 · 인페이지 탭: 눌린 트랙 + 잉크 선택 ─────────────── */
+.hub-app[data-visual-system="depth-c"] .hub-seg {
+  background: var(--well);
+  border-color: transparent;
+  box-shadow: var(--shadow-inset);
+}
+.hub-app[data-visual-system="depth-c"] .hub-seg__btn[aria-pressed="true"],
+.hub-app[data-visual-system="depth-c"] .fx-tab[aria-current="page"] {
+  color: var(--ink-fg);
+  background: var(--ink-face);
+  box-shadow: var(--shadow-ink);
+}
+.hub-app[data-visual-system="depth-c"] .fx-tabs {
+  padding: 4px;
+  border-radius: var(--fx-pill);
+  background: var(--well);
+  box-shadow: var(--shadow-inset);
+  width: fit-content;
+  max-width: 100%;
+}
+.hub-app[data-visual-system="depth-c"] .hub-seg[data-invalid] { box-shadow: inset 0 0 0 1px var(--danger), var(--shadow-inset); }
+
+/* ── 입력 · 트랙: 눌린 홈. 1px 경계(3:1, §5.1 --line-control)는 지킨다 ── */
+.hub-app[data-visual-system="depth-c"] .hub-input,
+.hub-app[data-visual-system="depth-c"] .hub-field {
+  background: var(--well);
+  box-shadow: var(--shadow-inset);
+}
+.hub-app[data-visual-system="depth-c"] .hub-input:focus { background: var(--well); }
+.hub-app[data-visual-system="depth-c"] .hub-field:focus-within {
+  background: var(--well);
+  box-shadow: 0 0 0 1px var(--moon-300), var(--shadow-inset);
+}
+.hub-app[data-visual-system="depth-c"] .hub-progress-track { box-shadow: var(--shadow-inset); }
+
+/* ── 오늘: 패널은 공통 깊이, 바로가기는 솟은 컨트롤 ───────────── */
+.hub-app[data-visual-system="depth-c"] .daily-brief {
   --brief-panel-shadow: var(--shadow-panel);
   --brief-panel-shadow-hover: var(--shadow-panel);
 }
-.hub-app[data-visual-system="depth-b"] .daily-brief__jump {
-  box-shadow: var(--shadow-control);
-  transform: none;
+/* 패딩 없는 패널의 맨 위·맨 아래 띠(긴급 KA 줄, 할 일 머리)가 제 배경을 네모로 칠해 둥근 모서리를
+ * 덮었다 — 상자와 바탕의 대비가 커지면서 위쪽이 잘린 판처럼 보였다(운영자 피드백 2026-10-21). */
+.hub-app[data-visual-system="depth-c"] .daily-brief__panel > :first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+.hub-app[data-visual-system="depth-c"] .daily-brief__panel > :last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
 }
 
-.hub-app[data-visual-system="depth-b"] .personal-revenue-drawer,
-.hub-app[data-visual-system="depth-b"] .hub-project-portfolio-mobile-manage > div {
+.hub-app[data-visual-system="depth-c"] .personal-revenue-drawer,
+.hub-app[data-visual-system="depth-c"] .hub-project-portfolio-mobile-manage > div {
   box-shadow: var(--shadow-card-legacy);
 }

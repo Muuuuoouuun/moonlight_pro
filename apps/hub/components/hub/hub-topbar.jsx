@@ -109,8 +109,6 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
   return (
     <header className="hub-topbar" style={{
       flexShrink: 0,
-      background: 'var(--surface)',
-      borderBottom: '1px solid var(--line-soft)',
       display: 'flex', flexDirection: 'column',
     }}>
       <div className="hub-topbar__main">
