@@ -60,7 +60,8 @@ test("each product carries ops status, month numbers, work with task counts and 
   assert.deepEqual(ledger.candidates.map((p) => p.id), ["p2"]);
   assert.deepEqual(ledger.areas, [{ id: "a1", name: "개인 사업" }]);
   const monthRead = r.seen.find((s) => s.table === "product_monthly_metrics");
-  assert.ok(monthRead.options.filters.some(([k, v]) => k === "month" && v === "in.(2026-09,2026-08)"));
+  // 추세선(12a-1·12d)이 읽는 최근 6개월 — 이번 달부터 거꾸로.
+  assert.ok(monthRead.options.filters.some(([k, v]) => k === "month" && v === "in.(2026-09,2026-08,2026-07,2026-06,2026-05,2026-04)"));
   assert.ok(r.seen.every(({ options }) => options.filters.some(([k, v]) => k === "workspace_id" && v === `eq.${WS}`)));
 });
 

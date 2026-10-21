@@ -406,19 +406,27 @@ export function productStageOrder(stage) {
 // ── 제품 운영실 B안 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0) ──────────
 
 // 운영 상태 — 단계("얼마나 자랐나")와 별개인 "지금 어떤가". 색 없이 글리프 + 글자(DESIGN §5.3 lifecycle).
+// 이름·기호는 제품 렌즈 §14.3 어휘(2026-10-21 운영자 "D 첫 화면 + 12a-1 보기 + 상세 12d"로 화면에 들어감).
 export const PRODUCT_OPS = [
-  { value: "dev", label: "개발 중", glyph: "◌" },
-  { value: "live", label: "사용 중", glyph: "●" },
-  { value: "paused", label: "일시 중지", glyph: "Ⅱ" },
-  { value: "ended", label: "종료", glyph: "／" },
+  { value: "dev", label: "제작중", glyph: "◐" },
+  { value: "live", label: "운영중", glyph: "●" },
+  { value: "paused", label: "중지", glyph: "⏸\uFE0E" },
+  { value: "ended", label: "종료", glyph: "⊘" },
 ];
 const OPS_BY_VALUE = Object.fromEntries(PRODUCT_OPS.map((ops) => [ops.value, ops]));
 export const OPS_REQUIRING_NOTE = new Set(["paused", "ended"]);
 export function productOps(value) {
   return OPS_BY_VALUE[value] || OPS_BY_VALUE.dev;
 }
+// 화면의 모드 = 운영 상태 + "기획"(코드 전 — 운영 상태 dev이면서 단계가 아이디어, 운영실 §0.1).
+// 모드는 색이 아니라 질감으로 그린다: 운영중 채운 타일 · 제작중 빗금 + 점선 · 중지 빈 실선 · 기획 점 테두리.
+const IDEA_MODE = { value: "idea", label: "기획", glyph: "○" };
+export function productMode(product) {
+  if ((product?.opsStatus || "dev") === "dev" && product?.stage === "idea") return IDEA_MODE;
+  return productOps(product?.opsStatus);
+}
 
-// 포트폴리오 목록 순서: 운영 상태(사용 중 → 개발 중 → 일시 중지 → 종료) → 단계(productStageOrder) → 이름.
+// 포트폴리오 목록 순서: 운영 상태(운영중 → 제작중 → 중지 → 종료) → 단계(productStageOrder) → 이름.
 // 마지막 기준이 이름인 이유 — 서버 순서(updated_at)에 기대면 같은 칸의 제품이 수정할 때마다 자리를 바꾼다.
 const LIST_OPS_RANK = ["live", "dev", "paused", "ended"];
 function opsRank(value) {
@@ -434,9 +442,9 @@ export function orderProducts(products) {
 
 // 제품에 붙는 일(프로젝트)의 종류. 보수는 반복 주기를 가질 수 있다.
 export const WORK_TYPES = [
-  { value: "feature", label: "신기능", glyph: "＋" },
+  { value: "feature", label: "신기능", glyph: "◆" },
   { value: "maintenance", label: "보수", glyph: "↻\uFE0E" },
-  { value: "contact", label: "연락", glyph: "☏\uFE0E" },
+  { value: "contact", label: "연락", glyph: "↗\uFE0E" },
 ];
 const WORK_BY_VALUE = Object.fromEntries(WORK_TYPES.map((type) => [type.value, type]));
 export function workType(value) {
@@ -530,6 +538,12 @@ export function previousMonth(month) {
   const [y, m] = String(month).split("-").map(Number);
   if (!y || !m) return null;
   return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+// 이번 달까지 count개월, 오래된 달 → 이번 달 순서(추세선·손익 막대의 x축).
+export function recentMonths(month, count = 6) {
+  const out = [month];
+  while (out.length < count && out[0]) out.unshift(previousMonth(out[0]));
+  return out.filter(Boolean);
 }
 function dayDiff(fromDay, toDay) {
   return Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86400000);

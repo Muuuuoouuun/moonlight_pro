@@ -1,5 +1,5 @@
 // 제품 운영실 읽기 모델 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0,
-// 2026-09-24-product-dev-projects-draft.md §3). 제품마다 운영 상태·월 숫자·저장소·일(프로젝트, 할 일 수)·
+// 2026-09-24-product-dev-projects-draft.md §3). 제품마다 운영 상태·최근 6개월 월 숫자·저장소·일(프로젝트, 할 일 수)·
 // 최근 GitHub 신호·연결된 문의를 붙이고, 문의함용으로 모든 제품의 문의(제품 미정 포함)를 함께 돌려준다.
 //
 // 봉투(CLAUDE.md Hub read 실패 봉투): 제품 행을 못 읽으면 status "error" — 빈 목록으로 위장하지 않는다.
@@ -8,7 +8,7 @@
 
 import { fetchSupabaseRowsDetailed, inFilter, withWorkspaceFilter } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
-import { previousMonth, seoulMonth } from "@/lib/product-catalog";
+import { recentMonths, seoulMonth } from "@/lib/product-catalog";
 
 const PRODUCT_LIMIT = 200;
 const SIGNAL_LIMIT = 150;
@@ -16,6 +16,8 @@ const SIGNALS_PER_PRODUCT = 12;
 const INQUIRY_LINK_LIMIT = 500;
 const RECENT_INQUIRY_LIMIT = 80;
 const TASK_LIMIT = 2000;
+// 월 숫자는 최근 6개월 — 포트폴리오(12a-1)·제품 상세(12d)의 추세선과 손익 막대가 같은 창을 읽는다(2026-10-21).
+const METRIC_MONTHS = 6;
 // lead_id·deal_id: 문의에서 만드는 일에 고객(리드)을 붙이려고 읽는다(0028 통합 문의 스키마).
 const INQUIRY_COLUMNS = "id,subject,status,kind,org_scope,contact_name,contact_email,lead_id,deal_id,received_at,updated_at";
 
@@ -130,7 +132,7 @@ export async function getProductLedger({
   if (!configured) return { status: "preview", source: "preview", ...empty };
 
   const month = seoulMonth(now);
-  const months = [month, previousMonth(month)];
+  const months = recentMonths(month, METRIC_MONTHS).reverse();
   const [products, repositories, projects, signals, inquiryLinks, recentInquiries, metrics, areas] = await Promise.all([
     fetchRows("products", { filters: withWorkspaceFilter(), order: "updated_at.desc", limit: PRODUCT_LIMIT }),
     fetchRows("product_repositories", { filters: withWorkspaceFilter(), order: "created_at.asc", limit: 500 }),
@@ -154,7 +156,7 @@ export async function getProductLedger({
       order: "received_at.desc",
       limit: RECENT_INQUIRY_LIMIT,
     }),
-    fetchRows("product_monthly_metrics", { filters: withWorkspaceFilter([["month", inFilter(months)]]), limit: 1000 }),
+    fetchRows("product_monthly_metrics", { filters: withWorkspaceFilter([["month", inFilter(months)]]), limit: PRODUCT_LIMIT * METRIC_MONTHS }),
     fetchRows("areas", { select: "id,name", filters: withWorkspaceFilter([["status", "eq.active"]]), order: "name.asc", limit: 100 }),
   ]);
 
