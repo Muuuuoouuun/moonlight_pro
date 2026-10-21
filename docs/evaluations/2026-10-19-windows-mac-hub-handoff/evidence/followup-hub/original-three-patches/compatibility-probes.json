@@ -1,0 +1,21 @@
+{
+  "base": "67eb1d9b316843f5acd70de513d5a7b8d823bfdc",
+  "synthetic": true,
+  "externalNetworkCalls": 0,
+  "validRequestCharacters": 1000,
+  "validAnswerCharacters": 10000,
+  "sevenTurns": {
+    "bytes": 233947,
+    "desktop": "accepted"
+  },
+  "eightTurns": {
+    "bytes": 267322,
+    "hubHttp": 200,
+    "hubStatus": "ready",
+    "desktop": {
+      "kind": "invalid",
+      "error": "invalid-response"
+    }
+  },
+  "note": "Hub route accepts valid records but Desktop whole-envelope byte bound prevents opening the 8-turn meeting. No real database or provider was used."
+}

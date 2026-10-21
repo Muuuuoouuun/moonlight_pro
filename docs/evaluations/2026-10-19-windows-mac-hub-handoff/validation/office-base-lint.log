@@ -1,0 +1,10 @@
+
+> lint
+> node ./scripts/lint-source.mjs
+
+Source syntax guard: 1752 files checked; 0 issues. No semantic/type/style analysis.
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

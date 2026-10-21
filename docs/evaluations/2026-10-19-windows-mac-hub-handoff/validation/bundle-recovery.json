@@ -1,0 +1,7 @@
+{
+  "recovered_commit": "a48ed295ca009d3d95dbeb73ec5f9e0b9d0be405",
+  "tree": "3e43d2195883424f804fa67ceeef1485f961bcc4",
+  "matches_code_commit_tree": true,
+  "source": "local verified-six-patches.bundle",
+  "recovery_in": "separate isolated clone"
+}
