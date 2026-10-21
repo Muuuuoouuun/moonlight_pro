@@ -5,7 +5,8 @@ import { Button, TextAreaField, TextField } from "../hub-primitives";
 import { refreshContentLedger } from "../use-content-ledger";
 import { JOURNAL_TAG_LIMIT, JOURNAL_TAG_LENGTH, normalizeJournalTags } from "@/lib/journal-tags";
 
-export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = "personal", fixedScope = false, onSaved }) {
+// `compact`: 만들기·보드의 한 줄 담기(시안 13a·13b). 저장 경로·재시도 규칙은 전체 폼과 같다 — 링크·태그·범위는 목록 보기의 전체 폼에서.
+export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = "personal", fixedScope = false, onSaved, compact = false, inputRef }) {
   const [body, setBody] = React.useState("");
   const [sourceUrl, setSourceUrl] = React.useState("");
   const [tags, setTags] = React.useState([]);
@@ -49,15 +50,29 @@ export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = 
       }
       attempt.current = null;
       setBody(""); setSourceUrl(""); setTags([]);
-      setMessage("소재함에 저장했습니다. 준비되면 원고를 이어 쓰세요.");
+      setMessage(compact ? "담았어요." : "소재함에 저장했습니다. 준비되면 원고를 이어 쓰세요.");
       onSaved?.(id);
     } catch (cause) {
       setError(true); setMessage(cause.message || "소재를 저장하지 못했습니다.");
     } finally { setBusy(false); }
   }
 
+  if (compact) {
+    const locked = busy || Boolean(attempt.current);
+    return (
+      <form onSubmit={capture} className="cflow-capture">
+        <div className="cflow-capture__well">
+          <input ref={inputRef} aria-label="아이디어 한 줄" value={body} onChange={(event) => setBody(event.target.value)} disabled={locked}
+            placeholder="떠오른 것 한 줄 — 영상 보다가, 걷다가, 상담하다가…" />
+          <Button type="submit" variant="primary" size="sm" disabled={busy || !body.trim()}>{busy ? "담는 중…" : attempt.current ? "같은 소재로 재시도" : "담기"}</Button>
+        </div>
+        {message && <div role={error ? "alert" : "status"} className="cflow-capture__msg" data-error={error ? "" : undefined}>{message}</div>}
+      </form>
+    );
+  }
+
   return (
-    <form onSubmit={capture} style={{ padding: 18, border: "1px solid var(--line-soft)", borderRadius: "var(--r-lg)", background: "var(--surface)", display: "grid", gap: 12 }}>
+    <form onSubmit={capture} style={{ padding: 18, border: "1px solid var(--line-soft)", borderRadius: "var(--r-lg)", background: "var(--surface)", boxShadow: "var(--shadow-card)", display: "grid", gap: 12 }}>
       <div style={{ fontSize: 14, fontWeight: 550 }}>떠오른 소재부터 담기</div>
       <TextAreaField
         label="소재 메모"
@@ -92,10 +107,10 @@ export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = 
       </div>
       <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
         <TextField label="참고 링크 (선택)" type="url" fieldStyle={{ flex: "1 1 200px" }} value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} disabled={busy || Boolean(attempt.current)} placeholder="https://" />
-        {!brandId && !fixedScope && <label style={{ display: 'grid', gap: 5, fontSize: 12, color: 'var(--fg-muted)' }}>기록 범위<select aria-label="소재 기록 범위" value={scope} onChange={(event) => setScope(event.target.value)} disabled={busy || Boolean(attempt.current)} style={{ minHeight: 40, color: 'var(--fg)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: '8px 10px' }}><option value="personal">개인</option><option value="company">회사</option></select></label>}
+        {!brandId && !fixedScope && <label style={{ display: 'grid', gap: 5, fontSize: 12, color: 'var(--fg-muted)' }}>기록 범위<select aria-label="소재 기록 범위" value={scope} onChange={(event) => setScope(event.target.value)} disabled={busy || Boolean(attempt.current)} style={{ minHeight: 40, color: 'var(--fg)', background: 'var(--well, var(--surface-2))', boxShadow: 'var(--shadow-inset, none)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: '8px 10px' }}><option value="personal">개인</option><option value="company">회사</option></select></label>}
         <label style={{ display: "grid", gap: 5, fontSize: 12, color: "var(--fg-muted)", flex: "1 1 180px" }}>
           브랜드 (나중에 선택 가능)
-          <select value={brandId} onChange={(event) => setBrandId(event.target.value)} disabled={busy || Boolean(attempt.current)} style={{ minHeight: 40, color: "var(--fg)", background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", padding: "8px 10px" }}>
+          <select value={brandId} onChange={(event) => setBrandId(event.target.value)} disabled={busy || Boolean(attempt.current)} style={{ minHeight: 40, color: "var(--fg)", background: "var(--well, var(--surface-2))", boxShadow: "var(--shadow-inset, none)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", padding: "8px 10px" }}>
             <option value="">미지정</option>
             {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
           </select>

@@ -28,7 +28,8 @@ const deps = {
   styles: new Proxy({}, { get: (_, key) => String(key) }),
   SectionTitle: ({ children, right }) => React.createElement("section-title", null, children, right),
   Iconed: () => null,
-  OpsLabel: ({ value }) => React.createElement("span", null, catalog.productOps(value).label),
+  ProductMark: () => null,
+  ModeLabel: ({ product }) => React.createElement("span", null, catalog.productMode(product).label),
 };
 const ProductDevList = new Function(...Object.keys(deps), `${js}; return ProductDevList;`)(...Object.values(deps));
 const text = (node) => (typeof node === "string" || typeof node === "number" ? String(node) : (node?.props?.children || []).map(text).join(""));
@@ -54,7 +55,7 @@ test("the list shows broken CI first with a danger rail, and only there", () => 
   const opened = [];
   const tree = expand(ProductDevList({ products, onOpenProduct: (id) => opened.push(id) }));
   const rows = all(tree, (node) => node.type === "button" && String(node.props.className || "").includes("devRow"));
-  assert.deepEqual(rows.map((row) => row.props["aria-label"]), ["깨진 제품 개발 상세 열기", "통과 제품 개발 상세 열기", "새 저장소 개발 상세 열기", "연결 전 제품 개발 상세 열기"]);
+  assert.deepEqual(rows.map((row) => row.props["aria-label"]), ["깨진 제품 상세 열기", "통과 제품 상세 열기", "새 저장소 상세 열기", "연결 전 제품 상세 열기"]);
   assert.match(rows[0].props.className, /rail/);
   assert.doesNotMatch(rows[1].props.className, /rail/);
   assert.match(text(rows[0]), /CI 실패 · lint/);

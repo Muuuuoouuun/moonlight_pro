@@ -4,6 +4,7 @@ import { test } from "node:test";
 import ts from "typescript";
 
 import * as catalog from "../../../lib/product-catalog.js";
+import * as instruments from "../../../lib/product-instruments.js";
 import { readSaveOutcome } from "./product-client.js";
 
 const source = readFileSync(new URL("./project-products-view.jsx", import.meta.url), "utf8");
@@ -57,7 +58,7 @@ function mountPage({ status = "live", ...overrides } = {}) {
   } };
   const toast = Object.assign(() => {}, { success() {}, error() {} });
   const deps = {
-    React, ...catalog,
+    React, ...catalog, ...instruments,
     usePathname: () => "/dashboard/products",
     useSearchParams: () => params,
     useRouter: () => router,
@@ -68,7 +69,7 @@ function mountPage({ status = "live", ...overrides } = {}) {
     styles: {},
     ...overrides,
   };
-  for (const name of ["Button", "EditDrawer", "EmptyState", "Kbd", "Skeleton", "TruthBadge", "ProductDetailDrawer", "ProductDevList", "ProductInbox"]) deps[name] = name;
+  for (const name of ["Button", "EditDrawer", "EmptyState", "Kbd", "SegmentedControl", "Skeleton", "TruthBadge", "ProductDetailDrawer", "ProductDevList", "ProductInbox", "ProductPage", "ProductPortfolio"]) deps[name] = name;
   const Page = new Function(...Object.keys(deps), `${pageJs}; return ProjectProductsView;`)(...Object.values(deps));
   const render = async () => {
     for (let turn = 0; turn < 10; turn += 1) {
@@ -151,6 +152,8 @@ test("the latest refresh owns both reads even when older transports finish last"
   products[0].resolve(ledgerWith("Initial"));
   github[0].resolve({ state: "preview" });
   await page.navigate("product=product");
+  page.find("ProductPage").props.onOpenSettings("dev");
+  await page.render();
   const older = page.find("ProductDetailDrawer").props.onChanged();
   const latest = page.find("ProductDetailDrawer").props.onChanged();
   products[2].resolve(ledgerWith("Latest"));
@@ -294,26 +297,61 @@ test("a create completing after unmount does not start another page refresh or n
   assert.equal(page.navigations.length, 1, "only the consumed New query, no late product navigation");
 });
 
-// 2026-10-21 제품 리스트 + 개발 요약: `?product=`는 리스트 위에 상세 드로어를 `개발` 탭부터 연다.
-test("a product link opens the detail drawer over the list on the dev tab, and closing clears only the product", async () => {
+// 2026-10-21 "D 첫 화면 + 12a-1 보기 + 상세 12d": 어느 보기에서든 `?product=`는 제품 상세(12d)로 가고,
+// 개발 탭은 상세의 "개발 · GitHub"가 드로어로 연다. 닫으면 `product`만 지워 보던 보기로 돌아간다.
+test("a product link lands on the 12d detail; 개발 · GitHub opens the drawer on the dev tab; back clears only the product", async () => {
   const page = mountPage({ readProducts: async () => ledgerWith("Current") });
   await page.render();
-  assert.ok(page.find("ProductDevList"), "the list is the landing");
-  assert.equal(page.find("ProductDetailDrawer"), null);
-  assert.equal(page.find("SegmentedControl"), null, "no portfolio/inbox switch on the landing");
+  assert.ok(page.find("ProductDevList"), "the D list is the landing");
+  assert.deepEqual(page.find("SegmentedControl").props.options.map((option) => option.key), ["dev", "portfolio"], "a two-way view switch, no inbox option");
 
   page.find("ProductDevList").props.onOpenProduct("product");
   await page.render();
   assert.match(page.navigations.at(-1), /product=product/);
-  assert.ok(page.find("ProductDevList"), "the list stays under the drawer");
-  const drawer = page.find("ProductDetailDrawer");
-  assert.equal(drawer.props.initialTab, "dev");
-  assert.equal(drawer.props.product.name, "Current");
+  const detail = page.find("ProductPage");
+  assert.equal(detail.props.product.name, "Current");
+  assert.equal(detail.props.months.length, 6, "the detail reads the same six-month window as the ledger");
+  assert.equal(detail.props.backLabel, "제품 · 개발");
+  assert.equal(page.find("ProductDevList"), null, "the detail replaces the list");
+  assert.equal(page.find("ProductDetailDrawer"), null, "the drawer waits for an explicit 개발 · GitHub");
 
-  drawer.props.onClose();
+  detail.props.onOpenSettings("dev");
+  await page.render();
+  assert.equal(page.find("ProductDetailDrawer").props.initialTab, "dev");
+  page.find("ProductDetailDrawer").props.onClose();
+  await page.render();
+  assert.equal(page.find("ProductDetailDrawer"), null);
+  assert.ok(page.find("ProductPage"), "closing the drawer keeps the detail");
+
+  page.find("ProductPage").props.onBack();
   await page.render();
   assert.doesNotMatch(page.navigations.at(-1), /product=/);
-  assert.equal(page.find("ProductDetailDrawer"), null);
+  assert.ok(page.find("ProductDevList"));
+  page.unmount();
+});
+
+test("the portfolio is a URL view; its rows land on the same detail and back returns to the portfolio", async () => {
+  const page = mountPage({ readProducts: async () => ledgerWith("Current") });
+  await page.render();
+  page.find("SegmentedControl").props.onChange("portfolio");
+  await page.render();
+  assert.match(page.navigations.at(-1), /view=portfolio/);
+  assert.equal(page.find("ProductDevList"), null);
+  const portfolio = page.find("ProductPortfolio");
+  assert.equal(portfolio.props.months.at(-1), portfolio.props.month);
+
+  portfolio.props.onOpenProduct("product");
+  await page.render();
+  assert.match(page.navigations.at(-1), /view=portfolio/);
+  assert.equal(page.find("ProductPage").props.backLabel, "제품 · 포트폴리오");
+  page.find("ProductPage").props.onBack();
+  await page.render();
+  assert.ok(page.find("ProductPortfolio"), "back returns to the portfolio, not the list");
+
+  page.find("ProductPortfolio").props.onOpenInbox();
+  await page.render();
+  assert.ok(page.find("ProductInbox"), "the portfolio reaches the inbox");
+  assert.equal(page.find("SegmentedControl"), null, "no view switch inside the inbox");
   page.unmount();
 });
 

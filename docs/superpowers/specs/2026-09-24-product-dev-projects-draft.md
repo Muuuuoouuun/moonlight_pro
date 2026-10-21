@@ -480,3 +480,18 @@ ClassIn은 회사 공식 객체의 정본이고, 개인 프로젝트는 ClassIn�
 | 그리지 않은 것 | 다음 마일스톤(폴링 요약에는 있으나 저장소 행에 저장하지 않음), 목표 출시일·30일 커밋 수(저장 칸 없음) — 필요하면 저장부터 정한다 |
 
 코드: `apps/hub/lib/product-dev-summary.js`(+ 테스트), `apps/hub/components/hub/pages/product-dev-list.jsx`(+ 테스트), `project-products-view.jsx`(첫 화면·드로어 연결), `product-detail-drawer.jsx`(`initialTab`). DESIGN.md §15 2026-10-21 행.
+
+### 14.9 D 첫 화면 + 12a-1 보기 + 상세 12d (운영자 확정 2026-10-21)
+
+운영자가 시안 `docs/design-studies/2026-10-21-product-tab-options/`(12a-1 포트폴리오 확정 · 상세 12d/12e)를 보고 "D 첫 화면 + 12a-1 보기 + 상세 12d"로 정했다. §14.8의 "행 → 상세"와 "화면에서 뺀 것"을 이 절이 대체한다.
+
+| 무엇 | 내용 |
+| --- | --- |
+| 보기 | 페이지 머리의 `개발 · 포트폴리오` 전환(`?view=portfolio`, 없으면 개발 = §14.8 리스트). 문의함은 포트폴리오의 `문의함 열기`·`지금 볼 것`·상세의 문의 행에서 열고, 옛 `?pview=inbox` 링크도 그대로 연다 |
+| 포트폴리오(12a-1) | 계기 5칸(사용 중 모드 구성 · 주간 사용자 선 · 순이익 + 6개월 손익 막대 · 열린 문의 점 · 집중 칸 3) → 지금 볼 것 → 표(집중 구간 / 나머지) |
+| 상세(12d) | `?product=<id>` — 어느 보기에서든 같은 상세. 머리 · 연결 링크 · 계기 4칸(사용자 · 손익 · 문의 · 운영 건강) · 흐름(오늘 → 이번 주 → 다음 → 언젠가 + 지난) · 레일(진행 중 프로젝트 · 요청 많은 신기능 · 단계 이력 · 제품 카드·돈). 개발 탭(저장소·GitHub·Codex)은 운영 건강 칸의 `개발 · GitHub`가 기존 상세 드로어로 연다 |
+| 모드(§14.3) | 운영 상태 이름을 ● 운영중 · ◐ 제작중 · ⏸ 중지 · ⊘ 종료로, 기획 ○ = 제작중 + 아이디어 단계. 제품 마크는 `ProductMark` 하나(아이콘 지도 `lib/product-icons.js`, 비면 모드 질감 타일) |
+| 원천 | 원장이 월 숫자를 최근 6개월 읽는다(같은 `product_monthly_metrics`). 사용자 선은 달마다 적는 "최근 7일 활성"이라 월 단위다. 운영 건강은 GitHub CI만 판정, 가동 체크·에러 수집은 `○ 연결 전` |
+| 그리지 않은 것 | 12e 탭 계기판(콘텐츠 → 제품 연결·링크 목록이 새로 필요), 12주 주간 사용자, 유료 고객·해지·사용자당 비용, 집중 칸에서 바로 올리기·거절 배너, 사이드바 고장 배지 |
+
+코드: `lib/product-instruments.js`(+ 테스트), `pages/product-portfolio.jsx`·`product-page.jsx`·`product-mark.jsx`·`project-products-view.jsx`, `pages/product-portfolio-detail.test.mjs`. DESIGN.md §11 제품 예외 · §15 2026-10-21 행.

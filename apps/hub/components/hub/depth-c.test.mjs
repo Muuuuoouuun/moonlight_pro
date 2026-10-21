@@ -100,3 +100,15 @@ test('the shell paints the glow; topbar and sidebar chrome moved from inline sty
   assert.match(read('hub-topbar.jsx'), /className="hub-topbar" style=\{\{\s*flexShrink: 0,\s*display: 'flex'/);
   assert.match(tokens, /\.hub-topbar \{[^}]*background: var\(--surface\);[^}]*border-bottom: 1px solid var\(--line-soft\);/);
 });
+
+// 2026-10-21 운영자 "테마 적용 안 된 요소 고치기": 1px 선 + 면만 있던 맨 위 판들이 바탕 위에 평평했다.
+test('top-level boxes that used to render flat sit on the panel shadow, and the memo launcher is a raised control', () => {
+  for (const cls of ['.discovery-entry', '.inquiry-list', '.workflow-records', '.memo-network-panel', '.pl-list', '.finance-gauge-card', '.finance-entries']) {
+    assert.equal(rule(`${marker} ${cls}`)?.['box-shadow'], 'var(--shadow-panel)', cls);
+  }
+  const memo = read('quick-memo.module.css');
+  assert.doesNotMatch(memo.replace(/\.backdrop[^}]*\}/, ''), /rgba\(/, 'launcher/panel colors come from tokens');
+  assert.match(memo, /\.root \.launcher \{[^}]*background: var\(--raise-face/, 'launcher face needs two classes to beat `.hub-app button`');
+  assert.match(read('pages/project-focus-stage.module.css'), /\.next \{[^}]*var\(--shadow-inset/);
+  assert.match(read('pages/project-delivery.module.css'), /\.summary \{[^}]*var\(--shadow-card\)/);
+});

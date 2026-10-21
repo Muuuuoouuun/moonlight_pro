@@ -291,7 +291,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     }}>
       <div className="hub-sidebar-header" style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div className="hub-sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <img src="/icon.svg" width="28" height="28" alt="" aria-hidden="true" style={{ flexShrink: 0 }} />
+          <img src="/icon-192.png" width="28" height="28" alt="" aria-hidden="true" style={{ flexShrink: 0, borderRadius: 7 }} />
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>Moonlight</div>
             <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>

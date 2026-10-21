@@ -314,3 +314,28 @@
 .hub-app[data-visual-system="depth-c"] .hub-project-portfolio-mobile-manage > div {
   box-shadow: var(--shadow-card-legacy);
 }
+
+/* ── 1px 선만 있던 판들 — depth C 상자로 (2026-10-21 운영자 "테마 적용 안 된 요소 고치기") ──
+ * 페이지 CSS가 border + 면만 주고 그림자가 없어 바탕 위에 평평하게 놓였다. 맨 위 판만 솟게 하고
+ * 그 안의 행·칸은 그대로 둔다(솟은 판 안에 또 솟은 판을 두지 않는다). */
+.hub-app[data-visual-system="depth-c"] .discovery-entry,
+.hub-app[data-visual-system="depth-c"] .guru-rec,
+.hub-app[data-visual-system="depth-c"] .guru-guidance__card,
+.hub-app[data-visual-system="depth-c"] .inquiry-list,
+.hub-app[data-visual-system="depth-c"] .mentor-shelf__collapsed,
+.hub-app[data-visual-system="depth-c"] .research-draft,
+.hub-app[data-visual-system="depth-c"] .workflow-disclosure,
+.hub-app[data-visual-system="depth-c"] .workflow-records,
+.hub-app[data-visual-system="depth-c"] .memo-search-details,
+.hub-app[data-visual-system="depth-c"] .memo-network-panel,
+.hub-app[data-visual-system="depth-c"] .pl-list,
+.hub-app[data-visual-system="depth-c"] .pl-detail,
+.hub-app[data-visual-system="depth-c"] .hub-pms-backlog-group,
+.hub-app[data-visual-system="depth-c"] .daily-review-capture,
+.hub-app[data-visual-system="depth-c"] .finance-gauge-card,
+.hub-app[data-visual-system="depth-c"] .finance-entries,
+.hub-app[data-visual-system="depth-c"] .finance-subscriptions,
+.hub-app[data-visual-system="depth-c"] .finance-table-scroll {
+  border-color: var(--line-soft);
+  box-shadow: var(--shadow-panel);
+}

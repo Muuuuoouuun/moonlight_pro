@@ -1,4 +1,4 @@
-.summary { padding: 12px 16px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--surface); color: var(--fg); min-width: 0; }
+.summary { padding: 12px 16px; border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--surface); color: var(--fg); min-width: 0; box-shadow: var(--shadow-card); }
 .heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .heading > div { min-width: 0; }
 .heading h3, .section h3 { font-size: 14px; line-height: 1.5; font-weight: 550; margin: 4px 0 0; overflow-wrap: anywhere; }

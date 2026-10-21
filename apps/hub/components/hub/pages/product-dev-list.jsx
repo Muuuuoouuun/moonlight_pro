@@ -2,14 +2,15 @@
 // 제품 탭 첫 화면 — 제품 리스트 + GitHub(개발) 요약 (2026-10-21 운영자 "일단 지금은 제품 리스트, 깃허브(개발) 요약 정도로").
 // 맨 위 네 칸(저장소 · CI · 열린 PR · 열린 이슈) → 제품 리스트(행마다 저장소·CI·최근 push·릴리스·열린 PR/이슈) → 최근 개발 활동.
 // 숫자는 저장소 요약(last_summary)과 GitHub 신호에서만 온다(lib/product-dev-summary.js). 모르는 값은 "—"이고,
-// 빨강은 CI 실패·동기화 실패·막힘 이슈에만 쓴다(DESIGN §5.2). 행을 누르면 그 제품의 상세 드로어가 `개발` 탭으로 열린다.
+// 빨강은 CI 실패·동기화 실패·막힘 이슈에만 쓴다(DESIGN §5.2). 행을 누르면 그 제품의 상세(12d)로 가고, 개발 탭은 상세의
+// 운영 건강 칸 "개발 · GitHub"에서 연다(2026-10-21 운영자 "D 첫 화면 + 12a-1 보기 + 상세 12d").
 import React from "react";
 
 import { SectionTitle } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import { CI_STATE_LABEL, productStageLabel } from "../../../lib/product-catalog.js";
 import { devSummary, orderDevRows, recentDevEvents, shortDay, shortTime, sinceLabel } from "../../../lib/product-dev-summary.js";
-import { OpsLabel } from "./product-portfolio";
+import { ModeLabel, ProductMark } from "./product-mark";
 import styles from "./product-room.module.css";
 
 const CI_GLYPH = { success: "✓", failure: "✕", pending: "◌", none: "·" };
@@ -81,10 +82,13 @@ function SummaryStrip({ summary }) {
 function DevRow({ product, row, onOpen }) {
   const urgent = Boolean(row.ci?.state === "failure" || row.syncError);
   return (
-    <button type="button" className={`hub-row ${styles.devRow}${urgent ? ` ${styles.rail}` : ""}`} onClick={() => onOpen(product.id)} aria-label={`${product.name} 개발 상세 열기`}>
-      <span className={styles.devCell}>
-        <span className={styles.name}>{product.name}</span>
-        <span><OpsLabel value={product.opsStatus} /> · {productStageLabel(product.stage)}</span>
+    <button type="button" className={`hub-row ${styles.devRow}${urgent ? ` ${styles.rail}` : ""}`} onClick={() => onOpen(product.id)} aria-label={`${product.name} 상세 열기`}>
+      <span className={styles.pfName}>
+        <ProductMark product={product} />
+        <span className={styles.devCell}>
+          <span className={styles.name}>{product.name}</span>
+          <span><ModeLabel product={product} /> · {productStageLabel(product.stage)}</span>
+        </span>
       </span>
       {row.connected ? (
         <>
@@ -108,7 +112,7 @@ function DevRow({ product, row, onOpen }) {
       ) : (
         <span className={styles.devEmpty}>
           <span className={styles.devPending}>저장소 연결 전</span>
-          <span>눌러서 개발 탭에서 GitHub 저장소를 연결해요</span>
+          <span>눌러서 상세의 개발 · GitHub에서 저장소를 연결해요</span>
         </span>
       )}
       <Iconed name="chevronR" size={14} style={{ color: "var(--fg-dim)" }} />
