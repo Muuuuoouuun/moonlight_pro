@@ -5,6 +5,7 @@ import ts from 'typescript';
 import { readTaskChecklist } from '../../../lib/task-checklist.js';
 import { projectIndexDoneState } from '../../../lib/project-index-order.js';
 import { canReviewProjectCompletion, resolveProjectNextAction } from '../../../lib/project-action-state.js';
+import { selectProjectNextStep } from '../../../lib/project-next-step.js';
 
 // Render the real workspace branches; primitive/hook doubles inspect truth and
 // callbacks. Browser checks cover the actual primitives, layout and focus.
@@ -40,8 +41,8 @@ function mount(initial = {}) {
     useRef(initial) { const index = cursor++; return slots[index] ||= { current: initial }; },
     useMemo: fn => fn(), useCallback: fn => fn, useEffect() {} };
   const styles = new Proxy({}, { get: (_, key) => key });
-  const scope = { React, readTaskChecklist, projectIndexDoneState, canReviewProjectCompletion, resolveProjectNextAction,
-    workStyles: styles, indexStyles: styles, deliveryStyles: styles,
+  const scope = { React, readTaskChecklist, projectIndexDoneState, canReviewProjectCompletion, resolveProjectNextAction, selectProjectNextStep,
+    workStyles: styles, indexStyles: styles, deliveryStyles: styles, stageStyles: styles,
     portfolioWindow: () => ({}), classifyProjectPortfolio: () => ({}), selectUrgentProjectItems: () => [],
     buildCurrentMonthProjectPreview: () => ({}), projectStatusLabel: value => value || '',
     useProjectIndexControls: projects => ({ ordered: projects, sortLabel: '직접 정렬', doneCollapsed: false, listRef: { current: null } }),

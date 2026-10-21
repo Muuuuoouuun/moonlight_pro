@@ -1,0 +1,44 @@
+/* 프로젝트 개요의 선택 프로젝트 — 2026-10-19 Projects B Focus 시안.
+   제목·요약 한 줄·다음 띠·할 일을 한 장의 카드에 담고, 참고 정보와 같은 소속의 다른 프로젝트는 카드 밖에 둔다.
+   색은 토큰만, 선은 1px, 빨강은 기한 지남·막힘(§5.2)에만. */
+.sheet { display: flex; flex-direction: column; gap: 18px; min-width: 0; padding: 30px 34px 22px; border: 1px solid var(--line-soft); border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow-card); }
+.eyebrow { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--fg-muted); font-size: 12px; }
+.eyebrow > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--fg-muted); font-size: 13px; }
+.summary > span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.summary strong { color: var(--fg); font-weight: 500; }
+.sep { width: 1px; height: 12px; background: var(--line); }
+.dday { color: var(--fg-muted); }
+.dday[data-tone="danger"], .risk { color: var(--danger); }
+.risk { display: inline-flex; align-items: center; gap: 4px; }
+/* 선택 프로젝트 게이지(§15 2026-09-23)를 요약 줄 안의 가는 트랙으로 줄인다 — 채움·한 번 차오름은 그대로. */
+.gauge { width: 72px; height: 6px; border-width: 0; }
+.notes { display: grid; gap: 2px; margin-top: -10px; color: var(--fg-muted); font-size: 10.5px; }
+
+.next { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px 16px; min-height: 56px; padding: 8px 10px 8px 16px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface-2); }
+.nextLabel { color: var(--fg-muted); font-size: 12px; }
+.nextTitle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; padding: 4px 6px; margin-left: -6px; border-radius: var(--r-sm); text-align: left; color: var(--fg); }
+.nextTitle > strong { font-size: 14px; font-weight: 500; line-height: 1.45; overflow-wrap: anywhere; }
+.nextTitle > span { color: var(--fg-muted); font-size: 12px; white-space: nowrap; }
+.nextDue { display: inline-flex; gap: 6px; color: var(--fg); font-size: 12px; white-space: nowrap; }
+.nextDue > span { color: var(--fg-muted); }
+.nextDue > span[data-tone="danger"] { color: var(--danger); }
+.feedback { margin: -10px 0 0; color: var(--fg-muted); font-size: 10.5px; }
+.feedback[role="alert"] { color: var(--danger); }
+
+.siblings { display: grid; gap: 12px; min-width: 0; }
+.siblings > h3 { margin: 0; color: var(--fg-dim); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; }
+.siblingGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.siblings .sibling { display: grid; gap: 10px; min-width: 0; padding: 16px 18px; border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--surface); text-align: left; color: var(--fg); }
+.sibling > span { display: flex; justify-content: space-between; gap: 8px; color: var(--fg-muted); font-size: 11px; }
+.sibling [data-tone="danger"] { color: var(--danger); }
+.sibling > strong { font-size: 13.5px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .sheet { gap: 14px; padding: 18px 16px 14px; border-radius: var(--r-lg); }
+  .next { grid-template-columns: minmax(0, 1fr) auto; padding: 10px 12px; }
+  .nextLabel, .nextTitle { grid-column: 1 / -1; }
+  .nextDue { grid-column: 1; }
+  .nextTitle { min-height: 44px; align-items: center; }
+}

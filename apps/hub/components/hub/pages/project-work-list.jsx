@@ -6,6 +6,7 @@ import { Iconed } from '../hub-icons';
 import { GitHubPrMark } from '../github-pr-mark';
 import { projectItemType, readTaskChecklist, TASK_CHECKLIST_LIMIT } from '@/lib/task-checklist';
 import { normalizeProjectIndexPreferences, sortProjectIndex, moveProjectIndex } from '@/lib/project-index-order';
+import { projectGroupSpan } from '@/lib/project-next-step';
 import { useProjectWorkOrder } from './project-work-order';
 import styles from './project-direct-work.module.css';
 
@@ -13,10 +14,32 @@ const TYPE_LABEL = { task: '할 일', subproject: '작업 묶음', milestone: '�
 const TYPE_ICON = { task: 'check', subproject: 'folder', milestone: 'flag' };
 const TYPE_SHAPE = { task: 'square', subproject: 'folder', milestone: 'diamond' };
 const EMPTY_DRAFT = { title: '', itemType: 'task', request: null, status: 'idle', message: '' };
+const seoulMonthDay = new Intl.DateTimeFormat('en-US', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Seoul' });
 const dateLabel = value => {
   const date = value ? new Date(value) : null;
-  return date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Seoul' }).format(date) : '';
+  if (!date || !Number.isFinite(date.getTime())) return '';
+  const parts = Object.fromEntries(seoulMonthDay.formatToParts(date).map(part => [part.type, part.value]));
+  return `${parts.month}/${parts.day}`;
 };
+// 열린 항목의 가까운 날짜만 D-N으로 덧붙인다. 지남(D+N)만 빨강, 오늘·임박은 글자로만(§5.2).
+const seoulDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+const dayKey = value => {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = value ? new Date(value) : null;
+  return date && Number.isFinite(date.getTime()) ? seoulDay.format(date) : '';
+};
+function nearDay(value, now = new Date()) {
+  const due = dayKey(value);
+  if (!due) return null;
+  const days = Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${dayKey(now)}T00:00:00Z`)) / 86_400_000);
+  if (days < 0) return { text: `D+${-days}`, late: true };
+  return days <= 7 ? { text: days === 0 ? 'D-Day' : `D-${days}`, late: false } : null;
+}
+function DueText({ value, done }) {
+  if (!value) return null;
+  const near = done ? null : nearDay(value);
+  return <span className={`${styles.due} mono`}>{dateLabel(value)}{near && <span className={styles.dday} data-late={near.late ? 'true' : undefined}>{near.text}</span>}</span>;
+}
 
 // Drafts belong to project/task IDs, so changing projects or collapsing a row
 // does not discard an input or change the identity of an unresolved save.
@@ -85,6 +108,14 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
     disabled: orderDisabled || !onReorderChecklist || feedback[task.id]?.status === 'saving',
   };
   const ordering = useProjectWorkOrder({ projectId, root, groups, onNotice: setOrderNotice });
+  // 처음 연 프로젝트에서는 아직 열린 세부 체크가 있는 첫 작업 묶음을 펼쳐 둔다(시안 B Focus). 한 번만.
+  const seededProjects = React.useRef(new Set());
+  React.useEffect(() => {
+    if (seededProjects.current.has(projectId) || !tasks.length) return;
+    seededProjects.current.add(projectId);
+    const group = openTasks.find(task => projectItemType(task) === 'subproject' && readTaskChecklist(task).some(item => !item.done));
+    if (group) setExpanded(previous => (group.id in previous ? previous : { ...previous, [group.id]: true }));
+  }, [projectId, tasks, openTasks]);
   const updateDraft = (key, patch) => {
     const next = { ...draftsRef.current, [key]: { ...(draftsRef.current[key] || EMPTY_DRAFT), ...patch } };
     draftsRef.current = next;
@@ -183,6 +214,8 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
   function row(task) {
     const checks = readTaskChecklist(task);
     const type = projectItemType(task);
+    const checksDone = checks.filter(item => item.done).length;
+    const span = type === 'subproject' ? projectGroupSpan(task) : null;
     const isOpen = Boolean(expanded[task.id]);
     const pending = pendingIds.has(task.id) || feedback[task.id]?.status === 'saving';
     return <div key={task.id} className={styles.task} data-task-id={task.id} data-done={task.done ? 'true' : 'false'} {...ordering.rowProps(task.done ? 'done' : 'open', task.id)}>
@@ -192,13 +225,18 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
         <button type="button" data-task-expand className={styles.taskTitle} aria-expanded={isOpen} aria-controls={`project-work-${task.id}`}
           onClick={() => setExpanded(previous => ({ ...previous, [task.id]: !previous[task.id] }))}>
           {type !== 'task' && <span className={styles.itemType}>{TYPE_LABEL[type]}</span>}
-          <span>{task.title}</span><Iconed name={isOpen ? 'chevronD' : 'chevronR'} size={12} />
+          <span>{task.title}</span>
+          {type === 'subproject' && (task.done || checksDone > 0) && <span className={styles.groupState}>{task.done ? '완료' : '진행 중'}</span>}
+          <Iconed name={isOpen ? 'chevronD' : 'chevronR'} size={12} />
         </button>
         <GitHubPrMark pr={task.githubPr} done={task.done} title={task.title} disabled={!canWrite || pending} onComplete={(event) => toggle(task, null, event)} />
-        {checks.length > 0 && <span className={`${styles.checkCount} num`} aria-label={`세부 체크 ${checks.filter(item => item.done).length}/${checks.length} 완료`}>{checks.filter(item => item.done).length}/{checks.length}</span>}
         {task.status === 'blocked' && <LifecycleBadge label="막힘" state="blocked" />}
         {task.status === 'doing' && <LifecycleBadge label="진행" state="active" />}
-        {task.dueAt && <span className={`${styles.due} mono`}>{dateLabel(task.dueAt)}</span>}
+        {type === 'subproject' && span && !span.single
+          ? <span className={`${styles.due} mono`}>{dateLabel(span.start)} – {dateLabel(span.end)}</span>
+          : <DueText value={task.dueAt} done={task.done} />}
+        {type === 'subproject' && checks.length > 0 && <span className={styles.groupGauge} aria-hidden="true"><span style={{ width: `${Math.round(checksDone / checks.length * 100)}%` }} /></span>}
+        {checks.length > 0 && <span className={`${type === 'subproject' ? styles.groupCount : styles.checkCount} num`} aria-label={`세부 체크 ${checksDone}/${checks.length} 완료`}>{checksDone}/{checks.length}</span>}
         {ordering.handle(task.done ? 'done' : 'open', task)}
       </div>
       <div id={`project-work-${task.id}`} className={styles.details} hidden={!isOpen}>
@@ -208,7 +246,7 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
           <span className={styles.checkTarget}><Checkbox className={styles.checkbox} size={16} checked={item.done} disabled={!canWrite || pending}
             label={`${item.title} ${item.done ? '다시 열기' : '완료'}`} onChange={() => toggle(task, item.id)} /></span>
           <span><strong>{item.title}</strong>{item.note && <p>{item.note}</p>}</span>
-          {item.dueAt && <span className={`${styles.due} mono`}>{dateLabel(item.dueAt)}</span>}
+          <DueText value={item.dueAt} done={item.done || task.done} />
           {ordering.handle(`check:${task.id}`, item)}
         </div>)}
         {composer(`check:${task.id}`, task)}
