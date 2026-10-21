@@ -1,16 +1,18 @@
 "use client";
 // 제품 탭(사이드바 `제품`, `dashboard/products`). 2026-09-30 운영자 "별도 탭 ㄱㄱ"로 프로젝트 탭의 한 보기에서
-// 독립 탭으로 옮겼고(제품 렌즈 §14.2), 2026-10-21 운영자 "일단 지금은 제품 리스트, 깃허브(개발) 요약 정도로"에 따라
-// 첫 화면은 제품 리스트 + 개발 요약(ProductDevList)이다. 제품 운영실 B안의 포트폴리오(돈·사용자·문의)와 제품 흐름
-// 페이지는 화면에서만 뺐고 코드(product-portfolio.jsx · product-page.jsx)는 다시 켤 때를 위해 남겼다.
-// URL이 화면을 고른다: 기본은 리스트, `?product=<id>`는 리스트 위에 그 제품의 상세 드로어(`개발` 탭부터), `?pview=inbox`는
-// 문의함(`&inquiry=<id>`로 한 건 선택 — 화면 전환 버튼은 없고 옛 링크만 받는다), `?new=product`는 새 제품 드로어를 한 번 연다.
-// 카드 편집(EditDrawer)과 상세(저장소·GitHub·단계, ProductDetailDrawer)는 여기서 여는 드로어다. 동시 진행 상한(MVP·출시·성장 3개,
-// 2026-09-30 확정 §12-5)은 Engine이 거절하고 여기는 그 이유를 그대로 보여 준다.
+// 독립 탭으로 옮겼다(제품 렌즈 §14.2). 2026-10-21 운영자 "D 첫 화면 + 12a-1 보기 + 상세 12d":
+// 첫 화면은 제품 리스트 + 개발 요약(ProductDevList, D), 두 번째 보기는 포트폴리오(ProductPortfolio, 12a-1 정밀 계기),
+// 제품을 열면 어느 보기에서든 제품 상세(ProductPage, 12d 흐름)다.
+// URL이 화면을 고른다(뒤로 가기·새로고침·공유가 그대로 된다): `?view=portfolio`는 포트폴리오(없으면 개발), `?product=<id>`는
+// 그 제품의 상세(닫으면 `product`만 지워 보던 보기로 돌아간다), `?pview=inbox`는 문의함(`&inquiry=<id>`로 한 건 선택 — 포트폴리오의
+// 문의 칸·상세의 문의 행에서 열고, 옛 링크도 그대로 받는다), `?new=product`는 새 제품 드로어를 한 번 연다.
+// 카드 편집(EditDrawer)과 상세 드로어(단계·체크리스트·저장소·GitHub, ProductDetailDrawer)는 여기서 여는 드로어다 — 12d의
+// "개발 · GitHub"는 드로어를 개발 탭부터 연다. 동시 진행 상한(MVP·출시·성장 3개, 2026-09-30 확정 §12-5)은 Engine이 거절하고
+// 여기는 그 이유를 그대로 보여 준다.
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Button, EditDrawer, EmptyState, Kbd, Skeleton, TruthBadge } from "../hub-primitives";
+import { Button, EditDrawer, EmptyState, Kbd, SegmentedControl, Skeleton, TruthBadge } from "../hub-primitives";
 import { useToast } from "../hub-toast";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import {
@@ -18,11 +20,16 @@ import {
   PRODUCT_ORG_SCOPES,
   formToProductInput,
   productToForm,
+  recentMonths,
+  seoulMonth,
 } from "../../../lib/product-catalog.js";
+import { FOCUS_LIMIT, monthShort, productTabCounts } from "../../../lib/product-instruments.js";
 import { createProduct, readGitHubStatus, readProducts, runGitHubSync, updateProduct } from "./product-client.js";
 import { ProductDetailDrawer } from "./product-detail-drawer";
 import { ProductDevList } from "./product-dev-list";
 import { ProductInbox } from "./product-inbox";
+import { ProductPage } from "./product-page";
+import { ProductPortfolio } from "./product-portfolio";
 import styles from "./product-room.module.css";
 
 const ORG_SCOPE_LABEL = Object.fromEntries(PRODUCT_ORG_SCOPES.map((scope) => [scope.value, scope.label]));
@@ -52,7 +59,7 @@ export function productFormFields({ creating }) {
   ];
 }
 
-export function ProjectProductsView({ onOpenProject, heading = null }) {
+export function ProjectProductsView({ onOpenProject, onOpenBoard }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -61,6 +68,7 @@ export function ProjectProductsView({ onOpenProject, heading = null }) {
   const [github, setGithub] = React.useState({ state: "loading" });
   const [editing, setEditing] = React.useState(null); // { creating, product, record }
   const [syncing, setSyncing] = React.useState(false);
+  const [drawerTab, setDrawerTab] = React.useState(null); // 상세 드로어: null | overview | dev
   const mountedRef = React.useRef(false);
   const loadRef = React.useRef(null);
   const createAttemptRef = React.useRef(null);
@@ -95,6 +103,7 @@ export function ProjectProductsView({ onOpenProject, heading = null }) {
 
   // 화면 고르기 — URL이 정본(뒤로 가기·새로고침·공유가 그대로 된다).
   const productId = searchParams.get("product") || null;
+  const view = searchParams.get("view") === "portfolio" ? "portfolio" : "dev";
   const inboxOpen = searchParams.get("pview") === "inbox";
   const inquiryId = searchParams.get("inquiry") || null;
   const navigate = React.useCallback((patch) => {
@@ -107,11 +116,24 @@ export function ProjectProductsView({ onOpenProject, heading = null }) {
   }, [pathname, router, searchParams]);
   const openProduct = React.useCallback((id) => navigate({ product: id, pview: null, inquiry: null }), [navigate]);
   const closeProduct = React.useCallback(() => navigate({ product: null }), [navigate]);
+  const openInbox = React.useCallback((id = null) => navigate({ pview: "inbox", product: null, inquiry: id }), [navigate]);
   const openList = React.useCallback(() => navigate({ pview: null, product: null, inquiry: null }), [navigate]);
+  const setView = React.useCallback((key) => navigate({ view: key === "portfolio" ? "portfolio" : null, pview: null, product: null, inquiry: null }), [navigate]);
+  const roomRef = React.useRef(null);
+  // 제품을 열면 상세 머리부터 보인다(쿼리만 바뀌어 셸 스크롤이 그대로 남는다).
+  React.useEffect(() => {
+    setDrawerTab(null);
+    if (productId) roomRef.current?.scrollIntoView?.({ block: "start" });
+  }, [productId]);
 
   const products = ledger.products;
+  const status = ledger.status;
+  const ready = status === "live" || status === "partial";
+  const month = ledger.month || seoulMonth();
+  const months = recentMonths(month, 6);
   const current = productId ? products.find((product) => product.id === productId) || null : null;
-  const selected = current && !inboxOpen ? current : null;
+  const onDetail = Boolean(ready && current && !inboxOpen);
+  const selected = onDetail && drawerTab ? current : null;
 
   const openCreate = React.useCallback(() => {
     createAttemptRef.current = null;
@@ -209,7 +231,6 @@ export function ProjectProductsView({ onOpenProject, heading = null }) {
         : "연결된 저장소 없음"
     : github.state === "preview" ? "Engine 연결 없음" : github.state === "loading" ? null : "GitHub 상태를 읽지 못했어요";
 
-  const status = ledger.status;
   let body;
   if (status === "loading") {
     body = <Skeleton lines={5} height={44} gap={10} label="제품 불러오는 중" />;
@@ -229,6 +250,23 @@ export function ProjectProductsView({ onOpenProject, heading = null }) {
     );
   } else if (status === "preview") {
     body = <EmptyState icon="lock" title="Preview · 연결 필요" description="Supabase가 연결되지 않아 제품을 읽고 쓸 수 없어요." />;
+  } else if (onDetail) {
+    body = (
+      <ProductPage
+        product={current}
+        month={month}
+        months={months}
+        areas={ledger.areas || []}
+        backLabel={view === "portfolio" ? "제품 · 포트폴리오" : "제품 · 개발"}
+        onBack={closeProduct}
+        onOpenProject={onOpenProject}
+        onOpenInquiry={(id) => openInbox(id)}
+        onOpenBoard={() => onOpenBoard?.(current.id)}
+        onOpenSettings={setDrawerTab}
+        onEditCard={() => openEdit(current)}
+        onChanged={() => load()}
+      />
+    );
   } else if (inboxOpen) {
     body = (
       <ProductInbox
@@ -258,28 +296,58 @@ export function ProjectProductsView({ onOpenProject, heading = null }) {
             <Button variant="ghost" size="sm" onClick={closeProduct}>닫기</Button>
           </div>
         )}
-        <ProductDevList products={products} onOpenProduct={openProduct} />
+        {view === "portfolio" ? (
+          <ProductPortfolio products={products} inquiries={ledger.inquiries || []} month={month} months={months} onOpenProduct={openProduct} onOpenInbox={() => openInbox()} />
+        ) : (
+          <ProductDevList products={products} onOpenProduct={openProduct} />
+        )}
       </>
     );
   }
 
+  const counts = productTabCounts(products);
+  const devBar = view === "dev" && !inboxOpen;
   return (
-    <div className={styles.room}>
-      {heading}
-      <div className={styles.bar}>
-        {inboxOpen && <Button variant="ghost" size="sm" onClick={openList}>← 제품 리스트</Button>}
-        {status === "partial" && <TruthBadge state="partial" reason={`일부 데이터: ${ledger.missing.join(", ") || "상한 도달"}`} />}
-        {githubNote && !inboxOpen && <span className={styles.dim}>{githubNote}</span>}
-        <span className={styles.spacer} />
-        {!inboxOpen && (
-          <>
-            <Button variant="ghost" size="sm" icon="refresh" onClick={syncGitHub} disabled={syncing || github.state === "loading"}>
-              {syncing ? "동기화 중…" : "GitHub 동기화"}
-            </Button>
-            <Button variant="primary" size="sm" icon="plus" onClick={openCreate} disabled={!canCreate}>제품 <Kbd>N</Kbd></Button>
-          </>
-        )}
-      </div>
+    <div ref={roomRef} className={styles.room}>
+      {!onDetail && (
+        <>
+          <header className={styles.hero}>
+            <div style={{ minWidth: 0 }}>
+              <div className={styles.eyebrow}>제품 · {month.slice(0, 4)} · {monthShort(month)}</div>
+              <h2 className={styles.pageTitle}>제품</h2>
+              <div className={styles.meta}>
+                <span>{view === "portfolio" && !inboxOpen ? "파는 것마다 상태 · 돈 · 문의 · 다음 행동." : "파는 것과 그 GitHub 저장소 상태를 한 판에서 봐요."} MVP·출시·성장은 동시에 3개까지.</span>
+                {ready && products.length > 0 && (
+                  <>
+                    <span className={styles.chip}>파는 것 <b className="mono">{counts.total}</b></span>
+                    <span className={styles.chip}>집중 <b className="mono">{counts.focus}/{FOCUS_LIMIT}</b></span>
+                    {counts.broken > 0 && <span className={styles.chip}>고장 <b className={`mono ${styles.danger}`}>{counts.broken}</b></span>}
+                  </>
+                )}
+              </div>
+            </div>
+            {!inboxOpen && (
+              <div className={styles.heroActions}>
+                <SegmentedControl label="제품 보기" value={view} onChange={setView} options={[{ key: "dev", label: "개발" }, { key: "portfolio", label: "포트폴리오" }]} />
+                <Button variant="primary" size="sm" icon="plus" onClick={openCreate} disabled={!canCreate}>제품 <Kbd>N</Kbd></Button>
+              </div>
+            )}
+          </header>
+          {(inboxOpen || devBar || status === "partial") && (
+            <div className={styles.bar}>
+              {inboxOpen && <Button variant="ghost" size="sm" onClick={openList}>{`← ${view === "portfolio" ? "포트폴리오" : "제품 리스트"}`}</Button>}
+              {status === "partial" && <TruthBadge state="partial" reason={`일부 데이터: ${ledger.missing.join(", ") || "상한 도달"}`} />}
+              {githubNote && devBar && <span className={styles.dim}>{githubNote}</span>}
+              <span className={styles.spacer} />
+              {devBar && (
+                <Button variant="ghost" size="sm" icon="refresh" onClick={syncGitHub} disabled={syncing || github.state === "loading"}>
+                  {syncing ? "동기화 중…" : "GitHub 동기화"}
+                </Button>
+              )}
+            </div>
+          )}
+        </>
+      )}
       {body}
 
       {selected && !editing && (
@@ -288,8 +356,8 @@ export function ProjectProductsView({ onOpenProject, heading = null }) {
           candidates={ledger.candidates}
           inquiryCandidates={ledger.inquiryCandidates || []}
           github={github}
-          initialTab="dev"
-          onClose={closeProduct}
+          initialTab={drawerTab}
+          onClose={() => setDrawerTab(null)}
           onEdit={() => openEdit(selected)}
           onChanged={() => load()}
           onOpenProject={onOpenProject}

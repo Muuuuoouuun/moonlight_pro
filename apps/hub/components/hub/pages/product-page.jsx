@@ -1,10 +1,10 @@
 "use client";
-// 제품 운영실 · 제품 페이지 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0 B안).
-// 머리(운영 상태·단계, 숫자 3개) + 흐름(오늘 → 이번 주 → 다음 → 언젠가 → 지난): 일(프로젝트)·문의·깨진 신호가
-// 한 줄로 섞인다. 옆에는 진행 중인 일, 요청 많은 신기능, 제품 카드·돈. 보드는 프로젝트 탭 Board를 제품으로 걸러 쓴다.
+// 제품 상세 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0 B안의 제품 페이지 → 2026-10-21 12d 흐름).
+// 머리 · 연결 링크 · 계기 4칸 + 흐름(오늘 → 이번 주 → 다음 → 언젠가 → 지난): 일(프로젝트)·문의·깨진 신호가
+// 한 줄로 섞인다. 옆에는 진행 중인 일, 요청 많은 신기능, 단계 이력, 제품 카드·돈. 보드는 프로젝트 탭 Board를 제품으로 걸러 쓴다.
 import React from "react";
 
-import { Button, Drawer, Kbd, SectionTitle, SegmentedControl, SelectField, TextField } from "../hub-primitives";
+import { Button, Drawer, Kbd, SegmentedControl, SelectField, TextField } from "../hub-primitives";
 import { useToast } from "../hub-toast";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import {
@@ -14,11 +14,13 @@ import {
   RECURRENCES,
   WORK_TYPES,
   flowFilter,
+  formatPricing,
   monthNumbers,
   openInquiries,
   parseMonthInput,
   previousMonth,
   productFlow,
+  productMode,
   productStageLabel,
   projectStateLabel,
   recurrenceLabel,
@@ -28,11 +30,13 @@ import {
   workCreateBody,
   workType,
 } from "../../../lib/product-catalog.js";
+import { changeLabel, monthlyLabel, percentChange, productHealth, productLinks, productSeries, stageTimeline, statusDots } from "../../../lib/product-instruments.js";
 import { INQUIRY_STATUSES } from "../inquiry-view-state";
 import { createWork, linkInquiry, recordMonth, updateProduct } from "./product-client.js";
-import { OpsLabel } from "./product-portfolio";
+import { ModeLabel, ProductMark } from "./product-mark";
+import { Axis, DotRows, Kpi, ProfitColumns, TrendLine } from "./product-portfolio";
 import styles from "./product-room.module.css";
-import { formatWon } from "@/lib/won-format";
+import { formatSignedWonShort, formatWon, formatWonShort } from "@/lib/won-format";
 
 const won = (value) => formatWon(value);
 const monthLabel = (month) => `${Number(String(month).slice(5, 7))}월`;
@@ -212,12 +216,32 @@ function OpsDrawer({ product, onClose, onSaved }) {
   );
 }
 
+// 종류 칩 — 색이 아니라 기호 + 글자(◆ 신기능 · ↻ 보수 · ↗ 연락 · ? 문의, 문의는 점선).
+function KindChip({ item }) {
+  if (item.kind === "signal") return <span className={`${styles.kind} ${styles.danger}`}><i aria-hidden="true">✕</i>CI</span>;
+  if (item.kind === "inquiry") return <span className={styles.kind} data-inquiry=""><i aria-hidden="true">?</i>문의</span>;
+  const type = workType(item.project.workType);
+  return <span className={styles.kind}><i aria-hidden="true">{type?.glyph || "·"}</i>{type?.label || "종류 미정"}</span>;
+}
+
+// 할 일 진척 — 칸 수로(퍼센트 원형 없음). 칸이 많으면 숫자만.
+function TaskCells({ done, total }) {
+  if (!total) return null;
+  return (
+    <span className={styles.taskCells} role="img" aria-label={`할 일 ${done}/${total}`}>
+      {total <= 8 && Array.from({ length: total }, (_, index) => <i key={index} data-on={index < done ? "" : undefined} />)}
+      <span className="mono">{done}/{total}</span>
+    </span>
+  );
+}
+
 function FlowRow({ item, onOpenProject, onOpenInquiry, onOpenSettings }) {
   if (item.kind === "signal") {
     return (
-      <button type="button" className={`hub-row ${styles.flowRow} ${styles.rail}`} onClick={onOpenSettings} style={{ paddingLeft: 10 }}>
-        <span className={styles.glyph} aria-hidden="true">✕</span>
-        <span><span className={`${styles.rowTitle} ${styles.danger}`}>{item.title}</span><span className={styles.rowMeta}><span>GitHub</span><span>설정 › 개발에서 로그·Codex</span></span></span>
+      <button type="button" className={`hub-row ${styles.flowRow} ${styles.rail}`} onClick={() => onOpenSettings("dev")}>
+        <KindChip item={item} />
+        <span><span className={`${styles.rowTitle} ${styles.danger}`}>{item.title}</span><span className={styles.rowMeta}><span>GitHub</span><span>개발 탭에서 로그·Codex</span></span></span>
+        <span />
         <span className={`${styles.due} ${styles.danger}`}>지금</span>
       </button>
     );
@@ -226,40 +250,44 @@ function FlowRow({ item, onOpenProject, onOpenInquiry, onOpenSettings }) {
     const inquiry = item.inquiry;
     return (
       <button type="button" className={`hub-row ${styles.flowRow}`} onClick={() => onOpenInquiry(inquiry.id)}>
-        <span className={styles.glyph} aria-hidden="true">?</span>
+        <KindChip item={item} />
         <span>
           <span className={styles.rowTitle}>{inquiry.subject}</span>
           <span className={styles.rowMeta}>
-            <span>문의</span><span>{INQUIRY_STATUSES[inquiry.status] || inquiry.status}</span>
+            <span>{INQUIRY_STATUSES[inquiry.status] || inquiry.status}</span>
             {inquiry.contactName && <span>{inquiry.contactName}</span>}
             <span>{inquiry.projectId ? "일에 붙음" : "일 연결 전"}</span>
           </span>
         </span>
+        <span />
         <span className={styles.due}>{shortDay(inquiry.receivedAt)}</span>
       </button>
     );
   }
   const project = item.project;
-  const type = workType(project.workType);
   return (
-    <button type="button" className={`hub-row ${styles.flowRow}${item.urgent ? ` ${styles.rail}` : ""}`} onClick={() => onOpenProject(project.id)} style={item.urgent ? { paddingLeft: 10 } : undefined}>
-      <span className={styles.glyph} aria-hidden="true">{type?.glyph || "·"}</span>
+    <button type="button" className={`hub-row ${styles.flowRow}${item.urgent ? ` ${styles.rail}` : ""}`} onClick={() => onOpenProject(project.id)}>
+      <KindChip item={item} />
       <span>
         <span className={`${styles.rowTitle}${project.status === "blocked" ? ` ${styles.danger}` : ""}`}>{project.name}</span>
         <span className={styles.rowMeta}>
-          <span>{type?.label || "종류 미정"}</span>
           <span className={project.status === "blocked" ? styles.danger : undefined}>{projectStateLabel(project.status)}</span>
-          {project.tasks > 0 && <span className="mono">할 일 {project.tasksDone}/{project.tasks}</span>}
           {project.recurrence && <span>↻ {recurrenceLabel(project.recurrence)}</span>}
           {project.requests > 0 && <span>요청 {project.requests}</span>}
         </span>
       </span>
-      <span className={`${styles.due}${item.overdue ? ` ${styles.danger}` : ""}`}>{item.overdue ? `지남 ${shortDay(project.dueAt)}` : shortDay(project.dueAt)}</span>
+      <TaskCells done={project.tasksDone} total={project.tasks} />
+      <span className={`${styles.due}${item.overdue ? ` ${styles.danger}` : ""}`}>{item.overdue ? `지남 ${shortDay(project.dueAt)}` : shortDay(project.dueAt) || "—"}</span>
     </button>
   );
 }
 
-export function ProductPage({ product, month, areas, onBack, onOpenProject, onOpenInquiry, onOpenBoard, onOpenSettings, onEditCard, onChanged }) {
+// 제품 상세 = 12d 흐름 (2026-10-21 운영자 "D 첫 화면 + 12a-1 보기 + 상세 12d", 운영실 B안 §0의 제품 페이지를 계기 어휘로).
+// 머리(마크 · 이름 · 모드 · 단계 · 버전) → 연결 링크 → 계기 4칸(사용자 · 손익 · 문의 · 운영 건강) → 흐름(오늘 → 이번 주 → 다음 →
+// 언젠가, 일과 문의가 섞임, 거르기) + 레일(진행 중 프로젝트 · 요청 많은 신기능 · 단계 이력 · 제품 카드·돈).
+// 새 데이터는 없다 — 원장의 월 숫자·문의·저장소·stage_history만 읽고, 가동 체크·에러 수집은 "○ 연결 전"으로 둔다.
+// 개발(저장소·GitHub·Codex)은 운영 건강 칸의 "개발 · GitHub"에서 기존 상세 드로어의 개발 탭으로 연다.
+export function ProductPage({ product, month, months, areas, backLabel = "제품", onBack, onOpenProject, onOpenInquiry, onOpenBoard, onOpenSettings, onEditCard, onChanged }) {
   const toast = useToast();
   const [filter, setFilter] = React.useState("all");
   const [showPast, setShowPast] = React.useState(false);
@@ -271,10 +299,19 @@ export function ProductPage({ product, month, areas, onBack, onOpenProject, onOp
   const all = flow.flatMap((bucket) => bucket.items);
   const liveCount = (key) => all.filter((item) => item.bucket !== "past" && flowFilter(item, key)).length;
   const numbers = monthNumbers(product, month);
+  const series = productSeries(product, months);
+  const users = series.map((row) => row.activeUsers);
+  const nets = series.map((row) => row.net);
   const open = openInquiries(product);
+  const linked = open.filter((inquiry) => inquiry.projectId).length;
   const active = (product.projects || []).filter((project) => project.status !== "completed" && project.status !== "archived");
   const wanted = active.filter((project) => project.workType === "feature" && project.requests > 0).sort((a, b) => b.requests - a.requests);
+  const health = productHealth(product);
+  const timeline = stageTimeline(product);
   const details = product.details || {};
+  const mode = productMode(product);
+  const netPrev = nets[nets.length - 2];
+  const facts = [product.summary, details.domain, details.audience].filter(Boolean).join(" · ");
   const saved = (message, options) => {
     setDrawer(null);
     if (message) toast(message, options);
@@ -283,32 +320,71 @@ export function ProductPage({ product, month, areas, onBack, onOpenProject, onOp
 
   return (
     <>
-      <div className={styles.bar}>
-        <Button variant="ghost" size="sm" onClick={onBack}>← 포트폴리오</Button>
-      </div>
-      <header className={styles.pageHead}>
+      <header className={styles.hero}>
         <div style={{ minWidth: 0 }}>
-          <div className="eyebrow">{[details.domain, details.audience].filter(Boolean).join(" · ") || "제품"}</div>
-          <h2 style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 500 }}>{product.name}</h2>
-          <div className={styles.meta}>
-            <Button variant="ghost" size="sm" onClick={() => setDrawer("ops")} aria-label={`운영 상태 바꾸기, 지금 ${PRODUCT_OPS.find((ops) => ops.value === product.opsStatus)?.label || "개발 중"}`}><OpsLabel value={product.opsStatus} /></Button>
-            <span>{productStageLabel(product.stage)}</span>
-            {product.opsNote && <span>· {product.opsNote}</span>}
-            <Button variant="ghost" size="sm" onClick={onEditCard}>카드</Button>
-            <Button variant="ghost" size="sm" onClick={onOpenSettings}>설정 · GitHub</Button>
+          <Button variant="ghost" size="sm" onClick={onBack}>← {backLabel}</Button>
+          <div className={styles.idRow}>
+            <ProductMark product={product} size="lg" />
+            <div style={{ minWidth: 0 }}>
+              <h2 className={styles.detailTitle}>{product.name}</h2>
+              <div className={styles.meta}>
+                <Button variant="ghost" size="sm" onClick={() => setDrawer("ops")} aria-label={`운영 상태 바꾸기, 지금 ${mode.label}`}><ModeLabel product={product} /></Button>
+                <span>{productStageLabel(product.stage)} 단계</span>
+                <span className="mono">v{product.version}</span>
+                <Button variant="ghost" size="sm" onClick={onEditCard}>카드</Button>
+                <Button variant="ghost" size="sm" onClick={() => onOpenSettings("overview")}>단계 · 체크리스트</Button>
+              </div>
+              {(facts || product.opsNote) && <p className={styles.facts}>{[facts, product.opsNote].filter(Boolean).join(" · ")}</p>}
+            </div>
           </div>
         </div>
-        <div className={styles.numbers}>
-          <div className={styles.number}><span className={`stat ${styles.numberValue}`}>{numbers.activeUsers ?? "—"}</span><span className={styles.dim}>주간 사용자</span></div>
-          <div className={styles.number}><span className={`stat ${styles.numberValue}`}>{won(numbers.net)}</span><span className={styles.dim}>{monthLabel(month)} 순이익</span></div>
-          <div className={styles.number}><span className={`stat ${styles.numberValue}`}>{open.length}</span><span className={styles.dim}>열린 문의</span></div>
-          <Button variant="ghost" size="sm" onClick={() => setDrawer("month")}>숫자 적기</Button>
+        <div className={styles.heroActions}>
+          <Button variant="outline" size="sm" onClick={onOpenBoard}>보드로 보기</Button>
+          <Button variant="primary" size="sm" icon="plus" onClick={() => setDrawer("work")}>일 <Kbd>N</Kbd></Button>
         </div>
       </header>
 
+      <div className={styles.bar} aria-label="연결 링크">
+        {productLinks(product).map((link) => (link.on ? (
+          <a key={link.key} className={styles.linkChip} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} <span className="mono">{link.value}</span></a>
+        ) : (
+          <span key={link.key} className={styles.linkChip} data-off="">{link.label} · {link.value}</span>
+        )))}
+      </div>
+
+      <div className={`${styles.kpis} ${styles.kpis4}`}>
+        <Kpi label="주간 사용자" note={changeLabel(percentChange(users, 1), "지난달")} value={numbers.activeUsers ?? "—"} foot="최근 7일 활성 · 달마다 입력">
+          <TrendLine values={users} pulse={Number.isFinite(numbers.revenue) && numbers.revenue > 0} width={230} height={60} label={monthlyLabel("주간 사용자", months, users, String)} />
+          <Axis months={months} />
+        </Kpi>
+        <Kpi label={`${monthLabel(month)} 순이익`} note={numbers.net !== null && Number.isFinite(netPrev) ? `${formatSignedWonShort(numbers.net - netPrev)} · 지난달` : null}
+          value={formatWonShort(numbers.net)}
+          foot={<><span>매출 {formatWonShort(numbers.revenue)} · 비용 {formatWonShort(numbers.cost)} (빗금)</span><Button variant="ghost" size="sm" onClick={() => setDrawer("month")}>숫자 적기</Button></>}>
+          <ProfitColumns series={series} label={monthlyLabel("6개월 순이익", months, nets, formatWonShort)} />
+          <Axis months={months} />
+        </Kpi>
+        <Kpi label="열린 문의" note={linked ? `일에 붙은 문의 ${linked}` : null} value={open.length}
+          foot={wanted.length ? `문의가 쌓인 신기능 ${wanted.length}개 → 아래 레일` : null}>
+          <DotRows rows={statusDots(product.inquiries)} label={`열린 문의 ${open.length}: ${statusDots(product.inquiries).map((row) => `${row.label} ${row.dots.length}`).join(", ")}`} />
+        </Kpi>
+        <Kpi label="운영 건강" note={`원천 ${health.connected}/${health.total}`}
+          foot={<Button variant="ghost" size="sm" onClick={() => onOpenSettings("dev")}>개발 · GitHub →</Button>}>
+          <div className={styles.health}>
+            {health.lines.map((line) => (
+              <div key={line.key} className={`${styles.healthLine}${line.urgent ? ` ${styles.rail}` : ""}`}>
+                <span className={`mono ${line.urgent ? styles.danger : line.known ? "" : styles.dim}`} aria-hidden="true">{line.glyph}</span>
+                <span className={line.urgent ? styles.danger : line.known ? undefined : styles.dim}>{line.label}</span>
+                <span className={`mono ${styles.dim}`}>{line.value || ""}</span>
+              </div>
+            ))}
+          </div>
+        </Kpi>
+      </div>
+
       <div className={styles.grid}>
-        <div>
-          <div className={styles.bar}>
+        <section className={styles.sheet} aria-label="흐름">
+          <div className={styles.sheetHead}>
+            <h3 className={styles.sheetTitle}>흐름 <span className={styles.dim}>· 일과 문의가 한 줄로</span></h3>
             <SegmentedControl label="흐름 거르기" value={filter} onChange={setFilter} options={[
               { key: "all", label: `전체 ${liveCount("all")}` },
               { key: "feature", label: `신기능 ${liveCount("feature")}` },
@@ -316,19 +392,16 @@ export function ProductPage({ product, month, areas, onBack, onOpenProject, onOp
               { key: "contact", label: `연락 ${liveCount("contact")}` },
               { key: "inquiry", label: `문의 ${liveCount("inquiry")}` },
             ]} />
-            <span className={styles.spacer} />
-            <Button variant="outline" size="sm" onClick={onOpenBoard}>보드로 보기</Button>
-            <Button variant="primary" size="sm" icon="plus" onClick={() => setDrawer("work")}>일 <Kbd>N</Kbd></Button>
           </div>
           {FLOW_BUCKETS.map((bucket) => {
             const items = flow.find((entry) => entry.key === bucket.key).items.filter((item) => flowFilter(item, filter));
             if (!items.length) return null;
             if (bucket.key === "past" && !showPast) {
-              return <Button key="past" variant="ghost" size="sm" style={{ marginTop: 12 }} onClick={() => setShowPast(true)}>지난 {items.length}건 보기</Button>;
+              return <Button key="past" variant="ghost" size="sm" style={{ alignSelf: "flex-start" }} onClick={() => setShowPast(true)}>지난 {items.length}건 보기 · 끝낸 일 · 닫은 문의</Button>;
             }
             return (
               <section key={bucket.key} className={styles.bucket} aria-label={bucket.label}>
-                <div className={styles.bucketHead}>{bucket.label} <span className="mono">{items.length}</span></div>
+                <div className={styles.bucketHead}><span className={styles.eyebrow}>{bucket.label}</span><span className="mono">{items.length}</span></div>
                 {items.map((item) => (
                   <FlowRow key={item.key} item={item} onOpenProject={onOpenProject} onOpenInquiry={onOpenInquiry} onOpenSettings={onOpenSettings} />
                 ))}
@@ -336,36 +409,64 @@ export function ProductPage({ product, month, areas, onBack, onOpenProject, onOp
             );
           })}
           {!all.some((item) => item.bucket !== "past" && flowFilter(item, filter)) && (
-            <p className={styles.dim} style={{ marginTop: 16 }}>
+            <p className={styles.dim} style={{ margin: 0 }}>
               {filter === "all" ? "아직 이 제품에 붙은 일·문의가 없어요. ＋ 일로 신기능·보수·연락을 만들어 보세요." : "이 종류의 열린 일이 없어요."}
             </p>
           )}
-        </div>
+        </section>
 
         <aside className={styles.aside}>
           <div className={styles.panel}>
-            <SectionTitle right={<span className="mono" style={{ fontSize: 12 }}>{active.length}</span>}>진행 중인 일</SectionTitle>
+            <div className={styles.sheetHead}><span className={styles.eyebrow}>진행 중인 프로젝트</span><span className="mono">{active.length}</span></div>
             {active.length ? active.map((project) => (
-              <div key={project.id} className={styles.mini}>
-                <span className={styles.name} style={{ fontWeight: 400 }}>{workType(project.workType)?.glyph || "·"} {project.name}</span>
-                <span className="mono" style={{ fontSize: 11.5, color: "var(--fg-dim)" }}>{project.tasks ? `${project.tasksDone}/${project.tasks}` : "—"}</span>
-              </div>
-            )) : <p className={styles.dim}>없음</p>}
+              <button key={project.id} type="button" className={`hub-row ${styles.miniRow}`} onClick={() => onOpenProject(project.id)}>
+                <span style={{ minWidth: 0 }}>
+                  <span className={styles.name}>{project.name}</span>
+                  <span className={styles.rowMeta}>
+                    <span>{workType(project.workType)?.label || "종류 미정"}</span>
+                    {project.requests > 0 && <span>요청 {project.requests}</span>}
+                    {project.dueAt && <span className="mono">목표 {shortDay(project.dueAt)}</span>}
+                  </span>
+                </span>
+                <TaskCells done={project.tasksDone} total={project.tasks} />
+              </button>
+            )) : <p className={styles.dim} style={{ margin: 0 }}>없음</p>}
           </div>
           {wanted.length > 0 && (
             <div className={styles.panel}>
-              <SectionTitle subtitle="문의가 붙은 수">요청 많은 신기능</SectionTitle>
+              <div className={styles.sheetHead}><span className={styles.eyebrow}>요청 많은 신기능</span><span className={styles.dim}>문의가 붙은 수</span></div>
               {wanted.map((project) => (
-                <div key={project.id} className={styles.mini}><span>{project.name}</span><span className="mono">{project.requests}</span></div>
+                <div key={project.id} className={styles.reqBar}>
+                  <span>{project.name} <span className={styles.dim}>· {projectStateLabel(project.status)}</span></span>
+                  <span className="mono">{project.requests}</span>
+                  <span className={styles.reqTrack} aria-hidden="true"><i style={{ width: `${Math.round((project.requests / wanted[0].requests) * 100)}%` }} /></span>
+                </div>
               ))}
             </div>
           )}
+          <div className={styles.panel}>
+            <div className={styles.sheetHead}>
+              <span className={styles.eyebrow}>단계 이력</span>
+              {timeline.currentDays !== null && <span className={styles.dim}>{productStageLabel(product.stage)} {timeline.currentDays}일째</span>}
+            </div>
+            {timeline.entries.length ? timeline.entries.map((entry, index) => (
+              <div key={`${entry.at}-${index}`} className={styles.stageLine} data-launch={entry.launch ? "" : undefined}>
+                <span className="mono" aria-hidden="true">{entry.launch ? "◉" : index === 0 ? "●" : "·"}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span>{entry.text}{entry.launch ? " · 운영 시작" : ""}</span>
+                  {entry.reason && <span className={styles.rowMeta}>{entry.reason}</span>}
+                </span>
+                <span className={`mono ${styles.dim}`}>{shortDay(entry.at)}</span>
+              </div>
+            )) : <p className={styles.dim} style={{ margin: 0 }}>기록 없음</p>}
+          </div>
           <div className={styles.panel}>
             <details>
               <summary className={styles.muted} style={{ cursor: "pointer" }}>제품 카드 · 돈</summary>
               <div className={styles.kv} style={{ marginTop: 10 }}>
                 <span>한 줄</span><span>{product.summary}</span>
                 <span>대상 고객</span><span>{details.audience || "—"}</span>
+                <span>가격</span><span>{formatPricing(details.pricing)}</span>
                 <span>{monthLabel(month)} 매출</span><span className="mono">{won(numbers.revenue)}</span>
                 <span>{monthLabel(month)} 비용</span><span className="mono">{won(numbers.cost)}</span>
                 <span>특이사항</span><span style={{ whiteSpace: "pre-wrap" }}>{details.notes || "—"}</span>
