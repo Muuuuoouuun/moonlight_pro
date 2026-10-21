@@ -26,6 +26,8 @@ test("canonical brands receive distinct recognizable vector marks", () => {
     assert.match(markup, /<svg[^>]+width="18"[^>]+height="18"/, key);
     assert.match(markup, /aria-hidden="true"/, key);
     assert.match(markup, /<path|<circle|<rect/, key);
+    // 2026-10-21 세트: 모두 같은 24 그리드·1.6 획의 선 아이콘이다 — 채운 외부 실루엣을 다시 섞지 않는다.
+    assert.match(markup, /<svg[^>]+viewBox="0 0 24 24"[^>]+fill="none"[^>]+stroke="currentColor"[^>]+stroke-width="1.6"/, key);
     drawings.add(markup.replace(/data-brand-icon="[^"]+"/, ""));
   }
   assert.equal(drawings.size, expected.size, "every brand should have its own geometry");
