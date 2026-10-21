@@ -68,7 +68,7 @@ function mountPage({ status = "live", ...overrides } = {}) {
     styles: {},
     ...overrides,
   };
-  for (const name of ["Button", "EditDrawer", "EmptyState", "Kbd", "SegmentedControl", "Skeleton", "TruthBadge", "ProductDetailDrawer", "ProductInbox", "ProductPage", "ProductPortfolio"]) deps[name] = name;
+  for (const name of ["Button", "EditDrawer", "EmptyState", "Kbd", "Skeleton", "TruthBadge", "ProductDetailDrawer", "ProductDevList", "ProductInbox"]) deps[name] = name;
   const Page = new Function(...Object.keys(deps), `${pageJs}; return ProjectProductsView;`)(...Object.values(deps));
   const render = async () => {
     for (let turn = 0; turn < 10; turn += 1) {
@@ -133,7 +133,7 @@ test("product reads publish before an unrelated GitHub read finishes", async () 
   const github = deferred();
   const page = mountPage({ readProducts: async () => ledgerWith("Current"), readGitHubStatus: () => github.promise });
   await page.render();
-  assert.equal(page.find("ProductPortfolio")?.props.products[0].name, "Current");
+  assert.equal(page.find("ProductDevList")?.props.products[0].name, "Current");
   page.unmount();
   github.resolve({ state: "preview" });
 });
@@ -151,8 +151,8 @@ test("the latest refresh owns both reads even when older transports finish last"
   products[0].resolve(ledgerWith("Initial"));
   github[0].resolve({ state: "preview" });
   await page.navigate("product=product");
-  const older = page.find("ProductPage").props.onChanged();
-  const latest = page.find("ProductPage").props.onChanged();
+  const older = page.find("ProductDetailDrawer").props.onChanged();
+  const latest = page.find("ProductDetailDrawer").props.onChanged();
   products[2].resolve(ledgerWith("Latest"));
   github[2].resolve({ state: "live", configured: true, linkedRepositories: 2 });
   await latest;
@@ -161,10 +161,8 @@ test("the latest refresh owns both reads even when older transports finish last"
   github[1].resolve({ state: "error" });
   await older;
   await page.render();
-  assert.equal(page.find("ProductPage").props.product.name, "Latest");
+  assert.equal(page.find("ProductDetailDrawer").props.product.name, "Latest");
   assert.equal(signals[1]?.aborted, true, "superseded refresh releases its transport");
-  page.find("ProductPage").props.onOpenSettings();
-  await page.render();
   assert.equal(page.find("ProductDetailDrawer").props.github.linkedRepositories, 2);
   page.unmount();
   assert.equal(signals[2].aborted, true, "unmount also cancels imperative refreshes");
@@ -294,4 +292,54 @@ test("a create completing after unmount does not start another page refresh or n
   await pending;
   assert.equal(reads, 1);
   assert.equal(page.navigations.length, 1, "only the consumed New query, no late product navigation");
+});
+
+// 2026-10-21 제품 리스트 + 개발 요약: `?product=`는 리스트 위에 상세 드로어를 `개발` 탭부터 연다.
+test("a product link opens the detail drawer over the list on the dev tab, and closing clears only the product", async () => {
+  const page = mountPage({ readProducts: async () => ledgerWith("Current") });
+  await page.render();
+  assert.ok(page.find("ProductDevList"), "the list is the landing");
+  assert.equal(page.find("ProductDetailDrawer"), null);
+  assert.equal(page.find("SegmentedControl"), null, "no portfolio/inbox switch on the landing");
+
+  page.find("ProductDevList").props.onOpenProduct("product");
+  await page.render();
+  assert.match(page.navigations.at(-1), /product=product/);
+  assert.ok(page.find("ProductDevList"), "the list stays under the drawer");
+  const drawer = page.find("ProductDetailDrawer");
+  assert.equal(drawer.props.initialTab, "dev");
+  assert.equal(drawer.props.product.name, "Current");
+
+  drawer.props.onClose();
+  await page.render();
+  assert.doesNotMatch(page.navigations.at(-1), /product=/);
+  assert.equal(page.find("ProductDetailDrawer"), null);
+  page.unmount();
+});
+
+test("an unknown product link keeps the list and says so instead of an empty page", async () => {
+  const page = mountPage({ readProducts: async () => ledgerWith("Current") });
+  await page.navigate("product=missing");
+  assert.ok(page.find("ProductDevList"));
+  assert.equal(page.find("ProductDetailDrawer"), null);
+  page.unmount();
+});
+
+test("an old inbox link still opens the inbox, with a way back to the list", async () => {
+  const page = mountPage({ readProducts: async () => ledgerWith("Current") });
+  await page.navigate("pview=inbox");
+  assert.ok(page.find("ProductInbox"));
+  const find = (node) => {
+    if (!node || typeof node !== "object") return null;
+    if (node.type === "Button" && node.props.children?.includes("← 제품 리스트")) return node;
+    for (const child of node.props?.children || []) { const hit = find(child); if (hit) return hit; }
+    return null;
+  };
+  const back = find(page.find("div"));
+  assert.ok(back, "back button is shown on the inbox");
+  back.props.onClick();
+  await page.render();
+  assert.doesNotMatch(page.navigations.at(-1), /pview=/);
+  assert.ok(page.find("ProductDevList"));
+  page.unmount();
 });

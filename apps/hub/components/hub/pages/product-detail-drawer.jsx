@@ -472,11 +472,12 @@ function DevPanel({ product, candidates, github, onChanged, onOpenProject, onSyn
   );
 }
 
-export function ProductDetailDrawer({ product, candidates, inquiryCandidates = [], github, onClose, onEdit, onChanged, onOpenProject, onSyncGitHub, syncing }) {
+// initialTab: 제품 리스트(2026-10-21)에서 열면 "dev" — 리스트가 개발 요약이라 같은 이야기를 이어서 연다.
+export function ProductDetailDrawer({ product, candidates, inquiryCandidates = [], github, initialTab = "overview", onClose, onEdit, onChanged, onOpenProject, onSyncGitHub, syncing }) {
   const router = useRouter();
   const toast = useToast();
-  const [tab, setTab] = React.useState("overview");
-  React.useEffect(() => { setTab("overview"); }, [product.id]);
+  const [tab, setTab] = React.useState(initialTab);
+  React.useEffect(() => { setTab(initialTab); }, [product.id, initialTab]);
   const ctx = { repositories: product.repositories.length, projects: product.projects.length };
   const changed = React.useCallback((message) => {
     if (message) toast(message);
