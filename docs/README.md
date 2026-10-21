@@ -147,7 +147,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **사이드바 IA · PMS 분류 (최신순, 확정 스펙만 정본)**
 
-- [`superpowers/specs/2026-09-24-product-dev-projects-draft.md`](superpowers/specs/2026-09-24-product-dev-projects-draft.md) — **§14.2의 별도 `제품` 앵커만 확정·구현(2026-09-30)**. 프로젝트와 브랜드 사이 `dashboard/products` 착지로 주요 10 + 유틸리티 2가 됐고, 옛 `?view=products` 링크는 새 탭으로 이어진다. 문서의 나머지 목업·후속 제안은 아래 기획 초안의 상태를 따른다.
+- [`superpowers/specs/2026-09-24-product-dev-projects-draft.md`](superpowers/specs/2026-09-24-product-dev-projects-draft.md) — **§14.2의 별도 `제품` 앵커만 확정·구현(2026-09-30)**. 프로젝트와 브랜드 사이 `dashboard/products` 착지로 주요 10 + 유틸리티 2가 됐고, 옛 `?view=products` 링크는 새 탭으로 이어진다. **2026-10-21 §14.8 확정·구현: 첫 화면은 제품 리스트 + GitHub 개발 요약**(돈·사용자·문의·흐름 페이지는 화면에서만 뺌). 문서의 나머지 목업·후속 제안은 아래 기획 초안의 상태를 따른다.
 - [`superpowers/specs/2026-09-24-revenue-four-tabs-design.md`](superpowers/specs/2026-09-24-revenue-four-tabs-design.md) — **확정(2026-09-24)** 중 IA 부분(§2): 주요 앵커 9 + 유틸리티 2(`고객 연락` 앵커 흡수), 영업·매출 탭 4개와 스코프별 구성, 탭에서 내려온 라우트의 역할 별칭(`REVENUE_ROUTE_TABS`). 다른 앵커의 2레벨 구성은 아래 07-15 스펙 그대로다.
 - [`superpowers/specs/2026-09-11-scope-as-global-filter.md`](superpowers/specs/2026-09-11-scope-as-global-filter.md) — **결정됨(2026-09-11)**. 스코프(전체·ClassIn·개인)의 의미와 적용 범위 정본. `2026-07-14` 스펙의 "스코프 = 목적지 전환" 해석을 폐기하고 전역 필터로 바꾼다. 앵커·2레벨 구조 자체는 아래 `2026-07-15` 스펙이 계속 정본이다. 구현은 단계별.
 - [`2026-09-11-brand-content-refocus-proposal.md`](superpowers/specs/2026-09-11-brand-content-refocus-proposal.md) — 9월 14일 첫 구현 지시 반영: 브랜드 기준 편집·독립 조회, 소재함·Threads 원고·수동 발행 기록·빠른 메모 연결. §10이 실제 구현 범위이며 나머지는 후속 권장안. 운영 DB 타입 확장은 인증 실패로 미적용.

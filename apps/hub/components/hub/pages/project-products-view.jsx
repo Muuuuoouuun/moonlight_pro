@@ -1,14 +1,16 @@
 "use client";
-// 제품 탭(사이드바 `제품`, `dashboard/products`) — 제품 운영실 B안 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0).
-// 2026-09-30 운영자 "별도 탭 ㄱㄱ"로 프로젝트 탭의 한 보기(`?view=products`)에서 독립 탭으로 옮겼다(제품 렌즈 §14.2).
-// URL이 화면을 고른다: 기본은 포트폴리오, `?product=<id>`는 그 제품의 흐름 페이지, `?pview=inbox`는 문의함
-// (`&inquiry=<id>`로 한 건 선택), `?new=product`는 새 제품 드로어를 한 번 연다. 카드 편집(EditDrawer)과
-// 설정(저장소·GitHub·단계, ProductDetailDrawer)은 여기서 여는 드로어다. 동시 진행 상한(MVP·출시·성장 3개,
+// 제품 탭(사이드바 `제품`, `dashboard/products`). 2026-09-30 운영자 "별도 탭 ㄱㄱ"로 프로젝트 탭의 한 보기에서
+// 독립 탭으로 옮겼고(제품 렌즈 §14.2), 2026-10-21 운영자 "일단 지금은 제품 리스트, 깃허브(개발) 요약 정도로"에 따라
+// 첫 화면은 제품 리스트 + 개발 요약(ProductDevList)이다. 제품 운영실 B안의 포트폴리오(돈·사용자·문의)와 제품 흐름
+// 페이지는 화면에서만 뺐고 코드(product-portfolio.jsx · product-page.jsx)는 다시 켤 때를 위해 남겼다.
+// URL이 화면을 고른다: 기본은 리스트, `?product=<id>`는 리스트 위에 그 제품의 상세 드로어(`개발` 탭부터), `?pview=inbox`는
+// 문의함(`&inquiry=<id>`로 한 건 선택 — 화면 전환 버튼은 없고 옛 링크만 받는다), `?new=product`는 새 제품 드로어를 한 번 연다.
+// 카드 편집(EditDrawer)과 상세(저장소·GitHub·단계, ProductDetailDrawer)는 여기서 여는 드로어다. 동시 진행 상한(MVP·출시·성장 3개,
 // 2026-09-30 확정 §12-5)은 Engine이 거절하고 여기는 그 이유를 그대로 보여 준다.
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Button, EditDrawer, EmptyState, Kbd, SegmentedControl, Skeleton, TruthBadge } from "../hub-primitives";
+import { Button, EditDrawer, EmptyState, Kbd, Skeleton, TruthBadge } from "../hub-primitives";
 import { useToast } from "../hub-toast";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import {
@@ -16,13 +18,11 @@ import {
   PRODUCT_ORG_SCOPES,
   formToProductInput,
   productToForm,
-  seoulMonth,
 } from "../../../lib/product-catalog.js";
 import { createProduct, readGitHubStatus, readProducts, runGitHubSync, updateProduct } from "./product-client.js";
 import { ProductDetailDrawer } from "./product-detail-drawer";
+import { ProductDevList } from "./product-dev-list";
 import { ProductInbox } from "./product-inbox";
-import { ProductPage } from "./product-page";
-import { ProductPortfolio } from "./product-portfolio";
 import styles from "./product-room.module.css";
 
 const ORG_SCOPE_LABEL = Object.fromEntries(PRODUCT_ORG_SCOPES.map((scope) => [scope.value, scope.label]));
@@ -52,14 +52,13 @@ export function productFormFields({ creating }) {
   ];
 }
 
-export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null }) {
+export function ProjectProductsView({ onOpenProject, heading = null }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const toast = useToast();
   const [ledger, setLedger] = React.useState(EMPTY_LEDGER);
   const [github, setGithub] = React.useState({ state: "loading" });
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(null); // { creating, product, record }
   const [syncing, setSyncing] = React.useState(false);
   const mountedRef = React.useRef(false);
@@ -107,23 +106,21 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router, searchParams]);
   const openProduct = React.useCallback((id) => navigate({ product: id, pview: null, inquiry: null }), [navigate]);
-  const openInbox = React.useCallback((id = null) => navigate({ pview: "inbox", product: null, inquiry: id }), [navigate]);
-  const openPortfolio = React.useCallback(() => navigate({ pview: null, product: null, inquiry: null }), [navigate]);
+  const closeProduct = React.useCallback(() => navigate({ product: null }), [navigate]);
+  const openList = React.useCallback(() => navigate({ pview: null, product: null, inquiry: null }), [navigate]);
 
   const products = ledger.products;
   const current = productId ? products.find((product) => product.id === productId) || null : null;
-  const selected = settingsOpen && current ? current : null;
-  const month = ledger.month || seoulMonth();
+  const selected = current && !inboxOpen ? current : null;
 
   const openCreate = React.useCallback(() => {
-    setSettingsOpen(false);
     createAttemptRef.current = null;
     // EditDrawer는 값이 있는 선택 칸이 하나라도 있으면 묶음을 펼친다 — 기본 가격 모델도
     // "값"으로 읽히므로 새 제품은 비워 두고(formToProductInput이 기본값으로 채운다) 접힌 채 시작한다.
     setEditing({ creating: true, product: null, record: { ...productToForm(null), id: null, pricingModel: "" } });
   }, []);
   const canCreate = ledger.status !== "loading" && ledger.status !== "preview" && ledger.error !== "products-table-missing";
-  // 포트폴리오의 N = 제품 등록. 제품 페이지는 자기 N(＋ 일)을 가진다.
+  // 리스트의 N = 제품 등록. 상세 드로어가 열려 있으면 드로어가 먼저다.
   usePageCreateHotkey(openCreate, { enabled: canCreate && !productId && !inboxOpen && !editing });
   // 탑바 새로 만들기 딥링크 — 기록 로드 뒤 한 번 열고 쿼리를 지운다(DESIGN §8.1 딥링크).
   const createdFromQueryRef = React.useRef(false);
@@ -232,24 +229,6 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
     );
   } else if (status === "preview") {
     body = <EmptyState icon="lock" title="Preview · 연결 필요" description="Supabase가 연결되지 않아 제품을 읽고 쓸 수 없어요." />;
-  } else if (productId) {
-    body = current ? (
-      <ProductPage
-        product={current}
-        month={month}
-        areas={ledger.areas || []}
-        onBack={openPortfolio}
-        onOpenProject={onOpenProject}
-        onOpenInquiry={(id) => openInbox(id)}
-        onOpenBoard={() => onOpenBoard?.(current.id)}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onEditCard={() => openEdit(current)}
-        onChanged={() => load()}
-      />
-    ) : (
-      <EmptyState icon="projects" title="제품을 찾지 못했어요" description="지워졌거나 다른 워크스페이스의 제품이에요."
-        action={<Button variant="outline" size="sm" onClick={openPortfolio}>포트폴리오로</Button>} />
-    );
   } else if (inboxOpen) {
     body = (
       <ProductInbox
@@ -266,35 +245,41 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
       <EmptyState
         icon="projects"
         title="아직 등록한 제품이 없어요"
-        description="파는 것을 제품으로 등록하면 일(신기능·보수·연락)과 문의가 제품별로 모여요. 이름과 한 줄 설명만 있으면 시작할 수 있어요."
+        description="파는 것을 제품으로 등록하고 GitHub 저장소를 붙이면 CI·PR·이슈가 제품별로 모여요. 이름과 한 줄 설명만 있으면 시작할 수 있어요."
         action={<Button variant="primary" size="sm" icon="plus" onClick={openCreate}>첫 제품 등록 <Kbd>N</Kbd></Button>}
       />
     );
   } else {
-    body = <ProductPortfolio products={products} inquiries={ledger.inquiries || []} month={month} onOpenProduct={openProduct} onOpenInbox={() => openInbox()} />;
+    body = (
+      <>
+        {productId && !current && (
+          <div className={styles.bar}>
+            <span className={styles.muted}>이 제품을 찾지 못했어요. 지워졌거나 다른 워크스페이스의 제품이에요.</span>
+            <Button variant="ghost" size="sm" onClick={closeProduct}>닫기</Button>
+          </div>
+        )}
+        <ProductDevList products={products} onOpenProduct={openProduct} />
+      </>
+    );
   }
 
-  const newInquiries = (ledger.inquiries || []).filter((inquiry) => inquiry.status === "new").length;
   return (
     <div className={styles.room}>
-      {!productId && heading}
-      {!productId && (
-        <div className={styles.bar}>
-          <SegmentedControl label="제품 화면" value={inboxOpen ? "inbox" : "portfolio"} onChange={(key) => (key === "inbox" ? openInbox() : openPortfolio())}
-            options={[{ key: "portfolio", label: "포트폴리오" }, { key: "inbox", label: newInquiries ? `문의함 · 새 ${newInquiries}` : "문의함" }]} />
-          {status === "partial" && <TruthBadge state="partial" reason={`일부 데이터: ${ledger.missing.join(", ") || "상한 도달"}`} />}
-          {githubNote && !inboxOpen && <span className={styles.dim}>{githubNote}</span>}
-          <span className={styles.spacer} />
-          {!inboxOpen && (
-            <>
-              <Button variant="ghost" size="sm" icon="refresh" onClick={syncGitHub} disabled={syncing || github.state === "loading"}>
-                {syncing ? "동기화 중…" : "GitHub 동기화"}
-              </Button>
-              <Button variant="primary" size="sm" icon="plus" onClick={openCreate} disabled={!canCreate}>제품 <Kbd>N</Kbd></Button>
-            </>
-          )}
-        </div>
-      )}
+      {heading}
+      <div className={styles.bar}>
+        {inboxOpen && <Button variant="ghost" size="sm" onClick={openList}>← 제품 리스트</Button>}
+        {status === "partial" && <TruthBadge state="partial" reason={`일부 데이터: ${ledger.missing.join(", ") || "상한 도달"}`} />}
+        {githubNote && !inboxOpen && <span className={styles.dim}>{githubNote}</span>}
+        <span className={styles.spacer} />
+        {!inboxOpen && (
+          <>
+            <Button variant="ghost" size="sm" icon="refresh" onClick={syncGitHub} disabled={syncing || github.state === "loading"}>
+              {syncing ? "동기화 중…" : "GitHub 동기화"}
+            </Button>
+            <Button variant="primary" size="sm" icon="plus" onClick={openCreate} disabled={!canCreate}>제품 <Kbd>N</Kbd></Button>
+          </>
+        )}
+      </div>
       {body}
 
       {selected && !editing && (
@@ -303,7 +288,8 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
           candidates={ledger.candidates}
           inquiryCandidates={ledger.inquiryCandidates || []}
           github={github}
-          onClose={() => setSettingsOpen(false)}
+          initialTab="dev"
+          onClose={closeProduct}
           onEdit={() => openEdit(selected)}
           onChanged={() => load()}
           onOpenProject={onOpenProject}
