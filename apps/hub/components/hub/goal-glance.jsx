@@ -14,8 +14,33 @@ const KPI_HEALTH_TONE = { inside: 'ahead', outside: 'out', partial: 'wait', unme
 const KPI_HEALTH_GLYPH = { inside: '✓', outside: '▲', partial: '◐', unmeasured: '○', unset: '○' };
 const number = value => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
 
+// 상태 글리프는 글꼴 문자 대신 16칸 SVG로 그린다 — 글꼴마다 ▲·○·↘의 높이·기준선이 달라 원·칩 안에서 어긋났다.
+// 색은 currentColor 하나, 뜻은 언제나 옆의 글이 말한다(§5.3).
+const GLYPH_PATHS = {
+  '▲': <path d="M8 3.6 13 12.4H3Z" fill="currentColor" stroke="none" />,
+  '↘': <path d="M4.5 4.5l7 7M11.5 6.2v5.3H6.2" />,
+  '↗': <path d="M4.5 11.5l7-7M6.2 4.5h5.3v5.3" />,
+  '=': <path d="M4 6.3h8M4 9.7h8" />,
+  '○': <circle cx="8" cy="8" r="4.6" />,
+  '◐': <><circle cx="8" cy="8" r="4.6" /><path d="M8 3.4a4.6 4.6 0 0 0 0 9.2Z" fill="currentColor" stroke="none" /></>,
+  '✓': <path d="M3.8 8.4l2.7 2.7L12.2 5.4" />,
+  '◔': <><circle cx="8" cy="8" r="4.6" /><path d="M8 5.2V8h2.4" /></>,
+  '!': <><path d="M8 3.8v5.4" /><circle cx="8" cy="11.8" r=".9" fill="currentColor" stroke="none" /></>,
+};
+export function GoalGlyph({ glyph, size = 14 }) {
+  const shape = GLYPH_PATHS[glyph];
+  if (!shape) return <span aria-hidden="true">{glyph}</span>;
+  return <svg className="goal-glyph" width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{shape}</svg>;
+}
+// "▲ 선 밖"처럼 글리프로 시작하는 라벨을 SVG + 글로 나눈다. 모르는 글리프는 그대로 둔다.
+export function GlyphLabel({ text, size = 12 }) {
+  const [head, ...rest] = String(text).split(' ');
+  return GLYPH_PATHS[head] && rest.length ? <><GoalGlyph glyph={head} size={size} /><span>{rest.join(' ')}</span></> : text;
+}
+
 export function TonePill({ tone, children, small = false }) {
-  return <span className={`goal-pill goal-pill--${tone}${small ? ' goal-pill--sm' : ''}`}>{children ?? PACE_TONE_LABEL[tone]}</span>;
+  const content = children ?? PACE_TONE_LABEL[tone];
+  return <span className={`goal-pill goal-pill--${tone}${small ? ' goal-pill--sm' : ''}`}>{typeof content === 'string' ? <GlyphLabel text={content} /> : content}</span>;
 }
 
 // 두꺼운 둥근 트랙 + 페이스 색 채움 + 진한 기대선(기간 경과). value가 null이면 채우지 않는다.
@@ -40,7 +65,7 @@ export function kpiRowsFor(model, objectives, today) {
 
 function KpiValue({ metric }) {
   const measured = metric.measurement?.coverage !== 'unmeasured' && Number.isFinite(metric.measurement?.value);
-  if (!measured) return <span className="stat goal-kpi-tile__value goal-kpi-tile__value--empty">—</span>;
+  if (!measured) return <span className="stat goal-kpi-tile__value goal-kpi-tile__value--empty">—<small>기록 없음</small></span>;
   return <span className="stat goal-kpi-tile__value">{number(metric.measurement.value)}{metric.unit && <small>{metric.unit}</small>}</span>;
 }
 
@@ -49,7 +74,7 @@ function KpiMeter({ row, today }) {
   if (isZeroKeep(metric)) {
     const { cells } = zeroKeepWeeks(metric, objective, observations, today);
     const glyph = { kept: '✓', broken: '▲' };
-    return <ol className="goal-kpi-tile__weeks" aria-label={`${metric.name} 주별 유지`}>{cells.map(cell => <li key={cell.start} className={`goal-kpi-tile__week goal-kpi-tile__week--${cell.state}${cell.phase === 'now' ? ' goal-kpi-tile__week--now' : ''}`} aria-label={`${cell.label} 주 ${cell.state === 'kept' ? '지킴' : cell.state === 'broken' ? '어김' : cell.state === 'future' ? '앞으로' : '확인 전'}`}>{glyph[cell.state] || ''}</li>)}</ol>;
+    return <ol className="goal-kpi-tile__weeks" aria-label={`${metric.name} 주별 유지`}>{cells.map(cell => <li key={cell.start} className={`goal-kpi-tile__week goal-kpi-tile__week--${cell.state}${cell.phase === 'now' ? ' goal-kpi-tile__week--now' : ''}`} title={`${cell.label} 주`} aria-label={`${cell.label} 주 ${cell.state === 'kept' ? '지킴' : cell.state === 'broken' ? '어김' : cell.state === 'future' ? '앞으로' : '확인 전'}`}>{glyph[cell.state] && <GoalGlyph glyph={glyph[cell.state]} size={13} />}</li>)}</ol>;
   }
   const { now, previous, partial } = kpiBulletReading(metric, observations);
   const scale = bulletScale(metric, [now, previous]);
@@ -62,7 +87,7 @@ function KpiMeter({ row, today }) {
       {now !== null && <span className={`goal-kpi-meter__fill goal-kpi-meter__fill--${KPI_HEALTH_TONE[health]}`} style={{ width: `${scale.at(now)}%` }} />}
     </div>
     {previous !== null && <i className="goal-kpi-meter__last" style={{ left: `${scale.at(previous)}%` }} />}
-    <div className="goal-kpi-meter__scale mono" aria-hidden="true"><span style={{ left: 0 }}>{fmt(scale.min)}</span><span style={{ right: 0 }}>{fmt(scale.max)}</span></div>
+    <div className="goal-kpi-meter__scale mono" aria-hidden="true">{[...new Set(metric.direction === 'range' ? [metric.targetMin, metric.targetMax] : [metric.target])].filter(Number.isFinite).map(line => { const edge = scale.at(line); return <span key={line} style={{ left: `${edge}%`, transform: `translateX(${edge <= 6 ? 0 : edge >= 94 ? -100 : -50}%)` }}>{fmt(line)}</span>; })}</div>
   </div>;
 }
 
@@ -78,10 +103,10 @@ export function KpiStrip({ rows, today, kpiHref, railBudget, readState = 'live' 
       const meta = zero ? '0건 유지' : kpiThresholdLabel(metric);
       const when = freshness;
       return <li key={metric.id} className={`goal-kpi-tile${health === 'outside' && railed ? ' goal-kpi-tile--outside' : ''}`}>
-        <div className="goal-kpi-tile__head"><span className="goal-kpi-tile__name">{metric.name}</span><TonePill tone={KPI_HEALTH_TONE[health]} small>{KPI_HEALTH_GLYPH[health]} {KPI_HEALTH_LABEL[health]}</TonePill></div>
+        <div className="goal-kpi-tile__head"><span className="goal-kpi-tile__name">{metric.name}</span><TonePill tone={KPI_HEALTH_TONE[health]} small>{`${KPI_HEALTH_GLYPH[health]} ${KPI_HEALTH_LABEL[health]}`}</TonePill></div>
         <KpiValue metric={metric} />
         <KpiMeter row={row} today={new Intl.DateTimeFormat('en-CA', { timeZone: objective.timezone || 'Asia/Seoul' }).format(new Date())} />
-        <span className="goal-muted">{objective.title} · {objective.periodStart}–{objective.periodEnd}</span>
+        <span className="goal-muted goal-kpi-tile__objective" title={`${objective.title} · ${objective.periodStart}–${objective.periodEnd}`}>{objective.title}</span>
         <div className="goal-kpi-tile__meta mono"><span>{meta}</span><span>{previous !== null ? `지난 ${number(previous)} · ` : ''}{when}</span></div>
       </li>;
     })}</ul> : readState !== 'live' ? <p role="status" className="goal-muted">KPI 목록을 모두 확인하지 못했습니다. 다시 불러온 뒤 지킬 선을 확인하세요.</p> : <p className="goal-muted">지킬 선(KPI)이 아직 없습니다. 목표를 이루면서도 무너지면 안 되는 선을 <Link className="hub-row" href={kpiHref}>KPI 보기</Link>에서 정하세요.</p>}
@@ -93,7 +118,7 @@ export function GlanceAttention({ items, suggestion, unknown = false }) {
   return <section className="goal-panel goal-attention" aria-label="이번 주 챙길 것">
     <div className="goal-section-head"><h3 className="goal-panel__title">이번 주 챙길 것</h3><span className="num">{items.length}</span></div>
     {items.length ? <ul className="goal-attention__list">{items.map(item => <li key={item.key} className={`goal-attention__item goal-attention__item--${item.tone}`}>
-      <span className="goal-attention__glyph" aria-hidden="true">{item.glyph}</span>
+      <span className="goal-attention__glyph" aria-hidden="true"><GoalGlyph glyph={item.glyph} size={13} /></span>
       <div><b>{item.title}</b><span>{item.detail}</span></div>
     </li>)}</ul> : <p className="goal-muted">{unknown ? '측정이나 읽기 근거를 먼저 확인하세요. 아직 이번 주 상태를 확정할 수 없습니다.' : '이번 주 챙길 것이 없습니다. 모든 KR이 페이스 안이고 KPI도 선 안입니다.'}</p>}
     {suggestion && <div className="goal-attention__suggestion"><CertaintyBadge state="recommended" label="제안" /><span>{suggestion.text}</span>{suggestion.href && <Link className="hub-row goal-section-link" href={suggestion.href}>{suggestion.cta} →</Link>}</div>}

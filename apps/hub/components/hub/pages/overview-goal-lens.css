@@ -54,7 +54,7 @@
   white-space: nowrap;
 }
 .hub-app .ogl-kpi-chip b { color: var(--fg); font-weight: 500; }
-.hub-app .ogl-kpi-chip__glyph { font-size: 11px; }
+.hub-app .ogl-kpi-chip__glyph { display: inline-flex; align-items: center; }
 .hub-app .ogl-kpi-chip--out,
 .hub-app .ogl-kpi-chip--out b { color: var(--danger); }
 
@@ -127,6 +127,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   height: 24px;
   padding: 0 9px;
   border-radius: 999px;

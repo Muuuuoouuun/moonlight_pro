@@ -357,17 +357,18 @@
 .goal-scope-tag { display:inline-flex; align-items:center; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; color:var(--fg); background-color:var(--surface-3); }
 
 /* 페이스 알약 — 앞섬·비슷함·늦음·판정 전 + KPI 선 밖 */
-.goal-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:12.5px; font-weight:700; white-space:nowrap; color:var(--okr-wait); background-color:var(--okr-wait-bg); }
+.goal-pill { display:inline-flex; align-items:center; gap:5px; line-height:1.2; padding:3px 10px; border-radius:999px; font-size:12.5px; font-weight:700; white-space:nowrap; color:var(--okr-wait); background-color:var(--okr-wait-bg); }
 .goal-pill--sm { padding:2px 8px; font-size:11.5px; }
 .goal-pill--ahead { color:var(--okr-ahead); background-color:var(--okr-ahead-bg); }
 .goal-pill--on { color:var(--okr-on); background-color:var(--okr-on-bg); }
 .goal-pill--late { color:var(--okr-late); background-color:var(--okr-late-bg); }
+.goal-glyph { display:block; flex-shrink:0; }
 .goal-pill--out { color:var(--danger); background-color:var(--danger-bg); }
 
 /* 게이지 — 두꺼운 둥근 트랙 + 페이스 색 채움 + 진한 기대선 */
 .goal-gauge { position:relative; padding:5px 0; }
 .goal-gauge--labeled { padding-top:20px; }
-.goal-gauge__track { height:10px; overflow:hidden; border-radius:999px; background-color:var(--okr-track); }
+.goal-gauge__track { height:10px; overflow:hidden; border-radius:999px; background-color:var(--okr-track); box-shadow:var(--shadow-inset, none); }
 .goal-gauge--lg .goal-gauge__track { height:16px; }
 .goal-gauge__fill { display:block; height:100%; border-radius:999px; background-color:var(--okr-wait); transition:width var(--dur-enter) var(--ease-hub); }
 .goal-gauge__fill--ahead { background-color:var(--okr-ahead); }
@@ -387,22 +388,24 @@
 .goal-kpi-tile__value { font-size:34px; font-weight:800; line-height:1; letter-spacing:-0.03em; color:var(--fg); }
 .goal-kpi-tile__value small { margin-left:2px; font-size:15px; font-weight:600; letter-spacing:0; color:var(--fg-muted); }
 .goal-kpi-tile__value--empty { color:var(--fg-faint); }
+.goal-kpi-tile__value--empty small { margin-left:8px; font-family:var(--font-sans, inherit); font-size:12px; font-weight:500; color:var(--fg-dim); vertical-align:middle; }
+.goal-kpi-tile__objective { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .goal-kpi-tile__meta { display:flex; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--fg-dim); }
-.goal-kpi-meter { position:relative; padding:4px 0 16px; }
-.goal-kpi-meter__track { position:relative; height:12px; overflow:hidden; border-radius:999px; background-color:var(--okr-track); }
-.goal-kpi-meter__band { position:absolute; top:0; bottom:0; background-color:var(--okr-ahead-bg); box-shadow:inset 0 0 0 1px color-mix(in oklch, var(--okr-ahead) 45%, transparent); }
+.goal-kpi-meter { position:relative; padding:4px 0 18px; }
+.goal-kpi-meter__track { position:relative; height:12px; overflow:hidden; border-radius:999px; background-color:var(--okr-track); box-shadow:var(--shadow-inset, none); }
+.goal-kpi-meter__band { position:absolute; top:0; bottom:0; background-color:var(--okr-ahead-bg); box-shadow:inset 1px 0 0 var(--okr-ahead), inset -1px 0 0 var(--okr-ahead); }
 .goal-kpi-meter__fill { position:absolute; left:0; top:3px; bottom:3px; border-radius:999px; background-color:var(--okr-wait); transition:width var(--dur-enter) var(--ease-hub); }
 .goal-kpi-meter__fill--ahead { background-color:var(--okr-ahead); }
 .goal-kpi-meter__fill--out { background-color:var(--danger); }
-.goal-kpi-meter__last { position:absolute; top:0; height:20px; width:2px; margin-left:-1px; border-radius:1px; background-color:var(--fg-dim); }
-.goal-kpi-meter__scale { position:absolute; left:0; right:0; bottom:0; height:13px; font-size:10.5px; color:var(--fg-dim); }
+.goal-kpi-meter__last { position:absolute; top:1px; height:18px; width:2px; margin-left:-1px; border-radius:1px; background-color:var(--fg-dim); }
+.goal-kpi-meter__scale { position:absolute; left:0; right:0; bottom:0; height:14px; font-size:11px; line-height:14px; color:var(--fg-muted); }
 .goal-kpi-meter__scale > span { position:absolute; }
 .goal-kpi-tile__weeks { list-style:none; margin:0; padding:2px 0 4px; display:flex; gap:5px; }
-.goal-kpi-tile__week { flex:1; height:26px; display:flex; align-items:center; justify-content:center; border-radius:var(--r-sm); font-size:13px; font-weight:800; color:var(--okr-ahead); background-color:var(--okr-track); }
+.goal-kpi-tile__week { flex:1; height:26px; display:flex; align-items:center; justify-content:center; border-radius:var(--r-sm); color:var(--okr-ahead); background-color:var(--okr-track); box-shadow:var(--shadow-inset, none); }
 .goal-kpi-tile__week--kept { background-color:var(--okr-ahead-bg); }
 .goal-kpi-tile__week--broken { color:var(--danger); background-color:var(--danger-bg); }
-.goal-kpi-tile__week--future { background:none; box-shadow:inset 0 0 0 1px var(--line); }
-.goal-kpi-tile__week--now { background:none; box-shadow:inset 0 0 0 1px var(--accent); }
+.goal-kpi-tile__week--future { background:none; box-shadow:none; border:1px dashed var(--line-strong); }
+.goal-kpi-tile__week--now { background:var(--surface); box-shadow:inset 0 0 0 1px var(--accent); }
 
 /* 목표 블록 + 오른쪽 패널 */
 .goal-glance { display:grid; grid-template-columns:minmax(0, 1fr) 330px; gap:22px; align-items:start; }
@@ -436,12 +439,12 @@
 .goal-panel .goal-section-head { margin:0; justify-content:flex-start; }
 .goal-weekly-memo .goal-section-head { justify-content:space-between; }
 .goal-attention__list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-.goal-attention__item { display:grid; grid-template-columns:26px minmax(0, 1fr); gap:10px; align-items:start; padding:10px 12px; border-radius:var(--r); background-color:var(--surface-2); }
-.goal-attention__glyph { width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:999px; font-size:12px; font-weight:800; color:var(--okr-wait); background-color:var(--okr-wait-bg); }
+.goal-attention__item { display:grid; grid-template-columns:26px minmax(0, 1fr); gap:12px; align-items:center; padding:10px 12px; border-radius:var(--r); background-color:var(--surface-2); }
+.goal-attention__glyph { width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:999px; color:var(--okr-wait); background-color:var(--okr-wait-bg); }
 .goal-attention__item--out .goal-attention__glyph { color:var(--danger); background-color:var(--danger-bg); }
 .goal-attention__item--late .goal-attention__glyph { color:var(--okr-late); background-color:var(--okr-late-bg); }
-.goal-attention__item b { display:block; font-size:14px; font-weight:700; color:var(--fg); overflow-wrap:anywhere; }
-.goal-attention__item span { display:block; margin-top:2px; font-size:12px; color:var(--fg-muted); overflow-wrap:anywhere; }
+.goal-attention__item > div > b { display:block; font-size:14px; font-weight:700; color:var(--fg); overflow-wrap:anywhere; }
+.goal-attention__item > div > span { display:block; margin-top:2px; font-size:12px; color:var(--fg-muted); overflow-wrap:anywhere; }
 .goal-attention__suggestion { display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:12px; border:1px dashed var(--line-strong); border-radius:var(--r); font-size:13px; color:var(--fg-muted); }
 .goal-weekly-memo__foot { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 

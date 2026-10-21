@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { Iconed } from "../hub-icons";
 import { Button, Card, EmptyState, Skeleton, TruthBadge } from "../hub-primitives";
-import { kpiRowsFor } from "../goal-glance";
+import { GlyphLabel, GoalGlyph, kpiRowsFor } from "../goal-glance";
 import { GOAL_WORK_BASE, goalHref, goalSectionState } from "@/lib/goal-client";
 import {
   KPI_HEALTH_LABEL,
@@ -174,7 +174,7 @@ export function OverviewGoalLens({ model, ledger, ledgerStatus, onLens }) {
           const measured = metric.measurement?.coverage !== "unmeasured" && Number.isFinite(metric.measurement?.value);
           return (
             <span key={metric.id} className={`ogl-kpi-chip${health === "outside" ? " ogl-kpi-chip--out" : ""}`} title={`${metric.name} · ${KPI_HEALTH_LABEL[health]}`}>
-              <span className="ogl-kpi-chip__glyph" aria-hidden="true">{KPI_GLYPH[health]}</span>
+              <span className="ogl-kpi-chip__glyph" aria-hidden="true"><GoalGlyph glyph={KPI_GLYPH[health]} size={12} /></span>
               <span>{metric.name}</span>
               <b className="num">{measured ? `${formatPaceNumber(metric.measurement.value)}${metric.unit || ""}` : "—"}</b>
               <span className="ogl-sr">{KPI_HEALTH_LABEL[health]}</span>
@@ -208,7 +208,7 @@ export function OverviewGoalLens({ model, ledger, ledgerStatus, onLens }) {
                       <span className="ogl-kr__name">{kr.metric.name}</span>
                       <Gauge value={kr.progress} marker={goal.elapsed} size="sm" label={`${kr.metric.name} 진행률`} />
                       <span className="num ogl-kr__pct">{percent(kr.progress) === null ? "—" : `${percent(kr.progress)}%`}</span>
-                      <span className="ogl-chip">{PACE_TONE_LABEL[kr.tone]}</span>
+                      <span className="ogl-chip"><GlyphLabel text={PACE_TONE_LABEL[kr.tone]} size={11} /></span>
                       <span className="ogl-kr__last">{kr.freshness}</span>
                     </span>
                   )) : <span className="ogl-muted">약속선이 있는 핵심 결과가 아직 없습니다</span>}
