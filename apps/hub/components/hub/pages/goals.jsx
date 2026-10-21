@@ -14,6 +14,91 @@ import { GOAL_SOURCE_OPTIONS, GoalCommandFeedback, GoalMetricCard, GoalMetricFor
 import { GoalWeeklyActuals } from '../goal-weekly-actuals';
 import { GoalContinueDrawer, GoalScorecard } from '../goal-scorecard';
 import { GaugeBar, GlanceAttention, KpiStrip, TonePill, WeeklyMemo, kpiRowsFor } from '../goal-glance';
+import { goalDashboardSnapshot } from '@/lib/goal-dashboard';
+import '../goal-dashboard.css';
+
+const percent = value => value === null ? '—' : `${Math.round(value)}%`;
+const dayLabel = key => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
+const recordDate = value => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }).format(new Date(value));
+const scopeLabel = objective => objective.scope === 'company' ? 'ClassIn' : '개인';
+
+function SummaryGauge({ snapshot }) {
+  const { progress, expected, measured, unmeasured } = snapshot;
+  const length = Math.PI * 78;
+  return <div className="goal-dash-gauge">
+    <h3>OKR 종합 진행</h3>
+    <div className="goal-dash-gauge__dial" role="meter" aria-label="조회 목표의 측정된 KR 평균 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined} aria-valuetext={progress === null ? '측정 전' : `${percent(progress)} · 측정 ${measured}개 · 미측정 ${unmeasured}개 제외`}>
+      <svg viewBox="0 0 184 104" aria-hidden="true"><path className="goal-dash-gauge__track" d="M14 92 A78 78 0 0 1 170 92" />{progress !== null && <path className="goal-dash-gauge__fill" d="M14 92 A78 78 0 0 1 170 92" strokeDasharray={`${length * progress / 100} ${length}`} />}{expected !== null && <line className="goal-dash-gauge__marker" x1="92" y1="5" x2="92" y2="23" transform={`rotate(${expected * 1.8 - 90} 92 92)`} />}</svg>
+      <div className="goal-dash-gauge__number"><strong className="stat">{percent(progress)}</strong><span>{expected === null ? '기대선은 진행 중인 기간만 표시' : `기간 경과 기준 ${percent(expected)}`}</span></div>
+    </div>
+    <p>측정 KR <b className="num">{measured}</b>개 평균 · 미측정 <b className="num">{unmeasured}</b>개 제외</p>
+    <span className="goal-dash-note">바닥(약속)까지의 진행률 · 점수와 별도</span>
+  </div>;
+}
+
+function ObjectiveTile({ objective, reading, index, hrefFor, onOpen }) {
+  return <article className={`goal-dash-objective goal-dash-color-${index % 4}`}>
+    <div className="goal-dash-objective__head"><span className="mono">O{String(index + 1).padStart(2, '0')} · {scopeLabel(objective)}</span><strong className="stat">{percent(reading.progress)}</strong></div>
+    <Link className="goal-dash-objective__title hub-row" data-goal-id={objective.id} href={hrefFor(objective)} onClick={onOpen}>{objective.title}</Link>
+    <span className="goal-dash-note">{dayLabel(objective.periodStart)}–{dayLabel(objective.periodEnd)} · <TonePill tone={reading.tone} small /></span>
+    <ul className="goal-dash-mini-krs">{reading.keyResults.slice(0, 3).map(metric => {
+      const row = reading.paceRows.find(item => item.metric.id === metric.id);
+      const progress = keyResultProgress(metric);
+      return <li key={metric.id}><div><span>{metric.name}</span><span className="num">{percent(progress)}</span></div><GaugeBar value={progress} marker={reading.period.phase === 'running' ? reading.period.elapsed * 100 : null} tone={reading.period.phase === 'running' ? keyResultTone(metric, row?.pace, reading.period) : 'wait'} label={`${metric.name} 바닥까지 진행률`} size="sm" /></li>;
+    })}</ul>
+    <span className="goal-dash-note">KR {reading.keyResults.length}개 · 측정 {reading.scored}개{reading.unscored ? ` · 미측정 ${reading.unscored}개` : ''}{reading.keyResults.length > 3 ? ' · 전체는 목표 열기' : ''}</span>
+  </article>;
+}
+
+function ProgressComparison({ rows, hrefFor, onOpen }) {
+  const [showAll, setShowAll] = React.useState(false);
+  const visible = showAll ? rows : rows.slice(0, 6);
+  return <section className="goal-dash-panel goal-dash-comparison" aria-label="KR 진행률 비교">
+    <div className="goal-section-head"><h3>핵심 결과 비교</h3><span className="goal-dash-note">각 KR의 바닥 = 100%</span></div>
+    <p className="goal-dash-note">단위가 다른 실제값을 합치지 않고, 각 약속까지의 진행률을 비교합니다.</p>
+    {rows.length ? <><ul className="goal-dash-columns">{visible.map(({ metric, objective, progress, tone }) => <li key={metric.id}>
+      <TonePill tone={tone} small />
+      <strong className="stat">{percent(progress)}</strong>
+      <Link className="goal-dash-column hub-card-link" data-goal-id={objective.id} href={hrefFor(objective)} onClick={onOpen} aria-label={`${metric.name} · ${percent(progress)} · ${objective.title} 열기`}><span className={`goal-dash-column__fill goal-dash-column__fill--${tone}`} style={{ height: `${progress ?? 0}%` }} /><span className="goal-dash-column__middle" aria-hidden="true" /></Link>
+      <span className="goal-dash-column__name">{metric.name}</span><span className="goal-dash-note goal-dash-column__context" title={objective.title}>{scopeLabel(objective)} · {objective.title}</span><span className="goal-dash-note">{measurementLabel(metric)}</span>
+    </li>)}</ul>{rows.length > 6 && <Button size="xs" variant="ghost" aria-expanded={showAll} onClick={() => setShowAll(value => !value)}>{showAll ? '6개만 보기' : `KR ${rows.length}개 모두 보기`}</Button>}</> : <p className="goal-dash-empty">목표 상세에서 KR을 추가하면 비교할 수 있습니다.</p>}
+  </section>;
+}
+
+function WeeklyRecords({ snapshot, weeklyHref }) {
+  const max = Math.max(1, ...snapshot.weeks.map(week => week.complete + week.pending));
+  const failed = snapshot.observationState === 'error';
+  const partial = snapshot.observationState === 'partial';
+  return <section className="goal-dash-panel goal-dash-weekly" aria-label="주간 관측 기록">
+    <div className="goal-section-head"><h3>주간 기록</h3><span className="goal-dash-note">최근 7주 · 서울 시간</span></div>
+    <p className="goal-dash-note">기록 건수 · 성과값의 합계와 별도{partial ? ' · 일부 기록만 조회' : ''}</p>
+    {failed ? <p className="goal-dash-empty" role="status">관측 기록을 읽지 못했습니다. 새로고침 후 확인하세요.</p> : <><ul className="goal-dash-weeks">{snapshot.weeks.map(week => <li key={week.start} className={week.current ? 'goal-dash-week--current' : ''}>
+      <span className="num">{week.known ? `${partial ? '≥' : ''}${week.complete + week.pending}` : '—'}</span>
+      <div className="goal-dash-week__track" role="img" aria-label={`${dayLabel(week.start)} 주: ${week.known ? `${partial ? '최소 ' : ''}확정 ${week.complete}건, 확인 전 ${week.pending}건` : '조회 부족'}${week.current ? ', 이번 주 진행 중' : ''}`}><span className="goal-dash-week__complete" style={{ height: `${week.complete / max * 100}%` }} /><span className="goal-dash-week__pending" style={{ height: `${week.pending / max * 100}%` }} /></div>
+      <span className="goal-dash-note">{week.current ? '이번 주' : dayLabel(week.start)}</span>
+    </li>)}</ul><div className="goal-dash-weekly__legend"><span>● 확정값 기록</span><span>▧ 확인 전 기록</span></div></>}
+    <Link className="goal-section-link hub-row" href={weeklyHref}>업무별 주간 실측 보기 →</Link>
+  </section>;
+}
+
+function GoalDashboard({ model, objectives, readings, today, hrefFor, weeklyHref, onOpen, kpis, attention, children }) {
+  const snapshot = goalDashboardSnapshot(model, objectives, today, new Date().toISOString());
+  const [allObjectives, setAllObjectives] = React.useState(false);
+  const cards = objectives.map(objective => ({ objective, reading: readings.find(item => item.objective.id === objective.id)?.reading })).filter(item => item.reading);
+  return <div className="goal-dashboard">
+    <section className="goal-dash-overview" aria-label="OKR 종합 진행과 목표">
+      <SummaryGauge snapshot={snapshot} />
+      <div className="goal-dash-objectives">{(allObjectives ? cards : cards.slice(0, 3)).map(({ objective, reading }, index) => <ObjectiveTile key={objective.id} objective={objective} reading={reading} index={index} hrefFor={hrefFor} onOpen={onOpen} />)}{!cards.length && <p className="goal-dash-empty">조회 조건에 맞는 목표가 없습니다.</p>}{cards.length > 3 && <Button size="xs" variant="ghost" aria-expanded={allObjectives} onClick={() => setAllObjectives(value => !value)}>{allObjectives ? '3개만 보기' : `목표 ${cards.length}개 모두 보기`}</Button>}</div>
+    </section>
+    {kpis}
+    <div className="goal-dash-analytics"><ProgressComparison rows={snapshot.keyResults} hrefFor={hrefFor} onOpen={onOpen} /><WeeklyRecords snapshot={snapshot} weeklyHref={weeklyHref} /></div>
+    <section className="goal-dash-recent" aria-label="최근 지표 기록"><div className="goal-section-head"><h3>최근 기록</h3><span className="goal-dash-note">조회 목표의 최근 관측 5건</span></div>
+      {snapshot.observationState === 'error' ? <p className="goal-dash-empty" role="status">최근 기록을 읽지 못했습니다. 새로고침 후 확인하세요.</p> : snapshot.recent.length ? <ul className="goal-dash-recent__list">{snapshot.recent.map(({ observation, metric, objective }) => <li key={observation.id}><Link className="goal-dash-recent-card hub-card-link" data-goal-id={objective.id} href={hrefFor(objective)} onClick={onOpen}><span className="goal-dash-note">{scopeLabel(objective)} · {recordDate(observation.observedAt)}</span><b>{metric.name}</b><strong className="stat">{observation.coverage === 'complete' && Number.isFinite(observation.value) ? `${new Intl.NumberFormat('ko-KR').format(observation.value)} ${metric.unit || ''}` : '확인 전'}</strong><span className="goal-dash-note">{objective.title}</span></Link></li>)}</ul> : <p className="goal-dash-empty">{snapshot.observationState === 'partial' ? '최근 기록을 모두 확인하지 못했습니다.' : '아직 기록이 없습니다. 체크인에서 실제값을 기록하세요.'}</p>}
+    </section>
+    <div className="goal-dash-bottom">{attention}</div>
+    <section className="goal-dash-details" aria-label="목표 상세와 채점">{children}</section>
+  </div>;
+}
 
 const entityLabels = { projects: '프로젝트', tasks: '할 일', campaigns: '캠페인', brands: '브랜드', content_items: '콘텐츠', deals: '딜', leads: '리드', customer_accounts: '고객', memos: '메모', journal_entries: '기록' };
 
@@ -257,7 +342,7 @@ function attentionItems(readings, kpiRows) {
   return items.slice(0, 5);
 }
 
-function GlanceView({ model, objectives, hrefFor, checkHref, kpiHref, onOpen, onRecord, onAddMetric, onContinue, onMemoSaved }) {
+function GlanceView({ model, objectives, hrefFor, checkHref, kpiHref, weeklyHref, dashboard = false, onOpen, onRecord, onAddMetric, onContinue, onMemoSaved }) {
   const today = seoulToday();
   const readings = objectives.filter(objective => objective.status === 'active').map(objective => ({ objective, reading: objectiveReading(objective, model, objectiveToday(objective)) })).filter(item => item.reading.period.phase !== 'ended');
   const kpiRows = kpiRowsFor(model, objectives, today);
@@ -273,6 +358,11 @@ function GlanceView({ model, objectives, hrefFor, checkHref, kpiHref, onOpen, on
   const recordsReadable = [metricState, objectiveState].every(state => ['live', 'partial'].includes(state));
   const recordsComplete = metricState === 'live' && objectiveState === 'live';
   const recordRows = recordsReadable ? recordFirstRows(goalCheckRows({ ...model, objectives }, { status: 'active' })) : [];
+  if (dashboard) return <GoalDashboard model={model} objectives={objectives} readings={objectives.map(objective => ({ objective, reading: objectiveReading(objective, model, objectiveToday(objective)) }))} today={today} hrefFor={hrefFor} weeklyHref={weeklyHref} onOpen={onOpen}
+    kpis={<KpiStrip rows={kpiRows} today={today} kpiHref={kpiHref} railBudget={OUTSIDE_RAIL_BUDGET} readState={goalSectionState(model, 'operating_metrics')} hrefFor={hrefFor} onOpen={onOpen} onRecord={onRecord} limit={4} />}
+    attention={<><GlanceAttention items={attentionItems(readings, kpiRows)} suggestion={suggestion} unknown={model.status !== 'live' || readings.some(item => item.reading.unscored > 0) || kpiRows.some(row => !['inside', 'outside'].includes(row.health))} />{memoTarget && <WeeklyMemo key={`${memoTarget.scope}:${memoTarget.id}:${objectiveToday(memoTarget)}`} objective={memoTarget} today={objectiveToday(memoTarget)} onSaved={onMemoSaved} />}</>}>
+    <details open={objectives.some(objective => objective.status === 'active' && objectivePeriod(objective, objectiveToday(objective)).phase === 'ended')}><summary>목표별 상세 · 월말 채점 <span className="num">{objectives.length}</span></summary><ul className="goal-list">{objectives.map(objective => <GoalObjectiveCard key={objective.id} objective={objective} model={model} hrefFor={hrefFor} onOpen={onOpen} onRecord={onRecord} onAddMetric={onAddMetric} onContinue={onContinue} />)}</ul></details>
+  </GoalDashboard>;
   return <>
     <div className="workflow-goal-priority">
       <section className="workflow-records" aria-label="먼저 기록할 지표">
@@ -484,7 +574,7 @@ export function Goals() {
     return () => cancelAnimationFrame(frame);
   }, [creating, selectedId]);
 
-  return <div className="goals-page fade-up">
+  return <div className={`goals-page fade-up${onWorkTab ? ' goals-page--reference' : ''}`}>
     <header className="goal-header">
       <div>
         <span className="goal-eyebrow">{onWorkTab ? '내 작업 · 목표' : '현황 · 목표'}</span>
@@ -580,7 +670,7 @@ export function Goals() {
     ) : !filtered.length ? (
       <EmptyState title="조건에 맞는 목표가 없습니다" action={<Button onClick={() => { setSearch(''); setStatus('all'); }}>검색·필터 지우기</Button>} />
     ) : (
-      <GlanceView model={model} objectives={filtered} hrefFor={hrefFor} checkHref={goalHref(null, scope, { check: true, base: routeBase })} kpiHref={goalHref(null, scope, { kpi: true, base: routeBase })} onOpen={event => { opener.current = event.currentTarget; }} onRecord={openRecord} onAddMetric={obj => setMetricModalObjective(obj)} onContinue={(objective, extra) => setContinueFrom({ objective, change: extra?.change || '' })} onMemoSaved={model.refresh} />
+      <GlanceView model={model} objectives={filtered} hrefFor={hrefFor} checkHref={goalHref(null, scope, { check: true, base: routeBase })} dashboard={onWorkTab} weeklyHref={goalHref(null, scope, { weekly: true, base: routeBase })} kpiHref={goalHref(null, scope, { kpi: true, base: routeBase })} onOpen={event => { opener.current = event.currentTarget; }} onRecord={openRecord} onAddMetric={obj => setMetricModalObjective(obj)} onContinue={(objective, extra) => setContinueFrom({ objective, change: extra?.change || '' })} onMemoSaved={model.refresh} />
     )}
 
     {creating && (
