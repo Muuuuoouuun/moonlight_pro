@@ -3,7 +3,8 @@ import React from 'react';
 import Link from 'next/link';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {Button, CertaintyBadge, Drawer, EditDrawer, EmptyState, LifecycleBadge, SegmentedControl, SelectField, Skeleton, TextAreaField, TextField, TruthBadge, useToast} from '../hub-primitives';
-import {FINANCE_VIEWS, PURPOSE_OPTIONS, CLAIM_OPTIONS, CYCLE_OPTIONS, SERVICE_OPTIONS, financeMoney, financeReadState, financeFilters, financeEntries, financePeriodTotals, financeSubscriptionDates, financeSubscriptionPayments, financeChanges, financeSaveResult, financeOptionLabel, financeClaimEntries, financeNextSort, financeSortRows, financeClaimRemaining} from './finance-view';
+import {FINANCE_VIEWS, PURPOSE_OPTIONS, CLAIM_OPTIONS, CYCLE_OPTIONS, SERVICE_OPTIONS, financeMoney, financeReadState, financeFilters, financeEntries, financePeriodTotals, financeSubscriptionDates, financeSubscriptionPayments, financeChanges, financeSaveResult, financeOptionLabel, financeClaimEntries, financeNextSort, financeSortRows, financeClaimRemaining, financeSpendEntries, financeLabelOf, financeSubscriptionGroups, financeGaugeMonth, financeObservedDays, financeRangeGauge, financeMonthlySeries, financeLabelSeries, financeGrossBreakdown, financeDailyStacks, financeCumulative, financeLabelProgress, financeTopMerchants, financeFixedCosts, financeCycleGauge} from './finance-view';
+import {CycleBar, DailyGauge, FixedCostGauge, FlowGauge, LabelGauge, PersonalGauge, cycleLeftLabel} from './finance-gauges';
 import {SortHead} from './revenue-core';
 import './finance.css';
 
@@ -49,7 +50,7 @@ function FinanceRows({entries,claims=false,onReview,onClear}) {
   </div>;
 }
 
-function SubscriptionRows({records,onReview,onClear}) {
+function SubscriptionRows({records,today,onReview,onClear}) {
   const [sort,setSort]=React.useState({key:'',dir:''});
   const toggle=key=>setSort(current=>financeNextSort(current,key));
   if (!records.length) return <EmptyState icon="search" title="표시할 계약이 없습니다" description="수집 범위와 검색 조건을 확인해 주세요." action={<Button variant="outline" onClick={onClear}>필터 지우기</Button>} />;
@@ -60,7 +61,7 @@ function SubscriptionRows({records,onReview,onClear}) {
       <span className="finance-subscription-stated" title={`${financeMoney(record.statedAmount)} · ${record.statedCycle||'주기 미확인'}`}><span className="finance-cell-label">자술 </span><span className="mono">{financeMoney(record.statedAmount)}</span> <span className="finance-muted">· 주기 확인</span></span>
       <span className="finance-subscription-contract"><span className="finance-cell-label">약정 </span><span className="mono">{contractMoney(record)}</span>{record.cycle && <span className="finance-muted"> · {financeOptionLabel(CYCLE_OPTIONS,record.cycle)}</span>}</span>
       <span className="finance-subscription-paid mono" title="수집한 전체 기간에서 마지막으로 관측한 결제일입니다. 플랜을 특정하지 못한 공동 관측일 수 있습니다."><span className="finance-cell-label">결제 </span>{record.lastPaymentDate||'미관측'}</span>
-      <span className={`finance-subscription-next ${record.nextScheduleDate?'':'finance-subscription-next-unknown'}`} title={record.nextScheduleDate?scheduleTitle(record):undefined}><span className="finance-cell-label">다음 </span><span className="mono">{record.nextScheduleDate||'미확인'}</span>{record.nextScheduleDate && <span className="finance-muted"> · {scheduleLabel(record)}</span>}</span>
+      <span className={`finance-subscription-next ${record.nextScheduleDate?'':'finance-subscription-next-unknown'}`} title={record.nextScheduleDate?scheduleTitle(record):undefined}><span className="finance-subscription-next-text"><span className="finance-cell-label">다음 </span><span className="mono">{record.nextScheduleDate||'미확인'}</span>{record.nextScheduleDate && <span className="finance-muted"> · {scheduleLabel(record)}{financeCycleGauge(record,today) && ` · ${cycleLeftLabel(financeCycleGauge(record,today))}`}</span>}</span><CycleBar gauge={financeCycleGauge(record,today)} /></span>
       <span className="finance-subscription-usage finance-muted" title={record.usageNote||undefined}><span>{financeOptionLabel(PURPOSE_OPTIONS,record.purpose)} · </span>{record.usageNote||'사용 미확인'}</span>
     </button>)}
   </div>;
@@ -87,7 +88,7 @@ function MonthlyTable({rows,wallet=false}) {
 export function Finance({onNavigate}) {
   const router=useRouter(), params=useSearchParams(), toast=useToast();
   const filters=financeFilters(params);
-  const [data,setData]=React.useState({status:'loading'}),[paymentDetail,setPaymentDetail]=React.useState(null),[moreOpen,setMoreOpen]=React.useState(false),[edit,setEdit]=React.useState(null),[fieldError,setFieldError]=React.useState(null),[conflict,setConflict]=React.useState(false),[latest,setLatest]=React.useState(null),[comparisonError,setComparisonError]=React.useState(''),[writeBusy,setWriteBusy]=React.useState(false);
+  const [data,setData]=React.useState({status:'loading'}),[paymentDetail,setPaymentDetail]=React.useState(null),[moreOpen,setMoreOpen]=React.useState(false),[edit,setEdit]=React.useState(null),[fieldError,setFieldError]=React.useState(null),[conflict,setConflict]=React.useState(false),[latest,setLatest]=React.useState(null),[comparisonError,setComparisonError]=React.useState(''),[writeBusy,setWriteBusy]=React.useState(false),[pickedDay,setPickedDay]=React.useState(''),[labelBusy,setLabelBusy]=React.useState('');
   const life=React.useRef({active:false,controller:null,version:0});
   const reload=React.useCallback(async()=>{
     const currentLife=life.current;
@@ -142,6 +143,16 @@ export function Finance({onNavigate}) {
     const record=(edit.entity==='entry'?next?.entries:next?.subscriptions)?.find(row=>row.id===edit.original.id);
     if (record) setLatest(record);else setComparisonError('최신 기록을 읽지 못했습니다. 입력은 유지했습니다. 다시 읽어 주세요.');
   };
+  const quickLabel=async(entry,purpose)=>{
+    setLabelBusy(entry.id);
+    try {
+      const response=await fetch('/api/hub/finance',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'review',entity:'entry',id:entry.id,expectedRevision:entry.revision,changes:{purpose}})});
+      const result=financeSaveResult(response.ok,await response.json());
+      if (result.ok) {toast(`${entry.merchant||'거래'} · ${financeOptionLabel(PURPOSE_OPTIONS,purpose)}로 저장했습니다.`);await reload();}
+      else toast.error(result.message);
+    } catch {toast.error('저장하지 못했습니다. 다시 시도해 주세요.');}
+    finally {setLabelBusy('');}
+  };
   const visibleEntries=financeEntries(data.entries||[],filters);
   const subscriptions=(data.subscriptions||[]).map(record=>financeSubscriptionDates(record,data.entries||[])).filter(record=>!filters.q.trim() || [record.name,record.accountAlias,record.usageNote,financeOptionLabel(SERVICE_OPTIONS,record.serviceStatus||'unknown')].filter(Boolean).join(' ').toLocaleLowerCase().includes(filters.q.trim().toLocaleLowerCase()));
   const totals=financePeriodTotals(data,filters.month);
@@ -155,6 +166,23 @@ export function Finance({onNavigate}) {
   const from=coverage.from||coverage.lastFrom||coverage.lastfrom||observationImports.map(row=>row.from).filter(Boolean).sort()[0];
   const through=coverage.through||coverage.lastThrough||coverage.lastthrough||observationImports.map(row=>row.through).filter(Boolean).sort().at(-1);
   const period=from&&through?`${from} — ${through}`:'수집 기간 미확인';
+  const today=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const gaugeMonth=financeGaugeMonth(data,filters.month);
+  const observed=gaugeMonth?financeObservedDays(gaugeMonth,through):null;
+  const subscriptionGroups=financeSubscriptionGroups(data.subscriptions||[]);
+  const labelOf=entry=>financeLabelOf(entry,subscriptionGroups);
+  const spend=financeSpendEntries(data.entries||[]);
+  const monthSpend=spend.filter(entry=>entry.date?.startsWith(gaugeMonth));
+  const gaugeRow=(data.monthly||[]).find(row=>row.month===gaugeMonth);
+  const flowGauge=gaugeMonth?financeRangeGauge(financeMonthlySeries(data.monthly||[]),gaugeMonth):null;
+  const daily=observed?financeDailyStacks(monthSpend,gaugeMonth,labelOf,observed.observed):null;
+  const lastObservedDay=daily?.days.filter(day=>day.observed).at(-1)?.date;
+  const selectedDay=pickedDay.startsWith(gaugeMonth)?pickedDay:lastObservedDay;
+  const labelProgress=financeLabelProgress(monthSpend,labelOf);
+  const unlabeled=monthSpend.filter(entry=>labelOf(entry)==='unclassified').sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,6);
+  const personalSpend=monthSpend.filter(entry=>labelOf(entry)==='personal');
+  const gaugeMonths=(data.monthly||[]).map(row=>row.month).filter(month=>month<=gaugeMonth).sort().slice(-6);
+  const personalGauge=gaugeMonth?financeRangeGauge(financeLabelSeries(spend,gaugeMonths,labelOf,'personal'),gaugeMonth):null;
   const draft=edit?.draft;
   const errorFor=key=>fieldError?.field===key?fieldError.message:undefined;
   return <div className="finance-page fade-up">
@@ -166,16 +194,24 @@ export function Finance({onNavigate}) {
     {data.status==='error' && <EmptyState icon="x" title="금융 장부를 읽지 못했어요" description="읽기 실패를 빈 장부로 표시하지 않습니다. 연결 상태를 확인하고 다시 읽어 주세요." action={<Button variant="outline" onClick={reload}>다시 읽기</Button>} />}
     {data.status==='preview' && <EmptyState icon="link" title="개인 금융 장부 연결 필요" description="연결 후 가져온 내역과 계약을 볼 수 있습니다." action={<Button variant="outline" onClick={reload}>연결 다시 확인</Button>} />}
     {available && filters.view==='flow' && <>
-      <section className="finance-summary" aria-label="수집한 소비 합계"><div><span>수집한 순소비</span><strong className="stat">{financeMoney(totals.net)}</strong></div><div><span>원구매</span><strong className="mono">{financeMoney(totals.gross)}</strong></div><div><span>환불</span><strong className="mono">{financeMoney(totals.refund)}</strong></div><div><span>중복 제외</span><strong className="mono">{financeMoney(totals.duplicate)}</strong></div></section>
-      <p className="finance-muted">합계는 선택 월 기준 · 검색은 목록에만 적용 · 순소비는 은행 출금과 다릅니다.</p>
+      {flowGauge ? <FlowGauge month={gaugeMonth} gauge={flowGauge} observed={observed} breakdown={financeGrossBreakdown(gaugeRow)} row={gaugeRow} /> : <p className="finance-muted">이 기간의 월별 소비 관측이 없습니다.</p>}
+      <p className="finance-muted">게이지는 {filters.month?'선택 월':'가장 최근 관측 월'} 기준 · 검색은 목록에만 적용 · 월별 표와 머니 이동은 더보기 · 순소비는 은행 출금과 다릅니다.</p>
+      {daily && selectedDay && <DailyGauge month={gaugeMonth} daily={daily} total={monthSpend.reduce((sum,entry)=>sum+entry.netAmount,0)} selected={selectedDay} onSelect={setPickedDay} cumulative={financeCumulative(spend,gaugeMonth,selectedDay,flowGauge?.prev?.value)} observed={observed} />}
+      {monthSpend.length>0 && <LabelGauge month={gaugeMonth} progress={labelProgress} rows={unlabeled} busyId={labelBusy} onLabel={quickLabel} />}
       <section className="finance-section"><div className="finance-section-head"><h3>거래 검토</h3><span className="finance-muted num">{visibleEntries.length}건 · 행을 눌러 검토</span></div><FinanceRows entries={visibleEntries} onReview={openReview} onClear={clearFilters} /></section>
       <details className="finance-supporting"><summary>월별 소비·머니 이동 <span className="finance-muted">선택 기간 집계</span></summary><div className="finance-monthly-grid"><section className="finance-section"><div className="finance-section-head"><h3>월별 소비</h3><span className="finance-muted">원구매 − 환불 − 중복</span></div><MonthlyTable rows={monthly} /></section>
       <section className="finance-section"><div className="finance-section-head"><h3>머니 이동</h3><span className="finance-muted">소비 합계에서 제외 · 잔액 아님</span></div><MonthlyTable rows={wallet} wallet /></section></div></details>
     </>}
+    {available && filters.view==='personal' && <>
+      {gaugeMonth ? <PersonalGauge month={gaugeMonth} gauge={personalGauge} observed={observed} count={personalSpend.length} top={financeTopMerchants(personalSpend)} /> : <p className="finance-muted">이 기간의 소비 관측이 없습니다.</p>}
+      <p className="finance-muted">개인 = 사용 목적 개인·개인 사업 중 구독 계약 밖 · {labelProgress.groups.unclassified.count?`미분류 ${labelProgress.groups.unclassified.count}건은 빠져 있습니다 · 흐름 탭에서 분류`:'미분류 없음'}</p>
+      {labelProgress.groups.unclassified.count>0 && <div><Button variant="outline" onClick={()=>changeFilter('view','flow')}>미분류 분류하러 가기</Button></div>}
+    </>}
     {available && filters.view==='subscriptions' && <>
       <p className="finance-muted">사용하는 서비스의 계정 별칭과 구독·고정비 계약입니다. 고객사·거래처 계정과 별도로 관리합니다.</p>
-      <section className="finance-section"><div className="finance-section-head"><h3>서비스·구독 계정</h3><span className="finance-muted num">{subscriptions.length}개 · 최근 결제일은 수집 전체 기간 기준</span></div><SubscriptionRows records={subscriptions} onReview={openReview} onClear={clearFilters} /></section>
-      <p className="finance-muted">이용 상태는 운영자 입력 기준 · 행에서 수정 · 중단·해지는 과거 결제 유지 · 재개 예정은 직접 입력 · 월결제 예상은 최근 결제 +1개월</p>
+      <FixedCostGauge fixed={financeFixedCosts(subscriptions)} />
+      <section className="finance-section"><div className="finance-section-head"><h3>서비스·구독 계정</h3><span className="finance-muted num">{subscriptions.length}개 · 최근 결제일은 수집 전체 기간 기준</span></div><SubscriptionRows records={subscriptions} today={today} onReview={openReview} onClear={clearFilters} /></section>
+      <p className="finance-muted">이용 상태는 운영자 입력 기준 · 행에서 수정 · 중단·해지는 과거 결제 유지 · 재개 예정은 직접 입력 · 월결제 예상은 최근 결제 +1개월 · 막대 = 최근 결제부터 오늘까지 지난 비율, 3주 안에 결제할 것은 진하게 · 점선 = 다음 결제 없음·미확인</p>
       <details className="finance-supporting"><summary>월별 구독 결제 <span className="finance-muted">날짜·금액 대조</span></summary><section className="finance-section"><p className="finance-muted">결제일 기준 월별 · 환불·중복 차감 · 같은 Claude 공동 결제는 한 번만 합산 · 결제를 눌러 내역 확인</p><SubscriptionPaymentTable table={payments} onReview={(cell,row)=>setPaymentDetail({...cell,label:GROUP_LABELS[row.group]||row.names.join(' · ')})} /></section></details>
     </>}
     {available && filters.view==='claims' && <>
@@ -212,6 +248,8 @@ export function Finance({onNavigate}) {
     </EditDrawer>}
     {moreOpen && <Drawer title="금융 더보기" onClose={()=>setMoreOpen(false)} width="min(480px, 96vw)">
       <div className="finance-more"><section><h3>수집 범위</h3><TruthBadge state={data.status} /><p className="mono">{period}</p><p>은행 원장 미조회 · 은행 잔액 미확인</p><p>조회 기간 밖 결제·현금·회사 정산은 전체 합계에 포함됐다고 말할 수 없습니다. 최신 월도 확인한 날짜까지만 관측한 일부 기간입니다.</p>{coverage.note && <p>{coverage.note}</p>}{Array.isArray(coverage.notes)?coverage.notes.map((note,index)=><p key={index}>{note}</p>):typeof coverage.notes==='string'?<p>{coverage.notes}</p>:null}{(data.imports||[]).map(record=><p key={record.id}><span className="mono">{record.from} — {record.through}</span> · {typeof record.coverage==='string'?record.coverage:record.coverage?.contractsOnly===true?'계약만 등록 · 결제 수집 아님':'가져온 범위'} · <span className="mono">{record.createdAt?.slice(0,10)||'시각 미확인'}</span></p>)}<Button variant="outline" onClick={reload}>수집 자료 다시 읽기</Button></section>
+      {available && <section><h3>월별 소비</h3><p className="finance-muted">원구매 − 환불 − 중복</p><MonthlyTable rows={monthly} /></section>}
+      {available && <section><h3>머니 이동</h3><p className="finance-muted">소비 합계에서 제외 · 잔액 아님</p><MonthlyTable rows={wallet} wallet /></section>}
       <section><h3>CFO 리피아 검토 자료</h3>{available && <dl className="finance-review-facts"><div><dt>선택 기간 순소비</dt><dd className="mono">{financeMoney(totals.net)}</dd></div><div><dt>수집 전체 기간 확인된 승인액</dt><dd className="mono">{financeMoney(data.totals?.approved)}</dd></div><div><dt>수집 전체 기간 확인된 회수액</dt><dd className="mono">{financeMoney(data.totals?.recovered)}</dd></div><div><dt>이용 상태</dt><dd>{SERVICE_OPTIONS.map(option=>`${option.label} ${data.subscriptions.filter(record=>(record.serviceStatus||'unknown')===option.value).length}`).join(' · ')}</dd></div><div><dt>사용 근거</dt><dd>{data.subscriptions.length ? `${data.subscriptions.filter(record=>!record.usageNote).length}개 계약 미확인` : '계약 미관측'}</dd></div></dl>}<p>승인 미확인 후보 {data.totals?.approvalUnknownCount ?? 0}건 · 회수 미확인 후보 {data.totals?.recoveryUnknownCount ?? 0}건</p><p>같은 기간의 소비·약정·사용 근거·승인·실제 회수와 빠진 출처를 함께 검토해 주세요. 자료가 없는 비용과 사용은 0으로 채우지 않습니다.</p><p>예상 시간 절감을 현금 이익으로 바꾸지 않습니다. 유지·축소 검토·해지 검토·추가 확인은 운영자 판단 전까지 검토 의견입니다.</p><Button variant="outline" onClick={()=>onNavigate?.('dashboard/agents/office-council')}>기존 오피스로 이동</Button></section></div>
     </Drawer>}
   </div>;
