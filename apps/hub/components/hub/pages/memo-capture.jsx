@@ -16,7 +16,7 @@ import {
 import styles from "./memo-capture.module.css";
 import { memoHref, saveMemoAndVerify } from "@/lib/memo-save";
 import { memoIntakeTaskSummary, prepareMemoIntakeTasks, saveMemoIntakeTasks } from "@/lib/memo-intake-tasks";
-import { formatMeetingBriefForShare } from "@/lib/multimodal-intake-core";
+import { formatMeetingBriefForShare } from "@/lib/meeting-brief-format";
 
 export function MemoCapture({ onSaved, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);

@@ -2,6 +2,7 @@ import { extractMeetingReviewText } from '@/lib/meeting-review-extractor';
 import { invokeSupabaseRpc, resolveDefaultWorkspaceId, resolveSupabaseConfig } from '@/lib/server-write';
 import { isCanonicalUuid } from './uuid.js';
 import { validateTaskChecklist } from './task-checklist.js';
+import { getGenaiStatus } from '@com-moon/genai-transport';
 
 const KINDS = new Set(['decision', 'open_issue', 'value', 'concern', 'signal', 'action']);
 const CERTAINTIES = new Set(['stated', 'derived', 'unknown']);
@@ -12,7 +13,7 @@ const defaultDependencies = {
   extract: extractMeetingReviewText,
   workspaceId: resolveDefaultWorkspaceId,
   configured: () => Boolean(resolveSupabaseConfig()),
-  providerConfigured: () => Boolean(process.env.GEMINI_API_KEY?.trim()),
+  providerConfigured: () => getGenaiStatus().configured,
 };
 
 function context(deps) {
