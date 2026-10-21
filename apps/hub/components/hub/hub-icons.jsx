@@ -103,6 +103,13 @@ const I = {
   trash:     (<><path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7"/></>),
   archive:   (<><rect x="3" y="3" width="18" height="5" rx="1"/><rect x="4" y="8" width="16" height="13" rx="1"/><path d="M10 12h4"/></>),
   refresh:   (<><path d="M21 12a9 9 0 0 1-15.55 6.36L3 16M3 21v-5h5M3 12a9 9 0 0 1 15.55-6.36L21 8M21 3v5h-5"/></>),
+  // 브랜드 탭 아이콘 세트(2026-10-21) 중 기존 이름이 없던 것 — 채널은 회사 로고가 아니라 일반 기호다.
+  channelThreads:   (<><circle cx="12" cy="12" r="3.4"/><path d="M15.4 12v1.3a2.7 2.7 0 0 0 5.4 0V12a8.8 8.8 0 1 0-3.6 7.1"/></>),
+  channelInstagram: (<><rect x="3" y="3" width="18" height="18" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/></>),
+  channelYoutube:   (<><rect x="2" y="5" width="20" height="14" rx="4.5"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/></>),
+  scheduled: (<><rect x="3" y="4.5" width="13" height="12.5" rx="2.5"/><path d="M3 9h13M7 2.8v3.4M12 2.8v3.4"/><circle cx="17.5" cy="17.5" r="4.5"/><path d="M17.5 15.5v2.2l1.4.9"/></>),
+  metric:    (<><path d="M3.5 20.5h17"/><path d="m4.5 15.5 4.5-4.5 3.5 3 7-7.5"/><path d="M15.5 6.5h4v4"/></>),
+  target:    (<><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/></>),
 };
 
 // Existing task surfaces use both nouns for the same checklist concept.

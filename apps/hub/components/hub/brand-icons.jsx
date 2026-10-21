@@ -3,54 +3,49 @@
 import React from "react";
 
 // 브랜드 기호는 DB의 meta.glyph와 별개인 화면 자산이다. 작은 목록 행에서도 각
-// 브랜드의 주제를 읽을 수 있도록 24px 그리드, 단색 1.7px 획을 공유한다.
+// 브랜드의 주제를 읽을 수 있도록 24px 그리드, 단색 1.6px 획, 둥근 끝을 공유한다.
+// 채움은 눈·점·달처럼 작은 표지에만 쓴다. 2026-10-21 세트로 모두 저장소 고유 그림이며
+// 원본은 docs/design-studies/2026-10-21-mywork-brand-develop/brand-tab-icons.json이다.
 const MARKS = {
   "22nomad": {
     id: "robot",
-    shape: <><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 7V4m-2 0h4M8 20v1m8-1v1"/><circle cx="9" cy="13" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1" fill="currentColor" stroke="none"/><path d="M9 17h6"/></>,
+    shape: <><rect x="4" y="8" width="16" height="11.5" rx="3.5"/><path d="M12 8V5"/><circle cx="12" cy="3.8" r="1.2"/><path d="M2 12.5v3M22 12.5v3"/><circle cx="9" cy="13.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="13.4" r="1.1" fill="currentColor" stroke="none"/><path d="M10 16.8h4"/></>,
   },
   bridgemaker: {
     id: "cross",
-    shape: <path d="M10 21h4v-9h5V8h-5V3h-4v5H5v4h5v9Z"/>,
+    shape: <path d="M10 3.5h4V8h4.5v4H14v8.5h-4V12H5.5V8H10z"/>,
   },
   classmoon: {
     id: "education",
-    shape: <><path d="M12 7c-2.5-1.6-5.4-2-9-1v13c3.6-1 6.5-.6 9 1 2.5-1.6 5.4-2 9-1V6c-3.6-1-6.5-.6-9 1Zm0 0v13"/><path d="M6 10h3m6 0h3M6 14h3m6 0h3"/></>,
+    shape: <><path d="M12 8.5c-2.4-1.5-5.2-1.9-8.5-1.2v11.4c3.3-.7 6.1-.3 8.5 1.2 2.4-1.5 5.2-1.9 8.5-1.2V7.3c-3.3-.7-6.1-.3-8.5 1.2z"/><path d="M12 8.5v11.4"/><path d="M13.6 2.6a2.6 2.6 0 1 0 2.9 3.3 2 2 0 0 1-2.9-3.3z" fill="currentColor" stroke="none"/></>,
   },
   classin_side: {
     id: "classin-side",
-    shape: <><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="13" r="1" fill="currentColor" stroke="none"/></>,
+    shape: <><path d="M4 5.5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8.5L7 20.5v-4H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z"/><path d="M7.5 10h9M7.5 13h5.5"/></>,
   },
   holyfuncollector: {
     id: "angel",
-    shape: <><ellipse cx="12" cy="4" rx="3.5" ry="1.2"/><circle cx="12" cy="9" r="2.2"/><path d="M9.3 11.4C6 10.5 3.7 12 3 15.6c1.7-.7 3.3-.7 4.8.2M14.7 11.4c3.3-.9 5.6.6 6.3 4.2-1.7-.7-3.3-.7-4.8.2M9.1 13.3 7.5 20h9l-1.6-6.7"/></>,
+    shape: <><ellipse cx="12" cy="3.6" rx="4.2" ry="1.3"/><circle cx="12" cy="13.5" r="7.2"/><path d="M9 12h.01M15 12h.01" strokeWidth="2.4"/><path d="M8.8 15.4c1.8 1.9 4.6 1.9 6.4 0"/></>,
   },
   moonpm: {
     id: "workflow",
-    shape: <><rect x="3" y="4" width="7" height="6" rx="1.2"/><rect x="15" y="4" width="6" height="6" rx="1.2"/><rect x="15" y="15" width="6" height="6" rx="1.2"/><path d="M10 7h5m-5 0h2v11h3"/></>,
+    shape: <><rect x="2.5" y="4" width="7" height="5.5" rx="1.6"/><rect x="14.5" y="4" width="7" height="5.5" rx="1.6"/><rect x="14.5" y="14.5" width="7" height="5.5" rx="1.6"/><path d="M9.5 6.75h5M6 9.5v4.5a3.25 3.25 0 0 0 3.25 3.25h5.25"/></>,
   },
   politicofficer: {
     id: "balance",
-    shape: <><path d="M12 4v16m-5 0h10M5 8h14M7 8l-3 6h6L7 8Zm10 0-3 6h6l-3-6Z"/><circle cx="12" cy="4" r="1"/></>,
+    shape: <><path d="M12 3.5v16.5M8 20h8"/><path d="M4.5 7.5c2.4-1 4.9-1.5 7.5-1.5s5.1.5 7.5 1.5"/><path d="M4.5 7.5 2.5 13a3 3 0 0 0 4 0z"/><path d="M19.5 7.5 17.5 13a3 3 0 0 0 4 0z"/><circle cx="12" cy="3.5" r="1" fill="currentColor" stroke="none"/></>,
   },
   studyseagull: {
     id: "seagull",
-    // Lucide Bird 윤곽을 18px 행 크기에 맞춰 조정했다. 라이선스: brand-icons.LICENSE.
-    shape: <><path d="M16 7h.01M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20m18-13 2 .5-2 .5M10 18v3m4-3.25V21M7 18a6 6 0 0 0 3.84-10.61"/></>,
+    shape: <><circle cx="15" cy="7.5" r="2.6"/><path d="M17.6 7.3h3.2l-2.6 1.6"/><path d="M12.6 8.6C8.4 9 5 11.6 3 16.5c3.5-.5 6.6-.2 9.6.9 3.3 1.2 5.4-1 5-4.6l-.4-3.6"/><path d="M7.5 13.6c1.5-.1 3.2.3 4.8 1.1"/><path d="M10 17.6V21M13 18v3"/><circle cx="15.4" cy="7.2" r=".6" fill="currentColor" stroke="none"/></>,
   },
   gore: {
     id: "whale",
-    // SVG Repo Animals 24, CC0: https://www.svgrepo.com/svg/232106/whale
-    viewBox: "0 0 512 512",
-    filled: true,
-    shape: <><path d="M113.54,241.604c-1.078-49.502-47.607-88.814-99.167-77.249c-6.168,1.383-10.985,6.2-12.368,12.368 c-6.139,27.375,2.017,55.54,21.82,75.344c2.71,2.71,5.584,5.188,8.584,7.455c-3.001,2.268-5.872,4.752-8.584,7.463 c-19.802,19.802-27.959,47.969-21.82,75.343c1.383,6.168,6.2,10.986,12.368,12.368c32.611,7.314,63.269-5.75,81.638-28.903 c19.784,37.994,55.306,67.943,96.907,86.054c74.853-29.739,137.213-91.062,143.227-170.243H113.54z"/><path d="M495.66,241.604H368.905c-5.052,80.573-59.043,146.548-130.303,184.962C375.692,456.533,512,373.949,512,257.943 C512,248.918,504.684,241.604,495.66,241.604z M439.056,310.907c-11.938,0-21.615-9.677-21.615-21.615s9.677-21.615,21.615-21.615 s21.615,9.677,21.615,21.615S450.994,310.907,439.056,310.907z"/><path d="M318.671,79.249c-21.716,0-39.384,17.667-39.384,39.384v79.49c0,9.024,7.316,16.34,16.34,16.34 c9.024,0,16.34-7.316,16.34-16.34v-79.49c0-3.697,3.008-6.705,6.705-6.705c3.698,0,6.706,3.009,6.706,6.705v18.204 c0,9.024,7.316,16.34,16.34,16.34s16.34-7.316,16.34-16.34v-18.204C358.056,96.915,340.389,79.249,318.671,79.249z"/><path d="M229.753,101.135c-21.716,0-39.384,17.667-39.384,39.384v18.204c0,9.024,7.316,16.34,16.34,16.34s16.34-7.316,16.34-16.34 v-18.204c0-3.697,3.008-6.705,6.705-6.705c3.698,0,6.706,3.009,6.706,6.705v57.604c0,9.024,7.316,16.34,16.34,16.34 s16.34-7.316,16.34-16.34v-57.604C269.138,118.802,251.471,101.135,229.753,101.135z"/></>,
+    shape: <><path d="M2.5 14c0-3.9 3.4-6.5 8-6.5 4 0 6.8 2 7.6 5.2.3 1.2 1.1 1.8 2.2 1.5L22 13.7c-.3 1.6-1.3 2.5-2.8 2.6-1.4 2.3-4.5 3.7-8.2 3.7-4.8 0-8.5-2.4-8.5-6z"/><path d="M19.6 14.5 21 10.6M19.6 14.5 16.8 11.4"/><circle cx="7" cy="12.4" r=".9" fill="currentColor" stroke="none"/><path d="M8 5.5V3.6M6.2 4.4 8 5.5l1.8-1.1"/></>,
   },
   sinabro: {
     id: "pen",
-    // Phosphor Pen Nib, MIT: brand-icons.LICENSE
-    viewBox: "0 0 256 256",
-    filled: true,
-    shape: <><path d="M248,92.68a15.86,15.86,0,0,0-4.69-11.31L174.63,12.68a16,16,0,0,0-22.63,0L123.57,41.11l-58,21.77A16.06,16.06,0,0,0,55.35,75.23L32.11,214.68A8,8,0,0,0,40,224a8.4,8.4,0,0,0,1.32-.11l139.44-23.24a16,16,0,0,0,12.35-10.17l21.77-58L243.31,104A15.87,15.87,0,0,0,248,92.68Zm-69.87,92.19L63.32,204l47.37-47.37a28,28,0,1,0-11.32-11.32L52,192.7,71.13,77.86,126,57.29,198.7,130ZM112,132a12,12,0,1,1,12,12A12,12,0,0,1,112,132Zm96-15.32L139.31,48l24-24L232,92.68Z"/></>,
+    shape: <><path d="M12 21v-7.5"/><circle cx="12" cy="11.5" r="2"/><path d="M12 2.8 6.2 9.6 9 20.2h6l2.8-10.6z"/><path d="M8.5 6.3h7"/></>,
   },
 };
 
@@ -69,8 +64,8 @@ function markFor(brand) {
 export function BrandIcon({ brand, size = 18, style }) {
   const mark = markFor(brand);
   return (
-    <svg width={size} height={size} viewBox={mark.viewBox || "0 0 24 24"} fill={mark.filled ? "currentColor" : "none"}
-      stroke={mark.filled ? "none" : "currentColor"} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
       data-brand-icon={mark.id} aria-hidden="true" focusable="false"
       style={{ flexShrink: 0, ...style }}>
       {mark.shape}

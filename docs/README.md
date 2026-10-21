@@ -231,6 +231,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`design-studies/2026-10-21-mywork-brand-develop/README.md`](design-studies/2026-10-21-mywork-brand-develop/README.md) — **목업·권장안 / 운영자 확정 전 / 앱·라우트·DB 미반영**. 깊이 레이어 테마로 그린 내 작업 시안 A~E(오늘 3개 우선 · 하루 흐름 2단 · 시간 블록 · 지금 하나)와 브랜드 탭 현재·최신 시안(집중 브랜드 편집 보드 + 채널 지표, 채널·12주 추이·최근 업로드·기록 타임라인을 담은 상세). 브랜드 탭용으로 새로 그린 아이콘 28개(`brand-tab-icons.json`)도 들어 있다. 그중 브랜드 10개는 `BrandIcon`에, 앱에 없던 채널·기록 6개는 `hub-icons.jsx`에 반영됐다(2026-10-21, DESIGN.md §15). 시안 화면은 비공개 캔버스 두 장이다. 팔로워 등 지표 수치는 예시 값이며, 채널 지표 저장·갈래 표시·기록 로그(P4)·자동 수집(P5)은 별도 결정이다.
+
 - [`design-studies/2026-09-29-reports-hub/README.md`](design-studies/2026-09-29-reports-hub/README.md) — **DRAFT · 목업·권장안 / 운영자 확정 전 / 앱·라우트·DB 미반영**. 리포트 허브·템플릿·8종 지도·본문 구성·개인/회사/콘텐츠 리포트의 아트보드 7개. 주차 기준과 사실·AI 해석·운영자 판단의 세 층, 차트·후속 행동 구성을 제안한다. 수치는 모두 예시 값이며 화면 위치·회고 질문·회사/개인 경계 등은 미정이다.
 
 - [`superpowers/specs/2026-09-25-product-operations-room-design.md`](superpowers/specs/2026-09-25-product-operations-room-design.md) — **DRAFT · 목업 단계 / 전부 권장안 / 연결 없음**. 제품 운영실: 포트폴리오(상태·사용자·매출·비용·건강), 제품별 전용 페이지, 개발(릴리스 5단계)·보수(전역 점검 종류 × 제품) 체크, 돈 월 마감, 단계와 분리한 운영 상태 5개, 제품 하트비트 push 계약, 매일·매주·매월·분기 리듬, M1~M5. 목업은 비공개 아티팩트.
