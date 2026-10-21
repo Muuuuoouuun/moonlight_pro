@@ -299,6 +299,16 @@
   --brief-panel-shadow: var(--shadow-panel);
   --brief-panel-shadow-hover: var(--shadow-panel);
 }
+/* 패딩 없는 패널의 맨 위·맨 아래 띠(긴급 KA 줄, 할 일 머리)가 제 배경을 네모로 칠해 둥근 모서리를
+ * 덮었다 — 상자와 바탕의 대비가 커지면서 위쪽이 잘린 판처럼 보였다(운영자 피드백 2026-10-21). */
+.hub-app[data-visual-system="depth-c"] .daily-brief__panel > :first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+.hub-app[data-visual-system="depth-c"] .daily-brief__panel > :last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
 
 .hub-app[data-visual-system="depth-c"] .personal-revenue-drawer,
 .hub-app[data-visual-system="depth-c"] .hub-project-portfolio-mobile-manage > div {

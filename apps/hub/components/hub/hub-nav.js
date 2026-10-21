@@ -209,7 +209,9 @@ const MY_WORK_CHILDREN = [
 ];
 
 const OVERVIEW_CHILDREN = Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [key, [
-  { key: 'overview-summary', label: '집계', path: 'dashboard/overview' },
+  // 10c(2026-10-21): 기본 착지는 목표 렌즈, 활동·운영 패널은 집계(?view=summary)로 옮겼다.
+  { key: 'overview-lens', label: '목표', path: 'dashboard/overview' },
+  { key: 'overview-summary', label: '집계', path: 'dashboard/overview?view=summary' },
   { key: 'overview-goals', label: 'OKR·KPI', path: `dashboard/overview?view=goals&scope=${key}` },
 ]]));
 
@@ -527,7 +529,7 @@ export function isSidebarChildActive(anchorKey, childPath, activePath, view) {
   if (anchorKey === 'overview') {
     const childView = new URLSearchParams(String(childPath).split('?')[1] || '').get('view') || '';
     const currentView = view || new URLSearchParams(String(activePath).split('?')[1] || '').get('view') || '';
-    if ((childView === 'goals') !== (currentView === 'goals')) return false;
+    if (childView !== currentView) return false;
   }
   return pathnameOf(childPath) === pathnameOf(activePath);
 }

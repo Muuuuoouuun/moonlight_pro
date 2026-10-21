@@ -114,12 +114,11 @@ test('each workflow keeps one tip in its selected hierarchy, outside the Home br
   const chartStart = overview.indexOf('작업·기획 활동 추이');
   const tip = overview.indexOf('<GuidanceInlineTip variant="overview"');
   const domainPanels = overview.indexOf('hub-grid--split', chartStart);
-  const goalSummary = overview.indexOf('<OkrSummaryCard');
-  const activityDisclosure = overview.indexOf('<details className="workflow-disclosure"');
-  const activityDisclosureEnd = overview.indexOf('</details>', activityDisclosure);
-  // GOAL LENS keeps the weekly tip with the visible goal summary. The activity
-  // chart and domain panels remain in their original order inside more detail.
-  assert.ok(goalSummary >= 0 && tip > goalSummary && activityDisclosure > tip);
-  assert.ok(chartStart > activityDisclosure && domainPanels > chartStart && activityDisclosureEnd > domainPanels);
+  const goalLens = overview.indexOf('<OverviewGoalLens');
+  const summaryLens = overview.indexOf("{lens === 'sum' && (\n        <div className=\"workflow-disclosure__body overview-sum\">");
+  // 10c(2026-10-21): the goal lens comes first and keeps the weekly tip right after it.
+  // The activity chart and domain panels live in the 집계 lens, in their original order.
+  assert.ok(goalLens >= 0 && tip > goalLens && summaryLens > tip);
+  assert.ok(chartStart > summaryLens && domainPanels > chartStart);
   assert.doesNotMatch(read('./pages/content-studio.jsx'), /GuidanceInlineTip/);
 });
