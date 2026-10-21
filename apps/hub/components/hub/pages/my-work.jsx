@@ -231,7 +231,15 @@ function useAttentionLedger() {
     }
   }, []);
 
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    const onTasksSaved = () => { load(); };
+    window.addEventListener('moonlight:tasks-saved', onTasksSaved);
+    load();
+    return () => {
+      window.removeEventListener('moonlight:tasks-saved', onTasksSaved);
+      requestRef.current += 1;
+    };
+  }, [load]);
   return { ...data, state, reload: load };
 }
 
@@ -2350,7 +2358,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
         </div>
       )}
       {overdue.length > 0 && (
-        <Card pad={false} style={{ overflow: 'hidden', boxShadow: 'inset 1px 0 0 var(--danger)' }}>
+        <Card pad={false} style={{ overflow: 'hidden', boxShadow: 'inset 1px 0 0 var(--danger), var(--shadow-card)' }}>
           <div style={{ padding: '8px 14px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--danger)', borderBottom: '1px solid var(--line-soft)' }}>
             기한 지남 {overdue.length}
           </div>

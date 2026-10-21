@@ -6,8 +6,26 @@ struct TaskCaptureContent: View {
     let openRevision: Int
     let openConnection: () -> Void
     @FocusState private var focused: Bool
+    @State private var pendingDeletion: DeletionTarget?
+    @State private var isEditing = false
+    @State private var selectedIDs: Set<UUID> = []
 
-    private var canChangeTasks: Bool { model.hub.canWriteTasks && !model.hub.isSavingTask }
+    private struct DeletionTarget {
+        let tasks: [LocalTask]
+        let hubURL: String?
+        let generation: Int
+        var title: String { tasks.count == 1 ? "할 일을 삭제할까요?" : "선택한 \(tasks.count)개 할 일을 삭제할까요?" }
+        var message: String {
+            let names = tasks.prefix(3).map { "“\($0.title)”" }.joined(separator: "\n")
+            let rest = tasks.count > 3 ? "\n외 \(tasks.count - 3)개" : ""
+            return names + rest + "\n" + (hubURL != nil
+                ? "Hub의 원본 할 일도 삭제되며 되돌릴 수 없어요."
+                : "이 Mac에 저장한 할 일을 삭제하며 되돌릴 수 없어요.")
+        }
+    }
+
+    private var canChangeTasks: Bool { model.hub.canWriteTasks }
+    private var canAddTask: Bool { canChangeTasks && !model.hub.isCreatingTask }
     private var readMessage: String? {
         guard model.hub.isEnabled else { return nil }
         if let message = model.hub.errorMessage { return message }
@@ -27,15 +45,16 @@ struct TaskCaptureContent: View {
                     .textFieldStyle(.plain).font(.system(size: 13))
                     .focused($focused).onSubmit(addTask)
                     .accessibilityLabel("새 할 일")
+                    .disabled(isEditing)
                     .modifier(GlassGlyphShadow())
                 Button(action: addTask) {
                     Image(systemName: "arrow.up").modifier(GlassGlyphShadow()).font(.system(size: 14, weight: .medium))
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(GlassActionStyle(compact: true))
-                .disabled(!canChangeTasks || (!model.hub.hasPendingTask
+                .disabled(isEditing || !canAddTask || (!model.hub.hasPendingTask
                           && model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                .accessibilityLabel(model.hub.isSavingTask ? "할 일 저장 중"
+                .accessibilityLabel(model.hub.isCreatingTask ? "할 일 저장 중"
                                     : model.hub.hasPendingTask ? "이전 할 일 저장 확인" : "할 일 추가")
             }
             .padding(.leading, 13).padding(.trailing, 6).frame(height: 46)
@@ -53,36 +72,70 @@ struct TaskCaptureContent: View {
                     .lineLimit(1).help(model.taskStatusLabel)
                 Spacer(minLength: 0)
                 if model.hub.isEnabled { HubRefreshButton(model: model) }
-                Button { model.openHub(.tasks) } label: { Label("Hub에서 열기", systemImage: "arrow.up.right") }
-                    .buttonStyle(GlassQuietStyle())
+                HubOpenButton(model: model, mode: .tasks)
             }
             .font(.system(size: 11.5, weight: .medium))
         }
         .animation(PetMotion.panel, value: model.displayedTasks.map(\.id))
         .onAppear { focusInput() }
-        .onChange(of: openRevision) { _, _ in focusInput() }
+        .onChange(of: openRevision) { _, _ in resetEditing(); focusInput() }
         .onChange(of: model.activeCompanion) { _, active in
-            if active == surface { focusInput() } else { focused = false }
+            if active == surface { focusInput() } else { focused = false; resetEditing() }
+        }
+        .alert(pendingDeletion?.title ?? "할 일 삭제", isPresented: Binding(
+            get: { pendingDeletion != nil },
+            set: { if !$0 { pendingDeletion = nil } }
+        ), presenting: pendingDeletion) { target in
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive) { remove(target) }
+        } message: { target in
+            Text(target.message)
+        }
+        .onChange(of: model.hubBaseURL) { _, _ in resetEditing() }
+        .onChange(of: model.hub.isEnabled) { _, _ in resetEditing() }
+        .onChange(of: model.hub.connectionGeneration) { _, _ in resetEditing() }
+        .onChange(of: model.displayedTasks.map(\.id)) { _, ids in
+            selectedIDs.formIntersection(ids)
+            if ids.isEmpty { isEditing = false }
         }
     }
 
     private var taskCount: some View {
         HStack(spacing: 6) {
-            Text(model.displayedTasks.isEmpty && (readMessage != nil || isLoading)
+            Text(isEditing ? "\(selectedIDs.count)개 선택" : model.displayedTasks.isEmpty && (readMessage != nil || isLoading)
                  ? (isLoading ? "불러오는 중…" : "할 일 확인 필요") : "남은 \(model.openTaskCount)개")
                 .monospacedDigit()
             Spacer(minLength: 0)
-            Menu {
-                Toggle("완료한 할 일 포함", isOn: $model.showsCompletedTasks)
-            } label: {
-                Text(model.showsCompletedTasks ? "완료 포함" : "목록 보기")
+            if isEditing {
+                Button(selectedIDs.count == model.displayedTasks.count ? "선택 해제" : "전체 선택") {
+                    selectedIDs = selectedIDs.count == model.displayedTasks.count ? [] : Set(model.displayedTasks.map(\.id))
+                }
+                .buttonStyle(GlassQuietStyle()).disabled(!canChangeTasks)
+                Button(role: .destructive) { requestDeletion(model.displayedTasks.filter { selectedIDs.contains($0.id) }) } label: {
+                    Label("삭제", systemImage: "trash").modifier(GlassGlyphShadow())
+                }
+                .buttonStyle(GlassQuietStyle()).disabled(selectedIDs.isEmpty || !canChangeTasks)
+                .accessibilityLabel("선택한 할 일 삭제")
+                Button("완료") { resetEditing(); focusInput() }
+                    .buttonStyle(GlassQuietStyle()).disabled(model.hub.isSavingTask)
+                    .accessibilityLabel("할 일 편집 완료")
+            } else {
+                Menu {
+                    Toggle("완료한 할 일 포함", isOn: $model.showsCompletedTasks)
+                } label: {
+                    Text(model.showsCompletedTasks ? "완료 포함" : "목록 보기")
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .accessibilityLabel("할 일 목록 보기 설정")
+                Button("편집") { focused = false; selectedIDs = []; isEditing = true }
+                    .buttonStyle(GlassQuietStyle())
+                    .disabled(model.displayedTasks.isEmpty || !canChangeTasks)
+                    .accessibilityLabel("할 일 편집")
             }
-            .menuStyle(.borderlessButton).fixedSize()
-            .accessibilityLabel("할 일 목록 보기 설정")
         }
         .font(.system(size: 11.5, weight: .medium))
         .foregroundStyle(Palette.glassInkMuted)
-        .frame(height: 18, alignment: .leading)
+        .frame(height: 28, alignment: .leading)
     }
 
     private var taskList: some View {
@@ -119,39 +172,56 @@ struct TaskCaptureContent: View {
     }
 
     private func taskRow(_ task: LocalTask) -> some View {
-        Button {
-            guard canChangeTasks else { return }
+        let isSaving = model.hub.isEnabled && model.hub.savingTaskIDs.contains(task.id)
+        let isDeleting = model.hub.isEnabled && model.hub.deletingTaskIDs.contains(task.id)
+        let checked = isSaving ? !task.isDone : task.isDone
+        return Button {
+            guard canChangeTasks, !model.hub.isTaskBusy(task.id) else { return }
+            if isEditing {
+                if selectedIDs.contains(task.id) { selectedIDs.remove(task.id) }
+                else { selectedIDs.insert(task.id) }
+                return
+            }
             withAnimation(PetMotion.hover) { model.toggleTask(task.id) }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle").modifier(GlassGlyphShadow())
+                Image(systemName: isEditing ? (selectedIDs.contains(task.id) ? "checkmark.square.fill" : "square")
+                      : checked ? "checkmark.circle.fill" : "circle").modifier(GlassGlyphShadow())
                     .font(.system(size: 19, weight: .ultraLight))
-                    .foregroundStyle(Palette.glassInkMuted)
+                    .foregroundStyle(isEditing && selectedIDs.contains(task.id) ? Palette.danger : Palette.glassInkMuted)
                 Text(task.title).font(.system(size: 13))
                     .strikethrough(task.isDone)
                     .foregroundStyle(task.isDone ? Palette.glassInkFaint : Palette.glassInk)
                     .lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
+                if isSaving || isDeleting {
+                    Text(isDeleting ? "삭제 중…" : "저장 중…").font(.system(size: 10.5))
+                        .foregroundStyle(Palette.glassInkMuted)
+                }
             }
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(GlassQuietStyle())
-        .disabled(!canChangeTasks)
-        .help(task.isDone ? "완료했어요 · 다시 눌러 취소 · 기본 목록에서 3초 뒤 숨김" : task.title + (model.hub.isEnabled ? " · 우클릭하여 Hub에서 열기" : " · 우클릭하여 삭제"))
-        .accessibilityLabel("\(task.title) \(task.isDone ? "완료 취소" : "완료")")
-        .accessibilityAction(named: Text(model.hub.isEnabled ? "Hub에서 열기" : "삭제")) {
-            if model.hub.isEnabled { model.openHub(.tasks) } else { remove(task.id) }
+        .disabled(!canChangeTasks || model.hub.isTaskBusy(task.id))
+        .help(isEditing ? "삭제할 할 일 선택 · 완료 상태는 바뀌지 않아요." : task.isDone ? "완료했어요 · 다시 눌러 취소 · 우클릭하여 삭제 · 기본 목록에서 3초 뒤 숨김" : task.title + " · 우클릭하여 삭제")
+        .accessibilityLabel("\(task.title) \(isDeleting ? "삭제 중" : isSaving ? "저장 중" : isEditing ? "선택" : task.isDone ? "완료 취소" : "완료")")
+        .accessibilityValue(isEditing ? (selectedIDs.contains(task.id) ? "선택됨" : "선택 안 됨") : task.isDone ? "완료됨" : "미완료")
+        .accessibilityAddTraits(isEditing && selectedIDs.contains(task.id) ? .isSelected : [])
+        .accessibilityActions {
+            if model.hub.isEnabled { Button("Hub에서 열기") { model.openHub(.tasks) } }
+            Button("삭제…") { requestDeletion([task]) }
         }
         .contextMenu {
             Button("Office 회의 안건으로 준비") { model.prepareOfficeFromTask(task) }
             Button("이 할 일로 담당자에게 묻기") { model.prepareCouncilFromTask(task) }
             if model.hub.isEnabled {
                 Button("Hub에서 열기") { model.openHub(.tasks) }
-            } else {
-                Button("삭제", role: .destructive) { remove(task.id) }
             }
+            Divider()
+            Button("삭제…", role: .destructive) { requestDeletion([task]) }
+                .disabled(!canChangeTasks)
         }
         .overlay(alignment: .bottom) { Palette.glassInk.opacity(0.08).frame(height: 1) }
         .transition(.opacity.combined(with: .offset(y: 4)))
@@ -160,17 +230,31 @@ struct TaskCaptureContent: View {
     private func focusInput() {
         DispatchQueue.main.async {
             // Double-click hides the quick host while its first-click focus is queued.
-            guard model.activeCompanion == surface else { return }
+            guard model.activeCompanion == surface, !isEditing else { return }
             focused = true
         }
     }
     private func addTask() {
-        guard canChangeTasks else { return }
+        guard canAddTask, !isEditing else { return }
         withAnimation(PetMotion.panel) { model.addTask() }
     }
-    private func remove(_ id: UUID) {
-        guard !model.hub.isEnabled else { return }
-        withAnimation(PetMotion.panel) { model.removeTask(id) }
+    private func resetEditing() {
+        isEditing = false; selectedIDs = []; pendingDeletion = nil
+    }
+    private func requestDeletion(_ tasks: [LocalTask]) {
+        guard canChangeTasks, !tasks.isEmpty, tasks.allSatisfy({ !model.hub.isTaskBusy($0.id) }) else { return }
+        pendingDeletion = DeletionTarget(tasks: tasks, hubURL: model.hub.isEnabled ? model.hubBaseURL : nil, generation: model.hub.connectionGeneration)
+    }
+    private func remove(_ target: DeletionTarget) {
+        guard canChangeTasks, target.generation == model.hub.connectionGeneration,
+              target.hubURL == (model.hub.isEnabled ? model.hubBaseURL : nil) else { return }
+        Task {
+            guard canChangeTasks, target.generation == model.hub.connectionGeneration,
+                  target.hubURL == (model.hub.isEnabled ? model.hubBaseURL : nil) else { return }
+            let deleted = await model.removeTasks(target.tasks.map(\.id))
+            guard target.generation == model.hub.connectionGeneration, target.hubURL == (model.hub.isEnabled ? model.hubBaseURL : nil) else { return }
+            selectedIDs.subtract(deleted)
+        }
     }
 }
 

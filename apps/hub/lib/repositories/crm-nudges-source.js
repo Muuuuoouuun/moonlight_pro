@@ -7,6 +7,7 @@
 import { getRevenueLedger } from "./revenue-ledger.js";
 import { listRecentActivities } from "./crm-activities.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
+import { calendarReadIsPartial } from "../calendar-read-coverage.js";
 import { buildCrmNudges } from "../sales-os/crm-nudges.js";
 import { findUnrecordedMeetings } from "../sales-os/calendar-touchpoints.js";
 import { filterOperatorOwnedRevenue } from "../operator-revenue-scope.js";
@@ -89,7 +90,7 @@ export async function getCrmNudges({ now = Date.now(), ignoredEventIds = [], sup
   const failedSources = [
     ...(activities === null ? ["crm_activities"] : []),
     // 캘린더 미연결(preview)은 실패가 아니다 — 연결한 적이 없는 것과 못 읽은 것을 가른다.
-    ...(!calendar?.ok && !["calendar-not-connected", "missing-connection", "missing-access-token", "missing-config"].includes(calendar?.reason || "")
+    ...(calendarReadIsPartial(calendar) || (!calendar?.ok && !["calendar-not-connected", "missing-connection", "missing-access-token", "missing-config"].includes(calendar?.reason || ""))
       ? ["calendar"]
       : []),
   ];

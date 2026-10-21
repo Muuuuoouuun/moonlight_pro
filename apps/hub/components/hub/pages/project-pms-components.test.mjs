@@ -303,18 +303,16 @@ test("mutation reloads keep the current ledger mounted while refreshing", () => 
   assert.doesNotMatch(loadBlock, /^\s*setSyncState\(['"]loading['"]\);/m);
 });
 
-test("the linked-content ledger loads only when project detail is used", () => {
-  const contentStart = projectsSource.indexOf('프로젝트 상세의 "연관 콘텐츠"');
-  const effectStart = projectsSource.indexOf("React.useEffect", contentStart);
-  const contentEnd = projectsSource.indexOf("React.useEffect", effectStart + 1);
-  const contentBlock = projectsSource.slice(contentStart, contentEnd);
-
-  assert.ok(contentStart >= 0 && effectStart > contentStart && contentEnd > effectStart);
-  assert.match(projectsSource.slice(0, contentStart), /const contentLoadedRef = React\.useRef\(false\)/);
-  assert.match(contentBlock, /if \(!openDetail \|\| contentLoadedRef\.current\) return undefined/);
-  assert.match(contentBlock, /contentLoadedRef\.current = true/);
-  assert.match(contentBlock, /AbortController/);
-  assert.match(contentBlock, /\[openDetail\]/);
+test("same-brand content uses a lazy truth-aware read with explicit retry", async () => {
+  const hook = await readFile(new URL('./use-project-brand-content.js', import.meta.url), 'utf8');
+  assert.match(projectsSource, /const brandContent = useProjectBrandContent\(openDetail\)/);
+  assert.match(projectsSource, /selectProjectBrandContent\(brandContent.items, p.brandId\)/);
+  assert.match(projectsSource, /contentState=\{brandContent.state\}/);
+  assert.match(projectsSource, /onReloadContent=\{brandContent.reload\}/);
+  assert.match(hook, /if \(!openDetail \|\| loaded.current\) return undefined/);
+  assert.match(hook, /controller.signal.aborted/);
+  assert.match(detailPanelSource, /같은 브랜드 콘텐츠/);
+  assert.doesNotMatch(detailPanelSource, /title="연관 콘텐츠"/);
 });
 
 test("partial project reads preserve core rows and offer a named retry state", () => {

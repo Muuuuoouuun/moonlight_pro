@@ -6,6 +6,8 @@
 // display model can't faithfully reverse (owner_id, expected_close_at from a free-text
 // close label) are intentionally left untouched — best-effort, never clobbered.
 
+import { confirmRevenueCreate, insertRevenueCreate } from "./revenue-create.js";
+import { REVENUE_CREATE_TABLES } from "./revenue-create-command.js";
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
 import { dealStageLabel, STAGE_ALIASES } from "../deal-stages.js";
 import { recordActivity } from "../repositories/crm-activities.js";
@@ -155,8 +157,10 @@ export function buildDealWrite(payload = {}) {
   if (payload.workspace) metaPatch.workspace = payload.workspace;
 
   // Deals have no next_action column → keep both follow-up fields in meta.
-  if (payload.next_action !== undefined) {
-    metaPatch.next_action = String(payload.next_action).trim() || null;
+  // The drawer edits nextAction; explicit API next_action (including clearing) wins.
+  const nextAction = payload.next_action !== undefined ? payload.next_action : payload.nextAction;
+  if (nextAction !== undefined) {
+    metaPatch.next_action = String(nextAction).trim() || null;
   }
   if (payload.snooze_until !== undefined) {
     metaPatch.snooze_until = String(payload.snooze_until).trim() || null;
@@ -336,13 +340,19 @@ async function readExistingRow(table, id, workspaceId) {
     select: table === "deals" ? "meta,stage" : "meta",
     filters: [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
     limit: 1,
+    strictRows: true,
   });
   // read 실패(null)와 "meta 없는 행"({})을 구분한다 — 실패를 {}로 뭉개면 patch가
   // 기존 meta 전체(snooze_until/value/stage_detail…)를 덮어쓰고 saved로 보고된다
   // (2026-08-05 재감사 안정성 M: meta-wipe).
   if (!Array.isArray(rows)) return null;
-  const meta = rows[0] ? rows[0].meta : null;
-  return { meta: meta && typeof meta === "object" ? meta : {}, stage: typeof rows[0]?.stage === "string" ? rows[0].stage : null };
+  const row = rows[0];
+  // Every metadata merge needs the actual snapshot, including customers and
+  // cases. Keep SQL NULL distinct from {}, and fail closed on malformed reads.
+  if (rows.length !== 1 || !row || !Object.hasOwn(row, "meta")) return null;
+  if (row.meta !== null && (typeof row.meta !== "object" || Array.isArray(row.meta))) return null;
+  if (table === "deals" && (!Object.hasOwn(row, "stage") || (row.stage !== null && typeof row.stage !== "string"))) return null;
+  return { meta: row.meta || {}, stage: table === "deals" ? row.stage : null, rawMeta: row.meta };
 }
 
 // Shared insert/update path for both the lead and deal routes. Returns a small status
@@ -449,11 +459,18 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
     return res.persisted ? { status: "saved", id } : persistFailure(res);
   }
 
+  if (op === "confirm-create") {
+    if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
+    if (!REVENUE_CREATE_TABLES.has(table)) return { status: "error", reason: "unsupported-create-confirmation" };
+    return confirmRevenueCreate({ table, workspaceId, payload });
+  }
+
   const { columns, metaPatch } = build(payload);
   const hasMeta = Object.keys(metaPatch).length > 0;
 
   if (op === "create") {
     if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
+    if (REVENUE_CREATE_TABLES.has(table)) return insertRevenueCreate({ table, workspaceId, payload, columns, metaPatch });
     const record = {
       ...columns,
       workspace_id: workspaceId,
@@ -472,6 +489,7 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
   let mergedMeta = null;
   let existingMeta = null;
   let existingStage = null;
+  const filters = [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]];
   if (hasMeta) {
     const existing = await readExistingRow(table, id, workspaceId);
     existingMeta = existing ? existing.meta : null;
@@ -481,17 +499,31 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
       return { status: "failed", reason: "meta-read-failed", detail: "existing meta unreadable; save aborted to avoid wiping sibling keys" };
     }
     mergedMeta = mergeRecordMeta({ table, existingMeta, metaPatch });
+    // Compare every merged metadata snapshot atomically: a second writer must
+    // not silently replace sibling keys after reading the same old row.
+    // PostgREST eq takes this literal unchanged; the adapter URL-encodes once.
+    filters.push(["meta", existing.rawMeta === null ? "is.null" : eqFilter(JSON.stringify(existing.rawMeta))]);
+    if (table === "deals") {
+      // Stage is also part of the snapshot used to calculate won_at.
+      filters.push(["stage", existingStage === null ? "is.null" : eqFilter(existingStage)]);
+    }
   }
   const patch = { ...columns, ...dealWonAtPatch({ table, existingMeta, existingStage, metaPatch }), ...(mergedMeta ? { meta: mergedMeta } : {}) };
   if (!Object.keys(patch).length) return { status: "noop" };
 
   const res = await updateSupabaseRecord(
     table,
-    [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
+    filters,
     patch,
     { returnRepresentation: true, select: "*" },
   );
-  if (!res.persisted) return persistFailure(res);
+  if (!res.persisted) {
+    if (hasMeta && res.reason === "no-matching-row") {
+      return { status: "conflict", reason: table === "deals" ? "concurrent-deal-change" : "concurrent-record-change",
+        message: "다른 변경이 먼저 저장되었거나 기록이 삭제되었습니다. 최신 기록을 확인한 뒤 다시 시도하세요." };
+    }
+    return persistFailure(res);
+  }
   await recordDealStageMove({ table, id, workspaceId, existingMeta, metaPatch });
   return { status: "saved", id, record: res.record };
 }

@@ -16,6 +16,7 @@ import { COUNCIL_HANDOFF_DRAFT_LIMIT, consumeCouncilDesktopHandoff, createCounci
 import { RECOMMENDED_TRIADS } from "../council-legends";
 import { requestPersonaChat, PERSONA_MODE_LABEL, GURU_LENS_MAP, GURU_LENS_CHIPS } from "../persona-client";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
+import { freezeTaskCommand, saveTaskCommand, TASK_OUTCOME } from '@/lib/memo-intake-tasks';
 
 const DEFAULT_PERSONA_KEY = PERSONA_CONTRACT[0]?.id || 'order';
 
@@ -84,7 +85,17 @@ export function AgentsChat({ onNavigate }) {
   const [guruModel, setGuruModel] = React.useState(null);
   const [guruGuidanceId, setGuruGuidanceId] = React.useState(null);
   const guruInputRef = React.useRef(null);
-  const [taskSavedMap, setTaskSavedMap] = React.useState({});
+  const [, refreshTaskSaves] = React.useState(0);
+  // A row index is reused by a new conversation. Bind commands and receipts to
+  // the exact message object instead, keeping each retry's full payload frozen.
+  const taskSaves = React.useRef(new WeakMap());
+  const taskThread = React.useRef(thread);
+  taskThread.current = thread;
+  const mounted = React.useRef(false);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const [copiedMap, setCopiedMap] = React.useState({});
   const busyRef = React.useRef(false);
   const routeHandledRef = React.useRef(false);
@@ -170,24 +181,35 @@ export function AgentsChat({ onNavigate }) {
     setBusy(false);
   }, []);
 
-  const handleSaveTask = React.useCallback(async (text, index) => {
-    const title = extractTaskTitleFromText(text);
-    try {
-      const res = await fetch('/api/hub/tasks', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title }),
-      });
-      if (res.ok) {
-        setTaskSavedMap(prev => ({ ...prev, [index]: true }));
-        setTimeout(() => {
-          setTaskSavedMap(prev => ({ ...prev, [index]: false }));
-        }, 3000);
-      }
-    } catch (e) {
-      console.error('Failed to create task', e);
+  const handleSaveTask = React.useCallback(async (message, text, kind = 'task') => {
+    if (!mounted.current || !taskThread.current.includes(message)) return;
+    let saves = taskSaves.current.get(message);
+    if (!saves) { saves = {}; taskSaves.current.set(message, saves); }
+    let entry = saves[kind];
+    if (entry?.status === 'saving' || entry?.status === 'saved') return;
+    if (!entry) {
+      const item = freezeTaskCommand({ id: crypto.randomUUID(), task: extractTaskTitleFromText(text) });
+      entry = saves[kind] = { command: item.command };
     }
+    // Set the guard synchronously, before React renders the disabled button.
+    entry.status = 'saving';
+    entry.error = null;
+    refreshTaskSaves(value => value + 1);
+    const outcome = await saveTaskCommand(entry.command);
+    Object.assign(entry, outcome);
+    if (mounted.current && taskThread.current.includes(message)) refreshTaskSaves(value => value + 1);
   }, []);
+
+  const taskState = (message, kind = 'task') => taskSaves.current.get(message)?.[kind];
+  const taskLabel = (message, initial, kind = 'task') => {
+    const status = taskState(message, kind)?.status;
+    return status === 'saved' ? '태스크 등록됨 ✓' : status === 'saving' ? '등록 확인 중…'
+      : TASK_OUTCOME[status]?.retry || initial;
+  };
+  const taskFeedback = (message, kind = 'task') => {
+    const entry = taskState(message, kind), outcome = TASK_OUTCOME[entry?.status];
+    return outcome ? <span role="status"><TruthBadge state={outcome.truth} label={outcome.label} /> {entry.error}</span> : null;
+  };
 
   const handleCopyMessage = React.useCallback((text, index) => {
     if (!text) return;
@@ -379,14 +401,18 @@ export function AgentsChat({ onNavigate }) {
                         {copiedMap[i] ? "복사됨 ✓" : "복사"}
                       </Button>
                       {(agentKey !== 'guru' || m.generated === true) && (
+                        <>
                         <Button
                           variant="ghost"
                           size="xs"
-                          icon={taskSavedMap[i] ? "check" : "plus"}
-                          onClick={() => handleSaveTask(m.text, i)}
+                          icon={taskState(m)?.status === 'saved' ? "check" : "plus"}
+                          disabled={['saving', 'saved'].includes(taskState(m)?.status)}
+                          onClick={() => handleSaveTask(m, m.text)}
                         >
-                          {taskSavedMap[i] ? "태스크 등록됨 ✓" : agentKey === 'council' && activeMode === 'weekly-review' ? "실험 태스크로 등록" : "태스크로 등록"}
+                          {taskLabel(m, agentKey === 'council' && activeMode === 'weekly-review' ? "실험 태스크로 등록" : "태스크로 등록")}
                         </Button>
+                        {taskFeedback(m)}
+                        </>
                       )}
 
                       {agentKey === 'order' && (
@@ -437,14 +463,18 @@ export function AgentsChat({ onNavigate }) {
                       )}
 
                       {agentKey === 'review' && (
+                        <>
                         <Button
                           variant="outline"
                           size="xs"
                           icon="check"
-                          onClick={() => handleSaveTask(`검수 승인 완료: ${m.text.slice(0, 100)}`, i)}
+                          disabled={['saving', 'saved'].includes(taskState(m, 'review')?.status)}
+                          onClick={() => handleSaveTask(m, `검수 승인 완료: ${m.text.slice(0, 100)}`, 'review')}
                         >
-                          승인 결과 태스크 저장
+                          {taskLabel(m, '승인 결과 태스크 저장', 'review')}
                         </Button>
+                        {taskFeedback(m, 'review')}
+                        </>
                       )}
                     </div>
                   )}

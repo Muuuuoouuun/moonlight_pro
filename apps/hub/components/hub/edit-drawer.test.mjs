@@ -60,6 +60,15 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
 
 const button = (app, label) => app.findAll(node => node.type === 'Button' && node.props.children.includes(label))[0];
 
+test('conflict keeps the drawer and input open with explicit retry guidance', async () => {
+  const app = mount({ onSave: async () => ({ ok: false, status: 'conflict' }) });
+  app.findAll(node => node.type === 'textarea')[0].props.onChange({ target: { value: '보존할 합성 입력' } });
+  app.render(); app.key(); await Promise.resolve(); app.render();
+  assert.equal(app.closed(), 0);
+  assert.equal(app.findAll(node => node.type === 'textarea')[0].props.value, '보존할 합성 입력');
+  assert.match(JSON.stringify(app.findAll(node => node.type === 'span')), /입력을 유지.*기록을 확인.*다시 시도/);
+});
+
 test('Cmd/Ctrl+Enter cannot bypass discard confirmation; continuing editing restores save', async () => {
   let saves = 0;
   const app = mount({ onSave: async () => { saves++; return { ok: false, status: 'error' }; } });

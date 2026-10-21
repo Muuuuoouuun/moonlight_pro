@@ -1,4 +1,4 @@
-// 로컬 설정 화면(file://)에만 작은 다리를 연다. 원격 허브 페이지에는 아무것도 노출하지 않는다.
+// Settings stay file-only. Main-process checks bind the narrow session intent API to the current Hub main frame.
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -7,5 +7,15 @@ if (window.location.protocol === 'file:') {
     getSettings: () => ipcRenderer.invoke('moonlight:get-settings'),
     setSettings: (patch) => ipcRenderer.invoke('moonlight:set-settings', patch),
     openExternal: (url) => ipcRenderer.invoke('moonlight:open-external', url),
+  });
+}
+
+if (['https:', 'http:'].includes(window.location.protocol)) {
+  contextBridge.exposeInMainWorld('moonlightSession', {
+    state: () => ipcRenderer.invoke('moonlight:session-state'),
+    logout: () => ipcRenderer.invoke('moonlight:session-logout'),
+    beginLogin: () => ipcRenderer.invoke('moonlight:session-begin-login'),
+    cancelLogin: (attempt) => ipcRenderer.invoke('moonlight:session-cancel-login', attempt),
+    acceptLogin: (attempt) => ipcRenderer.invoke('moonlight:session-accept-login', attempt),
   });
 }

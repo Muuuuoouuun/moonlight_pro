@@ -1,6 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 
 const load = () => import('./install-mac.mjs');
 
@@ -29,10 +30,10 @@ test('알 수 없는 옵션·빈 --dest는 오류로 모은다', async () => {
 test('installPaths: staging·backup은 대상 옆에 둔다', async () => {
   const { installPaths } = await load();
   const p = installPaths('/tmp/apps');
-  assert.equal(p.target, '/tmp/apps/Moonlight.app');
-  assert.equal(p.staging, '/tmp/apps/Moonlight.app.new');
-  assert.equal(p.backup, '/tmp/apps/Moonlight.app.old');
-  assert.equal(p.binary, '/tmp/apps/Moonlight.app/Contents/MacOS/Moonlight');
+  assert.equal(p.target, path.normalize('/tmp/apps/Moonlight.app'));
+  assert.equal(p.staging, path.normalize('/tmp/apps/Moonlight.app.new'));
+  assert.equal(p.backup, path.normalize('/tmp/apps/Moonlight.app.old'));
+  assert.equal(p.binary, path.normalize('/tmp/apps/Moonlight.app/Contents/MacOS/Moonlight'));
 });
 
 test('planSteps: 전체 순서', async () => {

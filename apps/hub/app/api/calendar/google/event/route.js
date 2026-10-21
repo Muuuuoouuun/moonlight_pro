@@ -8,6 +8,7 @@ import {
 } from "@/lib/google-calendar";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { calendarReadIsPartial } from "@/lib/calendar-read-coverage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,16 +71,17 @@ export async function GET(req) {
   const events = combined.items.map(mapCalendarSourceEvent).filter(Boolean);
 
   if (combined.ok) {
-    const isPartial = combined.reason === "partial-source-failure";
-    const failedSource = isPartial ? combined.sources.find((source) => source.status !== "live") : null;
+    const isPartial = calendarReadIsPartial(combined);
+    const failedSource = isPartial ? combined.sources.find((source) => source.status === "error") : null;
 
     return NextResponse.json({
       status: isPartial ? "partial" : "live",
       calendarId: combined.calendarId,
       source: combined.source,
       readOnly: combined.readOnly,
-      message: failedSource ? `${failedSource.label} 캘린더를 읽지 못했습니다.` : "",
+      message: isPartial ? `일부 일정만 확인했습니다. 전체 건수는 확인하지 못했습니다.${failedSource ? ` ${failedSource.label} 캘린더를 읽지 못했습니다.` : ""}` : "",
       sources: combined.sources,
+      coverage: combined.coverage || null,
       events,
     });
   }

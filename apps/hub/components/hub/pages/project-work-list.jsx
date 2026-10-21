@@ -3,6 +3,7 @@
 import React from 'react';
 import { Button, Checkbox, Input, LifecycleBadge } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
+import { GitHubPrMark } from '../github-pr-mark';
 import { projectItemType, readTaskChecklist, TASK_CHECKLIST_LIMIT } from '@/lib/task-checklist';
 import { normalizeProjectIndexPreferences, sortProjectIndex, moveProjectIndex } from '@/lib/project-index-order';
 import { useProjectWorkOrder } from './project-work-order';
@@ -92,6 +93,10 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
   const focusInput = key => requestAnimationFrame(() => inputs.current.get(key)?.focus());
 
   React.useImperativeHandle(ref, () => ({
+    focusList() {
+      setShowDone(previous => ({ ...previous, [projectId]: true }));
+      requestAnimationFrame(() => root.current?.focus());
+    },
     focusNewTask(title = '') {
       const draft = draftsRef.current[projectKey] || EMPTY_DRAFT;
       if (!draft.request && !draft.title) updateDraft(projectKey, { title, itemType: 'task' });
@@ -189,6 +194,7 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
           {type !== 'task' && <span className={styles.itemType}>{TYPE_LABEL[type]}</span>}
           <span>{task.title}</span><Iconed name={isOpen ? 'chevronD' : 'chevronR'} size={12} />
         </button>
+        <GitHubPrMark pr={task.githubPr} done={task.done} title={task.title} disabled={!canWrite || pending} onComplete={(event) => toggle(task, null, event)} />
         {checks.length > 0 && <span className={`${styles.checkCount} num`} aria-label={`세부 체크 ${checks.filter(item => item.done).length}/${checks.length} 완료`}>{checks.filter(item => item.done).length}/{checks.length}</span>}
         {task.status === 'blocked' && <LifecycleBadge label="막힘" state="blocked" />}
         {task.status === 'doing' && <LifecycleBadge label="진행" state="active" />}
@@ -211,7 +217,7 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
     </div>;
   }
 
-  return <section ref={root} className={styles.workList} aria-label="프로젝트 할 일">
+  return <section ref={root} tabIndex={-1} className={styles.workList} aria-label="프로젝트 할 일">
     <header className={styles.listHeader}><h2>할 일 <span className="num">{openTasks.length}</span></h2><span>{doneTasks.length}/{tasks.length} 완료</span></header>
     {!tasks.length && <p className={styles.empty}>첫 할 일을 적어보세요. 제목만 입력하면 바로 시작할 수 있습니다.</p>}
     {openTasks.map(row)}

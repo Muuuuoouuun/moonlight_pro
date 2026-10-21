@@ -27,8 +27,11 @@ const LABELS = {
 
 export function TopBar({ path, view, scope, onNavigate, theme, themePreference, onTheme, onSidebarOpen, onNew, onQuickCapture, navOpen, menuButtonRef, inquiryNotifications, onOfficeOpen }) {
   const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
+  const [menuCoords, setMenuCoords] = React.useState(null);
   const [clock, setClock] = React.useState(null);
   const deferredMenuRef = React.useRef(null);
+  const popupRef = React.useRef(null);
+  const activeTabRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
   const navigation = topNavigationForRoute(path, scope, view);
   // routeLabel — 탭에서 내려온 화면(Leads·Cases 등)의 제목. 가장 가까운 탭이 켜져도 제목은
@@ -46,10 +49,39 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
     return () => clearInterval(interval);
   }, []);
 
+  // 모바일/좁은 화면에서 선택된 탭이 우측으로 숨어 있으면 시야 안으로 자동 정렬
+  React.useEffect(() => {
+    if (activeTabRef.current) {
+      const prefersReduced = typeof window !== 'undefined'
+        && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      activeTabRef.current.scrollIntoView({
+        behavior: prefersReduced ? 'auto' : 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }
+  }, [navigation.activeTab?.key]);
+
+  const toggleDeferredMenu = React.useCallback(() => {
+    if (!deferredMenuOpen && deferredMenuRef.current) {
+      const rect = deferredMenuRef.current.getBoundingClientRect();
+      const popupWidth = 160;
+      const vw = typeof window !== 'undefined' ? window.innerWidth : 400;
+      const left = Math.max(8, Math.min(rect.left, vw - popupWidth - 8));
+      setMenuCoords({ top: rect.bottom + 4, left });
+      setDeferredMenuOpen(true);
+    } else {
+      setDeferredMenuOpen(false);
+    }
+  }, [deferredMenuOpen]);
+
   React.useEffect(() => {
     if (!deferredMenuOpen) return;
     function onDocClick(e) {
-      if (deferredMenuRef.current && !deferredMenuRef.current.contains(e.target)) {
+      if (
+        deferredMenuRef.current && !deferredMenuRef.current.contains(e.target) &&
+        (!popupRef.current || !popupRef.current.contains(e.target))
+      ) {
         setDeferredMenuOpen(false);
       }
     }
@@ -134,6 +166,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
             return (
               <button
                 key={tab.key}
+                ref={selected ? activeTabRef : undefined}
                 type="button"
                 aria-current={selected ? 'page' : undefined}
                 onClick={() => onNavigate(tab.path)}
@@ -153,7 +186,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
               <button
                 type="button"
                 className="hub-topbar__deferred-toggle"
-                onClick={() => setDeferredMenuOpen((v) => !v)}
+                onClick={toggleDeferredMenu}
                 aria-expanded={deferredMenuOpen}
                 aria-haspopup="true"
                 title="보류된 기능 목록"
@@ -171,6 +204,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                   marginLeft: 4,
+                  touchAction: 'manipulation',
                 }}
               >
                 <span>보류 ({hiddenDeferredTabs.length})</span>
@@ -178,22 +212,25 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
                   <Iconed name="chevronD" size={10} />
                 </span>
               </button>
-              {deferredMenuOpen && (
-                <div style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 4px)',
-                  left: 4,
-                  background: 'var(--surface)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 'var(--r)',
-                  boxShadow: '0 8px 24px -4px rgba(0,0,0,0.5)',
-                  padding: '4px',
-                  minWidth: 150,
-                  zIndex: 90,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 1,
-                }}>
+              {deferredMenuOpen && menuCoords && (
+                <div
+                  ref={popupRef}
+                  style={{
+                    position: 'fixed',
+                    top: menuCoords.top,
+                    left: menuCoords.left,
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--r)',
+                    boxShadow: '0 8px 24px -4px rgba(0,0,0,0.5)',
+                    padding: '4px',
+                    minWidth: 160,
+                    zIndex: 90,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                  }}
+                >
                   <div style={{ padding: '4px 8px', fontSize: 10.5, color: 'var(--fg-faint)', fontWeight: 500 }}>
                     보류된 기능 (준비 중)
                   </div>
@@ -201,28 +238,14 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
                     <button
                       key={dt.key}
                       type="button"
+                      className="hub-topbar__deferred-item"
                       onClick={() => {
                         setDeferredMenuOpen(false);
                         onNavigate(dt.path);
                       }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '6px 8px',
-                        fontSize: 12,
-                        color: 'var(--fg-muted)',
-                        background: 'transparent',
-                        border: 'none',
-                        borderRadius: 'var(--r-sm)',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--fg)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-muted)'; }}
                     >
                       <span>{dt.label}</span>
-                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>준비 중</span>
+                      <span className="hub-topbar__deferred-badge">준비 중</span>
                     </button>
                   ))}
                 </div>

@@ -8,6 +8,16 @@ const WA = { x: 0, y: 0, width: 1440, height: 852 }; // 1440×900 화면, 작업
 const PRIMARY = { id: 1, bounds: { x: 0, y: 0, width: 1440, height: 900 }, workArea: WA };
 const RIGHT = { id: 2, bounds: { x: 1440, y: -200, width: 1920, height: 1080 }, workArea: { x: 1440, y: -200, width: 1920, height: 1032 } };
 
+test('Office expands on Windows while Electron Mac retains its original card size', () => {
+  assert.deepEqual(C.PANEL_SIZES.office, [424, 296]);
+  assert.deepEqual(C.glassSize('office', 'darwin'), { width: 408, height: 280 });
+  assert.deepEqual(G.panelGlassSize('office', 'darwin'), { width: 408, height: 280 });
+  assert.deepEqual(G.panelGlassSize('office', 'win32'), { width: 444, height: 604 });
+  for (const mode of C.MODES.filter(mode => mode !== 'office')) {
+    assert.deepEqual(G.panelGlassSize(mode, 'darwin'), G.panelGlassSize(mode, 'win32'), mode);
+  }
+});
+
 test('기본 위치: 오른쪽 가장자리에서 8px, 아래쪽 1/3 (y는 위에서부터)', () => {
   const pet = G.defaultPetBounds(WA);
   assert.deepEqual(pet, { x: 1440 - 56 - 8, y: Math.round(852 - 852 / 3 - 56), width: 56, height: 56 });

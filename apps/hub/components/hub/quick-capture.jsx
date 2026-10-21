@@ -176,6 +176,10 @@ export function GlobalQuickCapture({ openRequest = 0, initialRaw = "", onInitial
   const saved = () => {
     const notifySharedSaved = sharedDraftSavedRef.current;
     sharedDraftSavedRef.current = null;
+    const result = session.snapshot();
+    if (result.status === 'saved' && result.destinationType === 'task' && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('moonlight:tasks-saved'));
+    }
     onSaved?.();
     notifySharedSaved?.();
   };

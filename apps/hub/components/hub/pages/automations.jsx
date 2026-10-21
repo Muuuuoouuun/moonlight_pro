@@ -16,9 +16,11 @@ const EMPTY_AUTOMATION_SUMMARY = {
 // 모듈 스코프 stale-while-revalidate — 개요↔Flows↔Webhooks↔Runs 탭 전환마다 기록을 다시
 // 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
 const AUTOMATIONS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+const AUTOMATIONS_READ_TIMEOUT_MS = 15000;
 let automationsLedgerCache = null; // { at, state }
 
 function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } = {}) {
+  const lifecycle = React.useRef({ active: false, controller: null }).current;
   const servable = automationsLedgerCache
     && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS;
   const [state, setState] = React.useState(servable ? automationsLedgerCache.state : {
@@ -33,17 +35,21 @@ function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } 
   });
 
   const load = React.useCallback(async (silent = false) => {
+    if (!lifecycle.active || lifecycle.controller) return;
+    const controller = new AbortController();
+    lifecycle.controller = controller;
+    const current = () => lifecycle.active && lifecycle.controller === controller;
+    const timer = setTimeout(() => controller.abort(), AUTOMATIONS_READ_TIMEOUT_MS);
+    const cacheAtStart = automationsLedgerCache;
     const hasServableCache = Boolean(
-      automationsLedgerCache && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS
+      cacheAtStart && Date.now() - cacheAtStart.at < AUTOMATIONS_CACHE_SERVABLE_MS
     );
     if (!silent && !hasServableCache) setState(s => ({ ...s, syncState: 'loading' }));
     try {
-      const response = await fetch('/api/hub/automations', { cache: 'no-store' });
+      const response = await fetch('/api/hub/automations', { cache: 'no-store', signal: controller.signal });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.status === 'error') {
-        setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
-        return;
-      }
+      if (!current()) return;
+      if (controller.signal.aborted || !response.ok || !data || data.status === 'error' || data.source === 'error') throw new Error('automations-read-failed');
       if (data.source === 'supabase') {
         const nextState = {
           source: 'supabase',
@@ -61,18 +67,31 @@ function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } 
         setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
       }
     } catch {
-      setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
+      if (current()) {
+        const fresh = cacheAtStart && Date.now() - cacheAtStart.at < AUTOMATIONS_CACHE_SERVABLE_MS;
+        if (fresh && automationsLedgerCache === cacheAtStart) automationsLedgerCache = { ...cacheAtStart, state: { ...cacheAtStart.state, syncState: 'partial' } };
+        setState(s => ({ ...s, syncState: fresh ? 'partial' : 'error' }));
+      }
+    } finally {
+      clearTimeout(timer);
+      if (current()) lifecycle.controller = null;
     }
-  }, []);
+  }, [lifecycle]);
 
   React.useEffect(() => {
+    lifecycle.active = true;
     load();
-  }, [load]);
+    return () => {
+      lifecycle.active = false;
+      lifecycle.controller?.abort();
+      lifecycle.controller = null;
+    };
+  }, [load, lifecycle]);
 
   React.useEffect(() => {
     if (!autoRefresh) return;
     const timer = setInterval(() => {
-      load(true);
+      if (!document.hidden) load(true);
     }, refreshIntervalMs);
     return () => clearInterval(timer);
   }, [autoRefresh, refreshIntervalMs, load]);
@@ -135,7 +154,7 @@ export function AutomationsIndex({ onNavigate }) {
 
         <Card pad style={{
           padding: '12px 16px',
-          boxShadow: failuresTodayCount > 0 ? 'inset 1px 0 0 var(--danger-line)' : undefined,
+          boxShadow: failuresTodayCount > 0 ? 'inset 1px 0 0 var(--danger-line), var(--shadow-card)' : undefined,
         }}>
           <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>과거 실행 실패</div>
           <div className="stat" style={{
@@ -562,7 +581,7 @@ export function Runs({ onNavigate } = {}) {
 
         <Card pad style={{
           padding: '12px 16px',
-          boxShadow: failureRuns.length > 0 ? 'inset 1px 0 0 var(--danger-line)' : undefined,
+          boxShadow: failureRuns.length > 0 ? 'inset 1px 0 0 var(--danger-line), var(--shadow-card)' : undefined,
         }}>
           <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>오류 / 실패</div>
           <div className="stat" style={{
@@ -575,7 +594,7 @@ export function Runs({ onNavigate } = {}) {
             <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
           </div>
           <div style={{ fontSize: 11, color: failureRuns.length > 0 ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}>
-            {failureRuns.length > 0 ? '실패 원인 확인 필요' : '모든 프로세스 정상'}
+            {failureRuns.length > 0 ? '실패 원인 확인 필요' : syncState === 'live' ? '조회한 실패 기록 없음' : '실패 여부 확인 필요'}
           </div>
         </Card>
 
@@ -584,7 +603,8 @@ export function Runs({ onNavigate } = {}) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
             <Dot tone={syncState === 'error' ? 'danger' : 'neutral'} />
             <span className="mono" style={{ fontSize: 15, fontWeight: 500, color: 'var(--fg)' }}>
-              {syncState === 'error' ? 'Degraded' : 'Live'}
+              {syncState === 'live' ? (latestHeartbeat ? '핑 기록 확인됨' : '핑 기록 없음')
+                : ({ loading: '확인 중', partial: '일부 확인', preview: '연결 전', error: '확인 불가' }[syncState] || '확인 필요')}
             </span>
             {latestHeartbeat && (
               <Badge tone="neutral" size="xs" numeric>{latestHeartbeat.ms}ms</Badge>
@@ -656,26 +676,29 @@ export function Runs({ onNavigate } = {}) {
 
       <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
-          {displayRows.length === 0 && (
+          {displayRows.length === 0 && syncState === 'loading' && <Skeleton lines={3} label="실행 로그 읽는 중" />}
+          {displayRows.length === 0 && syncState !== 'loading' && (
             <EmptyState
               icon={filter === 'errors' ? 'shield' : 'runs'}
               title={
-                filter === 'errors'
-                  ? '발생한 실행 오류가 없습니다'
+                syncState === 'error' ? '실행 로그를 읽지 못했습니다'
+                  : syncState === 'partial' ? '일부 실행 로그만 확인했습니다'
+                  : syncState !== 'live' ? '실행 로그 연결이 필요합니다'
+                  : filter === 'errors'
+                    ? '조회한 실행 기록에 오류가 없습니다'
                   : filter === 'events' && heartbeatRuns.length > 0
                     ? '기록된 비즈니스 실행 이벤트가 없습니다'
-                    : syncState === 'error'
-                      ? '실행 로그를 읽지 못했습니다'
-                      : '실행 로그가 없습니다'
+                    : '실행 로그가 없습니다'
               }
               description={
-                filter === 'errors'
-                  ? '모든 자동화 및 엔진 프로세스가 정상 작동하고 있습니다.'
+                syncState === 'error' ? '새로고침으로 기록 연결을 다시 확인하세요. 실행 상태는 아직 판단할 수 없습니다.'
+                  : syncState === 'partial' ? '누락된 기록이 있을 수 있습니다. 새로고침으로 다시 확인하세요.'
+                  : syncState !== 'live' ? '기록 연결 후 실행 결과를 확인할 수 있습니다.'
+                  : filter === 'errors'
+                    ? '이번에 조회한 범위에 오류 기록이 없습니다. 전체 시스템의 정상 여부를 보장하지 않습니다.'
                   : filter === 'events' && heartbeatRuns.length > 0
-                    ? `엔진 헬스체크는 정상 작동 중입니다 (최근 핑: ${latestHeartbeat?.at || '방금'} · ${latestHeartbeat?.ms || 0}ms). 고객 연동이나 웹훅이 실행되면 여기에 나타납니다.`
-                    : syncState === 'error'
-                      ? '화면을 새로고침하여 기록 연결을 다시 시도하세요.'
-                      : 'Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다.'
+                    ? `조회한 기록에는 시스템 핑만 있습니다 (최근 핑: ${latestHeartbeat?.at || '시각 미확인'} · ${latestHeartbeat?.ms || 0}ms).`
+                    : 'Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다.'
               }
               action={
                 filter === 'events' && heartbeatRuns.length > 0 ? (
@@ -689,24 +712,29 @@ export function Runs({ onNavigate } = {}) {
           )}
           {displayRows.map((r, i) => {
             const isSelected = selectedRunId === r.id;
+            const detailId = `hub-run-detail-${encodeURIComponent(String(r.id))}`;
             return (
               <React.Fragment key={r.id}>
-                <div
-                  onClick={() => setSelectedRunId(isSelected ? null : r.id)}
+                <button
+                  type="button"
+                  className="hub-row"
+                  aria-expanded={isSelected}
+                  aria-controls={isSelected ? detailId : undefined}
+                  onClick={() => setSelectedRunId(current => current === r.id ? null : r.id)}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '140px 24px 170px 65px 1fr 20px',
+                    width: '100%',
+                    font: 'inherit',
+                    textAlign: 'left',
                     padding: '6px 8px',
                     borderRadius: 'var(--r-sm)',
                     borderBottom: i < displayRows.length - 1 && !isSelected ? '1px dashed var(--line-soft)' : 'none',
                     alignItems: 'center',
                     gap: 10,
                     cursor: 'pointer',
-                    background: isSelected ? 'var(--surface-2)' : 'transparent',
-                    transition: 'background var(--dur-hover) ease',
+                    background: isSelected ? 'var(--surface-2)' : undefined,
                   }}
-                  onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface)'; }}
-                  onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                 >
                   <span style={{ color: 'var(--fg-faint)' }} title={r.dateLabel}>
                     {r.dateLabel || r.at}
@@ -720,9 +748,9 @@ export function Runs({ onNavigate } = {}) {
                   <span style={{ color: 'var(--fg-faint)', textAlign: 'center', fontSize: 10.5 }}>
                     <Iconed name={isSelected ? 'chevronD' : 'chevronR'} size={11} />
                   </span>
-                </div>
+                </button>
                 {isSelected && (
-                  <div style={{
+                  <div id={detailId} style={{
                     padding: '12px 14px',
                     margin: '2px 8px 8px',
                     background: 'var(--surface)',

@@ -32,6 +32,7 @@ export async function POST(req) {
     mimeType,
     text,
     instruction,
+    signal: req.signal,
   });
 
   if (!result.ok) {

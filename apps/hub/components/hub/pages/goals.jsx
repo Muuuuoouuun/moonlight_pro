@@ -1,5 +1,7 @@
 "use client";
 import React from 'react';
+import { recordFirstRows } from './workflow-reading';
+import './workflow-pages.css';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Iconed } from '../hub-icons';
@@ -255,7 +257,7 @@ function attentionItems(readings, kpiRows) {
   return items.slice(0, 5);
 }
 
-function GlanceView({ model, objectives, hrefFor, kpiHref, onOpen, onRecord, onAddMetric, onContinue, onMemoSaved }) {
+function GlanceView({ model, objectives, hrefFor, checkHref, kpiHref, onOpen, onRecord, onAddMetric, onContinue, onMemoSaved }) {
   const today = seoulToday();
   const readings = objectives.filter(objective => objective.status === 'active').map(objective => ({ objective, reading: objectiveReading(objective, model, objectiveToday(objective)) })).filter(item => item.reading.period.phase !== 'ended');
   const kpiRows = kpiRowsFor(model, objectives, today);
@@ -266,19 +268,33 @@ function GlanceView({ model, objectives, hrefFor, kpiHref, onOpen, onRecord, onA
   const shapeText = readings.map(item => objectiveSuggestion(item.reading.keyResults, item.reading.healthIndicators)).find(Boolean);
   const suggestion = paceText ? { text: paceText, href: hrefFor(suggestedRow.objective), cta: 'KR 근거' } : shapeText ? { text: shapeText } : null;
   const memoTarget = readings.find(item => item.objective.scope === 'personal' && item.reading.period.phase === 'running')?.objective;
+  const metricState = goalSectionState(model, 'operating_metrics');
+  const objectiveState = goalSectionState(model, 'operating_objectives');
+  const recordsReadable = [metricState, objectiveState].every(state => ['live', 'partial'].includes(state));
+  const recordsComplete = metricState === 'live' && objectiveState === 'live';
+  const recordRows = recordsReadable ? recordFirstRows(goalCheckRows({ ...model, objectives }, { status: 'active' })) : [];
   return <>
-    <KpiStrip rows={kpiRows} today={today} kpiHref={kpiHref} railBudget={OUTSIDE_RAIL_BUDGET} readState={goalSectionState(model, 'operating_metrics')} />
-    <div className="goal-glance">
-      <section className="goal-glance__main" aria-label="목표 · OKR">
-        <div className="goal-section-head"><h3 className="goal-section-title">목표 · OKR</h3><span className="goal-muted">목표 <span className="num">{objectives.length}</span> · KR <span className="num">{krCount}</span></span></div>
-        <ul className="goal-list">{objectives.map(objective => <GoalObjectiveCard key={objective.id} objective={objective} model={model} today={today} hrefFor={hrefFor} onOpen={onOpen} onRecord={onRecord} onAddMetric={onAddMetric} onContinue={onContinue} />)}</ul>
+    <div className="workflow-goal-priority">
+      <section className="workflow-records" aria-label="먼저 기록할 지표">
+        <div className="goal-section-head"><h3 className="goal-section-title">먼저 기록</h3><Link className="hub-row goal-section-link" href={checkHref}>체크인 전체 →</Link></div>
+        <p className="goal-muted">직접 기록 지표 · 근거가 비어 있는 항목부터</p>
+        {metricState !== 'live' && <p className="goal-muted" role="status"><TruthBadge state={metricState} /> 읽힌 지표만 표시합니다.</p>}
+        {objectiveState !== 'live' && <p className="goal-muted" role="status"><TruthBadge state={objectiveState} /> 읽힌 목표만 표시합니다.</p>}
+        {recordRows.length ? <ul className="workflow-records__list">{recordRows.map(({ objective, metric, needsEvidence }) => <li className="workflow-records__row" key={metric.id}>
+          <div className="workflow-records__identity"><strong>{metric.name}</strong><span>{objective.title}</span><span>{measurementLabel(metric)} · {needsEvidence ? '근거 확인 필요' : '직접 기록'}</span></div>
+          <Button variant="outline" size="sm" data-record-metric={metric.id} onClick={event => onRecord(event, objective, metric)} aria-label={`${metric.name} 실제값 기록`}>기록</Button>
+        </li>)}</ul> : <p className="goal-muted">{recordsComplete ? '이 조건의 직접 기록 지표가 없습니다. 체크인에서 자동 집계의 근거를 확인하세요.' : '직접 기록 지표를 모두 확인하지 못했습니다.'}</p>}
       </section>
-      <aside className="goal-glance__side">
-        <GlanceAttention items={attentionItems(readings, kpiRows)} suggestion={suggestion} unknown={model.status !== 'live' || readings.some(item => item.reading.unscored > 0) || kpiRows.some(row => !['inside', 'outside'].includes(row.health))} />
-        {memoTarget && <WeeklyMemo key={`${memoTarget.scope}:${memoTarget.id}:${objectiveToday(memoTarget)}`} objective={memoTarget} today={objectiveToday(memoTarget)} onSaved={onMemoSaved} />}
-      </aside>
+      <GlanceAttention items={attentionItems(readings, kpiRows)} suggestion={suggestion} unknown={model.status !== 'live' || readings.some(item => item.reading.unscored > 0) || kpiRows.some(row => !['inside', 'outside'].includes(row.health))} />
     </div>
+    <KpiStrip rows={kpiRows} today={today} kpiHref={kpiHref} railBudget={OUTSIDE_RAIL_BUDGET} readState={metricState} />
+    <section className="goal-glance__main" aria-label="목표 · OKR">
+      <div className="goal-section-head"><h3 className="goal-section-title">목표 · OKR</h3><span className="goal-muted">목표 <span className="num">{objectives.length}</span> · KR <span className="num">{krCount}</span></span></div>
+      <ul className="goal-list">{objectives.map(objective => <GoalObjectiveCard key={objective.id} objective={objective} model={model} today={today} hrefFor={hrefFor} onOpen={onOpen} onRecord={onRecord} onAddMetric={onAddMetric} onContinue={onContinue} />)}</ul>
+    </section>
+    {memoTarget && <details className="workflow-disclosure"><summary>이번 주 메모</summary><div className="workflow-disclosure__body"><WeeklyMemo key={`${memoTarget.scope}:${memoTarget.id}:${objectiveToday(memoTarget)}`} objective={memoTarget} today={objectiveToday(memoTarget)} onSaved={onMemoSaved} /></div></details>}
   </>;
+
 }
 
 function BulletChart({ metric, observations, timezone = 'Asia/Seoul' }) {
@@ -492,7 +508,7 @@ export function Goals() {
           label="목표 화면 보기"
           value={view}
           options={[
-            { key: 'okr', label: '한눈에' },
+            { key: 'okr', label: '기록·주의' },
             { key: 'kpi', label: 'KPI' },
             { key: 'check', label: '체크인' },
             { key: 'weekly', label: '주간 실측' },
@@ -564,7 +580,7 @@ export function Goals() {
     ) : !filtered.length ? (
       <EmptyState title="조건에 맞는 목표가 없습니다" action={<Button onClick={() => { setSearch(''); setStatus('all'); }}>검색·필터 지우기</Button>} />
     ) : (
-      <GlanceView model={model} objectives={filtered} hrefFor={hrefFor} kpiHref={goalHref(null, scope, { kpi: true, base: routeBase })} onOpen={event => { opener.current = event.currentTarget; }} onRecord={openRecord} onAddMetric={obj => setMetricModalObjective(obj)} onContinue={(objective, extra) => setContinueFrom({ objective, change: extra?.change || '' })} onMemoSaved={model.refresh} />
+      <GlanceView model={model} objectives={filtered} hrefFor={hrefFor} checkHref={goalHref(null, scope, { check: true, base: routeBase })} kpiHref={goalHref(null, scope, { kpi: true, base: routeBase })} onOpen={event => { opener.current = event.currentTarget; }} onRecord={openRecord} onAddMetric={obj => setMetricModalObjective(obj)} onContinue={(objective, extra) => setContinueFrom({ objective, change: extra?.change || '' })} onMemoSaved={model.refresh} />
     )}
 
     {creating && (

@@ -2,6 +2,8 @@
 
 import React from "react";
 import { CalendarOutcome } from "../calendar-outcome";
+import { CalendarAgenda } from "../calendar-agenda";
+import { resolveCalendarView, useCalendarCompactView } from "../calendar-view";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { topNavigationForRoute } from "../hub-nav";
@@ -10,12 +12,14 @@ import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmToday } from "../rhythm-today";
 import { RhythmHistory } from "../rhythm-history";
 import { DecisionFollowups, DecisionMeta, decisionMatches, decisionMonthGroups, decisionSourceOptions } from "./decision-journal";
+import { DecisionDesk } from "./decision-desk";
+import { buildDecisionQueue, deskStats } from "@/lib/decision-desk";
 import { FEATURE_GATES } from "@/lib/feature-gates";
 import { linkDecision, saveDecisionWithFollowup } from "../decision-actions";
 import { todayKey } from "../check-items/check-item-actions";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
-import { calendarEventWhenLabel, mapGoogleEventsToGrid } from "@/lib/calendar-event-view";
+import { calendarEventCardGeometry, calendarEventWhenLabel, calendarGridRange, mapGoogleEventsToGrid } from "@/lib/calendar-event-view";
 import {
   buildRoadmapItemAriaLabel,
   buildRoadmapProjection,
@@ -100,6 +104,24 @@ function formatHour(value) {
 const WORK_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let workLedgerCache = null; // { at, state }
 
+function markWorkLedgerPartial(state, message) {
+  return {
+    ...state,
+    syncState: 'partial',
+    decisionsState: { ...state.decisionsState, state: 'partial', partial: true, error: { message, retryable: true } },
+    rhythmState: 'partial',
+    rhythmPartial: true,
+    rhythmError: message,
+    roadmap: {
+      ...state.roadmap,
+      state: 'partial',
+      partial: true,
+      error: { message, retryable: true },
+      failedSources: [...new Set([...(state.roadmap.failedSources || []), 'projects', 'milestones'])],
+    },
+  };
+}
+
 function useWorkLedger(projectId = null) {
   const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
   const servable = !projectQuery && workLedgerCache
@@ -110,6 +132,7 @@ function useWorkLedger(projectId = null) {
     decisionsState: { state: 'preview', partial: false, error: null },
     rituals: [],
     projects: [],
+    blockedProjects: [],
     summary: null,
     syncState: 'preview',
     rhythmState: 'preview',
@@ -134,9 +157,19 @@ function useWorkLedger(projectId = null) {
   const runLoad = React.useCallback(async () => {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
+    const cacheAtStart = workLedgerCache;
     const hasServableCache = !projectQuery && Boolean(
-      workLedgerCache && Date.now() - workLedgerCache.at < WORK_CACHE_SERVABLE_MS
+      cacheAtStart && Date.now() - cacheAtStart.at < WORK_CACHE_SERVABLE_MS
     );
+    const markCachedReadFailure = (message) => {
+      const partial = markWorkLedgerPartial(cacheAtStart.state, message);
+      // Failed revalidation is part of the cached snapshot's truth. Preserve it
+      // on tab remount, without renewing the original successful-read lifetime
+      // or relabeling a newer snapshot published by another consumer.
+      if (workLedgerCache === cacheAtStart) workLedgerCache = { ...cacheAtStart, state: partial };
+      if (baseSnapshotRef.current === cacheAtStart.state) baseSnapshotRef.current = partial;
+      setState((prev) => markWorkLedgerPartial(prev, message));
+    };
     if (!hasServableCache) {
       // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증한다.
       setState((prev) => ({
@@ -160,11 +193,11 @@ function useWorkLedger(projectId = null) {
       if (!response.ok || !data || data.status === 'error') {
         // 캐시를 보여주는 중이면 데이터를 지우지 않는다 — 재검증 실패는 partial(오래된
         // 데이터 명명)이고, 캐시가 없을 때만 전면 error로 전환한다(SWR 공통 규칙).
+        const message = data?.error || data?.message || `업무 기록 응답 실패 (${response.status})`;
         if (hasServableCache) {
-          setState((prev) => ({ ...prev, syncState: 'partial' }));
+          markCachedReadFailure(message);
           return false;
         }
-        const message = data?.error || data?.message || `업무 기록 응답 실패 (${response.status})`;
         setState((prev) => ({
           ...prev,
           syncState: 'error',
@@ -234,6 +267,8 @@ function useWorkLedger(projectId = null) {
         decisionsState,
         rituals: Array.isArray(data.rituals) ? data.rituals : [],
         projects: Array.isArray(data.projects) ? data.projects : [],
+        // 결정 데스크의 막힌 프로젝트 — 못 읽었으면 null(모름), 빈 배열(없음)과 구분한다.
+        blockedProjects: Array.isArray(data.blockedProjects) ? data.blockedProjects : data.source === 'supabase' ? null : [],
         summary: data.summary || null,
         syncState: data.source === 'supabase' ? 'live' : 'preview',
         rhythmState: rhythm.state || 'error',
@@ -253,11 +288,11 @@ function useWorkLedger(projectId = null) {
       return rhythm.state === 'live' || rhythm.state === 'live-empty' || rhythm.state === 'partial';
     } catch (error) {
       if (requestId !== requestRef.current) return LOAD_SUPERSEDED;
+      const message = error instanceof Error ? error.message : String(error);
       if (hasServableCache) {
-        setState((prev) => ({ ...prev, syncState: 'partial' }));
+        markCachedReadFailure(message);
         return false;
       }
-      const message = error instanceof Error ? error.message : String(error);
       setState((prev) => ({
         ...prev,
         syncState: 'error',
@@ -405,7 +440,9 @@ export function Calendar({ onNavigate }) {
   const pathname = usePathname();
   const [now, setNow] = React.useState(() => new Date());
   const [selectedDate, setSelectedDate] = React.useState(() => new Date());
-  const [viewMode, setViewMode] = React.useState('week');
+  const [viewChoice, setViewMode] = React.useState(null);
+  const compactCalendar = useCalendarCompactView();
+  const viewMode = resolveCalendarView(viewChoice, compactCalendar);
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
   const [creating, setCreating] = React.useState(false);
@@ -540,7 +577,13 @@ export function Calendar({ onNavigate }) {
     }
   }
 
-  const gcalLabel = calendarData.source === 'multi' && isLive
+  const gcalLabel = calendarData.status === 'error'
+    ? '● 캘린더 읽기 실패'
+    : calendarData.status === 'loading'
+    ? '● 일정 확인 중'
+    : calendarData.status === 'partial'
+    ? '● 일부 일정만 확인'
+    : calendarData.source === 'multi' && isLive
     ? '● Personal + Company live · read only'
     : calendarData.source === 'ical' && isLive
     ? '● iCal live · read only'
@@ -555,17 +598,19 @@ export function Calendar({ onNavigate }) {
     : gcalStatus === 'error'
     ? '● Connect failed'
     : '● Not connected';
-  const gcalColor = isLive || gcalStatus === 'connected'
+  const gcalColor = calendarData.status === 'error'
+    ? 'var(--danger)'
+    : isLive || gcalStatus === 'connected'
     ? 'var(--fg-muted)'
     : gcalStatus === 'error'
     ? 'var(--danger)'
     : 'var(--fg-faint)';
 
-  const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
   const selectedWeek = buildCalendarWeek(selectedDate);
-  const visibleDays = viewMode === 'day' ? [selectedDate] : selectedWeek.days;
+  const singleDayView = viewMode !== 'week';
+  const visibleDays = singleDayView ? [selectedDate] : selectedWeek.days;
   const dayLabels = visibleDays.map((date) => `${['일','월','화','수','목','금','토'][date.getDay()]} ${date.getDate()}`);
-  const periodLabel = viewMode === 'day'
+  const periodLabel = singleDayView
     ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(selectedDate)
     : selectedWeek.weekLabel;
   const todayIndex = visibleDays.findIndex((date) => sameDate(date, now));
@@ -573,6 +618,8 @@ export function Calendar({ onNavigate }) {
   const gridEvents = calendarCapabilities.shouldShowEvents
     ? mapGoogleEventsToGrid(calendarData.events, visibleDays)
     : [];
+  const gridRange = calendarGridRange(gridEvents);
+  const hours = gridRange.hours;
   const gridTasks = mapTasksToCalendar(taskData.tasks, visibleDays);
   const baseDayWidth = viewMode === 'day' ? 320 : 120;
   // Keep each overlapping card at least 44px wide, plus 4px gaps/insets and the day border.
@@ -595,7 +642,7 @@ export function Calendar({ onNavigate }) {
     });
   };
   const movePeriod = (direction) => {
-    setSelectedDate((date) => addDays(date, direction * (viewMode === 'day' ? 1 : 7)));
+    setSelectedDate((date) => addDays(date, direction * (singleDayView ? 1 : 7)));
   };
   const selectDay = (date) => {
     setSelectedDate(new Date(date));
@@ -631,8 +678,14 @@ export function Calendar({ onNavigate }) {
             <span className="mono" style={{ color: taskData.status === 'error' ? 'var(--danger)' : 'var(--fg-dim)' }}>{taskStateLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
-            <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
-              {gcalStatus === 'connecting'
+            <Button variant="ghost" size="xs"
+              onClick={calendarData.status === 'error' ? calendarData.refetch : connectGoogleCalendar}
+              disabled={calendarData.status === 'loading' || (calendarData.status !== 'error' && gcalStatus === 'connecting')}>
+              {calendarData.status === 'error'
+                ? '일정 다시 불러오기'
+                : calendarData.status === 'loading'
+                ? '일정 확인 중'
+                : gcalStatus === 'connecting'
                 ? 'Connecting…'
                 : isReadOnly
                 ? 'Enable editing'
@@ -641,39 +694,41 @@ export function Calendar({ onNavigate }) {
                 : 'Connect Google Calendar'}
             </Button>
           </div>
-          {(createError || gcalMessage || calendarData.message || taskData.message) && (
+          {(createError || gcalMessage || calendarData.status === 'error' || calendarData.message || taskData.message) && (
             <div
               className="mono"
-              role={createError || calendarData.message === 'calendar-read-failed' ? 'alert' : undefined}
-              style={{ fontSize: 11, color: createError || calendarData.message === 'calendar-read-failed' ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}
+              role={createError || calendarData.status === 'error' ? 'alert' : undefined}
+              style={{ fontSize: 11, color: createError || calendarData.status === 'error' ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}
             >
               {/* 머신 토큰을 운영자 카피로 — reason 슬러그가 그대로 노출되지 않게(6차 재감사 S) */}
               {createError
-                || gcalMessage
-                || (calendarData.message === 'calendar-read-failed'
-                  ? '캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.'
-                  : calendarData.message)
+                || (calendarData.status === 'error'
+                  ? '캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다. 일정 다시 불러오기로 재시도하세요.'
+                  : gcalMessage || calendarData.message)
                 || taskData.message}
             </div>
           )}
         </div>
         <div style={{ flex: 1 }} />
         <div className="hub-toolbar" style={{ display: 'flex', gap: 6 }}>
-          <IconButton icon="chevronL" tooltip={viewMode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => movePeriod(-1)} />
+          <IconButton icon="chevronL" tooltip={singleDayView ? 'Previous day' : 'Previous week'} onClick={() => movePeriod(-1)} />
           <Button variant="secondary" size="sm" onClick={() => setSelectedDate(new Date(now))}>Today</Button>
-          <IconButton icon="chevronR" tooltip={viewMode === 'day' ? 'Next day' : 'Next week'} onClick={() => movePeriod(1)} />
+          <IconButton icon="chevronR" tooltip={singleDayView ? 'Next day' : 'Next week'} onClick={() => movePeriod(1)} />
         </div>
         <SegmentedControl
           className="hub-toolbar"
           label="캘린더 보기"
-          options={[{ key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }]}
+          options={[{ key: 'agenda', label: 'Agenda' }, { key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }]}
           value={viewMode}
           onChange={setViewMode}
         />
         <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating || !calendarCapabilities.canCreate}>Event</Button>
       </div>
 
-      <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <Card pad={false} className="hub-table-card" style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {viewMode === 'agenda' ? (
+          <CalendarAgenda events={gridEvents} tasks={gridTasks} calendarState={calendarData.status} taskState={taskData.status} onSelectEvent={setSelectedEvent} onNavigate={onNavigate} onRetry={calendarData.refetch} />
+        ) : (<>
         <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)' }}>
           <div />
           {dayLabels.map((d, i) => (
@@ -731,7 +786,7 @@ export function Calendar({ onNavigate }) {
           })}
         </div>
         <div className="scroll-y" style={{ flex: 1, minWidth: 56 + dayWidths.reduce((width, dayWidth) => width + dayWidth, 0) }}>
-          <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative' }}>
+          <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative', minHeight: gridRange.height }}>
             <div>
               {hours.map(h => (
                 <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10.5, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
@@ -741,30 +796,26 @@ export function Calendar({ onNavigate }) {
               <div key={date.toISOString()} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
                 {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
                 {gridEvents.filter(e => e.day === di).map((e) => {
-                  // Multi-day segments may cover midnight to midnight; keep them inside this grid's 08–20 window.
-                  const start = e.multiDay ? Math.max(8, e.start) : e.start;
-                  const end = e.multiDay ? Math.min(20, e.end) : e.end;
-                  if (end <= start) return null;
-                  const top = (start - 8) * 52;
-                  const height = (end - start) * 52 - 2;
+                  const { top, height } = calendarEventCardGeometry(e, gridRange.startHour);
+                  const whenLabel = calendarEventWhenLabel(e);
                   const columns = e.overlapColumns || 1;
                   const width = columns === 1 ? 'calc(100% - 8px)' : `calc(${100 / columns}% - ${4 + 4 / columns}px)`;
                   const left = !e.overlapColumn ? 4 : `calc(${100 * e.overlapColumn / columns}% + ${4 - 4 * e.overlapColumn / columns}px)`;
                   return (
-                    <button key={e.segmentKey} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title}`} onClick={() => setSelectedEvent(e)} style={{
+                    <button key={e.segmentKey} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title} · ${whenLabel}`} title={`${e.title} · ${whenLabel}`} onClick={() => setSelectedEvent(e)} style={{
                       textAlign: 'left', width,
                       position: 'absolute', top, left, right: 4, height,
                       background: toneBg[e.tone], color: toneFg[e.tone],
                       border: `1px solid ${toneBd[e.tone]}`,
                       borderLeft: `1px solid ${toneBd[e.tone]}`,
-                      borderRadius: 6, padding: '6px 8px',
+                      borderRadius: 6, padding: height < 50 ? '4px 6px' : '6px 8px',
                       fontSize: 11, fontWeight: 500, overflow: 'hidden',
                     }}>
-                      {e.sourceLabel && (
-                        <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85, marginRight: 4 }}>[{e.sourceLabel}]</span>
-                      )}
-                      {e.title}
-                      <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
+                      <span style={{ display: 'block', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {e.sourceLabel && <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85, marginRight: 4 }}>[{e.sourceLabel}]</span>}
+                        {e.title}
+                      </span>
+                      <div className="mono" style={{ fontSize: 10.5, lineHeight: '14px', opacity: 0.7, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{whenLabel}</div>
                     </button>
                   );
                 })}
@@ -772,6 +823,7 @@ export function Calendar({ onNavigate }) {
             ))}
           </div>
         </div>
+        </>)}
       </Card>
       {selectedEvent && (
         <Drawer title="일정 기록" subtitle="완료와 특이사항을 Moonlight에 남깁니다." onClose={() => { if (!outcomeSaving) setSelectedEvent(null); }} width="min(440px, 94vw)">
@@ -851,6 +903,7 @@ export function Decisions({ onNavigate, scope }) {
     decisions: liveDecisions,
     decisionsState,
     projects: linkableProjects,
+    blockedProjects,
     retry,
   } = useWorkLedger();
   const [localDecisions, setLocalDecisions] = React.useState([]);
@@ -992,12 +1045,27 @@ export function Decisions({ onNavigate, scope }) {
   // 탭은 hub-nav의 SSOT에서 가져온다 — 페이지가 자체 목록을 들면 사이드바·탑바와 갈라진다.
   const navigation = topNavigationForRoute('dashboard/work/decisions', scope);
 
+  // 결정 데스크(2026-10-15 스펙) — 결정 일지의 기본 보기는 `정하기`, `?view=journal`이면 일지 전체.
+  const view = DECISION_JOURNAL && searchParams.get('view') !== 'journal' ? 'desk' : 'journal';
+  const setView = (next) => router.replace(next === 'journal' ? `${pathname}?view=journal` : pathname);
+  const deskReady = decisionComplete || decisionSyncState === 'partial';
+  const deskQueue = React.useMemo(
+    () => (view === 'desk' ? buildDecisionQueue({ decisions: liveList, blockedProjects: blockedProjects || [] }) : []),
+    [view, liveList, blockedProjects],
+  );
+  const stats = view === 'desk' ? deskStats({ decisions: liveList, queue: deskQueue }) : null;
+  const statsLine = stats ? [
+    `이번 주 정한 것 ${stats.decidedThisWeek}`,
+    stats.openFollowups !== null ? `그래서 할 일 남음 ${stats.openFollowups}` : '',
+    stats.oldestDays !== null ? `가장 오래 미정 ${stats.oldestDays}일` : '',
+  ].filter(Boolean).join(' · ') : '';
+
   return (
     <div className="hub-futura hub-page fade-up">
       <header>
-        <div className="fx-eyebrow">{navigation.anchor?.label || 'Work'}</div>
-        <h2 className="fx-page-title">{DECISION_JOURNAL ? '결정 일지' : 'Decisions'}</h2>
-        <p className="fx-page-sub">일정 · 프로젝트 · 결정</p>
+        <div className="fx-eyebrow">{navigation.anchor?.label || 'Work'}{view === 'desk' ? ' · 결정 일지' : ''}</div>
+        <h2 className="fx-page-title">{view === 'desk' && deskReady ? `정할 것 ${deskQueue.length}건` : DECISION_JOURNAL ? '결정 일지' : 'Decisions'}</h2>
+        <p className="fx-page-sub">{view === 'desk' && deskReady ? statsLine : '일정 · 프로젝트 · 결정'}</p>
         {navigation.tabs.length > 0 && (
           <nav className="fx-tabs" aria-label={`${navigation.anchor.label} 하위 메뉴`}>
             {navigation.tabs.map((tab) => (
@@ -1013,8 +1081,40 @@ export function Decisions({ onNavigate, scope }) {
             ))}
           </nav>
         )}
+        {DECISION_JOURNAL ? (
+          <SegmentedControl className="dd-view-toggle" label="결정 일지 보기" value={view} onChange={setView}
+            options={[{ key: 'desk', label: '정하기' }, { key: 'journal', label: '일지 전체' }]} />
+        ) : null}
       </header>
 
+      {view === 'desk' ? (
+        <section aria-label="결정 데스크">
+          {decisionSyncState === 'loading' ? <Skeleton lines={5} label="정할 것 불러오는 중" /> : null}
+          {!deskReady && decisionSyncState !== 'loading' ? (
+            <Card>
+              <EmptyState
+                icon="decisions"
+                title={decisionSyncState === 'error' ? '결정 기록 읽기 실패' : '결정 기록 미연결'}
+                description={decisionSyncState === 'error'
+                  ? decisionsState?.error?.message || '결정 기록을 다시 읽은 뒤 정할 것을 보여 드립니다.'
+                  : 'Supabase decisions 기록을 연결하면 정할 것이 표시됩니다.'}
+                action={decisionSyncState === 'error' ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button> : undefined}
+              />
+            </Card>
+          ) : null}
+          {deskReady ? (
+            <DecisionDesk
+              queue={deskQueue}
+              decisions={liveList}
+              blockedReadable={Array.isArray(blockedProjects)}
+              onSaved={retry}
+              onRetry={retry}
+              onOpenJournal={() => setView('journal')}
+              onAskAdvice={setCouncilDecision}
+            />
+          ) : null}
+        </section>
+      ) : (
       <section>
         <div className="fx-section-head">
           <div>
@@ -1127,7 +1227,7 @@ export function Decisions({ onNavigate, scope }) {
           </div>
         )}
       </section>
-
+      )}
 
       {editingDecision && (
         <EditDrawer
@@ -1196,7 +1296,8 @@ export function Decisions({ onNavigate, scope }) {
           isOpen={Boolean(councilDecision)}
           onClose={() => setCouncilDecision(null)}
           agent="council"
-          contextType="project"
+          contextType="general"
+          unavailableReason="결정의 회사·개인 범위를 확인할 수 없어 Council 자문을 요청할 수 없습니다. 기존 메모·검토 흐름을 이용해 주세요."
           contextTitle={councilDecision.title || "결정 검증"}
           contextData={{
             title: councilDecision.title,
@@ -1204,7 +1305,8 @@ export function Decisions({ onNavigate, scope }) {
             status: councilDecision.decidedAt ? "Committed" : "Draft",
           }}
           onApplyText={(text) => {
-            if (editDecisionId) {
+            if (councilDecision.apply) councilDecision.apply(text);
+            else if (editDecisionId) {
               updateDraft('rationale', editingDecision?.rationale ? `${editingDecision.rationale}\n\n[Council 자문 검증]:\n${text}` : text);
             }
           }}

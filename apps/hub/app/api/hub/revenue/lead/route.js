@@ -14,7 +14,7 @@ export async function POST(req) {
     if (parsed.error) return parsed.error;
 
     const payload = parsed.data || {};
-    const op = payload.op === "create" ? "create" : payload.op === "delete" ? "delete" : "update";
+    const op = payload.op === "confirm-create" ? "confirm-create" : payload.op === "create" ? "create" : payload.op === "delete" ? "delete" : "update";
 
     const result = await persistRevenueRecord({
       table: "leads",
@@ -24,9 +24,10 @@ export async function POST(req) {
       build: buildLeadWrite,
     });
 
-    // saved 200 · error(입력) 400 · blocked(이력이 붙어 삭제 거부) 409 ·
+    // unknown 202 (outcome unconfirmed; no automatic retry) · saved 200 · conflict 409 · error(입력) 400 · blocked(이력이 붙어 삭제 거부) 409 ·
     // failed(라이브 백엔드 거부 — 재시도) 502 · preview/noop 202
     const httpStatus = result.status === "saved" ? 200
+      : result.status === "conflict" ? 409
       : result.status === "error" ? 400
       : result.status === "blocked" ? 409
       : result.status === "failed" ? 502

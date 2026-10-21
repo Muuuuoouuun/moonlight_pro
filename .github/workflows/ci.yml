@@ -8,6 +8,55 @@ on:
       - "codex/**"
 
 jobs:
+  windows-desktop:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/codex/office-connection-20261002' || github.ref == 'refs/heads/codex/moonlight-r18-review-20261020') && github.event.repository.private == false
+    runs-on: windows-2025
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+      - name: Install
+        run: npm ci
+      - name: Desktop contracts on Windows
+        run: npm --workspace @com-moon/desktop test
+      - name: Build Windows setup and portable without publishing
+        run: npm --workspace @com-moon/desktop run build -- --publish never
+      - name: Verify package, install and isolated login transition
+        run: node apps/desktop/scripts/verify-windows-package.cjs
+      - name: Read Windows file versions and signature state
+        shell: pwsh
+        run: |
+          $expected = (Get-Content apps/desktop/package.json | ConvertFrom-Json).version
+          $files = Get-ChildItem apps/desktop/dist/*.exe
+          $files += Get-Item apps/desktop/dist/win-unpacked/Moonlight.exe
+          $rows = foreach ($file in $files) {
+            $version = $file.VersionInfo.ProductVersion
+            if ($version -notlike "$expected*") { throw "Unexpected version: $($file.Name) = $version" }
+            @{ name = $file.Name; productVersion = $version; fileVersion = $file.VersionInfo.FileVersion; signature = (Get-AuthenticodeSignature $file.FullName).Status.ToString() }
+          }
+          $rows | ConvertTo-Json | Set-Content apps/desktop/dist/verification/windows-file-versions.json
+          $rows | ConvertTo-Json
+      - name: Retain review installers and verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-${{ github.sha }}
+          retention-days: 1
+          compression-level: 0
+          path: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/verification/
+
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -46,6 +95,7 @@ jobs:
 
   macos-pet:
     runs-on: macos-26
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,7 +106,18 @@ jobs:
           ./script/test_panel_interaction.sh
           ./script/test_hub_transport.sh
           ./script/test_hub_domain.sh
+          ./script/test_office_meeting_pages.sh
+          ./script/test_office_meeting_transport.sh
           node script/test_native_session_bridge.mjs
+
+      # This opt-in audit exposed an unresolved stale-cookie defect at 34debac2.
+      # Its execution and proposed fix are safety-blocked pending review.
+      # A skipped audit is NOT a pass; preserve the ordinary native checks above.
+      - name: Native stale-cookie audit (safety-blocked, not passed)
+        if: ${{ false }}
+        timeout-minutes: 5
+        working-directory: prototypes/moonlight-pet-macos
+        run: ./script/test_hub_transport.sh --audit-stale-cookie
 
       - name: Build and verify signed Mac pet bundle
         working-directory: prototypes/moonlight-pet-macos

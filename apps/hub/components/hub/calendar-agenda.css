@@ -1,0 +1,14 @@
+.hub-app .calendar-agenda { min-width: 0; display: flex; flex-direction: column; gap: 24px; padding: var(--card-pad); overflow-y: auto; }
+.hub-app .calendar-agenda__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.hub-app .calendar-agenda__heading h3 { margin: 0; color: var(--fg); font-size: 14px; font-weight: 600; }
+.hub-app .calendar-agenda__heading span, .hub-app .calendar-agenda__note { color: var(--fg-muted); font-size: 12px; }
+.hub-app .calendar-agenda__list { list-style: none; margin: 0; padding: 0; }
+.hub-app .calendar-agenda__list li + li { border-top: 1px solid var(--line-soft); }
+.hub-app .calendar-agenda__event, .hub-app .calendar-agenda__task { width: 100%; min-height: 44px; padding: 12px 8px; color: var(--fg); text-align: left; border: 0; background: transparent; overflow-wrap: anywhere; }
+.hub-app .calendar-agenda__event { display: grid; grid-template-columns: minmax(100px, 180px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.hub-app .calendar-agenda__time { color: var(--fg-muted); font-size: 12px; }
+.hub-app .calendar-agenda__title, .hub-app .calendar-agenda__task { font-size: 13px; }
+.hub-app .calendar-agenda__title small { display: block; margin-top: 4px; color: var(--fg-muted); font-size: 11.5px; }
+@media (max-width: 720px) {
+  .hub-app .calendar-agenda__event { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}

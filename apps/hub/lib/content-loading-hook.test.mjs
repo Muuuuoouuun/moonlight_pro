@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 import { createContentLedgerCache, EMPTY_CONTENT_LEDGER } from './content-ledger-cache.js';
 
 const hookSource = readFileSync(new URL('../components/hub/use-content-ledger.js', import.meta.url), 'utf8');
 const pageSource = readFileSync(new URL('../components/hub/pages/content.jsx', import.meta.url), 'utf8');
 const tick = () => new Promise(setImmediate);
+
+function importsSharedContentLedger(source) {
+  const file = ts.createSourceFile('content.jsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+  return file.statements.some((node) => {
+    if (!ts.isImportDeclaration(node) || node.importClause?.isTypeOnly || !ts.isStringLiteral(node.moduleSpecifier)
+      || node.moduleSpecifier.text !== '../use-content-ledger') return false;
+    const bindings = node.importClause?.namedBindings;
+    return bindings && ts.isNamedImports(bindings) && bindings.elements.some((binding) =>
+      !binding.isTypeOnly && binding.name.text === 'useContentLedger'
+      && (binding.propertyName?.text ?? binding.name.text) === 'useContentLedger');
+  });
+}
 
 function harness() {
   const effects = [], requests = [], updates = [];
@@ -34,8 +47,26 @@ function harness() {
 }
 
 test('content pages consume the shared hook instead of owning a second ledger cache', () => {
-  assert.match(pageSource, /import\s*\{\s*useContentLedger\s*\}\s*from\s*["']\.\.\/use-content-ledger["']/);
+  assert.ok(importsSharedContentLedger(pageSource), 'page imports the shared useContentLedger binding');
+  assert.match(pageSource, /\buseContentLedger\s*\(/);
   assert.doesNotMatch(pageSource, /(?:function useContentLedger|let contentLedgerCache|let catalogCache)/);
+});
+
+test('shared hook import contract accepts multiple named imports, not unrelated source text', () => {
+  for (const bindings of ['useContentLedger', 'useContentLedger, readContentLedger',
+    '\nreadContentLedger,\nuseContentLedger,\n']) {
+    assert.equal(importsSharedContentLedger(`import { ${bindings} } from '../use-content-ledger';`), true);
+  }
+  for (const source of [
+    "import { readContentLedger } from '../use-content-ledger';",
+    "import { useContentLedger } from '../other-ledger';",
+    "import { readContentLedger as useContentLedger } from '../use-content-ledger';",
+    "import useContentLedger from '../use-content-ledger';",
+    "import type { useContentLedger } from '../use-content-ledger';",
+    "import { type useContentLedger } from '../use-content-ledger';",
+    "/* import { useContentLedger } from '../use-content-ledger'; */",
+    'const text = "import { useContentLedger } from \'../use-content-ledger\';";',
+  ]) assert.equal(importsSharedContentLedger(source), false, source);
 });
 
 test('queue and brand log share one read while Studio reads its independent lightweight catalog', async () => {

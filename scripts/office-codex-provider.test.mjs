@@ -69,7 +69,7 @@ async function setup(t, mode = 'success') {
       laterAnswer();
     } else if (mode.startsWith('group')) {
       internalItems();
-      const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.send?.("ready"); setInterval(() => {}, 1000)'], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
+      const child = spawn(process.execPath, ['-e', 'const fs = require("node:fs"); process.on("SIGTERM", () => {}); if (process.platform === "linux") fs.writeFileSync(process.argv[1], fs.readFileSync("/proc/self/stat", "utf8")); process.send?.("ready"); setInterval(() => {}, 1000)', capture + '.identity'], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
       fs.writeFileSync(capture + '.pid', String(child.pid));
       child.once('message', () => setTimeout(() => emit(mode === 'group-error' ? { type: 'error', message: 'PRIVATE_ERROR_BODY' } : mode === 'group-turn-failed' ? { type: 'turn.failed', error: { message: 'PRIVATE_ERROR_BODY' } } : { type: 'item.started', item: { type: 'command_execution' } }), 80));
       process.on('SIGTERM', () => process.exit(0));
@@ -79,8 +79,9 @@ async function setup(t, mode = 'success') {
       process.on('SIGTERM', () => setTimeout(() => process.exit(0), 80));
       setInterval(() => {}, 1000);
     } else if (mode === 'ignore-term') {
+      process.on('SIGTERM', () => {});
       emit({ type: 'item.started', item: { type: 'reasoning' } });
-      process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);
+      setInterval(() => {}, 1000);
     } else if (mode === 'turn-failed') {
       process.stderr.write('SENSITIVE_DIAGNOSTIC'); emit({ type: 'turn.failed', error: { message: 'SENSITIVE_DIAGNOSTIC' } });
     } else if (mode === 'error') {
@@ -281,6 +282,38 @@ test('the first tool event or unknown item stops the process before any later an
   }
 });
 
+// kill(pid, 0) also succeeds for a dead Linux process awaiting its adopter's
+// waitpid. Accept that case only for this exact fixture identity and SIGKILL;
+// a live descendant, a reused PID, or another termination cause must fail.
+async function assertFixtureTerminated(pid, identityPath) {
+  try { process.kill(pid, 0); } catch (error) { assert.equal(error.code, 'ESRCH'); return; }
+  assert.equal(process.platform, 'linux', 'an extant non-Linux PID has not demonstrated termination');
+  const fields = text => text.slice(text.lastIndexOf(')') + 2).trim().split(/\s+/);
+  const identity = fields(await readFile(identityPath, 'utf8'));
+  let current;
+  try { current = fields(await readFile(`/proc/${pid}/stat`, 'utf8')); }
+  catch (error) { assert.equal(error.code, 'ENOENT'); return; }
+  assert.equal(current[19], identity[19], 'the PID still identifies the spawned fixture');
+  assert.equal(current[2], identity[2], 'the fixture remains in its original process group');
+  assert.equal(current[0], 'Z', 'the fixture must be dead, never merely still present');
+  assert.equal(Number(current[49]), 9, 'the fixture was terminated by SIGKILL');
+}
+
+test('the termination assertion rejects a live Linux fixture', { skip: process.platform !== 'linux' }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-live-fixture-'));
+  const identityPath = join(directory, 'identity');
+  const child = spawn(process.execPath, ['-e', 'const fs = require("node:fs"); fs.writeFileSync(process.argv[1], fs.readFileSync("/proc/self/stat", "utf8")); process.send("ready"); setInterval(() => {}, 1000)', identityPath], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+  const closed = new Promise(resolve => child.once('close', resolve));
+  try {
+    await new Promise((resolve, reject) => { child.once('message', resolve); child.once('error', reject); child.once('exit', () => reject(new Error('live fixture exited before readiness'))); });
+    await assert.rejects(assertFixtureTerminated(child.pid, identityPath), /fixture must be dead/);
+  } finally {
+    child.kill('SIGKILL');
+    await closed;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('abort waits for process exit and a terminated process group includes pipe-holding descendants', async t => {
   for (const mode of ['group', 'group-error', 'group-turn-failed']) {
     const options = await setup(t, mode);
@@ -290,7 +323,7 @@ test('abort waits for process exit and a terminated process group includes pipe-
     assert.equal(result.adapterMetadata.exitCode, 0, 'the group leader exits on TERM while its descendant keeps stdout open');
     assert.ok(result.adapterMetadata.elapsedMs >= 250, 'the adapter waits for KILL and pipe closure');
     const pid = Number(await readFile(options.capture + '.pid', 'utf8'));
-    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    await assertFixtureTerminated(pid, options.capture + '.identity');
     assert.doesNotMatch(JSON.stringify(result), /PRIVATE_|SENSITIVE_DIAGNOSTIC/);
   }
 });
@@ -315,14 +348,44 @@ test('the shared AbortSignal cancels concurrent calls and preserves their comple
   }
 });
 
-test('the local wall-clock cap escalates from TERM to KILL and never exceeds the configurable 45-second ceiling', async t => {
+test('the local wall-clock cap stops the fixture and rejects a configurable ceiling above 45 seconds', async t => {
   const options = await setup(t, 'ignore-term');
   const provider = await createCodexCliProvider({ ...options, timeoutMs: 150 });
   const result = await provider.generate(input);
   assert.equal(result.reason, 'timeout');
-  assert.equal(result.adapterMetadata.exitSignal, 'SIGKILL');
-  assert.ok(result.adapterMetadata.elapsedMs >= 350 && result.adapterMetadata.elapsedMs < 1500);
+  // Under load the cap may expire before Node installs the fixture's TERM
+  // handler. Both signals terminate it; escalation is proved after readiness below.
+  assert.ok(['SIGTERM', 'SIGKILL'].includes(result.adapterMetadata.exitSignal));
+  assert.ok(result.adapterMetadata.elapsedMs >= 150 && result.adapterMetadata.elapsedMs < 1500);
   await assert.rejects(createCodexCliProvider({ timeoutMs: 45_001 }), /invalid-codex-provider-options/);
+});
+
+test('a ready TERM-resistant fixture escalates to KILL before the timeout result resolves', async t => {
+  const options = await setup(t, 'ignore-term');
+  const controller = new AbortController();
+  let ready = false;
+  let fixtureOutput = '';
+  const signals = [];
+  const provider = await createCodexCliProvider({ ...options, timeoutMs: 5000 }, {
+    spawnImpl: (...args) => {
+      const child = spawn(...args);
+      child.stdout.on('data', chunk => {
+        fixtureOutput += chunk.toString();
+        if (!ready && fixtureOutput.includes('reasoning')) {
+          ready = true;
+          controller.abort(new DOMException('Fixture deadline', 'TimeoutError'));
+        }
+      });
+      return child;
+    },
+    killImpl: (pid, signal) => { signals.push(signal); return process.kill(pid, signal); },
+  });
+  const result = await provider.generate({ ...input, signal: controller.signal });
+  assert.equal(ready, true, 'the fixture installed its TERM handler before timing out');
+  assert.equal(result.reason, 'timeout');
+  assert.deepEqual(signals.slice(0, 2), ['SIGTERM', 'SIGKILL']);
+  assert.equal(result.adapterMetadata.exitSignal, 'SIGKILL');
+  assert.ok(result.adapterMetadata.elapsedMs >= 250 && result.adapterMetadata.elapsedMs < 5000);
 });
 
 test('invalid inputs and already aborted calls never launch a generation process or leak raw process errors', async () => {

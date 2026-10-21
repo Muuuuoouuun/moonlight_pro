@@ -26,7 +26,28 @@ export function decisionAcknowledges(decision, body) {
   return decision?.id === body.id && scoped(decision, body) && decision.title === body.title
     && decision.project_id === body.projectId && (decision.rationale || null) === (body.rationale || null)
     && sameInstant(body.decidedAt, decision.decided_at) && decision.meta?.source === body.source
-    && sameJson(decision.meta?.sourceRef || null, body.sourceRef || null);
+    && sameJson(decision.meta?.sourceRef || null, body.sourceRef || null)
+    // 결정 데스크 — 보낸 질문·선택지·고른 선택지·미루기만 확인한다(예전 호출은 보내지 않는다).
+    && (body.question === undefined || (decision.meta?.question || null) === (body.question || null))
+    && (body.options === undefined || sameJson(decision.meta?.options || [], body.options || []))
+    && (body.chosenOptionId === undefined || (decision.meta?.chosenOptionId || null) === (body.chosenOptionId || null))
+    && (body.deferUntil === undefined || (decision.meta?.deferUntil || null) === (body.deferUntil || null));
+}
+
+// PATCH는 보낸 필드만 확인한다 — 표시용 링크(linkDecision), 초안 확정·미루기(결정 데스크).
+export function decisionPatchAcknowledges(decision, body) {
+  const meta = decision?.meta || {};
+  return decision?.id === body.id
+    && (!body.expectedWorkspaceId || decision.workspace_id === undefined || decision.workspace_id === body.expectedWorkspaceId)
+    && (!body.nextTaskId || meta.nextTaskId === body.nextTaskId)
+    && (!body.unblockedProjectId || meta.unblockedProjectId === body.unblockedProjectId)
+    && (body.title === undefined || decision.title === body.title)
+    && (body.rationale === undefined || (decision.rationale || null) === (body.rationale || null))
+    && (body.decidedAt === undefined || sameInstant(body.decidedAt || null, decision.decided_at ?? null))
+    && (body.question === undefined || (meta.question || null) === (body.question || null))
+    && (body.options === undefined || sameJson(meta.options || [], body.options || []))
+    && (body.chosenOptionId === undefined || (meta.chosenOptionId || null) === (body.chosenOptionId || null))
+    && (body.deferUntil === undefined || (meta.deferUntil || null) === (body.deferUntil || null));
 }
 
 export async function sendCheckWrite(fetchImpl, url, method, body, acknowledges = null) {

@@ -79,6 +79,9 @@ export function Card({ children, style, pad = true, interactive = false, classNa
       padding: pad ? 'var(--card-pad)' : 0,
       ...(interactive && { cursor: 'pointer' }),
       ...style,
+      // A conditional caller override often supplies undefined. Keep panel
+      // depth in that case, but respect deliberate none/null/custom shadows.
+      boxShadow: style?.boxShadow === undefined ? 'var(--shadow-card)' : style.boxShadow,
     }}>{children}</div>
   );
 }
@@ -1047,6 +1050,10 @@ export function SegmentedControl({ options, value, onChange, className, style, l
 
 // Elements the drawer's focus manager treats as tab stops.
 const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])';
+function isDrawerFocusTarget(element) {
+  return Boolean(element) && !element.matches(':disabled') && !element.closest('[inert]')
+    && element.offsetParent !== null && getComputedStyle(element).visibility !== 'hidden';
+}
 
 // Shared drawer shell (side by default, optional compact capture): overlay + aside + header +
 // scrollable body + optional footer bar. Owns ESC-to-close, focus-in-on-mount +
@@ -1075,7 +1082,12 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
   onCloseRef.current = onClose;
   React.useEffect(() => {
     const layer = pushEscLayer();
-    const onKey = (e) => { if (e.key === 'Escape' && isTopEscLayer(layer)) onCloseRef.current?.(); };
+    const onKey = (e) => {
+      if (!isTopEscLayer(layer)) return;
+      if (e.key === 'Escape') onCloseRef.current?.();
+      // Escaped focus cannot bubble through the aside's onKeyDown.
+      else if (e.key === 'Tab' && !asideRef.current?.contains(document.activeElement)) handleKeyDown(e);
+    };
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); popEscLayer(layer); };
   }, []);
@@ -1086,9 +1098,11 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
     const raf = requestAnimationFrame(() => {
       const scope = bodyRef.current || asideRef.current;
       const preferred = initialFocusRef?.current;
-      const first = preferred && scope?.contains(preferred)
+      const first = preferred && scope?.contains(preferred) && isDrawerFocusTarget(preferred)
         ? preferred
-        : scope?.querySelector(DRAWER_FOCUSABLE);
+        : Array.from(scope?.querySelectorAll(DRAWER_FOCUSABLE) || []).find(isDrawerFocusTarget)
+          || Array.from(asideRef.current?.querySelectorAll(DRAWER_FOCUSABLE) || []).find(isDrawerFocusTarget)
+          || asideRef.current;
       if (first && typeof first.focus === 'function') first.focus();
     });
     return () => {
@@ -1102,13 +1116,15 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
     if (e.key !== 'Tab') return;
     const root = asideRef.current;
     if (!root) return;
-    const nodes = Array.from(root.querySelectorAll(DRAWER_FOCUSABLE)).filter(el =>
-      !el.matches(':disabled') && !el.closest('[inert]') && el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden');
-    if (nodes.length === 0) return;
+    const nodes = Array.from(root.querySelectorAll(DRAWER_FOCUSABLE)).filter(isDrawerFocusTarget);
+    if (nodes.length === 0) { e.preventDefault(); root.focus(); return; }
     const first = nodes[0];
     const last = nodes[nodes.length - 1];
     // A loading/disabled form may retain programmatic focus with only Close tabbable.
     if (nodes.length === 1) { e.preventDefault(); first.focus(); return; }
+    if (!root.contains(document.activeElement)) {
+      e.preventDefault(); (e.shiftKey ? last : first).focus(); return;
+    }
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
@@ -1121,6 +1137,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === 'string' ? title : undefined}
+        tabIndex={-1}
         onKeyDown={handleKeyDown}
         className="hub-drawer"
         data-presentation={presentation}

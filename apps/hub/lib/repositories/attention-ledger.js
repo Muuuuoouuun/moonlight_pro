@@ -27,6 +27,7 @@ import { getDeadlineAlertSettings } from "./deadline-alert-settings.js";
 import { isDeadlineAlertSuppressed } from "../deadline-alert-reset.js";
 import { isDealStalled } from "../deal-stages.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
+import { calendarReadIsPartial } from "../calendar-read-coverage.js";
 import { dueBucket, kstDayKey } from "../kst-day.js";
 import { isFocusedOn, summarizeFocusDay } from "../task-today.js";
 
@@ -297,11 +298,14 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     deals: dealSourceState,
     deadlineAlerts: deadlineAlerts.status,
     calendar: calendar?.ok
-      ? "live"
+      ? calendarReadIsPartial(calendar) ? "partial" : "live"
       : ["calendar-not-connected", "missing-connection", "missing-access-token", "missing-config"].includes(calendar?.reason || "calendar-not-connected")
         ? "preview"
         : "error",
   };
+  if (sources.calendar === "partial" || sources.calendar === "error") {
+    sourceFailures.push({ source: "calendar", error: calendar?.reason || "calendar-read-failed", failedSources: ["calendar"] });
+  }
 
   if (inquiries.status === 'error') sourceFailures.push({ source: 'inquiries', error: inquiries.error, failedSources: ['inquiries'] });
   if (deadlineAlerts.status === 'error') sourceFailures.push({ source: 'deadlineAlerts', error: deadlineAlerts.error, failedSources: ['deadlineAlerts'] });
@@ -348,7 +352,8 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     focusToday,
     failedSources: sourceFailures.map((failure) => failure.source),
     sourceFailures,
-    calendarReason: calendar?.ok ? "" : calendar?.reason || "",
+    calendarReason: calendarReadIsPartial(calendar) ? "partial-source-failure" : calendar?.ok ? "" : calendar?.reason || "",
+    calendarCoverage: calendar?.coverage || null,
     items,
     // Separate summary keeps My Work's task/deal/event lane contract intact.
     // The exact unread count is independent of the three-row preview.

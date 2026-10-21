@@ -9,8 +9,11 @@ const SCOPES = new Set(['action', 'upcoming', 'all']);
 
 // 읽기 실패는 5xx가 아니라 200 + { status: 'error' } — 허브 read 봉투 계약(CLAUDE.md).
 export async function GET(req) {
-  const scope = new URL(req.url).searchParams.get('scope') || 'all';
-  return NextResponse.json(await listContentSchedules({ scope: SCOPES.has(scope) ? scope : 'all' }));
+  const params = new URL(req.url).searchParams;
+  const scope = params.get('scope') || 'all';
+  const selection = params.has('variantId') || params.has('contentId')
+    ? { variantId: params.get('variantId'), contentId: params.get('contentId') } : {};
+  return NextResponse.json(await listContentSchedules({ scope: SCOPES.has(scope) ? scope : 'all', ...selection }));
 }
 
 export async function POST(req) {

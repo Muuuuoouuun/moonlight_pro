@@ -25,8 +25,8 @@
       const week = h('div', { class: 'week', role: 'group', 'aria-label': '이번 주 날짜' });
       const scroll = h('div', { class: 'scroll', role: 'region', 'aria-label': '그날 일정' });
       const status = h('span', { class: 'status' });
-      const refresh = M.platform.isMac() ? U.quiet('', { icon: 'refresh', iconSize: 14, title: 'Hub 새로고침',
-        onClick: () => { if (!loading) load(); } }) : null;
+      const refresh = U.quiet('', { icon: 'refresh', iconSize: 14, title: 'Hub 새로고침',
+        onClick: () => { if (!loading) load(); } });
       const footer = h('div', { class: 'footer' }, status,
         U.quiet('Hub에서 열기', { icon: 'arrowUpRight', iconSize: 12, iconAfter: true, title: '일정 편집은 Hub에서 해요', onClick: () => ctx.openHub(C.HUB_PATHS.calendar) }));
       if (refresh) footer.insertBefore(refresh, footer.lastChild);

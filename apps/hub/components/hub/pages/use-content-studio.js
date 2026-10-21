@@ -387,5 +387,5 @@ export function useContentStudio(workspace) {
     } finally { if (current()) update({ busy: false }); }
   };
   return { ...state, scope, campaignRequested: campaignParam !== null, edit, save, recordPublication, switchVariant, newDraft, refreshHistory, compareLatest, recover, mutate, retryLoad,
-    retryMutation: () => stateRef.current.pendingMutation && mutate(stateRef.current.pendingMutation.command), getDraft: () => stateRef.current.draft };
+    retryMutation: () => stateRef.current.pendingMutation && mutate(stateRef.current.pendingMutation.command), getDraft: () => stateRef.current.draft, getDocumentIdentity: () => epoch.current };
 }

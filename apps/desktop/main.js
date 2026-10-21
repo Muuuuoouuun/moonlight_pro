@@ -35,6 +35,10 @@ const {
 const { buildAppMenuTemplate, buildDockMenuTemplate, loginItemMenuItem } = require('./menu-template');
 const { installPetRuntime } = require('./pet-runtime');
 const { startHubSessionBridge } = require('./hub-session-bridge');
+const { registerHubSessionIpc } = require('./hub-session-ipc');
+const { registerHubSessionNetwork } = require('./hub-session-network');
+let hubSessionBridge;
+const { readBuildInfo } = require('./build-info');
 const { startNativeSessionBridge } = require('./native-session-bridge');
 let nativeSessionBridge;
 
@@ -249,6 +253,16 @@ function loadHub() {
   const hubUrl = currentHubUrl();
   if (!hubUrl) return showSettings();
   return win.loadURL(dashboardUrl(hubUrl)).catch(() => {});
+}
+
+async function refreshHub() {
+  const hubUrl = currentHubUrl();
+  if (!hubUrl) return showSettings();
+  showWindow();
+  // Only cached network resources; operator cookies and local drafts survive.
+  await session.defaultSession.clearCache();
+  if (isSameOrigin(win.webContents.getURL(), hubUrl)) win.webContents.reloadIgnoringCache();
+  else await loadHub();
 }
 
 function showSettings(query = {}) {
@@ -552,6 +566,7 @@ function refreshMenus() {
   const actions = {
     quickCapture,
     showSettings: () => showSettings(),
+    refreshHub: () => refreshHub().catch(() => showSettings({ reason: '새로고침 실패' })),
     quit,
     showWindow,
     goBack: () => win && !win.isDestroyed() && win.webContents.navigationHistory.goBack(),
@@ -601,14 +616,28 @@ function fromSettingsPage(event) {
 }
 
 function registerIpc() {
+  registerHubSessionIpc({ ipcMain, getWindow: () => win, getHubUrl: currentHubUrl,
+    getBridge: () => hubSessionBridge, enabled: () => USE_NATIVE_PET && !SMOKE && !SMOKE_MAC,
+    verifyAcceptedLogin: async (attempt) => {
+      if (!hubSessionBridge?.hasLoginAttempt(attempt) || !hubSessionBridge.hasAcceptedBrowserResponse(attempt)) return false;
+      const origin = new URL(currentHubUrl()).origin;
+      const response = await session.defaultSession.fetch(`${origin}/api/operator/session`,
+        { method: 'GET', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(8000),
+          headers: { 'x-moonlight-login-check': attempt } });
+      if (!response.ok || response.url !== `${origin}/api/operator/session` || new URL(currentHubUrl()).origin !== origin) return false;
+      const result = await response.json();
+      return result.status === 'authenticated' && result.configured === true;
+    } });
   ipcMain.handle('moonlight:get-settings', (event) => {
     fromSettingsPage(event);
-    return { hubUrl: currentHubUrl(), defaultHubUrl: resolveHubUrl('', appConfig.hubUrl) };
+    return { hubUrl: currentHubUrl(), defaultHubUrl: resolveHubUrl('', appConfig.hubUrl),
+      build: readBuildInfo(), addressSource: readSettings().hubUrl ? '사용자 설정' : '앱 기본값' };
   });
   ipcMain.handle('moonlight:set-settings', (event, patch) => {
     fromSettingsPage(event);
     const result = normalizeHubUrl(patch && patch.hubUrl);
     if (!result.ok) return result;
+    hubSessionBridge?.invalidateConnection();
     writeJson(userFile('settings.json'), { ...readSettings(), hubUrl: result.url });
     hideWidget(); // 위젯은 다음에 열 때 새 주소의 /widget을 다시 불러온다(isWidgetPage가 origin을 본다)
     if (pet && pet.hubUrlChanged) pet.hubUrlChanged();
@@ -745,8 +774,13 @@ async function runWidgetSmoke() {
     if (!ok) throw new Error(label);
   };
 
-  // 1) 창 모양: https://example.com/widget(404 페이지)을 띄워 찍는다.
-  hubUrlOverride = 'https://example.com';
+  // Every page and cookie belongs to this disposable loopback fixture.
+  const server = await startLoggedOutHub();
+  hubUrlOverride = `http://127.0.0.1:${server.address().port}`;
+  await session.defaultSession.cookies.set({ url: hubUrlOverride, name: 'com_moon_operator_session',
+    value: 'smoke-login', path: '/', httpOnly: true, expirationDate: Date.now() / 1000 + 3600 });
+  await loadHub();
+  // 1) 창 모양: 운영 Hub나 외부 웹에 연결하지 않고 위젯을 띄운다.
   toggleWidget();
   await waitFor(widgetVisible, 'widget visible');
   await sleep(800);
@@ -817,8 +851,8 @@ async function runWidgetSmoke() {
   console.log('smoke:widget-toggle ok');
 
   // 4) 세션 만료: /widget → /login이면 위젯은 숨은 채로, 메인 창이 로그인 주소를 연다.
-  const server = await startLoggedOutHub();
-  hubUrlOverride = `http://127.0.0.1:${server.address().port}`;
+  await session.defaultSession.cookies.remove(`${hubUrlOverride}/`, 'com_moon_operator_session');
+  widgetNeedsReload = true; // The normal cookie listener sets this outside smoke mode.
   toggleWidget();
   await waitFor(() => isLoginUrl(win.webContents.getURL(), hubUrlOverride), 'main at login');
   await sleep(1000);
@@ -1009,6 +1043,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     quitting = true;
     nativeSessionBridge?.close().catch(() => {});
+    hubSessionBridge?.close().catch(() => {});
   });
   app.on('will-quit', () => globalShortcut.unregisterAll());
   // macOS는 창을 다 닫아도(허브 창은 숨김) 메뉴 막대·펫이 계속 산다.
@@ -1047,8 +1082,14 @@ if (!app.requestSingleInstanceLock()) {
         }, 100);
       });
       if (USE_NATIVE_PET) {
-        startHubSessionBridge({ session: session.defaultSession, getHubUrl: currentHubUrl })
-          .catch(() => console.warn('Mac 위젯 세션 연결을 시작하지 못했습니다.'));
+        // Until the installation intent is read, this fence treats automatic
+        // cookie restoration as unconfirmed without inventing a logout intent.
+        registerHubSessionNetwork({ webRequest: session.defaultSession.webRequest, getHubUrl: currentHubUrl,
+          getWindow: () => win, getBridge: () => hubSessionBridge });
+        try {
+          hubSessionBridge = await startHubSessionBridge({ session: session.defaultSession, getHubUrl: currentHubUrl,
+            intentDirectory: path.join(app.getPath('userData'), 'hub-session-intent') });
+        } catch { console.warn('Mac 위젯 세션 연결을 시작하지 못했습니다.'); }
       }
     }
     if (IS_MAC) {
@@ -1068,11 +1109,11 @@ if (!app.requestSingleInstanceLock()) {
         app.exit(1);
       });
     } else if (SMOKE_WIDGET) {
-      hubUrlOverride = 'https://example.com';
       runWidgetSmoke().catch((error) => {
         console.log(`smoke:fail ${error.message}`);
         app.exit(1);
       });
+      return; // The isolated smoke creates its Hub before loading any page.
     } else if (SMOKE) {
       runSmoke();
     } else {

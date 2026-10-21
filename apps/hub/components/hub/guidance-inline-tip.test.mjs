@@ -100,7 +100,7 @@ test('the inline tip renders as one source-backed accessible button without requ
   assert.doesNotMatch(css, /#[\da-fA-F]{3,8}\b|rgba?\(|oklch\(/);
 });
 
-test('Home places one unified tip outside and above the morning brief card', () => {
+test('each workflow keeps one tip in its selected hierarchy, outside the Home brief and Overview activity disclosure', () => {
   const today = read('./pages/daily-brief.jsx');
   const overview = read('./pages/overview.jsx');
   const home = read('./pages/home.jsx');
@@ -114,6 +114,12 @@ test('Home places one unified tip outside and above the morning brief card', () 
   const chartStart = overview.indexOf('작업·기획 활동 추이');
   const tip = overview.indexOf('<GuidanceInlineTip variant="overview"');
   const domainPanels = overview.indexOf('hub-grid--split', chartStart);
-  assert.ok(chartStart >= 0 && tip > chartStart && domainPanels > tip);
+  const goalSummary = overview.indexOf('<OkrSummaryCard');
+  const activityDisclosure = overview.indexOf('<details className="workflow-disclosure"');
+  const activityDisclosureEnd = overview.indexOf('</details>', activityDisclosure);
+  // GOAL LENS keeps the weekly tip with the visible goal summary. The activity
+  // chart and domain panels remain in their original order inside more detail.
+  assert.ok(goalSummary >= 0 && tip > goalSummary && activityDisclosure > tip);
+  assert.ok(chartStart > activityDisclosure && domainPanels > chartStart && activityDisclosureEnd > domainPanels);
   assert.doesNotMatch(read('./pages/content-studio.jsx'), /GuidanceInlineTip/);
 });

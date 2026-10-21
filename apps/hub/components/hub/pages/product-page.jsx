@@ -25,6 +25,7 @@ import {
   saveWork,
   seoulDay,
   workDrawerSubtitle,
+  workCreateBody,
   workType,
 } from "../../../lib/product-catalog.js";
 import { INQUIRY_STATUSES } from "../inquiry-view-state";
@@ -62,21 +63,51 @@ export function WorkDrawer({ product, areas, seed, onClose, onSaved }) {
     recurrence: "",
     areaId: defaultArea(product, areas),
   }));
-  const [state, setState] = React.useState({ saving: false, message: "" });
+  const [state, setState] = React.useState({ saving: false, message: "", unknownOutcome: false });
   const [created, setCreated] = React.useState(null); // 만들었지만 문의가 아직 안 붙은 일의 id
   const titleRef = React.useRef(null);
+  const savingRef = React.useRef(false);
+  const attemptRef = React.useRef(null);
+  const changeDraft = (patch) => {
+    if (savingRef.current || attemptRef.current) return;
+    setDraft((current) => ({ ...current, ...patch }));
+  };
   const save = async (event) => {
     event?.preventDefault();
-    if (!created && !draft.title.trim()) { setState({ saving: false, message: "일 제목을 적어 주세요." }); return; }
-    if (!created && !draft.areaId) { setState({ saving: false, message: "업무 분야를 골라 주세요." }); return; }
-    setState({ saving: true, message: "" });
-    const result = await saveWork({ createWork, linkInquiry }, { product, draft, seed, id: newId(), createdId: created });
-    if (!result.ok) { setCreated(result.createdId); setState({ saving: false, message: result.message }); return; }
-    onSaved(`‘${draft.title.trim()}’ ${workType(draft.workType)?.label || "일"}을(를) 만들었어요.`);
+    if (savingRef.current) return;
+    if (!attemptRef.current && !draft.title.trim()) { setState({ saving: false, message: "일 제목을 적어 주세요." }); return; }
+    if (!attemptRef.current && !draft.areaId) { setState({ saving: false, message: "업무 분야를 골라 주세요." }); return; }
+    // 결과가 유실돼도 ID·입력·문의 연결은 처음 보낸 명령 그대로다. 확정 거절 전에는
+    // 입력도 잠근다 — 같은 ID에 나중 제목을 실으면 충돌하고, 새 ID면 일이 중복된다.
+    const attempt = attemptRef.current ||= {
+      body: workCreateBody(product, draft, seed, newId()),
+      inquiryId: seed?.inquiryId || null,
+      createdId: null,
+      unknownOutcome: false,
+    };
+    savingRef.current = true;
+    setState({ saving: true, message: "", unknownOutcome: attempt.unknownOutcome });
+    try {
+      const result = await saveWork({ createWork, linkInquiry }, attempt);
+      attempt.createdId = result.createdId;
+      if (!result.ok) {
+        // 뒤의 401·preview는 앞선 미확정 명령이 저장되지 않았다는 증거가 아니다.
+        if (result.unknownOutcome) attempt.unknownOutcome = true;
+        if (!attempt.createdId && !attempt.unknownOutcome) attemptRef.current = null;
+        setCreated(result.createdId);
+        setState({ saving: false, message: result.message, unknownOutcome: attempt.unknownOutcome });
+        return;
+      }
+      onSaved(`‘${attempt.body.title}’ ${workType(attempt.body.workType)?.label || "일"}을(를) 만들었어요.`);
+    } finally {
+      savingRef.current = false;
+    }
   };
-  const close = () => (created
-    ? onSaved(`‘${draft.title.trim()}’ 일은 만들었지만 문의는 붙지 않았어요. 문의의 ‘붙은 일’에서 골라 주세요.`, { tone: "danger" })
-    : onClose());
+  const close = () => {
+    if (savingRef.current) return;
+    if (created) onSaved(`‘${attemptRef.current.body.title}’ 일은 만들었지만 문의는 붙지 않았어요. 문의의 ‘붙은 일’에서 골라 주세요.`, { tone: "danger" });
+    else onClose();
+  };
   return (
     <Drawer
       title={`${product.name} · 새 일`}
@@ -84,21 +115,21 @@ export function WorkDrawer({ product, areas, seed, onClose, onSaved }) {
       presentation="compact"
       onClose={state.saving ? undefined : close}
       initialFocusRef={titleRef}
-      footer={<><span className={styles.spacer} />{state.message && <span role="alert" className={styles.danger} style={{ fontSize: 12 }}>{state.message}</span>}<Button variant="ghost" size="sm" onClick={close} disabled={state.saving}>닫기</Button><Button variant="primary" size="sm" onClick={save} disabled={state.saving}>{state.saving ? (created ? "붙이는 중…" : "만드는 중…") : created ? "문의 다시 붙이기" : "일 만들기"}</Button></>}
+      footer={<><span className={styles.spacer} />{state.message && <span role="alert" className={styles.danger} style={{ fontSize: 12 }}>{state.message}</span>}<Button variant="ghost" size="sm" onClick={close} disabled={state.saving}>닫기</Button><Button variant="primary" size="sm" onClick={save} disabled={state.saving}>{state.saving ? (created ? "붙이는 중…" : state.unknownOutcome ? "확인 중…" : "만드는 중…") : created ? "문의 다시 붙이기" : state.unknownOutcome ? "저장 결과 확인" : "일 만들기"}</Button></>}
     >
       <form onSubmit={save}>
-        {/* 일을 이미 만들었으면 입력은 잠근다 — 다시 누르면 문의만 붙고 제목·종류는 바뀌지 않는다. */}
-        <fieldset disabled={Boolean(created)} style={{ display: "flex", flexDirection: "column", gap: 12, border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-          <TextField ref={titleRef} label="제목" required value={draft.title} maxLength={300} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="예: 채점 결과 엑셀 내보내기" />
-          <SegmentedControl label="종류" options={WORK_TYPES.map((type) => ({ key: type.value, label: `${type.glyph} ${type.label}` }))} value={draft.workType} onChange={(value) => setDraft({ ...draft, workType: value })} />
+        {/* 저장 중·결과 미확정·문의 연결 대기에는 처음 보낸 입력을 유지한다. */}
+        <fieldset disabled={state.saving || state.unknownOutcome || Boolean(created)} style={{ display: "flex", flexDirection: "column", gap: 12, border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <TextField ref={titleRef} label="제목" required value={draft.title} maxLength={300} onChange={(event) => changeDraft({ title: event.target.value })} placeholder="예: 채점 결과 엑셀 내보내기" />
+          <SegmentedControl label="종류" options={WORK_TYPES.map((type) => ({ key: type.value, label: `${type.glyph} ${type.label}` }))} value={draft.workType} onChange={(value) => changeDraft({ workType: value })} />
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <TextField label="기한" type="date" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} fieldStyle={{ flex: "1 1 150px" }} />
+            <TextField label="기한" type="date" value={draft.dueAt} onChange={(event) => changeDraft({ dueAt: event.target.value })} fieldStyle={{ flex: "1 1 150px" }} />
             {draft.workType === "maintenance" && (
-              <SelectField label="반복" value={draft.recurrence} onChange={(event) => setDraft({ ...draft, recurrence: event.target.value })}
+              <SelectField label="반복" value={draft.recurrence} onChange={(event) => changeDraft({ recurrence: event.target.value })}
                 options={[{ value: "", label: "한 번" }, ...RECURRENCES]} fieldStyle={{ flex: "1 1 120px" }} />
             )}
           </div>
-          <SelectField label="업무 분야" value={draft.areaId} onChange={(event) => setDraft({ ...draft, areaId: event.target.value })}
+          <SelectField label="업무 분야" value={draft.areaId} onChange={(event) => changeDraft({ areaId: event.target.value })}
             options={areas.length ? areas.map((area) => ({ value: area.id, label: area.name })) : [{ value: "", label: "업무 분야가 없어요" }]} />
         </fieldset>
       </form>

@@ -12,4 +12,4 @@ swiftc -parse-as-library \
   "$package_dir/Sources/MoonlightPetPreview/Support/HubTransport.swift" \
   "$package_dir/Tests/MoonlightPetPreviewTests/HubTransportTests.swift" \
   -o "$test_dir/HubTransportTests"
-"$test_dir/HubTransportTests"
+"$test_dir/HubTransportTests" "$@"

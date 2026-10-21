@@ -105,7 +105,7 @@ function TodaySchedule({ onNavigate, schedule, onReload }) {
       ) : status === 'error' || status === 'preview' ? (
         <div><TruthBadge state={status} reason={status === 'error' ? '일정을 불러오지 못했습니다' : '캘린더 연결 필요'} /><Button onClick={onReload}>다시 불러오기</Button></div>
       ) : !events.length ? (
-        <EmptyState title="오늘 잡힌 일정이 없습니다" />
+        <EmptyState title={status === 'partial' ? "읽힌 일정이 없습니다. 오늘 일정이 없다고 확정할 수 없습니다." : "오늘 잡힌 일정이 없습니다"} />
       ) : (
         <div className="fx-timeline">
           {events.map((e, i) => {
@@ -341,9 +341,9 @@ export function Home({ onNavigate, onGuidanceAsk }) {
               ) : (
                 <div className="fx-card">
                   <EmptyState
-                    icon="check"
-                    title="오늘 확인할 것을 다 봤습니다"
-                    description={finishedToday.length || waitingCount
+                    icon={status === 'partial' ? "signal" : "check"}
+                    title={status === 'partial' ? "확인할 것을 모두 읽지 못했습니다" : "오늘 확인할 것을 다 봤습니다"}
+                    description={status === 'partial' ? '읽힌 항목이 없어도 실제로 확인할 일이 있을 수 있습니다. 위에서 다시 불러와 주세요.' : finishedToday.length || waitingCount
                       ? `끝낸 것 ${finishedToday.filter((r) => r.outcome !== 'snoozed').length}건 · 잡아 둔 것 ${waitingCount}건 · 보류 ${finishedToday.filter((r) => r.outcome === 'snoozed').length}건 — 잡아 둔 일은 그 시간에, 보류한 것은 그날 다시 맨 앞으로 옵니다.`
                       : '새로 확인할 것이 생기면 여기 가장 먼저 올라옵니다.'}
                   />
@@ -368,8 +368,12 @@ export function Home({ onNavigate, onGuidanceAsk }) {
         {status !== 'unauthorized' && schedule.status !== 'unauthorized' ? <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} /> : null}
       </div>
 
-      <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기 · <Kbd>T</Kbd> 시간 잡기 · <Kbd>D</Kbd> 결정 · <Kbd>J</Kbd> 건너뛰기 · <Kbd>K</Kbd> 이전
+      <footer className="fx-eyebrow" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>T</Kbd> 시간 잡기</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>D</Kbd> 결정</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>J</Kbd> 건너뛰기</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>K</Kbd> 이전</span>
       </footer>
 
       {recordTarget && (

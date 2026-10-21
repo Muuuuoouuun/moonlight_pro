@@ -54,10 +54,7 @@ struct CalendarCompanionContent: View {
                     .lineLimit(1).help(model.hub.connectionLabel)
                 Spacer(minLength: 0)
                 if model.hub.isEnabled { HubRefreshButton(model: model) }
-                Button { model.openHub(.calendar) } label: {
-                    Label("Hub에서 열기", systemImage: "arrow.up.right")
-                }
-                .buttonStyle(GlassQuietStyle())
+                HubOpenButton(model: model, mode: .calendar)
             }
             .font(.system(size: 11.5, weight: .medium))
         }

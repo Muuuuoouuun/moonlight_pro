@@ -1,0 +1,304 @@
+/* 결정 데스크 — 정할 것 큐 + 정하기 패널(2026-10-15 결정 데스크 스펙). Futura 페이지 안. 토큰만, 보더 1px. */
+
+.hub-app .dd-desk {
+  display: grid;
+  grid-template-columns: minmax(280px, 460px) minmax(0, 1fr);
+  gap: 24px 32px;
+  align-items: start;
+}
+
+.hub-app .dd-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hub-app .dd-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* 큐 — 고른 한 건만 Moonstone 1px 테두리(현재 위치). */
+.hub-app .dd-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .dd-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: var(--fx-shadow);
+  transition: box-shadow var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .dd-item[data-selected="true"] {
+  box-shadow: 0 0 0 1px var(--accent), var(--fx-shadow-lift);
+}
+
+.hub-app .dd-item > .hub-checkbox { margin-top: 2px; }
+
+.hub-app .dd-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hub-app .dd-item__meta,
+.hub-app .dd-panel__meta {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.hub-app .dd-item__meta[data-urgent="true"],
+.hub-app .dd-panel__meta [data-urgent="true"] { color: var(--danger); }
+
+.hub-app .dd-item__title {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--fg);
+}
+
+.hub-app .dd-item[data-selected="true"] .dd-item__title { font-weight: 500; }
+
+.hub-app .dd-item__sub {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .dd-bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 12.5px;
+}
+
+.hub-app .dd-bulk > span:first-child { margin-right: auto; }
+
+.hub-app .dd-add { align-self: flex-start; }
+
+/* 최근 결정 */
+.hub-app .dd-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hub-app .dd-recent__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hub-app .dd-recent__head .fx-eyebrow { margin: 0; }
+
+.hub-app .dd-recent ul {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .dd-recent__row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 2px 10px;
+  font-size: 13px;
+}
+
+.hub-app .dd-recent__date { font-size: 12px; color: var(--fg-dim); }
+.hub-app .dd-recent__title { color: var(--fg); }
+.hub-app .dd-recent__sub { grid-column: 2; font-size: 12px; color: var(--fg-muted); }
+
+/* 정하기 패널 */
+.hub-app .dd-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.hub-app .dd-panel__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .dd-panel__meta > span + span::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--fg-faint);
+}
+
+.hub-app .dd-panel__title { margin: 0; }
+
+.hub-app .dd-context {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  margin: 0;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--line-soft);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+
+.hub-app .dd-context > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+
+.hub-app .dd-context dt { font-size: 11px; color: var(--fg-dim); }
+.hub-app .dd-context dd { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg); }
+
+.hub-app .dd-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.hub-app .dd-options legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.hub-app .dd-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  transition: box-shadow var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .dd-option[data-chosen="true"] { box-shadow: inset 0 0 0 1px var(--accent); }
+
+.hub-app .dd-option__radio {
+  width: 16px;
+  height: 16px;
+  margin: 30px 0 0;
+  accent-color: var(--accent);
+}
+
+.hub-app .dd-option__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hub-app .dd-option__trade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.hub-app .dd-options > .hub-btn { align-self: flex-start; }
+
+.hub-app .dd-task {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hub-app .dd-preview {
+  display: flex;
+  align-items: baseline;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.hub-app .dd-preview__lead { font-weight: 500; color: var(--fg); }
+.hub-app .dd-preview > span + span:not(.dd-preview__lead)::before { content: "→ "; color: var(--fg-faint); }
+.hub-app .dd-preview > .dd-preview__lead + span::before { content: none; }
+
+.hub-app .dd-error { margin: 0; font-size: 12.5px; color: var(--danger); }
+
+.hub-app .dd-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hub-app .dd-keys {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px 20px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .dd-view-toggle { margin-top: 16px; }
+
+@media (max-width: 900px) {
+  .hub-app .dd-desk { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .hub-app .dd-option { grid-template-columns: auto minmax(0, 1fr); }
+  .hub-app .dd-option > .hub-iconbtn { grid-column: 2; justify-self: end; }
+  .hub-app .dd-actions { justify-content: stretch; }
+  .hub-app .dd-actions > .hub-btn { flex: 1 1 auto; }
+  .hub-app .dd-keys { display: none; }
+}

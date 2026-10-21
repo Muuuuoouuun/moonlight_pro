@@ -36,6 +36,18 @@ async function boot(t, platform, extra = {}) {
   return { E, pet, kept };
 }
 
+test('Office windows use the platform contract through the shell layout path', async t => {
+  for (const [platform, size] of [['darwin', {width:408,height:280}], ['win32', {width:444,height:604}]]) {
+    await t.test(platform, async t => {
+      const { pet } = await boot(t, platform);
+      pet.openMode('office');
+      const frame = pet.windows.panel.getBounds();
+      assert.equal(frame.width, size.width);
+      assert.equal(frame.height, size.height);
+    });
+  }
+});
+
 test('macOS: 걸친 캐릭터·말풍선 창은 처음 쓸 때 만든다 — 대기 중에는 펫·패널 둘만', async (t) => {
   const { E, pet } = await boot(t, 'darwin');
   assert.equal(pet.platform, 'darwin');
@@ -84,37 +96,53 @@ test('macOS: 빠른 패널은 showInactive + focus(앱 활성화 없이 키 창)
 
 test('macOS: 키 창이 못 되어도 앱을 활성화하지 않는다(허브 창이 따라 올라오지 않게) — 150ms 뒤 다시 잡는다', async (t) => {
   const { E, pet } = await boot(t, 'darwin');
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const panel = pet.windows.panel;
   let tries = 0;
   panel.focus = function focus() { tries += 1; this.calls.push('focus'); this.focused = tries >= 2; };
   pet.openQuick();
   assert.deepEqual(E.electron.app.focusCalls, [], 'app.focus({steal}) 없음');
   assert.deepEqual(panel.calls, ['showInactive', 'focus']);
-  await settle(200);
+  t.mock.timers.tick(200);
   assert.deepEqual(panel.calls, ['showInactive', 'focus', 'focus']);
   assert.equal(panel.isFocused(), true);
   assert.equal(panel.calls.includes('show'), false);
-  await settle(200);
+  t.mock.timers.tick(200);
   assert.equal(tries, 2, '잡은 뒤에는 더 부르지 않는다');
 });
 
 test('macOS: 그래도 키 창이 못 되면 유예 안에서 300ms 에 한 번 더 — 그 뒤로는 부르지 않는다', async (t) => {
   const { E, pet } = await boot(t, 'darwin');
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const panel = pet.windows.panel;
   let tries = 0;
   panel.focus = function focus() { tries += 1; this.calls.push('focus'); this.focused = tries >= 3; };
   pet.openQuick();
   assert.equal(panel.isFocused(), false);
-  await settle(200);
+  t.mock.timers.tick(200);
   assert.equal(tries, 2);
   assert.equal(panel.isFocused(), false);
-  await settle(150);
+  t.mock.timers.tick(150);
   assert.equal(tries, 3);
   assert.equal(panel.isFocused(), true);
-  await settle(200);
+  t.mock.timers.tick(200);
   assert.equal(tries, 3);
   assert.deepEqual(E.electron.app.focusCalls, []);
   assert.equal(panel.calls.includes('show'), false);
+});
+
+test('macOS: a delayed retry never focuses after the blur grace deadline', async (t) => {
+  const { pet } = await boot(t, 'darwin');
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const panel = pet.windows.panel;
+  let tries = 0;
+  panel.focus = function focus() { tries += 1; this.focused = false; };
+  pet.openQuick();
+  assert.equal(tries, 1);
+  t.mock.timers.tick(500);
+  assert.equal(tries, 1, 'a delayed timer cannot extend the 400ms focus grace');
+  t.mock.timers.tick(500);
+  assert.equal(tries, 1, 'the expired attempt does not schedule another retry');
 });
 
 test('macOS: 활성 유지 도우미·DWM 없이 — 남은 위젯이 blur 돼도 아무 일 없다(vibrancy active)', async (t) => {

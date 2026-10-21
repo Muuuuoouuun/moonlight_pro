@@ -5,7 +5,9 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { brandInWorkspace } from '../workspace-map.js';
+import { collapsedTodayAgendaRows, todayAgendaRows } from './workflow-reading.js';
 import { REACTION_LABEL } from '../../../lib/sales-os/followup-scoring.js';
+import { buildDailyFocus } from '../../../lib/daily-focus.js';
 
 // Run the production JSX, with read hooks and unrelated widgets replaced by local
 // boundaries. No API, browser effect, model, customer record or save is executed.
@@ -17,7 +19,9 @@ function section(start, end) {
   assert.ok(at >= 0 && to > at, `${start} section must stay findable`);
   return source.slice(at, to);
 }
+const agendaSource = readFileSync(new URL('./today-time-flow.jsx', import.meta.url), 'utf8');
 const compiled = ts.transpileModule([
+  agendaSource.slice(agendaSource.indexOf('export function TodayTimeFlow')).replace('export function', 'function'),
   section('const BRIEF_DESTINATIONS =', '// Command Brief priority:'),
   section('function BriefNavigation(', '// The command —'),
   section('// §2 확정 슬롯', '// 60초 시계를 페이지 루트에서 분리'),
@@ -39,21 +43,22 @@ const ledgerOf = (dailyFocus) => ({
 });
 function components(runtime, getLedger, html = false) {
   const deps = {
-    React: runtime, brandInWorkspace, FOCUS_REACTION_LABEL: REACTION_LABEL,
+    React: runtime, collapsedTodayAgendaRows, todayAgendaRows, brandInWorkspace, FOCUS_REACTION_LABEL: REACTION_LABEL,
     REVIEW_EVENING_HOUR: 18, useDailyBriefLedger: getLedger,
     useGuruRecommendations: () => ({ reload() {} }), useToast: () => ({}),
     rankSignals: (signals) => signals,
   };
   for (const name of new Set([...compiled.matchAll(/React\.createElement\(([A-Z]\w*)/g)].map((m) => m[1]))) {
-    if (name === 'FocusSlots' || name === 'BriefNavigation') continue;
+    if (name === 'React' || name === 'FocusSlots' || name === 'BriefNavigation' || name === 'TodayTimeFlow') continue;
     deps[name] = html ? () => null : name;
   }
+  if (!html) deps.EmptyState = ({ title, description, action }) => runtime.createElement('div', null, title, description, action);
   if (html) {
     deps.Card = ({ children, className, ...props }) => runtime.createElement('div', {
       className, 'aria-label': props['aria-label'],
     }, children);
     deps.Button = ({ children, onClick }) => runtime.createElement('button', { type: 'button', onClick }, children);
-    deps.CalendarOutcome = ({ title }) => runtime.createElement('span', null, title);
+    deps.CalendarOutcome = ({ title, whenLabel }) => runtime.createElement('span', null, whenLabel, ' ', title);
   }
   return new Function(...Object.keys(deps), `${compiled}; return { DailyBrief, FocusSlots };`)(...Object.values(deps));
 }
@@ -152,12 +157,40 @@ test('compact calendar keeps one state-appropriate CTA and truthful error/previe
 });
 
 test('compact agenda exposes three events and an honest count for remaining events', () => {
-  const items = Array.from({ length: 5 }, (_, i) => ({ id: `local-${i}`, title: `합성 일정 ${i + 1}`, whenLabel: '09:00' }));
+  const items = Array.from({ length: 5 }, (_, i) => ({ id: `local-${i}`, outcomeKey: `original-${i}`, title: `합성 일정 ${i + 1}`, whenLabel: '09:00' }));
   const app = mount(focusOf('live', items));
   const tree = app.render();
   const card = findAll(tree, (n) => n.type === 'Card' && n.props['aria-label'] === '오늘 일정')[0];
   assert.deepEqual(findAll(card, (n) => n.type === 'CalendarOutcome').map((n) => n.props.title), items.slice(0, 3).map((n) => n.title));
-  assert.ok(text(card).includes('외 2건 더 있음'));
+  assert.ok(text(card).includes('일정 2건 더 보기'));
+  const expand = findAll(card, node => node.type === 'Button' && node.props['aria-expanded'] === false)[0];
+  expand.props.onClick();
+  const expanded = app.render();
+  assert.deepEqual(findAll(expanded, node => node.type === 'CalendarOutcome').map(node => node.props.eventKey), items.map(item => item.outcomeKey));
+  const collapse = findAll(expanded, node => node.type === 'Button' && node.props['aria-expanded'] === true)[0];
+  collapse.props.onClick();
+  const collapsed = app.render();
+  const rows = findAll(collapsed, node => node.type === 'li' && node.props.className === 'workflow-agenda__item');
+  assert.equal(rows.filter(node => !node.props.hidden).length, 3, 'only three events remain visible');
+  assert.equal(rows.filter(node => node.props.hidden).length, 2, 'visited editors stay mounted while collapsed');
+  assert.deepEqual(findAll(collapsed, node => node.type === 'CalendarOutcome').map(node => node.props.eventKey), items.map(item => item.outcomeKey), 'the same keyed editors retain pending save/conflict state');
+  findAll(collapsed, node => node.type === 'Button' && node.props['aria-expanded'] === false)[0].props.onClick();
+  assert.equal(findAll(app.render(), node => node.type === 'li' && node.props.hidden).length, 0);
+});
+
+test('time flow preserves partial truth and never shows failed or preview rows as real events', () => {
+  const items = [{ id: 'local-only', outcomeKey: 'original', title: '합성 일정', whenLabel: '10:00' }];
+  const app = mount(focusOf('partial', items));
+  let tree = app.render();
+  assert.match(text(tree), /일부 일정만 확인했습니다/);
+  assert.equal(findAll(tree, node => node.type === 'CalendarOutcome').length, 1);
+  tree = app.render(focusOf('partial'));
+  assert.match(text(tree), /오늘 일정이 없다고 확정할 수 없습니다/);
+  for (const state of ['error', 'preview']) {
+    tree = app.render(focusOf(state, items));
+    assert.equal(findAll(tree, node => node.type === 'CalendarOutcome').length, 0);
+    assert.doesNotMatch(text(tree), /오늘 예정된 일정이 없습니다/);
+  }
 });
 
 test('real React server render retains the accessible nav for every read state', () => {
@@ -168,6 +201,22 @@ test('real React server render retains the accessible nav for every read state',
     assert.equal((html.match(/class="daily-brief__jump"/g) || []).length, routes.length);
     assert.match(html, /aria-label="내 작업: 5건 확인"/);
   }
+});
+
+test('carry-over projection reaches Today with original dated start, not false live-empty copy', () => {
+  const focus = buildDailyFocus({ now: new Date('2026-10-20T07:00:00+09:00'), calendar: { ok: true, items: [
+    { id: 'trip', summary: '합성 출장', start: { date: '2026-10-19' }, end: { date: '2026-10-22' }, outcomeKey: 'trip-key' },
+    { id: 'travel', summary: '합성 이동', start: { dateTime: '2026-10-19T23:00:00+09:00' }, end: { dateTime: '2026-10-20T07:30:00+09:00' }, outcomeKey: 'travel-key' },
+  ] } });
+  const outcomes = findAll(mount(focus).render(), node => node.type === 'CalendarOutcome');
+  assert.deepEqual(outcomes.map(node => [node.props.eventKey, node.props.whenLabel]), [
+    ['trip-key', '종일'], ['travel-key', '2026-10-19 23:00 시작'],
+  ]);
+  const { DailyBrief } = components(React, () => ledgerOf(focus), true);
+  const html = renderToStaticMarkup(React.createElement(DailyBrief, { onNavigate() {} }));
+  assert.match(html, /2026-10-19 23:00 시작/);
+  assert.match(html, /종일/);
+  assert.doesNotMatch(html, /오늘 예정된 일정이 없습니다|진행 중/);
 });
 
 test('desktop shortcuts are visible while touch hitboxes and mobile input floors remain intact', () => {

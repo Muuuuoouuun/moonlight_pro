@@ -104,11 +104,12 @@ export function summarizeFocusDay(todos = [], { now = new Date(), timeZone = TAS
 export function computeTaskStreak(todos = [], { now = new Date(), timeZone = TASK_TIME_ZONE } = {}) {
   const todayKey = dateKeyInZone(now, timeZone);
   if (!todayKey) {
-    return { streak: 0, todayDoneCount: 0, isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
+    return { streak: 0, todayDoneCount: 0, todayDoneIds: [], isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
   }
 
   const doneDateKeys = new Set();
   let todayDoneCount = 0;
+  const todayDoneIds = [];
 
   (Array.isArray(todos) ? todos : []).forEach((task) => {
     if (!isDoneTask(task)) return;
@@ -119,6 +120,7 @@ export function computeTaskStreak(todos = [], { now = new Date(), timeZone = TAS
       doneDateKeys.add(taskDateKey);
       if (taskDateKey === todayKey) {
         todayDoneCount += 1;
+        if (task.id) todayDoneIds.push(task.id);
       }
     }
   });
@@ -147,6 +149,7 @@ export function computeTaskStreak(todos = [], { now = new Date(), timeZone = TAS
   return {
     streak,
     todayDoneCount,
+    todayDoneIds,
     isBurning: streak >= 3 || (streak > 0 && todayDoneCount > 0),
     recentDays,
   };

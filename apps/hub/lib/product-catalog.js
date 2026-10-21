@@ -478,15 +478,18 @@ export function workCreateBody(product, draft, seed, id) {
 
 // ＋ 일 저장 흐름(WorkDrawer). 일을 만든 뒤 문의 붙이기가 실패하면 만든 일 id(createdId)를 돌려준다 — 다시 누르면
 // 그 일에 문의만 붙이고, 같은 고객이 붙은 두 번째 일을 만들지 않는다. 쓰기 함수는 주입한다(product-client.js).
-export async function saveWork({ createWork, linkInquiry }, { product, draft, seed, id, createdId = null }) {
+export async function saveWork({ createWork, linkInquiry }, {
+  product, draft, seed, id, createdId = null,
+  body = workCreateBody(product, draft, seed, id), inquiryId = seed?.inquiryId,
+}) {
   let workId = createdId;
   if (!workId) {
-    const outcome = await createWork(workCreateBody(product, draft, seed, id));
-    if (!outcome.ok) return { ok: false, createdId: null, message: outcome.message };
-    workId = outcome.entity?.id || id;
+    const outcome = await createWork(body);
+    if (!outcome.ok) return { ok: false, createdId: null, message: outcome.message, ...(outcome.unknownOutcome ? { unknownOutcome: true } : {}) };
+    workId = outcome.entity?.id || body.id;
   }
-  if (seed?.inquiryId) {
-    const linked = await linkInquiry(seed.inquiryId, product.id, workId);
+  if (inquiryId) {
+    const linked = await linkInquiry(inquiryId, body.productId, workId);
     if (!linked.ok) return { ok: false, createdId: workId, message: `일은 만들었지만 문의를 붙이지 못했어요: ${linked.message} 다시 누르면 문의만 붙여요.` };
   }
   return { ok: true, createdId: workId };

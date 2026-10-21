@@ -113,7 +113,7 @@ export async function POST(req) {
       goal,
       records,
       question,
-    });
+    }, { signal: req.signal });
 
     return NextResponse.json(engineRes.data, { status: engineRes.httpStatus });
   } catch (err) {

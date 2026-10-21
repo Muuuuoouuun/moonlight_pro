@@ -1,6 +1,6 @@
 export async function forwardPatternAnalysis(
   payload,
-  { env = process.env, fetchImpl = fetch } = {}
+  { env = process.env, fetchImpl = fetch, signal } = {}
 ) {
   const base = env.COM_MOON_ENGINE_URL?.trim().replace(/\/$/, "");
   const secret = env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim();
@@ -39,6 +39,10 @@ export async function forwardPatternAnalysis(
   }
 
   try {
+    const requestSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(45000)])
+      : AbortSignal.timeout(45000);
+    requestSignal.throwIfAborted();
     const response = await fetchImpl(`${base}/api/ai/pattern-analyze`, {
       method: "POST",
       headers: {
@@ -47,10 +51,11 @@ export async function forwardPatternAnalysis(
       },
       body: JSON.stringify(payload),
       cache: "no-store",
-      signal: AbortSignal.timeout(45000),
+      signal: requestSignal,
     });
 
     const result = await response.json().catch(() => null);
+    requestSignal.throwIfAborted();
     if (!result) {
       return {
         httpStatus: 502,

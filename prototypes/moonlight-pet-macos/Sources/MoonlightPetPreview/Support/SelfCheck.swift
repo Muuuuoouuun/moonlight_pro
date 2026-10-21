@@ -1,6 +1,48 @@
 import AppKit
 
 enum SelfCheck {
+    @MainActor private static func checkTaskDeletion() -> Bool {
+        var result: Bool?
+        Task { @MainActor in
+            let suite = "pet-task-deletion-check-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            defaults.set(false, forKey: "petHub.enabled")
+            let service = CaptureCheckService()
+            let hub = HubStore(defaults: defaults, makeAPI: { _ in service })
+            let model = AppModel(defaults: defaults, hub: hub)
+            model.taskDraft = "로컬 삭제 검사"; model.addTask()
+            guard let localID = model.tasks.first?.id else { result = false; return }
+            let remote = HubTask(id: UUID(), title: "Hub delete check", status: "todo", updatedAt: "2026-10-17T00:00:00Z")
+            await service.offerTask(remote)
+            await hub.connect(baseURL: "https://delete.test")
+            model.removeTask(remote.id)
+            while hub.tasks.contains(where: { $0.id == remote.id }) { await Task.yield() }
+            guard model.tasks.map(\.id) == [localID], hub.taskReceipt != nil else { result = false; return }
+            let remoteBatch = (1...2).map { HubTask(id: UUID(), title: "Hub batch check \($0)", status: "todo", updatedAt: "2026-10-17T00:00:00Z") }
+            await service.offerTasks(remoteBatch)
+            await hub.refresh()
+            let remoteDeleted = await model.removeTasks(remoteBatch.map(\.id))
+            guard remoteDeleted == Set(remoteBatch.map(\.id)), hub.tasks.isEmpty, model.tasks.map(\.id) == [localID] else {
+                result = false; return
+            }
+            hub.useLocalStorage()
+            model.taskDraft = "두 번째 선택 검사"; model.addTask()
+            guard let secondID = model.tasks.first?.id else { result = false; return }
+            model.taskDraft = "선택하지 않은 할 일"; model.addTask()
+            let localDeleted = await model.removeTasks([localID, secondID, secondID])
+            guard localDeleted == [localID, secondID], model.tasks.count == 1,
+                  AppModel(defaults: defaults).tasks == model.tasks else { result = false; return }
+            model.removeTask(model.tasks[0].id)
+            result = model.tasks.isEmpty && AppModel(defaults: defaults).tasks.isEmpty
+        }
+        let deadline = Date().addingTimeInterval(5)
+        while result == nil && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+        if result != true { fputs("Task deletion must affect only the current source and persist local removal\n", stderr) }
+        else { print("PASS: AppModel Hub/local single/bulk deletion routing and local persistence") }
+        return result == true
+    }
+
     @MainActor private static func checkOfficeAgendaReplacement() -> Bool {
         let suite = "pet-office-agenda-check-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
@@ -77,7 +119,7 @@ enum SelfCheck {
                 return false
             }
         }
-        guard checkOfficeAgendaReplacement(), checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkPetOpeningHandoff(), checkReadingTone(), checkCompanionWindows() else { return false }
+        guard checkOfficeAgendaReplacement(), checkHubMemoCapture(), checkTaskDeletion(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkPetOpeningHandoff(), checkReadingTone(), checkCompanionWindows() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -531,16 +573,23 @@ enum SelfCheck {
 
 /// In-memory protocol probe used only by --self-check; it never contacts a Hub.
 private actor CaptureCheckService: HubServing {
+    private var offeredTasks: [HubTask] = []
+    func offerTask(_ task: HubTask) { offeredTasks = [task] }
+    func offerTasks(_ tasks: [HubTask]) { offeredTasks = tasks }
     var started = false
     private var continuation: CheckedContinuation<Bool, Never>?
     func release(fail: Bool) { started = false; continuation?.resume(returning: fail); continuation = nil }
     func login(username: String, password: String) async throws {}
     func clearSession() async {}
     func disconnect() async {}
-    func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: [], partial: false) }
+    func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: offeredTasks, partial: false) }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage { HubCalendarPage(events: [], partial: false) }
     func createTask(_ command: HubTaskCommand) async throws -> HubTask { throw HubDataError.invalidResponse }
     func setTask(_ task: HubTask, done: Bool) async throws -> HubTask { throw HubDataError.invalidResponse }
+    func deleteTask(_ id: UUID) async throws {
+        guard offeredTasks.contains(where: { $0.id == id }) else { throw HubDataError.invalidResponse }
+        offeredTasks.removeAll { $0.id == id }
+    }
     func memo(id: UUID) async throws -> HubMemoEntry { throw HubDataError.invalidResponse }
     func saveMemo(_ command: HubMemoCommand) async throws -> HubMemoEntry {
         let fails = await withCheckedContinuation { continuation = $0; started = true }

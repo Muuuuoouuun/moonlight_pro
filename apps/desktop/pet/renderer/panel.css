@@ -193,3 +193,32 @@ html[data-platform="mac"] .memo-editor:focus {
 .event-row:hover { background: transparent; }
 .focus-run .timer { font-size: 82px; }
 .council .composer .meta .mono.over { color: #ffb3ad; }
+
+/* Durable Office records share the Windows glass surface and type tokens. */
+html[data-platform="win"] .office { gap: 8px; }
+html[data-platform="win"] .office > .seg { flex: none; }
+html[data-platform="win"] .office-notice { flex: none; font-size: 11.5px; line-height: 17px; color: var(--ink-2); }
+html[data-platform="win"] .office-synced { display: block; font-size: 10.5px; color: var(--ink-3); }
+html[data-platform="win"] .office-list.has-detail { flex: 0 1 112px; min-height: 64px; }
+html[data-platform="win"] .office-row { width: 100%; display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 9px 6px; border: 0; border-bottom: 1px solid var(--ink-dim); border-radius: 0; color: var(--ink-2); background: transparent; cursor: pointer; }
+html[data-platform="win"] .office-row:hover, html[data-platform="win"] .office-row[aria-pressed="true"] { color: var(--ink); background: color-mix(in srgb, currentColor 8%, transparent); }
+html[data-platform="win"] .office-row-title { font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+html[data-platform="win"] .office-row-meta { font-size: 10.5px; line-height: 15px; }
+html[data-platform="win"] .office-result { flex: 2; min-height: 60px; font-size: 12px; line-height: 1.65; padding-top: 6px; }
+html[data-platform="win"] .office-body { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+html[data-platform="win"] .office-result .turn-user, html[data-platform="win"] .office-result .turn-bot { padding: 8px 0; border-bottom: 1px solid var(--ink-dim); }
+html[data-platform="win"] .office .office-composer { flex: none; }
+html[data-platform="win"] .office .office-composer textarea { min-height: 64px; max-height: 96px; resize: vertical; }
+html[data-platform="win"] .office-footer { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+html[data-platform="win"] .office [hidden] { display: none !important; }
+
+/* Read-only request diagnostics use the existing pet ink/focus theme, without motion. */
+html[data-platform="win"] .office-diagnostic { border-top: 1px solid var(--ink-dim); margin-top: 6px; }
+html[data-platform="win"] .office-diagnostic summary { padding: 6px 0; cursor: pointer; color: var(--ink); font-size: 12px; line-height: 18px; }
+html[data-platform="win"] .office-diagnostic summary:focus-visible { outline: 1px solid var(--ink); outline-offset: -2px; }
+html[data-platform="win"] .office-diagnostic[open] { max-height: 190px; overflow-y: auto; }
+html[data-platform="win"] .office-diagnostic dl { display: grid; grid-template-columns: minmax(84px, auto) minmax(0, 1fr); gap: 4px 8px; margin: 6px 0; }
+html[data-platform="win"] .office-diagnostic dt { color: var(--ink-2); }
+html[data-platform="win"] .office-diagnostic dd { margin: 0; overflow-wrap: anywhere; user-select: text; color: var(--ink); }
+html[data-platform="win"] .office-diagnostic p { margin: 6px 0; font-size: 12px; line-height: 18px; }
+@media (pointer: coarse) { html[data-platform="win"] .office-diagnostic summary { min-height: 44px; } }

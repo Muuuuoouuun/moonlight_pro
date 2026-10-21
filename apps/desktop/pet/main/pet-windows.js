@@ -23,6 +23,7 @@ const { BrowserWindow } = require('electron');
 const C = require('../shared/contract');
 const { isExternalOpenable } = require('../../hub-url');
 const { loadMacGlass, attachMacGlass } = require('./pet-mac-glass');
+const { attachRendererRecovery } = require('./pet-renderer-recovery');
 
 const PET_PAGES = Object.freeze({
   pet: 'pet.html',
@@ -161,10 +162,7 @@ function createWindowFactory(options = {}) {
       if (isExternalOpenable(url)) openExternal(url);
       return { action: 'deny' };
     });
-    contents.on('render-process-gone', (_event, details) => {
-      log(`pet:${surface} renderer gone ${details && details.reason}`);
-      if (details && details.reason !== 'clean-exit' && !win.isDestroyed()) setTimeout(() => !win.isDestroyed() && contents.reload(), 1000);
-    });
+    win.petRendererRecovery = attachRendererRecovery(win, { log });
   }
 
   function load(win, surface, query = {}) {

@@ -17,6 +17,7 @@ import {
 import { extractGoogleCalendarAccountIdentity } from "@/lib/google-calendar-identity";
 import { createHash } from "crypto";
 import { decodeState, encodeState, sanitizeReturnPath } from "./google-oauth.js";
+import { boundCalendarItems, CALENDAR_READ_LIMITS, calendarCoverage, calendarReadIsPartial, readCalendarEventPages } from "./calendar-read-coverage.js";
 
 const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
 const GOOGLE_CALENDAR_SYNC_SOURCE = "google_calendar";
@@ -423,20 +424,24 @@ export async function listGoogleCalendarEvents({
         const params = new URLSearchParams({
           singleEvents: "true",
           orderBy: "startTime",
-          maxResults: String(maxResults),
+          maxResults: String(Math.max(1, Math.min(2500, Math.floor(Number(maxResults) || 20)))),
           timeMin: effectiveTimeMin,
           timeMax: effectiveTimeMax,
         });
         const encodedCalendarId = encodeURIComponent(access.calendarId);
-        const payload = await fetchGoogleCalendarJson(
-          `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodedCalendarId}/events?${params.toString()}`,
-          access.accessToken,
-        );
+        // One eight-second read budget covers the whole traversal, not eight
+        // seconds per page. Access is obtained once; pagination never retries writes.
+        const signal = AbortSignal.timeout(8000);
+        const read = await readCalendarEventPages({ signal, readPage: async (pageToken) => {
+          if (pageToken) params.set("pageToken", pageToken);
+          return fetchGoogleCalendarJson(
+            `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodedCalendarId}/events?${params.toString()}`,
+            access.accessToken, { signal },
+          );
+        } });
 
         return {
-          ok: true,
-          reason: "ok",
-          items: Array.isArray(payload.items) ? payload.items : [],
+          ...read,
           connection: access.connection,
           calendarId: access.calendarId,
         };
@@ -578,7 +583,7 @@ export async function deleteGoogleCalendarEvent({
 }
 
 function combinedCalendarItemSortKey(item) {
-  return item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00` : "");
+  return Date.parse(item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00+09:00` : "")) || 0;
 }
 
 function calendarTransportIdentity(event) {
@@ -610,8 +615,10 @@ export async function readCombinedGoogleCalendarEvents({
   const effectiveTimeMax = timeMax || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const [oauthResult, mergedResult] = await Promise.all([
-    readOauth({ workspaceId, calendarId, timeMin, timeMax, maxResults }),
-    readMergedSources({ timeMin: effectiveTimeMin, timeMax: effectiveTimeMax, maxResults }),
+    readOauth({ workspaceId, calendarId, timeMin: effectiveTimeMin, timeMax: effectiveTimeMax, maxResults })
+      .catch(() => ({ ok: false, reason: "calendar-read-failed", items: [] })),
+    readMergedSources({ timeMin: effectiveTimeMin, timeMax: effectiveTimeMax, maxResults })
+      .catch(() => ({ ok: false, status: "error", items: [], sources: [] })),
   ]);
 
   // Provider event IDs identify recurring instances; never key by mutable title/start.
@@ -620,7 +627,7 @@ export async function readCombinedGoogleCalendarEvents({
     outcomeKey: event.id ? createHash("sha256").update(JSON.stringify([source, event.id])).digest("hex") : null,
   });
   const oauthSource = oauthResult.source === "ical" ? "ical:default" : `oauth:${oauthResult.calendarId || calendarId || "primary"}`;
-  const items = oauthResult.ok ? oauthResult.items.map(event => withOutcomeKey(event, oauthSource)) : [];
+  let items = oauthResult.ok ? oauthResult.items.map(event => withOutcomeKey(event, oauthSource)) : [];
   const connectedEvents = new Map();
   for (const item of items) {
     const identity = calendarTransportIdentity(item);
@@ -641,36 +648,49 @@ export async function readCombinedGoogleCalendarEvents({
     }
   }
   items.sort(
-    (a, b) => combinedCalendarItemSortKey(a).localeCompare(combinedCalendarItemSortKey(b)),
+    (a, b) => combinedCalendarItemSortKey(a) - combinedCalendarItemSortKey(b),
   );
+  const retained = boundCalendarItems(items);
+  items = retained.items;
+  const oauthMissing = !oauthResult.ok && ["missing-connection", "missing-access-token", "missing-config"].includes(oauthResult.reason);
+  const partial = retained.truncated || calendarReadIsPartial(oauthResult)
+    || (!oauthResult.ok && !oauthMissing)
+    || ["partial", "error"].includes(mergedResult.status)
+    || mergedResult.coverage?.complete === false;
+  const coverage = calendarCoverage(items, !partial, {
+    truncated: Boolean(retained.truncated || oauthResult.coverage?.truncated || mergedResult.coverage?.truncated || oauthResult.nextPageToken),
+    retainedBytes: retained.retainedBytes, limits: CALENDAR_READ_LIMITS,
+  });
 
   if (oauthResult.ok) {
     return {
       ok: true,
-      reason: "ok",
+      reason: partial ? "partial-source-failure" : "ok",
       source: oauthResult.source || "oauth",
       readOnly: Boolean(oauthResult.readOnly),
       calendarId: oauthResult.calendarId,
       items,
       sources: mergedResult.sources,
+      coverage,
     };
   }
 
   if (mergedResult.ok) {
     return {
       ok: true,
-      reason: mergedResult.status === "partial" ? "partial-source-failure" : "ok",
+      reason: partial ? "partial-source-failure" : "ok",
       source: "multi",
       readOnly: true,
       calendarId: oauthResult.calendarId,
       items,
       sources: mergedResult.sources,
+      coverage,
     };
   }
 
   return {
     ok: false,
-    reason: oauthResult.reason,
+    reason: mergedResult.status === "error" ? "calendar-read-failed" : oauthResult.reason,
     source: null,
     readOnly: false,
     calendarId: oauthResult.calendarId,

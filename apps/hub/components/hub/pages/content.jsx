@@ -12,7 +12,7 @@ import { ContentStudio } from "./content-studio";
 import { businessTruthCompleteness, buildWeeklyScorecard, normalizeCampaignBusinessTruth } from "@/lib/campaign-business-truth";
 import { ContentIdeaCapture } from "./content-idea-capture";
 import { contentQueueScope, contentQueueTabs } from "@/lib/content-workflow";
-import { useContentLedger } from "../use-content-ledger";
+import { useContentLedger, readContentLedger } from "../use-content-ledger";
 import { campaignStudioHref } from '@/lib/content-studio-routing';
 import "./content-workflow.css";
 
@@ -111,13 +111,13 @@ function ContentTagTrendPanel({ tagTrends, syncState }) {
         </div>
       )}
       {tagTrends.map((entry) => (
-        <div key={entry.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 84px) 1fr 22px 30px', alignItems: 'center', gap: 8 }}>
+        <div key={entry.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 84px) minmax(0, 1fr) minmax(22px, max-content) 30px', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{entry.tag}</span>
           <span style={{ height: 5, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
             <span style={{ display: 'block', height: '100%', width: `${Math.round((entry.count / maxCount) * 100)}%`, background: 'var(--moon-300)', borderRadius: 3 }} />
           </span>
-          <span className="num" style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right' }}>{entry.count}</span>
-          <span style={{ fontSize: entry.trend === 'new' ? 8.5 : 11, fontWeight: entry.trend === 'new' ? 600 : 400, color: entry.trend === 'new' ? 'var(--accent)' : 'var(--fg-faint)', textAlign: 'center' }}>{TAG_TREND_GLYPH[entry.trend]}</span>
+          <span className="num" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{entry.count}</span>
+          <span style={{ fontSize: entry.trend === 'new' ? 10.5 : 11, fontWeight: entry.trend === 'new' ? 600 : 400, color: entry.trend === 'new' ? 'var(--accent)' : 'var(--fg-faint)', textAlign: 'center' }}>{TAG_TREND_GLYPH[entry.trend]}</span>
         </div>
       ))}
     </div>
@@ -182,7 +182,7 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
             {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
           </select>
         </label>
-        <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{selectedBrand?.name || '현재 범위'} · {filteredByBrand.length}건 중 {visibleQueue.length}건</span>
+        <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{selectedBrand?.name || '현재 범위'} · {ledger.syncState === 'loading' ? '콘텐츠 확인 중' : ledger.syncState === 'preview' ? '기록 연결 대기' : `${ledger.syncState === 'live' ? '' : '확인한 '}${filteredByBrand.length}건 중 ${visibleQueue.length}건`}</span>
       </div>
       <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="콘텐츠 단계" />
       {(tab === 'all' || tab === 'idea') && (
@@ -202,7 +202,13 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
           </div>
         </div>
       )}
-      {visibleQueue.length === 0 && <EmptyState icon="queue" title={`${activeLabel}에 표시할 콘텐츠가 없습니다`} description={ledger.syncState === 'error' || ledger.syncState === 'partial' ? '기록 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '떠오른 문장이나 링크를 소재함에 담아보세요.'} />}
+      {visibleQueue.length === 0 && (ledger.syncState === 'loading'
+        ? <Skeleton lines={4} label="콘텐츠 목록 확인 중" />
+        : <EmptyState icon="queue"
+            title={ledger.syncState === 'live' ? `${activeLabel}에 표시할 콘텐츠가 없습니다` : ledger.syncState === 'preview' ? '기록 연결 후 콘텐츠를 표시합니다' : '콘텐츠 목록을 모두 확인하지 못했습니다'}
+            description={ledger.syncState === 'live' ? '떠오른 문장이나 링크를 소재함에 담아보세요.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '기록 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.'}
+            action={['error', 'partial'].includes(ledger.syncState) ? <Button variant="outline" size="sm" onClick={() => { void readContentLedger(); }}>다시 읽기</Button> : undefined}
+          />)}
       {pageItems.length > 0 && (
         <div>
           {pageItems.map((item, index) => <div key={item.id} className="hub-row hub-content-queue-row" role="button" tabIndex={0} aria-current={item.id === focusItemId ? 'true' : undefined} onClick={() => openStudio(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudio(item.id); } }} style={{ display: 'grid', padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 12, cursor: 'pointer', boxShadow: item.id === focusItemId ? 'inset 1px 0 0 var(--line-strong)' : undefined, borderBottom: index < pageItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
@@ -858,7 +864,7 @@ export function Campaigns() {
                   <div style={{ marginTop: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{cScorecard ? `Weekly · ${cScorecard.metric}` : `Goal · ${c.goal || '미설정'}`}</span>
-                      <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>
+                      <span className="mono" style={{ fontSize: 12, color: 'var(--fg)', whiteSpace: 'nowrap' }}>
                         {cScorecard ? (cScorecard.actual ?? '—') : c.current}
                         <span style={{ color: 'var(--fg-faint)' }}> / {cScorecard?.target ?? String(c.goal || '').match(/\d+/)?.[0] ?? '—'}</span>
                       </span>

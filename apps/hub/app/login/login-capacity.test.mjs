@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import ts from 'typescript';
+import { desktopAllowsSessionRestore, beginDesktopLogin, acceptDesktopLogin } from '../../lib/desktop-session-intent.js';
 
 // Evaluate the actual LoginForm handlers with synthetic responses. No browser login,
 // credential setup, automatic retry, Council dispatch, or external requests occur.
@@ -17,7 +18,7 @@ function find(node, predicate) {
   for (const child of kids(node)) { const found = find(child, predicate); if (found) return found; }
   return null;
 }
-function mount(respond, query = '', sessionResponse = () => body({ status: 'anonymous', configured: true })) {
+function mount(respond, query = '', sessionResponse = () => body({ status: 'anonymous', configured: true }), desktopBridge) {
   let cursor = 0;
   const slots = [];
   const calls = [];
@@ -35,9 +36,10 @@ function mount(respond, query = '', sessionResponse = () => body({ status: 'anon
     useCallback: fn => fn, useEffect: fn => { effects.push(fn); },
   };
   const scope = {
+    desktopAllowsSessionRestore, beginDesktopLogin, acceptDesktopLogin,
     React, Button: 'Button', Card: 'Card', Checkbox: 'Checkbox', Input: 'Input', TextAreaField: 'TextAreaField',
     useRouter: () => ({ replace: path => visits.push(path) }), useSearchParams: () => new URLSearchParams(query),
-    window: { location: { origin: 'https://hub.example.invalid' }, addEventListener() {}, removeEventListener() {} },
+    window: { moonlightSession: desktopBridge, location: { origin: 'https://hub.example.invalid' }, addEventListener() {}, removeEventListener() {} },
     fetch: async (url, init) => {
       assert.equal(url, '/api/operator/session');
       if (!init.method) {
@@ -141,4 +143,28 @@ test('normal login shows no cleanup warning for absent or unrelated flags', () =
     const form = mount(() => { throw Error('render must not request login'); }, query);
     assert.doesNotMatch(text(form.render()), /복구 입력을 정리하지 못했습니다/);
   }
+});
+
+
+test('actual login handler clears intent only after accepted authentication and matching desktop commit', async () => {
+  const order = [];
+  const bridge = { beginLogin: async () => { order.push('begin'); return { supported: true, loginAttempt: 'synthetic' }; },
+    acceptLogin: async (attempt) => { assert.equal(attempt, 'synthetic'); order.push('accept'); return { supported: true, signedOut: false }; } };
+  const form = mount(() => { order.push('server'); return body({ status: 'authenticated' }); }, '', undefined, bridge);
+  await form.submit(); assert.deepEqual(order, ['begin', 'server', 'accept']); assert.deepEqual(form.visits, ['/dashboard']);
+});
+
+test('failed authentication never commits desktop login and rejected/stale commit never navigates', async () => {
+  const bridge = { beginLogin: async () => ({ supported: true, loginAttempt: 'synthetic' }), acceptLogin: async () => assert.fail('Not accepted') };
+  const denied = mount(() => body({ status: 'unauthorized' }, 401), '', undefined, bridge);
+  await denied.submit(); assert.deepEqual(denied.visits, []);
+  bridge.acceptLogin = async () => ({ supported: true, signedOut: true, error: 'stale' });
+  const stale = mount(() => body({ status: 'authenticated' }), '', undefined, bridge);
+  await stale.submit(); assert.deepEqual(stale.visits, []);
+});
+
+test('durable logout prevents passive redirect from an old authenticated cookie', async () => {
+  const bridge = { state: async () => ({ supported: true, signedOut: true, automaticLoginBlocked: true }) };
+  const form = mount(() => assert.fail('No password request'), '', () => body({ status: 'authenticated', configured: true }), bridge);
+  await form.runEffects(); assert.deepEqual(form.visits, []); assert.equal(form.sessionCalls.length, 0);
 });

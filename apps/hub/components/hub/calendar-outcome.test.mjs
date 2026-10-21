@@ -3,13 +3,84 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import ts from "typescript";
 
 const { CalendarOutcome } = await import("./calendar-outcome.jsx");
 const homeSource = await readFile(new URL("./pages/home.jsx", import.meta.url), "utf8");
 const futuraCss = await readFile(new URL("./hub-futura.css", import.meta.url), "utf8");
+const outcomeSource = await readFile(new URL("./calendar-outcome.jsx", import.meta.url), "utf8");
 
 const KEY = "a".repeat(64);
 const render = (props) => renderToStaticMarkup(React.createElement(CalendarOutcome, { eventKey: KEY, title: "주간 점검", whenLabel: "09:30", ...props }));
+const LONG_WHEN = "2026-10-19 23:00 – 2026-10-21 1:00";
+const LONG_TITLE = "합성 여러 날 시간 일정";
+
+// Inspect production JSX with a synthetic read state, not a reimplementation of its layout.
+const ast = ts.createSourceFile("calendar-outcome.jsx", outcomeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+const component = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "CalendarOutcome");
+assert.ok(component);
+const componentCode = ts.transpileModule(component.getText(ast).replace("export function", "function"), {
+  compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const nodes = (node, predicate) => Array.isArray(node) ? node.flatMap(child => nodes(child, predicate))
+  : node && typeof node === "object" ? [...(predicate(node) ? [node] : []), ...nodes(node.props?.children, predicate)] : [];
+function headerTree(props = {}, state = {}) {
+  const outcome = { record: { done: false, note: "" }, state: "live", open: false, saving: false, detailsId: "synthetic-detail",
+    editButtonRef: null, editLabel: "특이사항", save() {}, toggleOpen() {}, ...state };
+  const deps = { React: { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }) },
+    useCalendarOutcome: () => outcome, Checkbox: "Checkbox", Button: "Button", LifecycleBadge: "LifecycleBadge",
+    Skeleton: "Skeleton", OutcomeEditor: "OutcomeEditor", RetryButton: "RetryButton", SAVED: "저장됨" };
+  const Outcome = new Function(...Object.keys(deps), `${componentCode}; return CalendarOutcome;`)(...Object.values(deps));
+  return nodes(Outcome({ eventKey: KEY, title: LONG_TITLE, whenLabel: LONG_WHEN, ...props }),
+    node => node.props.children?.some(child => child?.type === "Checkbox")
+      && node.props.children?.some(child => child?.type === "Button"))[0];
+}
+
+test("long date and title stay complete in a wrapping summary, separate from controls", () => {
+  const html = render({ title: LONG_TITLE, whenLabel: LONG_WHEN, expanded: true });
+  assert.ok(html.includes(LONG_TITLE));
+  assert.ok(html.includes(LONG_WHEN));
+  const header = headerTree();
+  assert.deepEqual(header.props.children.map(child => child.type), ["Checkbox", "div", "Button"]);
+  const summary = header.props.children[1];
+  assert.equal(summary.props.style.flex, "1 1 0");
+  assert.equal(summary.props.style.minWidth, 0);
+  assert.equal(summary.props.style.flexWrap, "wrap");
+  const [when, title] = summary.props.children;
+  assert.equal(when.props.style.maxWidth, "100%");
+  assert.equal(when.props.style.boxSizing, "border-box");
+  assert.equal(when.props.style.whiteSpace, "normal");
+  assert.equal(when.props.style.overflowWrap, "anywhere");
+  assert.notEqual(when.props.style.flexShrink, 0);
+  assert.equal(title.props.style.flex, "1 1 10rem", "nonzero basis wraps the title before it collapses");
+  assert.equal(title.props.style.minWidth, 0);
+  assert.equal(header.props.children[2].props.style.flexShrink, 0);
+  // Style/SSR contract only: browser width and wrapping still require a rendered-device check.
+});
+
+test("completed and no-date headers preserve title, badge and original controls", () => {
+  let done, edits = 0;
+  const labels = ["09:30", LONG_WHEN, "2026-10-19 – 2026-10-21 · 종일", ""];
+  for (const whenLabel of labels) {
+    const title = "긴제목".repeat(30);
+    const header = headerTree({ title, whenLabel }, {
+      record: { done: true, note: "" }, save: value => { done = value; }, toggleOpen: () => { edits++; },
+    });
+    const [checkbox, summary, button] = header.props.children;
+    assert.equal(summary.type, "div", "date/title/status share a wrapping middle group");
+    assert.equal(summary.props.children[1].props.children[0], title);
+    assert.equal(summary.props.children[1].props.style.textDecoration, "line-through");
+    assert.equal(summary.props.children[2].type, "LifecycleBadge", "badge wraps inside summary, not beside controls");
+    assert.equal(summary.props.children[2].props.state, "done");
+    assert.equal(checkbox.props.size, 18, "existing bare-checkbox contract is unchanged");
+    assert.equal(checkbox.props.label, `${title} 완료`);
+    assert.equal(button.props["aria-controls"], "synthetic-detail");
+    checkbox.props.onChange(false); button.props.onClick();
+  }
+  assert.equal(done, false);
+  assert.equal(edits, labels.length);
+  assert.doesNotMatch(render({ compact: true }), /calendar-outcome__/);
+});
 
 // 완료·특이사항은 표면마다 모양만 다르고 기록은 하나다 — Home이 다른 키로 그리면
 // Daily Brief에서 완료한 일정이 Home에서 미완료로 보인다.

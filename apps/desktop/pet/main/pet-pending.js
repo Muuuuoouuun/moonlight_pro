@@ -120,6 +120,7 @@ function createPending({ api, store, origin, now = Date.now }) {
 
   // 반환 { task, title, replayed, recovered } — title 은 이번에 확인된 명령의 제목(현재 입력과 다를 수 있다).
   async function addTask({ title, id } = {}) {
+    const currentApi = api;
     const normalized = typeof title === 'string' ? title.trim() : '';
     if (!state.task && !validText(normalized, LIMITS.taskTitle)) throw fail('error', 'invalid-input');
     if (savingTask) throw fail('error', 'busy');
@@ -128,7 +129,7 @@ function createPending({ api, store, origin, now = Date.now }) {
     state.task = command;
     persist();
     try {
-      const task = await api.createTask(command);
+      const task = await currentApi.createTask(command);
       state.task = null;
       persist();
       return { task, title: command.title, replayed: command.title !== normalized, recovered: false };
@@ -137,7 +138,7 @@ function createPending({ api, store, origin, now = Date.now }) {
         // 생성이 이미 반영된 뒤 응답을 잃었을 수 있다. 같은 id 를 목록에서 확인한다(옛 필드를 다시 쓰지 않는다).
         let existing = null;
         try {
-          const page = await api.tasks();
+          const page = await currentApi.tasks();
           existing = page.tasks.find((t) => t.id === command.id) || null;
         } catch {
           existing = null;
@@ -175,6 +176,7 @@ function createPending({ api, store, origin, now = Date.now }) {
   //   4) entryId 가 없거나 캡처 메모 — 캡처 메모. 다시 읽어 펫이 쓴 뒤 Hub 에서 바뀌지 않았는지 확인.
   //   5) 캡처 메모가 없으면 새 캡처 메모(entryId 가 UUID 면 그 id). 캡처 메모가 있는데 다른 entryId 를 revision 없이 주면 invalid-input.
   async function saveMemo(payload) {
+    const currentApi = api;
     const input = isObject(payload) ? payload : {};
     const body = input.body;
     if (savingMemo) throw fail('error', 'busy');
@@ -215,7 +217,7 @@ function createPending({ api, store, origin, now = Date.now }) {
         } else if (role === 'explicit') {
           // 렌더러가 읽어 둔 메모를 고친다 — 다시 읽어 revision 을 확인하고 메타를 보존한다.
           targetId = explicitId;
-          const remote = await api.memo(explicitId);
+          const remote = await currentApi.memo(explicitId);
           if (remote.revision !== input.expectedRevision) throw fail('conflict', 'memo-conflict');
           prior = remote;
           if (remote.body === body) {
@@ -225,7 +227,7 @@ function createPending({ api, store, origin, now = Date.now }) {
         } else if (state.savedMemo) {
           // 저장된 뒤 Hub 에서 바뀌었으면 덮어쓰지 않는다.
           targetId = savedId;
-          const remote = await api.memo(state.savedMemo.id);
+          const remote = await currentApi.memo(state.savedMemo.id);
           if (remote.revision !== state.savedMemo.revision || remote.body !== state.savedMemo.body) throw fail('conflict', 'memo-conflict');
           prior = remote; // 전체 상세에서 제목·태그·맥락을 보존
           if (remote.body === body) return { entry: remote, verified: true, replayed: false, unchanged: true, role };
@@ -240,7 +242,7 @@ function createPending({ api, store, origin, now = Date.now }) {
       }
       targetRole = state.memoRole || 'capture';
       targetId = command.entryId.toLowerCase();
-      const saved = await api.saveMemo(command);
+      const saved = await currentApi.saveMemo(command);
       const savedEntryId = String(saved.id).toLowerCase();
       const recovered = state.memoRecovers;
       state.memo = null;
@@ -302,6 +304,9 @@ function createPending({ api, store, origin, now = Date.now }) {
   }
 
   return {
+    // Future clicks use the new connection; an existing operation keeps its
+    // original client so it cannot continue under a replacement session.
+    setApi(nextApi) { api = nextApi; },
     key, load, summary, addTask, saveMemo, finishMemoCapture, noteMemoRead,
     savedMemoId: () => (state.savedMemo ? state.savedMemo.id : null),
     state: () => JSON.parse(JSON.stringify(state)),

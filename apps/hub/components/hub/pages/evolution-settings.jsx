@@ -1,5 +1,6 @@
 "use client";
 
+import { persistDesktopLogout } from '../../../lib/desktop-session-intent';
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState, SelectField } from "../hub-primitives";
@@ -535,7 +536,12 @@ export function Settings({ onNavigate }) {
     setLogoutBusy(true);
     setLogoutError('');
     let cleanupWarning = '';
+    let desktopWarning = '';
+    let desktopIntent = null;
     try {
+      // Record explicit intent before the server can remove the local cookie.
+      try { desktopIntent = await persistDesktopLogout(window.moonlightSession); }
+      catch (error) { desktopWarning = error.message; }
       // Invalidate pending requests before the cookie changes. Storage failures
       // must not prevent server logout, or claim capture text was removed.
       try { resetQuickTasks(); }
@@ -549,11 +555,16 @@ export function Settings({ onNavigate }) {
         body: JSON.stringify({ action: 'logout' }),
       });
       if (!response.ok) throw new Error('로그아웃하지 못했습니다. 다시 시도해 주세요.');
+      if (desktopWarning) throw new Error(`서버 로그아웃 응답은 받았습니다. ${desktopWarning}`);
       // Carry only a fixed warning flag; no capture text, owner or task ID.
-      window.location.replace(cleanupWarning ? '/login?recoveryCleanup=failed' : '/login');
+      const loginFlags = new URLSearchParams();
+      if (cleanupWarning) loginFlags.set('recoveryCleanup', 'failed');
+      if (desktopIntent) loginFlags.set('companionLogout', 'unconfirmed');
+      window.location.replace(`/login${loginFlags.size ? `?${loginFlags}` : ''}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : '로그아웃하지 못했습니다.';
-      setLogoutError(cleanupWarning ? `${message} ${cleanupWarning}` : message);
+      const partial = desktopWarning && !message.includes(desktopWarning) ? `${message} ${desktopWarning}` : message;
+      setLogoutError(cleanupWarning ? `${partial} ${cleanupWarning}` : partial);
       setLogoutBusy(false);
     }
   };

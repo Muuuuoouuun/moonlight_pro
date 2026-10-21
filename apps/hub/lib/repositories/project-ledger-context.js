@@ -305,6 +305,8 @@ export function mapProjectRows(rows = [], {
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
       genre: typeof row.meta?.genre === "string" ? row.meta.genre : null,
+      // 프로젝트에 직접 연결한 GitHub 저장소 — 열린 PR이 이 프로젝트의 할 일로 들어온다(제품 렌즈 §5.3).
+      githubRepo: typeof row.meta?.github?.repo === "string" ? row.meta.github.repo : null,
       tasks: stats.total,
       done: stats.done,
       changes: updates.count,

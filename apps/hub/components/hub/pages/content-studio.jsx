@@ -50,8 +50,23 @@ export function ContentStudio({ workspace, ledger }) {
   const [newChannel, setNewChannel] = React.useState('instagram'), [notice, setNotice] = React.useState('');
   const templates = useContentTemplates();
   // 예약 — 결과물마다 올릴 시각 하나. 알림 방식이라 올리는 것은 직접 한다(자동 업로드는 보류 결정).
-  const schedules = useContentSchedule('all');
+  const schedules = useContentSchedule({ variantId: draft.variantId, contentId: draft.variantId ? draft.contentId : null });
   const [scheduleAt, setScheduleAt] = React.useState(''), [scheduleError, setScheduleError] = React.useState(''), [scheduleSaving, setScheduleSaving] = React.useState(false);
+  const scheduleContext = React.useRef({ active: false, attempt: null });
+  const scheduleDocument = studio.getDocumentIdentity();
+  React.useEffect(() => {
+    scheduleContext.current.active = true;
+    return () => { scheduleContext.current.active = false; scheduleContext.current.attempt = null; };
+  }, []);
+  React.useEffect(() => {
+    const attempt = scheduleContext.current.attempt;
+    // 문서 세대는 첫 저장의 ID 승격에는 유지되고 새 문서·결과물 전환 때만 바뀐다.
+    if (attempt && attempt.documentIdentity !== scheduleDocument) {
+      scheduleContext.current.attempt = null;
+      setScheduleSaving(false);
+      setScheduleError('');
+    }
+  }, [scheduleDocument]);
   // AI 요청은 작업마다 쓰는 지시문이라 콘텐츠에 저장하지 않는다. 실행한 요청은 AI 작업 기록(run)에 남는다.
   // 같은 지시를 매일 다시 쓰므로 이 브라우저에 마지막 요청을 기억한다(편의용 — 실패해도 동작에는 영향 없음).
   const [aiRequest, setAiRequestState] = React.useState(''), [templateId, setTemplateId] = React.useState('');
@@ -185,24 +200,63 @@ export function ContentStudio({ workspace, ledger }) {
     setScheduleAt(toLocalInput(currentSchedule && currentSchedule.state !== 'missed' ? currentSchedule.scheduledAt : schedulePresets()[1].at));
     setDrawer('schedule');
   };
+  const scheduleReadBlocked = Boolean(draft.variantId) && schedules.status !== 'live';
+  const beginScheduleAttempt = () => {
+    const context = scheduleContext.current;
+    if (!context.active || context.attempt || disabled || studio.getDocumentIdentity() !== scheduleDocument) return null;
+    const attempt = { firstSave: !draft.variantId, documentIdentity: scheduleDocument };
+    context.attempt = attempt;
+    setScheduleSaving(true);
+    return attempt;
+  };
+  const ownsScheduleAttempt = (attempt, target) => {
+    const context = scheduleContext.current, current = studio.getDraft();
+    return context.active && context.attempt === attempt && studio.getDocumentIdentity() === attempt.documentIdentity
+      && (!target || (current.variantId === target.variantId && current.contentId === target.contentId));
+  };
+  const finishScheduleAttempt = (attempt) => {
+    if (scheduleContext.current.attempt !== attempt) return;
+    scheduleContext.current.attempt = null;
+    setScheduleSaving(false);
+  };
   const submitSchedule = async () => {
-    setScheduleError('');
+    if (scheduleReadBlocked || schedules.status === 'preview') return;
     const when = new Date(scheduleAt);
     if (!scheduleAt || Number.isNaN(when.getTime())) { setScheduleError('올릴 시각을 확인해 주세요.'); return; }
-    setScheduleSaving(true);
+    const attempt = beginScheduleAttempt();
+    if (!attempt) return;
+    setScheduleError('');
+    // 이미 저장된 결과물은 클릭 때 확인한 버전을 유지한다. 저장 사이 다른 창의 변경을 덮어쓰지 않는다.
+    let observed = schedules;
     const saved = await studio.save(true);
-    if (!saved?.variantId) { setScheduleSaving(false); setScheduleError('글을 먼저 서버에 저장해야 예약할 수 있습니다. 저장이 확인된 뒤 다시 눌러 주세요.'); return; }
+    if (!ownsScheduleAttempt(attempt, saved)) { finishScheduleAttempt(attempt); return; }
+    if (!saved?.variantId || !saved?.contentId) {
+      finishScheduleAttempt(attempt);
+      setScheduleError('글을 먼저 서버에 저장해야 예약할 수 있습니다. 저장이 확인된 뒤 다시 눌러 주세요.');
+      return;
+    }
+    if (attempt.firstSave) observed = await schedules.readSelected({ variantId: saved.variantId, contentId: saved.contentId });
+    if (!ownsScheduleAttempt(attempt, saved)) { finishScheduleAttempt(attempt); return; }
+    if (observed.status !== 'live') {
+      finishScheduleAttempt(attempt);
+      setScheduleError(observed.message || '예약을 확인하지 못했습니다. 다시 불러온 뒤 시도해 주세요.');
+      return;
+    }
+    const revision = observed.schedules.find((row) => row.variantId === saved.variantId)?.revision || 0;
     const result = await schedules.set({ variantId: saved.variantId, contentId: saved.contentId, scheduledAt: when.toISOString(),
-      title: saved.variantTitle || saved.title || '', channel: saved.channel, expectedRevision: schedules.anyForVariant(saved.variantId)?.revision || 0 });
-    setScheduleSaving(false);
+      title: saved.variantTitle || saved.title || '', channel: saved.channel, expectedRevision: revision }, observed);
+    if (!ownsScheduleAttempt(attempt, saved)) { finishScheduleAttempt(attempt); return; }
+    finishScheduleAttempt(attempt);
     if (['saved', 'duplicate'].includes(result.status)) { setDrawer(null); toast.success(`${formatKstShort(result.schedule.scheduledAt)}에 알려 드릴게요. 올리는 것은 직접 합니다.`); }
     else setScheduleError(result.message || '예약을 저장하지 못했습니다.');
   };
   const cancelSchedule = async () => {
-    if (!currentSchedule) return;
-    setScheduleSaving(true);
+    if (scheduleReadBlocked || !currentSchedule) return;
+    const attempt = beginScheduleAttempt();
+    if (!attempt) return;
     const result = await schedules.cancel(currentSchedule.variantId, currentSchedule.revision);
-    setScheduleSaving(false);
+    if (!ownsScheduleAttempt(attempt, currentSchedule)) { finishScheduleAttempt(attempt); return; }
+    finishScheduleAttempt(attempt);
     if (['saved', 'duplicate'].includes(result.status)) { setDrawer(null); toast.success('예약을 해제했습니다.'); }
     else setScheduleError(result.message || '예약을 해제하지 못했습니다.');
   };
@@ -391,8 +445,8 @@ export function ContentStudio({ workspace, ledger }) {
     </Drawer>}
     {drawer === 'schedule' && <Drawer title="올릴 시각" subtitle="그 시각에 홈의 '지금 올릴 글'에 뜹니다. 올리는 것은 직접 합니다(자동 업로드는 꺼져 있습니다)." presentation="compact" onClose={() => { if (!scheduleSaving) setDrawer(null); }}
       footer={<div className="studio-actions">
-        <Button variant="primary" disabled={scheduleSaving || schedules.status === 'preview'} onClick={submitSchedule}>{scheduleSaving ? '저장 중…' : currentSchedule && currentSchedule.state !== 'missed' ? '시각 바꾸기' : '이 시각으로 예약'}</Button>
-        {currentSchedule && <Button variant="outline" disabled={scheduleSaving} onClick={cancelSchedule}>예약 해제</Button>}
+        <Button variant="primary" disabled={disabled || scheduleSaving || scheduleReadBlocked || schedules.status === 'preview'} onClick={submitSchedule}>{scheduleSaving ? '저장 중…' : currentSchedule && currentSchedule.state !== 'missed' ? '시각 바꾸기' : '이 시각으로 예약'}</Button>
+        {currentSchedule && <Button variant="outline" disabled={disabled || scheduleSaving || scheduleReadBlocked} onClick={cancelSchedule}>예약 해제</Button>}
       </div>}>
       <div className="studio-stack">
         {schedules.status === 'preview' && <TruthBadge state="preview" label="예약 저장소 연결 필요" />}

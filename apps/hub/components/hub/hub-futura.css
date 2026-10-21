@@ -597,13 +597,17 @@
   box-shadow: var(--fx-shadow);
   opacity: 0;
   transition:
-    transform var(--dur-enter) var(--ease-hub),
-    width var(--dur-enter) var(--ease-hub),
-    height var(--dur-enter) var(--ease-hub),
+    transform var(--dur-panel) var(--ease-hub),
     opacity var(--dur-hover) var(--ease-hub);
 }
 
 .hub-app .hub-nav-indicator[data-instant] { transition: opacity var(--dur-hover) var(--ease-hub); }
+
+/* Keep the final selected position; reduced motion skips only the glide. */
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-nav-indicator,
+  .hub-app .hub-nav-indicator[data-instant] { transition: none; }
+}
 
 .hub-app [data-indicator="on"] > .hub-nav-indicator { opacity: 1; }
 
@@ -626,14 +630,16 @@
  * Button/IconButton/Input은 §15 2026-09-15 이후 chrome을 CSS가 소유한다.
  * 여기서 radius와 그림자만 Futura 어휘로 덮는다 — 색은 §5.2 그대로 둔다.
  */
-.hub-app .hub-btn:not(.hub-btn--primary) {
+/* Ghost actions stay flat: the generic :not() selector otherwise outranks
+ * .hub-btn--ghost and makes secondary links compete with the primary action. */
+.hub-app .hub-btn:not(.hub-btn--primary):not(.hub-btn--ghost) {
   border-radius: var(--fx-pill);
   box-shadow: var(--fx-shadow);
 }
 
 .hub-app .hub-btn--primary { border-radius: var(--fx-pill); }
 
-.hub-app .hub-btn:not(.hub-btn--primary):hover { box-shadow: var(--fx-shadow-lift); }
+.hub-app .hub-btn:not(.hub-btn--primary):not(.hub-btn--ghost):hover:not(:disabled) { box-shadow: var(--fx-shadow-lift); }
 
 .hub-app .hub-btn--ghost { box-shadow: none; }
 .hub-app .hub-btn--ghost:hover { box-shadow: none; }

@@ -4,6 +4,8 @@
 // 이 파일이 따로 있는 이유: 이 조각들을 4천 줄짜리 revenue.jsx에서 가져오면 그 화면들의
 // 지연 로딩 청크가 Deals·Leads·Accounts·Cases 전체(와 그 의존성)를 같이 받는다.
 import React from "react";
+import { saveRevenueCreate } from './revenue-create-client';
+import { REVENUE_CREATE_KINDS, CREATE_UNKNOWN_MESSAGE } from '@/lib/sales-os/revenue-create-command';
 import { Badge, Divider } from "../hub-primitives";
 import { revenueLedgerCache } from "../revenue-shared-cache";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
@@ -55,17 +57,25 @@ export function SortHead({ k, sort, onToggle, children, align, className }) {
 // { ok, status, id } — `ok` is true only when the row actually saved; 'preview' means the
 // backend isn't configured (or the DB refused the write) and the optimistic local row stands.
 export async function saveRevenueRecord(kind, op, record) {
-  try {
-    const resp = await fetch(`/api/hub/revenue/${kind}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ op, ...record }),
-    });
-    const data = await resp.json().catch(() => ({}));
-    return { ok: resp.ok && data.status === 'saved', status: data.status || 'error', id: data.id, data };
-  } catch (err) {
-    return { ok: false, status: 'error', error: err instanceof Error ? err.message : String(err) };
-  }
+  const send = async (operation, payload) => {
+    const uncertain = (operation === 'create' || operation === 'confirm-create') && REVENUE_CREATE_KINDS.has(kind);
+    try {
+      const resp = await fetch(`/api/hub/revenue/${kind}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...payload, op: operation }),
+      });
+      const data = await resp.json().catch(() => null);
+      if (uncertain && (!data || (resp.status >= 500 && data.status !== 'failed')
+        || (data.status === 'saved' && (!data.id || (REVENUE_CREATE_KINDS.has(kind) && data.id !== payload.createId))))) {
+        return { ok: false, status: 'unknown', message: CREATE_UNKNOWN_MESSAGE };
+      }
+      return { ok: resp.ok && data?.status === 'saved', status: data?.status || 'error', id: data?.id, message: data?.message, data };
+    } catch (err) {
+      return { ok: false, status: uncertain ? 'unknown' : 'error',
+        ...(uncertain ? { message: CREATE_UNKNOWN_MESSAGE } : {}), error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+  return op === 'create' && REVENUE_CREATE_KINDS.has(kind) ? saveRevenueCreate(kind, record, send) : send(op, record);
 }
 
 export function LeadEnrichmentPanel({ lead }) {

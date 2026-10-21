@@ -9,6 +9,7 @@ import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-w
 import { canonicalOrgScopeForKey } from "../brand-org-scope.js";
 import { buildProjectProgress } from "../pms-ui.js";
 import { readTaskChecklist, projectItemType } from "../task-checklist.js";
+import { readTaskGitHubPr } from "../github-pr-task.js";
 import {
   buildProjectCatalogFetchPlan,
   buildProjectEntities,
@@ -348,6 +349,8 @@ function mapTodos(rows, projectById, brandById) {
       // Deal-linked sub-task (meta.deal_id, written by create_task's dealId) — the Deals
       // drawer checklist filters on this; null for ordinary project/standalone tasks.
       dealId: row.meta?.deal_id || null,
+      // GitHub PR에서 들어온 할 일(meta.github_pr, Engine github-project-tasks.ts) — 없으면 null.
+      githubPr: readTaskGitHubPr(row),
       // 오늘 3개 — 고른 날짜의 이력(meta.focus_dates, KST 'YYYY-MM-DD'). task-today.js가 오늘
       // 레인을, attention-ledger가 `focus` 버킷을, 주간 리포트가 완료율을 이걸로 센다(§6.2).
       focusDates: Array.isArray(row.meta?.focus_dates)

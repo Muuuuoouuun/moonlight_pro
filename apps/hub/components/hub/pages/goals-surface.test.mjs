@@ -14,7 +14,7 @@ const tokensSource = readFileSync(new URL('../hub-tokens.css', import.meta.url),
 test('OKR and KPI are separate views, not one mixed list', () => {
   assert.match(goalsSource, /function GlanceView/);
   assert.match(goalsSource, /function KpiView/);
-  assert.match(goalsSource, /\{ key: 'okr', label: '한눈에' \}/);
+  assert.match(goalsSource, /\{ key: 'okr', label: '기록·주의' \}/);
   assert.match(goalsSource, /\{ key: 'kpi', label: 'KPI' \}/);
   assert.match(goalsSource, /\{ key: 'check', label: '체크인' \}/);
   assert.match(goalsSource, /\{ key: 'weekly', label: '주간 실측' \}/);
@@ -23,7 +23,7 @@ test('OKR and KPI are separate views, not one mixed list', () => {
   assert.doesNotMatch(cssSource, /goal-matrix|goal-bento|goal-signal/);
 });
 
-test('glance view (A안): KPI strip on top, objective blocks beside this week\'s attention and memo', () => {
+test('record-first view retains KPI, objectives, attention and the weekly memo', () => {
   assert.match(goalsSource, /function GoalObjectiveCard/);
   assert.match(goalsSource, /function objectiveReading/);
   assert.match(goalsSource, /splitObjectiveMetrics\(model\.metrics, objective\.id\)/);

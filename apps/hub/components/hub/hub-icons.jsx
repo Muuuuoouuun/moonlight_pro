@@ -53,6 +53,7 @@ const I = {
   check:     (<><path d="M5 12l5 5L20 7"/></>),
   x:         (<><path d="M6 6l12 12M6 18L18 6"/></>),
   arrowRight:(<><path d="M5 12h14M13 6l6 6-6 6"/></>),
+  arrowUpRight:(<><path d="M7 17 17 7M7 7h10v10"/></>),
   arrowUp:   (<><path d="M12 19V5M6 11l6-6 6 6"/></>),
   arrowDown: (<><path d="M12 5v14M6 13l6 6 6-6"/></>),
   chevronR:  (<><path d="M9 6l6 6-6 6"/></>),
@@ -89,6 +90,9 @@ const I = {
   flag:      (<><path d="M4 3v18M4 4h12l-2 4 2 4H4"/></>),
   command:   (<><path d="M6 6h3a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2H6a2 2 0 1 1 0-4zM18 6h-3a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h3a2 2 0 1 0 0-4zM6 18h3a2 2 0 0 0 2-2v0a2 2 0 0 0-2-2H6a2 2 0 1 0 0 4zM18 18h-3a2 2 0 0 1-2-2v0a2 2 0 0 1 2-2h3a2 2 0 1 1 0 4z"/></>),
   lock:      (<><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 1 1 8 0v4"/></>),
+  key:       (<><circle cx="8" cy="8" r="4"/><path d="m11 11 9 9m-5-5 3-3m-1 5 3-3"/></>),
+  alert:     (<><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5m0 3h.01"/></>),
+  shield:    (<><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="M12 8v5m0 3h.01"/></>),
   copy:      (<><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></>),
   globe:     (<><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></>),
   sparkle:   (<><path d="M12 3l1.5 5 5 1.5-5 1.5L12 16l-1.5-5-5-1.5 5-1.5zM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7z"/></>),
@@ -101,12 +105,16 @@ const I = {
   refresh:   (<><path d="M21 12a9 9 0 0 1-15.55 6.36L3 16M3 21v-5h5M3 12a9 9 0 0 1 15.55-6.36L21 8M21 3v5h-5"/></>),
 };
 
-export function Iconed({ name, size = 16, stroke = 1.5, style }) {
-  const p = I[name];
+// Existing task surfaces use both nouns for the same checklist concept.
+const ICON_ALIASES = { tasks: 'checklist' };
+
+export function Iconed({ name, size = 16, stroke = 1.5, style, className, 'aria-hidden': ariaHidden }) {
+  const p = I[ICON_ALIASES[name] || name];
   if (!p) return null;
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
          strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
+         className={className} aria-hidden={ariaHidden}
          style={{ flexShrink: 0, ...style }}>
       {p}
     </svg>

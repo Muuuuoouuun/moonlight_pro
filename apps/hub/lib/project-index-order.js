@@ -84,7 +84,7 @@ export function sortProjectIndex(projects, preferences) {
   }).map(({ project }) => project);
 }
 
-// 할 일이 모두 끝나 진척 100%로 측정된 프로젝트는 "완료됨" 묶음으로 목록 맨 아래에 둔다.
+// 할 일이 모두 끝나 진척 100%로 측정된 프로젝트는 "결과 확인 대기" 묶음으로 목록 맨 아래에 둔다.
 // 상태(completed)는 결과 확인 뒤 운영자가 바꾼다 — 여기서는 표시 순서만 내린다.
 // null = 판단 불가(미측정·일부 데이터). 축하는 false → true 전환에만 붙인다.
 export function projectIndexDoneState(project) {
@@ -97,7 +97,7 @@ export function projectIndexDoneState(project) {
   return progress.done === progress.total;
 }
 
-// 정렬 결과를 보존한 채 완료됨 묶음만 뒤로 보낸다(안정 분할).
+// 정렬 결과를 보존한 채 결과 확인 대기 묶음만 뒤로 보낸다(안정 분할).
 export function sinkDoneProjects(rows) {
   const list = Array.isArray(rows) ? rows : [];
   const open = [];

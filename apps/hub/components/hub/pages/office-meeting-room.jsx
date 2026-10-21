@@ -16,6 +16,8 @@ import { OfficeSkillRequestDrawer, OfficeSkillRequestHistory } from '../office-s
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
 import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
+import { OfficeMeetingDiagnostic } from '../office-meeting-diagnostic.jsx';
+import { beginOfficeMeetingRead, finishOfficeMeetingRead, guardOfficeMeetingRead } from '../office-meeting-diagnostic.js';
 import { officeMentorSessions } from '../office-mentor-session';
 import { requestOfficeMentor } from '../office-mentor-client';
 import { GuruRecommendation, guruRecommendationCard } from '../guru-recommendation';
@@ -208,6 +210,7 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
   const [selectedTurnId, setSelectedTurnId] = React.useState(null);
   const [mobileView, setMobileView] = React.useState('meet');
   const [meetingRead, setMeetingRead] = React.useState({ status: 'idle' });
+  const [meetingDiagnostic, setMeetingDiagnostic] = React.useState(null);
   const [archive, setArchive] = React.useState({ status: 'idle', meetings: [], nextCursor: null });
   const [settingsBusy, setSettingsBusy] = React.useState(false);
   const [settingsNotice, setSettingsNotice] = React.useState('');
@@ -265,11 +268,16 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
     const readId = ++meetingReadRef.current;
     applyReadRef.current += 1;
     setTaskApply(null);
+    setMeetingDiagnostic(previous => previous?.target.scope === scope && previous.target.meetingId === meetingParam ? previous : null);
     if (!meetingParam || !officeMeetingScope(scope)) { setMeetingRead({ status: 'idle' }); return; }
     if (store.get(scope).meetingId === meetingParam && store.get(scope).meeting) { setMeetingRead({ status: 'ready' }); return; }
+    const target = { origin: window.location.origin, scope, meetingId: meetingParam };
+    setMeetingDiagnostic(previous => beginOfficeMeetingRead(previous, target, readId, new Date().toISOString()));
     setMeetingRead({ status: 'loading' });
-    readOfficeMeeting(meetingParam, scope).then(result => {
-      if (readId !== meetingReadRef.current) return;
+    readOfficeMeeting(meetingParam, scope).then(response => {
+      if (!mountedRef.current || activeScopeRef.current !== scope || activeMeetingParamRef.current !== meetingParam || readId !== meetingReadRef.current) return;
+      const result = guardOfficeMeetingRead(store.get(scope), response);
+      setMeetingDiagnostic(previous => finishOfficeMeetingRead(previous, target, readId, result, new Date().toISOString()));
       setMeetingRead(result);
       if (result.status === 'ready') store.restoreMeeting(scope, result);
     });
@@ -299,9 +307,14 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
     const id = meetingParam || session.meetingId;
     if (!id || busy) return;
     const readId = ++meetingReadRef.current;
+    const target = { origin: window.location.origin, scope, meetingId: id };
+    const knownTurn = store.get(scope).meetingId === id ? store.get(scope).unresolvedTurns[0] : null;
+    setMeetingDiagnostic(previous => beginOfficeMeetingRead(previous, target, readId, new Date().toISOString(), knownTurn));
     setMeetingRead({ status: 'loading' });
-    const result = await readOfficeMeeting(id, scope);
-    if (readId !== meetingReadRef.current) return;
+    const response = await readOfficeMeeting(id, scope);
+    if (!mountedRef.current || activeScopeRef.current !== scope || activeMeetingParamRef.current !== meetingParam || readId !== meetingReadRef.current) return;
+    const result = guardOfficeMeetingRead(store.get(scope), response);
+    setMeetingDiagnostic(previous => finishOfficeMeetingRead(previous, target, readId, result, new Date().toISOString()));
     setMeetingRead(result);
     if (result.status === 'ready') store.restoreMeeting(scope, result, { keepSettings: store.get(scope).meetingId === result.meeting.meetingId });
   }
@@ -562,7 +575,9 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
             placeholder={preset?.hint || '막힌 일이나 판단할 내용을 적어 주세요. 텍스트를 붙여 넣어도 됩니다.'} />
           {inputNotice ? <p role="status" className={styles.note}>{inputNotice}</p> : null}
           {session.error ? <div role={session.error.status === 'error' ? 'alert' : 'status'} className={styles.notice + (session.error.status === 'error' ? ' ' + styles.error : '')}><TruthBadge state={session.error.status === 'preview' ? 'preview' : 'error'} /><p>{session.error.error}</p></div> : null}
-          {needsMeetingCheck ? <Button variant="outline" size="sm" disabled={busy} onClick={reloadMeeting}>입력 유지하고 저장된 회의 확인</Button> : null}
+          {needsMeetingCheck ? <OfficeMeetingDiagnostic state={meetingDiagnostic} scope={scope} meetingId={meetingParam || session.meetingId}
+            knownTurn={session.meetingId === (meetingParam || session.meetingId) ? session.unresolvedTurns[0] : null} /> : null}
+          {needsMeetingCheck ? <Button variant="outline" size="sm" disabled={busy || !(meetingParam || session.meetingId)} onClick={reloadMeeting}>입력 유지하고 저장된 회의 확인</Button> : null}
           {closed ? <p className={styles.note}>보관된 회의입니다. 회의·기록에서 다시 열 수 있습니다.</p> : null}
           <div className={styles.actions}><span className={styles.note}>{busy ? '응답을 기다리는 중입니다. 다른 화면으로 이동해도 저장된 회의에서 이어집니다.' : scope === 'all' ? '회의를 저장할 개인 또는 회사 범위를 골라 주세요.' : '⌘/Ctrl + Enter · 보낸 요청과 답변은 회의에 저장됩니다.'}</span>
             <Button type="submit" variant="primary" disabled={busy || needsMeetingCheck || closed || !officeMeetingScope(scope) || !session.draft.trim() || tooLong || (followUpMode === 'council' && !reviewers.length)}>{busy ? '확인 중…' : session.turns.length ? '보내기' : mode === 'council' ? '회의 시작' : '보내기'}</Button></div>

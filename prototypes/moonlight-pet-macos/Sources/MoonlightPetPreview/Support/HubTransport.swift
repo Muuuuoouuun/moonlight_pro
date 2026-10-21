@@ -83,16 +83,65 @@ struct HubSavedSession: Codable, Sendable, Equatable {
     }
 }
 
+struct HubDesktopLogoutIntent: Codable, Sendable {
+    let id: String?
+    let installationId: String
+    let accountScope: String
+    let persistence: String
+    let localSession: String
+    let companion: String
+    let ownedKeychain: String
+    let remoteSession: String
+}
+
+struct HubDesktopCapabilities: Codable, Sendable {
+    let logoutIntent: Bool
+}
+
+enum HubDesktopPeer: Equatable, Sendable {
+    case verified, unsupported, unavailable
+
+    static func classify(_ snapshot: HubDesktopSession?, origin: String) -> Self {
+        guard let snapshot, snapshot.origin == origin else { return .unavailable }
+        return snapshot.protocolVersion == 2 && snapshot.capabilities?.logoutIntent == true ? .verified : .unsupported
+    }
+}
+
 struct HubDesktopSession: Codable, Sendable {
     let origin: String
     let session: HubSavedSession?
     var signedOut: Bool? = nil
+    var automaticLoginBlocked: Bool? = nil
+    var logoutIntent: HubDesktopLogoutIntent? = nil
+    var loginAttempt: String? = nil
+    var error: String? = nil
+    var sessionEpoch: String? = nil
+    var protocolVersion: Int? = nil
+    var capabilities: HubDesktopCapabilities? = nil
 }
 
 protocol HubDesktopSessionSharing: Sendable {
     // nil is an unavailable shell; session:nil is an anonymous shell.
     func read(origin: String) async -> HubDesktopSession?
     func write(_ session: HubSavedSession?, origin: String) async
+    func write(_ session: HubSavedSession?, origin: String, epoch: String?) async
+    func publishSession(_ session: HubSavedSession, origin: String, epoch: String?) async -> HubDesktopSession?
+    var supportsLogoutIntent: Bool { get }
+    func beginLogin(origin: String) async -> HubDesktopSession?
+    func acceptLogin(_ session: HubSavedSession, attempt: String, origin: String) async -> HubDesktopSession?
+    func recordLogout(origin: String) async -> HubDesktopSession?
+}
+
+extension HubDesktopSessionSharing {
+    var supportsLogoutIntent: Bool { false }
+    func write(_ session: HubSavedSession?, origin: String, epoch: String?) async { await write(session, origin: origin) }
+    func publishSession(_ session: HubSavedSession, origin: String, epoch: String?) async -> HubDesktopSession? { nil }
+    func beginLogin(origin: String) async -> HubDesktopSession? { nil }
+    func acceptLogin(_ session: HubSavedSession, attempt: String, origin: String) async -> HubDesktopSession? { nil }
+    func recordLogout(origin: String) async -> HubDesktopSession? {
+        await write(nil, origin: origin)
+        return await read(origin: origin)
+    }
 }
 
 struct HubResponse: Sendable {
@@ -115,8 +164,18 @@ struct HubSessionStatus: Sendable {
 
 private struct HubAuthenticationRejection: Error {}
 
+/// An opaque in-process fence, never a credential or a wire header.
+struct HubOfficeOperation: Sendable, Equatable {
+    let transportID: UUID
+    let generation: Int
+    let authenticationRevision: Int
+}
+
 protocol HubTransporting: Sendable {
     func request(path: String, method: String, body: Data?) async throws -> HubResponse
+    func beginOfficeOperation() async throws -> HubOfficeOperation?
+    func officeRequest(path: String, method: String, body: Data?, operation: HubOfficeOperation?, deadline: Date) async throws -> HubResponse
+    func validateOfficeOperation(_ operation: HubOfficeOperation?) async throws
     func sessionStatus() async throws -> HubSessionStatus
     func login(username: String, password: String) async throws
     func logout() async throws
@@ -124,10 +183,26 @@ protocol HubTransporting: Sendable {
     func disconnect() async
 }
 
+// Existing injected transports remain source compatible. Production HubTransport
+// implements the stronger authentication fence and receive-time byte limit.
+extension HubTransporting {
+    func beginOfficeOperation() async throws -> HubOfficeOperation? { try Task.checkCancellation(); return nil }
+    func validateOfficeOperation(_ operation: HubOfficeOperation?) async throws { try Task.checkCancellation() }
+    func officeRequest(path: String, method: String, body: Data?, operation: HubOfficeOperation?, deadline: Date) async throws -> HubResponse {
+        try Task.checkCancellation()
+        guard Date() < deadline else { throw HubTransportError.timeout }
+        let response = try await request(path: path, method: method, body: body)
+        try Task.checkCancellation()
+        guard Date() < deadline else { throw HubTransportError.timeout }
+        guard response.data.count <= 262_144 else { throw HubTransportError.invalidResponse }
+        return response
+    }
+}
+
 enum HubTransportError: Error, Equatable, LocalizedError {
     case unauthorized, unconfigured, offline, timeout, rejectedURL, redirectRejected, invalidResponse, conflict
     case server(statusCode: Int)
-    case credentialStorage
+    case credentialStorage, desktopSessionUnavailable
     var errorDescription: String? {
         switch self {
         case .unauthorized: return "Hub 로그인이 필요합니다. 계정과 비밀번호를 확인해 주세요."
@@ -138,6 +213,7 @@ enum HubTransportError: Error, Equatable, LocalizedError {
         case .redirectRejected: return "Hub가 다른 주소로 이동을 요청했습니다. 설정에서 최종 Hub 주소를 확인해 주세요."
         case .invalidResponse: return "Hub 응답을 확인하지 못했습니다. 저장 완료로 처리하지 않았습니다."
         case .conflict: return "Hub에서 내용이 바뀌었습니다. 현재 입력을 보관했으니 최신 내용을 확인해 주세요."
+        case .desktopSessionUnavailable: return "앱의 로그아웃 상태를 확인하지 못했어요. 앱 연결을 확인한 뒤 다시 시도해 주세요."
         case .credentialStorage: return "macOS 키체인의 자동 로그인 정보를 확인하지 못했어요. 키체인 접근을 허용한 뒤 다시 로그인해 주세요."
         case .server(let statusCode): return "Hub 요청을 처리하지 못했습니다. (응답 \(statusCode))"
         }
@@ -147,6 +223,7 @@ enum HubTransportError: Error, Equatable, LocalizedError {
 /// A fixed-origin client. Authentication belongs to the Hub operator session;
 /// accepted credentials belong only to Keychain; cookies stay in private memory.
 actor HubTransport: HubTransporting {
+    private let transportID = UUID()
     private let baseURL: URL
     private let origin: String
     private let session: URLSession
@@ -159,6 +236,8 @@ actor HubTransport: HubTransporting {
     private var hasDesktopSession = false
     private var automaticLogin: (id: UUID, task: Task<Void, Error>)?
     private var automaticLoginAllowed = true
+    private var standaloneExplicitLogin = false
+    private var desktopEpoch: String?
     private var authenticationRevision = 0
     private var sessionGeneration = 0
 
@@ -243,27 +322,78 @@ actor HubTransport: HubTransporting {
         }
     }
 
+    func beginOfficeOperation() async throws -> HubOfficeOperation? {
+        // Establish any permitted automatic login before pinning this operation.
+        // A change after this point aborts the chain; no page or write is replayed.
+        guard try await sessionStatus().isAuthenticated else { throw HubTransportError.unauthorized }
+        try Task.checkCancellation()
+        return HubOfficeOperation(transportID: transportID, generation: sessionGeneration, authenticationRevision: authenticationRevision)
+    }
+
+    func validateOfficeOperation(_ operation: HubOfficeOperation?) async throws {
+        try await syncDesktopSession()
+        try checkOfficeOperation(operation)
+    }
+
+    private func checkOfficeOperation(_ operation: HubOfficeOperation?) throws {
+        try Task.checkCancellation()
+        guard let operation, operation.transportID == transportID, operation.generation == sessionGeneration,
+              operation.authenticationRevision == authenticationRevision else { throw CancellationError() }
+    }
+
+    func officeRequest(path: String, method: String, body: Data?, operation: HubOfficeOperation?, deadline: Date) async throws -> HubResponse {
+        let url = try requestURL(path)
+        let parts = url.path.split(separator: "/")
+        let collection = url.path == "/api/hub/office/meetings" && method == "POST"
+        let item = parts.count >= 5 && parts[0...3].joined(separator: "/") == "api/hub/office/meetings" && UUID(uuidString: String(parts[4])) != nil
+        guard collection || (item && ((parts.count == 5 && method == "GET") || (parts.count == 6 && parts[5] == "turns" && method == "POST"))) else { throw HubTransportError.rejectedURL }
+        try await validateOfficeOperation(operation)
+        guard Date() < deadline else { throw HubTransportError.timeout }
+        let response = try await requestOnce(path: path, method: method, body: body, officeOperation: operation, deadline: deadline)
+        try await validateOfficeOperation(operation)
+        guard Date() < deadline else { throw HubTransportError.timeout }
+        return response
+    }
+
     private func requestOnce(path: String, method: String = "GET", body: Data? = nil,
-                             classifyAuthentication: Bool = false) async throws -> HubResponse {
+                             classifyAuthentication: Bool = false, publishSession: Bool = true,
+                             officeOperation: HubOfficeOperation? = nil, deadline: Date? = nil) async throws -> HubResponse {
         let generation = sessionGeneration
+        let requestEpoch = desktopEpoch
         let url = try requestURL(path)
         let method = method.uppercased()
         guard ["GET", "POST", "PATCH", "DELETE"].contains(method) else { throw HubTransportError.rejectedURL }
-        if !desktopSessionAvailable, !(path.hasPrefix("/api/operator/session") && method != "GET"), let shared = await sharedSession(),
-           shared.origin == baseURL {
-            for cookie in cookies.cookies ?? [] where cookie.name == "com_moon_operator_session" {
-                cookies.deleteCookie(cookie)
-            }
-            guard let value = shared.cookie else { throw HubTransportError.unauthorized }
-            let header = "com_moon_operator_session=\(value); Path=/; HttpOnly" + (baseURL.scheme == "https" ? "; Secure" : "")
-            cookies.setCookies(HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": header], for: baseURL),
-                               for: baseURL, mainDocumentURL: baseURL)
+        if desktopSession?.supportsLogoutIntent == true, !desktopSessionAvailable,
+           !standaloneExplicitLogin, !hasDesktopSession, !(path == "/api/operator/session" && method == "POST") {
+            throw HubTransportError.desktopSessionUnavailable
         }
+        if !desktopSessionAvailable, desktopSession?.supportsLogoutIntent != true,
+           !(path.hasPrefix("/api/operator/session") && method != "GET") {
+            let shared = await sharedSession()
+            // A bridge read may finish after disconnect/sign-out. Reject it
+            // before importing its cookie or sending the original request.
+            guard generation == sessionGeneration else { throw CancellationError() }
+            try Task.checkCancellation()
+            if let shared, shared.origin == baseURL {
+                for cookie in cookies.cookies ?? [] where cookie.name == "com_moon_operator_session" {
+                    cookies.deleteCookie(cookie)
+                }
+                guard let value = shared.cookie else { throw HubTransportError.unauthorized }
+                let header = "com_moon_operator_session=\(value); Path=/; HttpOnly" + (baseURL.scheme == "https" ? "; Secure" : "")
+                cookies.setCookies(HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": header], for: baseURL),
+                                   for: baseURL, mainDocumentURL: baseURL)
+            }
+        }
+        if officeOperation != nil { try checkOfficeOperation(officeOperation) }
         let selectedSession = sessionForRequest(path: path, method: method)
         var request = URLRequest(url: url, timeoutInterval: selectedSession.configuration.timeoutIntervalForRequest)
         request.httpMethod = method
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if officeOperation != nil {
+            request.setValue("1", forHTTPHeaderField: "x-office-read-version")
+            if let deadline { request.timeoutInterval = min(request.timeoutInterval, max(0.001, deadline.timeIntervalSinceNow)) }
+        }
         if method != "GET" {
             request.setValue(origin, forHTTPHeaderField: "Origin")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -277,7 +407,11 @@ actor HubTransport: HubTransporting {
 
         let data: Data
         let response: URLResponse
-        do { (data, response) = try await selectedSession.data(for: request) }
+        do {
+            if officeOperation != nil, let deadline {
+                (data, response) = try await Self.officeData(for: request, session: selectedSession, deadline: deadline)
+            } else { (data, response) = try await selectedSession.data(for: request) }
+        }
         catch is CancellationError { throw CancellationError() }
         catch let error as URLError {
             switch error.code {
@@ -288,6 +422,8 @@ actor HubTransport: HubTransporting {
             }
         }
         guard generation == sessionGeneration else { throw CancellationError() }
+        try Task.checkCancellation()
+        if officeOperation != nil { try checkOfficeOperation(officeOperation) }
         guard let http = response as? HTTPURLResponse, let responseURL = http.url,
               Self.sameOrigin(responseURL, baseURL) else { throw HubTransportError.invalidResponse }
         guard !(300..<400).contains(http.statusCode) else { throw HubTransportError.redirectRejected }
@@ -304,7 +440,8 @@ actor HubTransport: HubTransporting {
             throw HubTransportError.unauthorized
         }
         if http.statusCode == 409 { throw HubTransportError.conflict }
-        guard (200..<300).contains(http.statusCode), status != "error", source != "error" else {
+        let officeReadError = officeOperation != nil && method == "GET" && http.statusCode == 200
+        guard (200..<300).contains(http.statusCode), officeReadError || (status != "error" && source != "error") else {
             throw HubTransportError.server(statusCode: http.statusCode)
         }
         guard envelope != nil || http.statusCode == 204 else { throw HubTransportError.invalidResponse }
@@ -315,10 +452,35 @@ actor HubTransport: HubTransporting {
         }
         let received = HTTPCookie.cookies(withResponseHeaderFields: headers, for: url)
         cookies.setCookies(received, for: url, mainDocumentURL: baseURL)
-        if received.contains(where: { $0.name == "com_moon_operator_session" }) {
-            await desktopSession?.write(savedSession(), origin: origin)
+        if publishSession, desktopSession?.supportsLogoutIntent != true || (desktopSessionAvailable && !standaloneExplicitLogin),
+           received.contains(where: { $0.name == "com_moon_operator_session" }), let saved = savedSession() {
+            // Empty/expired response cookies are not an explicit logout action.
+            await desktopSession?.write(saved, origin: origin, epoch: requestEpoch)
         }
+        guard generation == sessionGeneration else { throw CancellationError() }
+        try Task.checkCancellation()
+        if officeOperation != nil { try checkOfficeOperation(officeOperation) }
         return HubResponse(data: data, status: status, source: source)
+    }
+
+    private static func officeData(for request: URLRequest, session: URLSession, deadline: Date) async throws -> (Data, URLResponse) {
+        // AsyncBytes lets us stop at the envelope limit even for a chunked body
+        // or a dishonest Content-Length. Cancellation closes this request only.
+        let (stream, response) = try await session.bytes(for: request)
+        defer { stream.task.cancel() }
+        guard response.expectedContentLength <= 262_144 else { throw HubTransportError.invalidResponse }
+        var data = Data()
+        for try await byte in stream {
+            guard data.count < 262_144 else { throw HubTransportError.invalidResponse }
+            if data.count & 4095 == 0 {
+                try Task.checkCancellation()
+                guard Date() < deadline else { throw HubTransportError.timeout }
+            }
+            data.append(byte)
+        }
+        try Task.checkCancellation()
+        guard Date() < deadline else { throw HubTransportError.timeout }
+        return (data, response)
     }
 
     func sessionStatus() async throws -> HubSessionStatus {
@@ -338,33 +500,98 @@ actor HubTransport: HubTransporting {
     func login(username: String, password: String) async throws {
         let credentials = HubCredentials(username: username, password: password)
         guard !username.isEmpty, !password.isEmpty else { throw HubTransportError.unauthorized }
+        // A new explicit login supersedes older logout/automatic-auth work.
+        invalidateAuthentication()
         let generation = sessionGeneration
-        try await authenticate(credentials, generation: generation)
+        let modern = desktopSession?.supportsLogoutIntent == true
+        let peer = modern ? await desktopSession?.read(origin: origin) : nil
+        guard generation == sessionGeneration else { throw CancellationError() }
+        let paired = modern && HubDesktopPeer.classify(peer, origin: origin) == .verified
+        let explicitAttempt = paired ? await desktopSession?.beginLogin(origin: origin) : nil
+        guard generation == sessionGeneration else { throw CancellationError() }
+        if paired {
+            guard HubDesktopPeer.classify(explicitAttempt, origin: origin) == .verified,
+                  explicitAttempt?.loginAttempt != nil, explicitAttempt?.error == nil else {
+                throw HubTransportError.desktopSessionUnavailable
+            }
+        }
+        try await authenticate(credentials, generation: generation, explicit: true)
         guard generation == sessionGeneration else { throw CancellationError() }
         try Task.checkCancellation()
+        if let attempt = explicitAttempt?.loginAttempt, let saved = savedSession() {
+            let accepted = await desktopSession?.acceptLogin(saved, attempt: attempt, origin: origin)
+            guard generation == sessionGeneration else { throw CancellationError() }
+            guard HubDesktopPeer.classify(accepted, origin: origin) == .verified, accepted?.session == saved,
+                  accepted?.signedOut == false, accepted?.automaticLoginBlocked != true, accepted?.error == nil else {
+                invalidateAuthentication(); clearCookies()
+                throw HubTransportError.desktopSessionUnavailable
+            }
+            desktopEpoch = accepted?.sessionEpoch
+            hasDesktopSession = true
+        } else if desktopSession?.supportsLogoutIntent == true {
+            // An unavailable or unsupported app permits a new manual companion login.
+            // This accepts only the local session and never clears the app intent.
+            standaloneExplicitLogin = true
+            hasDesktopSession = false
+            desktopEpoch = nil
+        } else {
+            await desktopSession?.write(savedSession(), origin: origin)
+        }
+        guard generation == sessionGeneration else { throw CancellationError() }
         // Save only credentials that the server actually accepted.
         try credentialStore.save(credentials, origin: origin)
         automaticLoginAllowed = true
     }
 
-    private func authenticate(_ credentials: HubCredentials, generation: Int) async throws {
+    private func authenticate(_ credentials: HubCredentials, generation: Int, explicit: Bool = false) async throws {
         try Task.checkCancellation()
         guard generation == sessionGeneration else { throw CancellationError() }
         clearCookies()
+        let requestEpoch = desktopEpoch
         let body = try JSONSerialization.data(withJSONObject: ["username": credentials.username,
             "password": credentials.password, "rememberMe": true])
-        let response = try await requestOnce(path: "/api/operator/session", method: "POST", body: body)
+        let response = try await requestOnce(path: "/api/operator/session", method: "POST", body: body, publishSession: false)
         try Task.checkCancellation()
         guard generation == sessionGeneration else { throw CancellationError() }
         guard response.status == "authenticated", !response.isPreview else { throw HubTransportError.invalidResponse }
         guard cookies.cookies(for: baseURL)?.contains(where: { $0.name == "com_moon_operator_session" && !$0.value.isEmpty }) == true else {
             throw HubTransportError.invalidResponse
         }
+        if !explicit {
+            // A shell logout arriving during automatic authentication still wins.
+            try await syncDesktopSession()
+            guard generation == sessionGeneration, automaticLoginAllowed, desktopEpoch == requestEpoch else { throw CancellationError() }
+            if desktopSession?.supportsLogoutIntent == true, !desktopSessionAvailable {
+                clearCookies()
+                throw HubTransportError.desktopSessionUnavailable
+            }
+            if desktopSession?.supportsLogoutIntent == true {
+                guard let saved = savedSession() else { throw HubTransportError.invalidResponse }
+                let accepted = await desktopSession?.publishSession(saved, origin: origin, epoch: requestEpoch)
+                guard generation == sessionGeneration, desktopEpoch == requestEpoch else { throw CancellationError() }
+                try Task.checkCancellation()
+                guard HubDesktopPeer.classify(accepted, origin: origin) == .verified,
+                      accepted?.session == saved, accepted?.sessionEpoch == requestEpoch,
+                      accepted?.signedOut == false, accepted?.automaticLoginBlocked != true, accepted?.error == nil else {
+                    invalidateAuthentication(); clearCookies(); hasDesktopSession = false
+                    desktopEpoch = nil; authenticationRevision += 1
+                    throw HubTransportError.desktopSessionUnavailable
+                }
+                hasDesktopSession = true
+            } else {
+                await desktopSession?.write(savedSession(), origin: origin, epoch: requestEpoch)
+                guard generation == sessionGeneration else { throw CancellationError() }
+                try Task.checkCancellation()
+            }
+        }
         authenticationRevision += 1
     }
 
     private func restoreLogin() async throws -> Bool {
         guard automaticLoginAllowed else { return false }
+        // Unavailable bridge is not logout. Wait for intent verification before
+        // reading accepted credentials on a companion restart.
+        if desktopSession?.supportsLogoutIntent == true, !desktopSessionAvailable { return false }
         if let running = automaticLogin { try await running.task.value; return true }
         guard let credentials = try credentialStore.load(origin: origin) else { return false }
         let id = UUID()
@@ -385,8 +612,10 @@ actor HubTransport: HubTransporting {
         // Disable automatic login before logout, including offline logout.
         invalidateAuthentication()
         hasDesktopSession = false
-        await desktopSession?.write(nil, origin: origin)
-        defer { clearCookies() }
+        let generation = sessionGeneration
+        defer { if generation == sessionGeneration { clearCookies() } }
+        try await recordDesktopLogout()
+        guard generation == sessionGeneration else { throw CancellationError() }
         try credentialStore.remove(origin: origin)
         let response = try await requestOnce(path: "/api/operator/session", method: "POST", body: Data("{\"action\":\"logout\"}".utf8))
         guard response.status == "logged_out", !response.isPreview else { throw HubTransportError.invalidResponse }
@@ -401,18 +630,61 @@ actor HubTransport: HubTransporting {
         invalidateAuthentication()
         clearCookies()
         hasDesktopSession = false
-        await desktopSession?.write(nil, origin: origin)
+        let generation = sessionGeneration
+        try await recordDesktopLogout()
+        guard generation == sessionGeneration else { throw CancellationError() }
         try credentialStore.remove(origin: origin)
+    }
+
+    private func recordDesktopLogout() async throws {
+        if desktopSession?.supportsLogoutIntent == true {
+            let generation = sessionGeneration
+            let peer = await desktopSession?.read(origin: origin)
+            guard generation == sessionGeneration else { throw CancellationError() }
+            guard HubDesktopPeer.classify(peer, origin: origin) == .verified else {
+                throw HubTransportError.desktopSessionUnavailable
+            }
+        }
+        let result = await desktopSession?.recordLogout(origin: origin)
+        if desktopSession?.supportsLogoutIntent == true {
+            guard HubDesktopPeer.classify(result, origin: origin) == .verified, result?.signedOut == true, result?.error == nil,
+                  result?.logoutIntent?.persistence == "persisted", result?.logoutIntent?.localSession == "cleared" else {
+                throw HubTransportError.desktopSessionUnavailable
+            }
+        }
     }
 
     private func syncDesktopSession() async throws {
         let generation = sessionGeneration
-        guard let shared = await desktopSession?.read(origin: origin), shared.origin == origin else {
+        let shared = await desktopSession?.read(origin: origin)
+        // Unavailable and foreign-origin reads are asynchronous too; neither
+        // may let an operation from a discarded connection continue.
+        guard generation == sessionGeneration else { throw CancellationError() }
+        try Task.checkCancellation()
+        // Availability alone cannot verify intent on a legacy peer. Do not
+        // import its cookie or reinterpret its old signedOut deletion policy.
+        if desktopSession?.supportsLogoutIntent == true {
+            let peer = HubDesktopPeer.classify(shared, origin: origin)
+            if peer != .verified {
+                desktopSessionAvailable = false
+                // A known downgrade fences only previously paired authentication.
+                // Unavailability and a new local-only manual login remain distinct.
+                if peer == .unsupported, hasDesktopSession, !standaloneExplicitLogin {
+                    invalidateAuthentication()
+                    clearCookies()
+                    hasDesktopSession = false
+                    desktopEpoch = nil
+                    authenticationRevision += 1
+                }
+                return
+            }
+        }
+        guard let shared, shared.origin == origin else {
             desktopSessionAvailable = false
             return
         }
-        guard generation == sessionGeneration else { throw CancellationError() }
         desktopSessionAvailable = true
+        desktopEpoch = shared.sessionEpoch
         if let saved = shared.session, saved.isValid {
             if cookies.cookies(for: baseURL)?.first(where: { $0.name == "com_moon_operator_session" })?.value != saved.value {
                 clearCookies()
@@ -422,12 +694,17 @@ actor HubTransport: HubTransporting {
                 authenticationRevision += 1
             }
             hasDesktopSession = true
-        } else if shared.signedOut == true {
+            standaloneExplicitLogin = false
+        } else if shared.signedOut == true || shared.automaticLoginBlocked == true {
             if hasDesktopSession || automaticLoginAllowed {
                 invalidateAuthentication()
                 clearCookies()
                 hasDesktopSession = false
-                try credentialStore.remove(origin: origin)
+                // The new durable intent suppresses restoration; it does not
+                // authorize deleting any stored secret or another account.
+                if shared.logoutIntent == nil, shared.signedOut == true {
+                    try credentialStore.remove(origin: origin)
+                }
             }
         } else if hasDesktopSession {
             // Natural expiry may still renew from this origin's accepted Keychain
@@ -447,6 +724,7 @@ actor HubTransport: HubTransporting {
     private func invalidateAuthentication() {
         sessionGeneration += 1
         automaticLoginAllowed = false
+        standaloneExplicitLogin = false
         automaticLogin?.task.cancel()
         automaticLogin = nil
     }

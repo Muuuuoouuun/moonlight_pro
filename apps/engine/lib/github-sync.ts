@@ -5,7 +5,10 @@ import {
 } from "./integration-state";
 import { ciTransitionUpdate, summarizeCheckRuns } from "./github-signals.ts";
 import type { RepositoryLink } from "./github-signals.ts";
-import { fetchSupabaseRows, insertSupabaseRecord, updateSupabaseRecord } from "./supabase-rest";
+import { syncProjectPullRequestTasks } from "./github-project-tasks.ts";
+import type { PullRequest } from "./github-project-tasks.ts";
+import { fetchPullRequestPages } from "./github-pr-pages.ts";
+import { fetchSupabaseRows, inFilterQuoted, insertSupabaseRecord, updateSupabaseRecord } from "./supabase-rest";
 
 // 저장소 목록의 정본은 product_repositories(제품 렌즈 §5.1)다. 환경 변수 GITHUB_REPOSITORIES·
 // GITHUB_PROJECT_MAP은 테이블이 비었거나 아직 없을 때만 쓰는 읽기 폴백이다.
@@ -447,6 +450,41 @@ async function writeProjectUpdates(summaries: Array<ReturnType<typeof buildRepoS
   return writes;
 }
 
+// Read every open/closed page before planning any task writes. Partial reads
+// fail explicitly and retry from page one; GitHub is never written here.
+async function fetchPullRequestsForTasks(fullName: string) {
+  return fetchPullRequestPages(fullName, path => fetchGitHubJson<PullRequest[]>(path));
+}
+
+// 프로젝트에 직접 연결한 저장소와 제품 탭 저장소의 열린 PR을 프로젝트 할 일로 맞춘다(github-project-tasks.ts).
+async function syncLinkedProjectTasks(repositories: GitHubRepoConfig[]) {
+  const workspaceId = resolveDefaultWorkspaceId();
+  if (!workspaceId) return null;
+  try {
+    return await syncProjectPullRequestTasks({
+      workspaceId,
+      now: new Date().toISOString(),
+      productRepositories: repositories
+        .filter((repo) => repo.productId)
+        .map((repo) => ({ full_name: repo.fullName, product_id: repo.productId, status: "connected" })),
+      deps: {
+        fetchRows: (table, options) => fetchSupabaseRows(table, options),
+        fetchPulls: fetchPullRequestsForTasks,
+        insert: (table, record) => insertSupabaseRecord(table, record),
+        update: (table, filters, patch) => updateSupabaseRecord(table, filters, patch, { returnRepresentation: true, select: "id" }),
+        quotedIn: inFilterQuoted,
+      },
+    });
+  } catch (error) {
+    return {
+      status: "error" as const,
+      error: error instanceof Error ? error.message : String(error),
+      repositories: [],
+      skipped: [],
+    };
+  }
+}
+
 // 상세 상태(GET·Hub 화면용) — 테이블 연결 저장소 수까지 센다. health는 동기 getGitHubIntegrationStatus를 쓴다.
 export async function getGitHubIntegrationStatusDetailed() {
   const envStatus = getGitHubIntegrationStatus();
@@ -466,6 +504,33 @@ export async function syncGitHubRepositories() {
   const startedAt = new Date().toISOString();
 
   if (!repositories.length) {
+    // 제품 탭 저장소가 없어도 프로젝트에 직접 연결한 저장소의 PR은 맞춘다.
+    const projectTasks = await syncLinkedProjectTasks([]);
+    if (projectTasks && (projectTasks.repositories.length || projectTasks.status !== "synced")) {
+      const finishedAt = new Date().toISOString();
+      const failed = projectTasks.status !== "synced";
+      const connection = await upsertIntegrationConnection({
+        provider: "github",
+        status: failed ? "error" : "connected",
+        config: getGitHubIntegrationStatus(),
+        lastSyncedAt: failed ? null : finishedAt,
+      });
+      await insertIntegrationSyncRun({
+        provider: "github",
+        connectionId: connection.connection?.id || null,
+        status: failed ? "failure" : "success",
+        payload: { startedAt, finishedAt, projectTasks },
+        errorMessage: projectTasks.status === "synced" ? null : "project pull request task sync incomplete",
+      });
+      return {
+        status: projectTasks.status,
+        configured: true,
+        source: "projects" as const,
+        repositories: [],
+        failures: [],
+        projectTasks,
+      };
+    }
     const connection = await upsertIntegrationConnection({
       provider: "github",
       status: "pending",
@@ -489,6 +554,7 @@ export async function syncGitHubRepositories() {
       configured: false,
       message: "제품에 연결된 저장소가 없습니다.",
       repositories: [],
+      projectTasks,
     };
   }
 
@@ -497,11 +563,13 @@ export async function syncGitHubRepositories() {
     .filter((result): result is Extract<typeof result, { ok: true }> => result.ok)
     .map((result) => result.summary);
   const failures = results.filter((result) => !result.ok);
-  const connected = summaries.length > 0 && failures.length === 0;
+  const projectTasks = await syncLinkedProjectTasks(targets.source === "env" ? [] : repositories);
+  const tasksComplete = !projectTasks || projectTasks.status === "synced";
+  const connected = summaries.length > 0 && failures.length === 0 && tasksComplete;
   const finishedAt = new Date().toISOString();
   const connection = await upsertIntegrationConnection({
     provider: "github",
-    status: summaries.length ? "connected" : "error",
+    status: connected ? "connected" : "error",
     config: {
       ...getGitHubIntegrationStatus(),
       lastResult: {
@@ -509,7 +577,7 @@ export async function syncGitHubRepositories() {
         failedRepositories: failures.length,
       },
     },
-    lastSyncedAt: summaries.length ? finishedAt : null,
+    lastSyncedAt: connected ? finishedAt : null,
   });
   const projectUpdateWrites = targets.source === "env"
     ? await writeProjectUpdates(summaries)
@@ -517,15 +585,16 @@ export async function syncGitHubRepositories() {
   const syncRun = await insertIntegrationSyncRun({
     provider: "github",
     connectionId: connection.connection?.id || null,
-    status: failures.length && !summaries.length ? "failure" : "success",
+    status: connected ? "success" : "failure",
     payload: {
       startedAt,
       finishedAt,
       summaries,
       failures,
       projectUpdateWrites,
+      projectTasks,
     },
-    errorMessage: failures.length ? `${failures.length} repository sync failures` : null,
+    errorMessage: !tasksComplete ? "project pull request task sync incomplete" : failures.length ? `${failures.length} repository sync failures` : null,
   });
 
   return {
@@ -534,6 +603,7 @@ export async function syncGitHubRepositories() {
     source: targets.source,
     repositories: summaries,
     failures,
+    projectTasks,
     persistence: {
       connection,
       syncRun,

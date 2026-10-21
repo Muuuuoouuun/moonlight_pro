@@ -26,6 +26,8 @@
 // 메모 모드는 휴대폰에서도 같다.
 
 import React from "react";
+import { newRevenueCreateId } from '@/lib/sales-os/revenue-create-command';
+import { pendingRevenueCreates, rememberRevenueDraft } from './revenue-create-client';
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { RelatedCustomerProjects } from '../related-customer-projects';
 import { ContextMemoDrawer } from '../context-memo-drawer';
@@ -1373,15 +1375,25 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
 // 첫 약속(무엇 + 언제)을 함께 받는다 — 약속이 정본이다(CRM 스펙 §0.5). 담당자·연락처 칸은
 // 없앴다: 리드 생성 경로에 연락처 쓰기가 없어 입력이 조용히 버려지고 있었다.
 function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = null, onClose, onCreated }) {
-  const [name, setName] = React.useState(initialName);
-  const [phone, setPhone] = React.useState(initialPhone);
-  const [stage, setStage] = React.useState("New");
-  const [nextAction, setNextAction] = React.useState("");
-  const [nextActionAt, setNextActionAt] = React.useState("");
-  const [isImportant, setIsImportant] = React.useState(false);
+  const [restored] = React.useState(() => pendingRevenueCreates('lead').find(row => !row.id && (row.workspace || null) === workspace));
+  const [createId] = React.useState(() => restored?.createId || newRevenueCreateId());
+  const [name, setName] = React.useState(restored?.name ?? initialName);
+  const [phone, setPhone] = React.useState(restored?.phone ?? initialPhone);
+  const [stage, setStage] = React.useState(restored?.stage ?? "New");
+  const [nextAction, setNextAction] = React.useState(restored?.next_action ?? "");
+  const [nextActionAt, setNextActionAt] = React.useState(restored?.next_action_at ?? "");
+  const [isImportant, setIsImportant] = React.useState(restored?.focusOverride === 'raise');
+  const [recovery, setRecovery] = React.useState(null);
   const [submitting, setSubmitting] = React.useState(false);
-  const [error, setError] = React.useState("");
+  const [error, setError] = React.useState(restored ? "이전 등록 입력을 복원했습니다. 새 등록 대신 같은 기록에서 이어갑니다." : "");
   const [hasContactPicker, setHasContactPicker] = React.useState(false);
+
+  // Recovery can turn a later explicit save into UPDATE. Empty values must stay
+  // explicit so clearing the original phone/promise is not silently ignored.
+  const createPayload = { createId, name: name.trim(), stage,
+    phone: phone.trim(), next_action: nextAction.trim(), next_action_at: nextActionAt || "",
+    ...(workspace ? { workspace } : {}), focusOverride: isImportant ? "raise" : "default" };
+  React.useEffect(() => { rememberRevenueDraft('lead', createPayload); }, [name, phone, stage, nextAction, nextActionAt, isImportant, workspace, createId]);
 
   React.useEffect(() => {
     if (typeof navigator !== "undefined" && "contacts" in navigator && "ContactsManager" in window) {
@@ -1419,23 +1431,16 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
     setSubmitting(true);
     setError("");
     try {
-      const res = await saveRevenueRecord("lead", "create", {
-        name: trimmedName,
-        stage,
-        ...(phone.trim() ? { phone: phone.trim() } : {}),
-        ...(nextAction.trim() ? { next_action: nextAction.trim() } : {}),
-        ...(nextActionAt ? { next_action_at: nextActionAt } : {}),
-        ...(workspace ? { workspace } : {}),
-        focusOverride: isImportant ? "raise" : "default",
-      });
+      const res = await saveRevenueRecord("lead", "create", createPayload);
+      setRecovery(() => res.retryOriginal || null);
       setSubmitting(false);
       if (res.ok && res.id) {
         onCreated(res.id, trimmedName);
         onClose();
       } else {
-        setError(res.status === "preview"
+        setError(res.message || (res.status === "preview"
           ? "Preview · 연결 필요 — 고객이 저장되지 않았습니다."
-          : `고객 생성 실패 (${res.status || "오류"}) — 다시 시도하세요.`);
+          : `고객 생성 실패 (${res.status || "오류"}) — 다시 시도하세요.`));
       }
     } catch (err) {
       setSubmitting(false);
@@ -1452,6 +1457,11 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
       width="min(480px, 96vw)"
       footer={(
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, width: "100%" }}>
+          {recovery && <Button variant="outline" size="sm" disabled={submitting} onClick={async () => {
+            setSubmitting(true);
+            try { const result = await recovery(); setError(result.message || '등록 결과가 아직 불명확합니다.'); setRecovery(() => result.retryOriginal || null); }
+            finally { setSubmitting(false); }
+          }}>처음 등록 재시도</Button>}
           <Button variant="ghost" size="sm" onClick={onClose} disabled={submitting}>취소</Button>
           <Button variant="primary" size="sm" onClick={handleSave} disabled={submitting}>
             {submitting ? "등록 중…" : "고객 등록"}
@@ -1463,12 +1473,13 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>기본 정보</span>
           {hasContactPicker && (
-            <Button variant="ghost" size="xs" icon="user" onClick={handlePickContact}>
+            <Button variant="ghost" size="xs" icon="user" onClick={handlePickContact} disabled={submitting}>
               주소록에서 가져오기
             </Button>
           )}
         </div>
         <TextField
+          disabled={submitting}
           label="고객 / 학원명"
           required
           value={name}
@@ -1477,6 +1488,7 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
           autoFocus
         />
         <TextField
+          disabled={submitting}
           label="전화번호"
           value={phone}
           onChange={e => { setPhone(e.target.value); setError(""); }}
@@ -1484,6 +1496,7 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
           className="mono"
         />
         <TextField
+          disabled={submitting}
           label="다음 약속"
           value={nextAction}
           onChange={e => { setNextAction(e.target.value); setError(""); }}
@@ -1491,6 +1504,7 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
         />
         <div className="customer-promise__dates">
           <TextField
+          disabled={submitting}
             label="언제"
             type="date"
             value={nextActionAt}
@@ -1499,12 +1513,13 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
             fieldStyle={{ flex: "1 1 150px" }}
             style={{ padding: "0 10px" }}
           />
-          <DateQuickPresets onPick={(value) => { setNextActionAt(value); setError(""); }} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
+          <DateQuickPresets disabled={submitting} onPick={(value) => { if (!submitting) { setNextActionAt(value); setError(""); } }} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
         </div>
         <details className="customer-sec">
           <summary><span className="customer-sec__more">단계 · 중요 고객</span><span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span></summary>
           <div className="customer-sec__in">
             <SelectField
+              disabled={submitting}
               label="초기 단계"
               value={stage}
               onChange={e => setStage(e.target.value)}
@@ -1518,6 +1533,7 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
               checked={isImportant}
               onChange={setIsImportant}
               text="⭐ 중요 고객으로 등록 (집중도 높임)"
+              disabled={submitting}
             />
           </div>
         </details>

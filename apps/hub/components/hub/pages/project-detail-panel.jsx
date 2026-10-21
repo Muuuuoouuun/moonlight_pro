@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from '../hub-icons';
 import { RelatedMemos } from '../related-memos';
 import { GoalLinks } from '../goal-links';
+import { GitHubPrMark } from '../github-pr-mark';
 import { Badge, Button, Checkbox, IconButton, SegmentedControl, TruthBadge } from "../hub-primitives";
 import { projectCustomerRef, projectMemoContexts } from '@/lib/project-customer-context';
 import { ProjectCustomerPanel } from './project-customer-panel';
@@ -13,6 +14,8 @@ import { BrandMark, ProjectProgressGauge, ProjectStatusBadge } from "./project-p
 import { TaskChecklistGauge } from './project-task-checklist';
 import { ProjectUnblockSection } from '../unblock-panel';
 import { FEATURE_GATES } from '@/lib/feature-gates';
+import { canReviewProjectCompletion } from '@/lib/project-action-state';
+import { projectBrandContentMessage } from '@/lib/project-brand-content';
 
 function DetailSection({ title, count = 0, empty, children }) {
   return (
@@ -111,7 +114,7 @@ function ProjectNotes({ notes, partial, failed }) {
 export function ProjectDetailPanel({
   project, container, todos = [], updates = [], content = [], decisions = [], notes = [],
   notesPartial = false, checks = [], syncState, failedSources = [], updateTone = {}, checkTone = {},
-  contentTone = {}, orderPending = false, orderResult = null, pendingTodoIds = new Set(),
+  contentTone = {}, contentState = 'idle', onReloadContent, orderPending = false, orderResult = null, pendingTodoIds = new Set(),
   taskPartial = false, onClose, onEdit, onToggleTodo, onEditTodo, onCreateTodo, onOpen,
   onSendOrder, onConsultCouncil, onComplete, onManageDelivery, onUnblocked, onArchive, onRemove,
   onCustomerSaved, onMemo, onOpenMemo, customerInitiallyOpen = false, onCustomerClosed, customerSaving = false, onCustomerPendingChange,
@@ -123,8 +126,8 @@ export function ProjectDetailPanel({
   const mainBody = React.useRef(null), savedScroll = React.useRef(0);
   if (!project) return null;
   const doneCount = todos.filter(todo => todo.done).length;
-  const allTasksDone = todos.length > 0 && doneCount === todos.length && !taskPartial;
-  const canReviewCompletion = allTasksDone && !['completed', 'archived'].includes(project.statusKey);
+  const canReviewCompletion = canReviewProjectCompletion({ project, tasks: todos, sourceState: syncState, taskPartial, failedSources });
+  const contentMessage = projectBrandContentMessage(contentState, Boolean(project.brandId));
   const failed = new Set(failedSources);
   const displaySummary = project.displaySummary || project.summary || '';
   const displayNextAction = project.displayNextAction || project.nextAction || '';
@@ -178,6 +181,7 @@ export function ProjectDetailPanel({
             <span style={{ textDecoration: todo.done ? 'line-through' : 'none' }}>{todo.title}</span>
             {todo.nextAction && <span className="hub-pms-task-next">{todo.nextAction}</span>}
           </button><TaskChecklistGauge task={todo} /></div>
+          <GitHubPrMark pr={todo.githubPr} done={todo.done} title={todo.title} disabled={pendingTodoIds.has(todo.id)} onComplete={(event) => onToggleTodo?.(todo.id, event)} />
           <span className="mono project-focus-muted">{todo.due}</span>
         </div>)}
         {!todos.length && <p className="project-focus-muted">{taskPartial ? '할 일을 모두 확인하지 못했어요.' : '할 일을 추가해 다음 행동을 이어가세요.'}</p>}
@@ -207,9 +211,14 @@ export function ProjectDetailPanel({
           <DetailSection title="결정" count={decisions.length} empty={failedEmpty('decisions', '결정 기록이 없어요.')}>
             {decisions.map(decision => <ActivityRow key={decision.id} title={decision.title} body={decision.summary} meta={decision.decidedAtLabel} badge="결정" />)}
           </DetailSection>
-          <DetailSection title="연관 콘텐츠" count={content.length} empty="연관 콘텐츠가 없어요.">
-            {content.map(item => <ActivityRow key={item.id} title={item.title} body={[item.kind, item.channel].filter(Boolean).join(' · ')} meta={item.when} badge={item.statusLabel} tone={contentTone[item.status] || 'neutral'} />)}
-          </DetailSection>
+          <section aria-label="같은 브랜드 콘텐츠">
+            <p className="project-focus-muted">프로젝트에 직접 연결된 자료가 아닌, 같은 브랜드의 콘텐츠입니다. 불러온 항목 중 최대 5건을 표시합니다.</p>
+            {contentMessage && <p role={contentState === 'error' ? 'alert' : 'status'} className="project-focus-muted">{contentMessage}</p>}
+            {project.brandId && ['error', 'partial', 'preview'].includes(contentState) && <Button variant="outline" size="sm" onClick={onReloadContent}>콘텐츠 다시 확인</Button>}
+            {project.brandId && (content.length > 0 || contentState === 'live') && <DetailSection title="같은 브랜드 콘텐츠" count={content.length} empty="불러온 콘텐츠에서 같은 브랜드의 항목을 찾지 못했어요.">
+              {content.map(item => <ActivityRow key={item.id} title={item.title} body={[item.kind, item.channel].filter(Boolean).join(' · ')} meta={item.when} badge={item.statusLabel} tone={contentTone[item.status] || 'neutral'} />)}
+            </DetailSection>}
+          </section>
           <ProjectNotes key={project.id} notes={notes} partial={notesPartial} failed={failed.has('notes')} />
           <a className="hub-row project-focus-link" href={`/dashboard/work/projects?view=memos&project=${encodeURIComponent(project.id)}`}>기존 메모 작업대 · 업무에 연결 →</a>
           <DetailSection title="루틴 체크" count={checks.length} empty={failedEmpty('routine_checks', '루틴 체크가 없어요.')}>
@@ -230,7 +239,9 @@ export function ProjectDetailPanel({
         {project.statusKey === 'archived'
           ? <Button variant="ghost" size="sm" onClick={() => onArchive?.(project)}>보관 해제</Button>
           : <Button variant="ghost" size="sm" onClick={() => onRemove?.(project)}>목록에서 제거</Button>}
-        <Button variant="ghost" size="sm" onClick={() => onConsultCouncil?.(project)}>Council 조언</Button>
+        {project.orgScope === 'personal'
+          ? <Button variant="ghost" size="sm" onClick={() => onConsultCouncil?.(project)}>Council 조언</Button>
+          : <span className="project-focus-muted">{project.orgScope === 'classin' ? 'Council은 개인 프로젝트 전용입니다. 회사 업무는 기존 Office 주문을 이용하세요.' : '프로젝트 범위를 확인할 수 없어 Council을 열 수 없어요.'}</span>}
         <Button variant="ghost" size="sm" disabled={orderPending} onClick={() => onSendOrder?.(project)}>{orderPending ? '전송 중…' : '주문 보내기'}</Button>
       </div></details>
       {orderResult && !orderPending && <p role={orderResult.tone === 'ok' ? 'status' : 'alert'} className={orderResult.tone === 'ok' ? 'project-focus-muted' : 'project-focus-error'}>{orderResult.label}</p>}

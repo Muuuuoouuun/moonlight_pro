@@ -2,6 +2,7 @@
 // 실제 공용 REST 클라이언트 + fetch 스텁 — "숨겼는데 다시 뜬다"·"읽기 실패가 빈 목록으로 보인다"를
 // 저장소 경계에서 잡는다.
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import { registerHooks } from "node:module";
 import { afterEach, beforeEach, test } from "node:test";
 
@@ -44,6 +45,7 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
   process.env.COM_MOON_DEFAULT_WORKSPACE_ID = WORKSPACE;
   state.revenueThrows = false;
+  state.beforeMetaPatch = null;
   state.revenue = {
     source: "supabase",
     leads: [{ id: LEAD, name: "서연영어", companyName: "서연영어", companyId: "co-9", owner: "Me", nudgeSuppression: null }],
@@ -75,12 +77,16 @@ beforeEach(() => {
     const rows = tables[table] || [];
     const matches = (row) => [...url.searchParams].every(([key, value]) => {
       if (["select", "limit", "order"].includes(key)) return true;
-      if (value.startsWith("eq.")) return String(row[key]) === value.slice(3);
+      if (value === "is.null") return row[key] === null;
+      if (value.startsWith("eq.")) return key === "meta"
+        ? isDeepStrictEqual(row.meta, JSON.parse(value.slice(3)))
+        : String(row[key]) === value.slice(3);
       if (value.startsWith("in.(")) return value.slice(4, -1).split(",").includes(String(row[key]));
       if (value.startsWith("gte.")) return String(row[key]) >= value.slice(4);
       return true;
     });
     if (method === "PATCH") {
+      if (table === "leads" && state.beforeMetaPatch) { state.beforeMetaPatch(rows); state.beforeMetaPatch = null; }
       const body = JSON.parse(options.body);
       const hit = rows.filter(matches);
       hit.forEach((row) => Object.assign(row, body));
@@ -111,6 +117,13 @@ test("live read merges calendar and phone candidates newest first with today's d
   const phoneRead = calls.find((c) => c.table === "webhook_events" && c.params.some(([k, v]) => k === "status" && v === "eq.received"));
   assert.ok(phoneRead.params.some(([k, v]) => k === "workspace_id" && v === `eq.${WORKSPACE}`));
   assert.ok(phoneRead.params.some(([k, v]) => k === "source" && v === "eq.phone-capture"));
+});
+
+test("partial calendar source never makes the candidate read complete", async () => {
+  state.calendar = { ...state.calendar, ok: true, reason: "partial-source-failure", coverage: { complete: false } };
+  const result = await repo.getRecordCandidates({ now: NOW });
+  assert.equal(result.status, "partial");
+  assert.ok(result.failedSources.includes("calendar"));
 });
 
 test("read failures are named, never shown as an empty list", async () => {
@@ -191,8 +204,11 @@ test("resolving after a record marks the events processed and drops their text",
 
 test("calendar escapes write the shared nudge key and the outcome fact without wiping sibling meta", async () => {
   const id = `calendar:lead:${LEAD}:evt-1`;
+  const before = structuredClone(tables.leads[0].meta);
   const saved = await repo.applyRecordCandidateAction({ id, action: "dismiss", reason: "not-this-customer" }, { now: NOW });
   assert.equal(saved.status, "saved");
+  const mutation = calls.find(call => call.table === "leads" && call.method === "PATCH");
+  assert.equal(new URLSearchParams(mutation.params).get("meta"), `eq.${JSON.stringify(before)}`);
   const meta = tables.leads[0].meta;
   assert.equal(meta.region, "서울");
   assert.equal(meta.nudges.snoozedUntil, "2026-09-30", "an unrelated snooze survives");
@@ -227,4 +243,14 @@ test("invalid input never reaches persistence", async () => {
     assert.equal(result.httpStatus, 400);
   }
   assert.equal(calls.length, 0);
+});
+
+
+test("calendar escape refuses a concurrent metadata change instead of dropping it", async () => {
+  state.beforeMetaPatch = rows => { rows[0].meta = { ...rows[0].meta, concurrent: "preserved" }; };
+  const result = await repo.applyRecordCandidateAction({ id: `calendar:lead:${LEAD}:evt-1`, action: "dismiss", reason: "not-this-customer" }, { now: NOW });
+  assert.equal(result.status, "failed");
+  assert.equal(tables.leads[0].meta.concurrent, "preserved");
+  assert.equal(tables.leads[0].meta.calendar_outcomes, undefined);
+  assert.equal(calls.filter(call => call.table === "leads" && call.method === "PATCH").length, 1);
 });

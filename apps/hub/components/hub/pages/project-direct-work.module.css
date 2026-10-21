@@ -20,7 +20,7 @@
 .progressMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--fg-muted); font-size: 10.5px; }
 .risk { color: var(--danger); margin-left: auto; }
 .mobileOnly { display: none; }
-.addOptions > div { position: absolute; z-index: 8; right: 0; top: calc(100% + 4px); display: grid; min-width: 166px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card); }
+.addOptions > div { position: absolute; z-index: 8; right: 0; top: calc(100% + 4px); display: grid; min-width: 166px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card-legacy, var(--shadow-card)); }
 .addOptions button { min-height: 36px; padding: 6px 10px; text-align: left; color: var(--fg); font-size: 12px; border-radius: var(--r-sm); }
 .addOptions button:hover { background: var(--surface-2); }
 .workList { min-width: 0; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); }

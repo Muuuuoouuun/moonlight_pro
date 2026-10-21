@@ -31,6 +31,8 @@
     'pending-memo': '확인이 필요한 앞 메모가 있어요. 먼저 ‘저장 확인’을 눌러 주세요.',
     'memo-conflict': 'Hub에서 먼저 바뀌었어요. 입력은 보관했어요.',
     conflict: 'Hub에서 먼저 바뀌었어요. 입력은 보관했어요.',
+    'meeting-revision-changed': '대화가 먼저 바뀌어 질문이 접수되지 않았어요. 입력은 보관했어요. 다시 불러온 뒤 보내 주세요.',
+    'meeting-closed': '종료된 대화라 질문이 접수되지 않았어요. 입력은 보관했어요. 새 대화에서 이어 주세요.',
     'missing-version': '할 일의 버전을 몰라 다시 불러와야 해요.',
     'stale-origin': 'Hub 주소가 바뀌어 이 결과는 쓰지 않았어요.',
     'redirect-rejected': 'Hub가 다른 주소로 보내려 해서 멈췄어요.',

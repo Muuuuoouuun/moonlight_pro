@@ -1,0 +1,40 @@
+/* Selected workflow hierarchy only. Existing shell, theme and primitives own chrome. */
+.workflow-step { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.workflow-step__label { margin: 0; display: flex; gap: 8px; align-items: center; color: var(--fg-muted); font-size: 12px; font-weight: 500; }
+.workflow-step__label .mono { color: var(--fg-dim); font-size: 12px; }
+.workflow-agenda__head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--line-soft); }
+.workflow-agenda__head > span:first-child { flex: 1; }
+.workflow-agenda__message { margin: 0; padding: 12px 16px; color: var(--fg-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.workflow-agenda__message[role="alert"] { color: var(--danger); }
+.workflow-agenda__list { list-style: none; margin: 0; padding: 0 16px; }
+.workflow-agenda__item { position: relative; padding: 12px 0 12px 16px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line-soft); }
+.workflow-agenda__item:last-child { border-bottom: 0; }
+.workflow-agenda__item::before { content: ''; position: absolute; left: -4px; top: 17px; width: 7px; height: 7px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); }
+.workflow-agenda__item[data-next]::before { background: var(--accent); border-color: var(--accent-line); }
+.workflow-agenda__state { display: block; margin-bottom: 6px; font-size: 11px; color: var(--fg-dim); }
+.workflow-agenda__item[data-next] .workflow-agenda__state { color: var(--fg); font-weight: 600; }
+.workflow-agenda__expand { margin: 8px 16px; }
+.workflow-disclosure { min-width: 0; border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--surface); }
+.workflow-disclosure > summary { cursor: pointer; min-height: 44px; padding: 12px 16px; font-size: 13px; color: var(--fg); overflow-wrap: anywhere; }
+.workflow-disclosure > summary:hover { background: var(--surface-2); }
+.workflow-disclosure > summary:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+.workflow-disclosure__body { display: flex; flex-direction: column; gap: var(--section-gap); min-width: 0; padding: 16px; }
+.workflow-goal-lens { min-width: 0; }
+.workflow-goal-lens__intro { margin: 0 0 12px; color: var(--fg-muted); font-size: 13px; line-height: 1.6; }
+.workflow-goal-priority { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.workflow-records { min-width: 0; padding: 20px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg); }
+.workflow-records__list { list-style: none; margin: 12px 0 0; padding: 0; }
+.workflow-records__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line-soft); }
+.workflow-records__identity { min-width: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
+.workflow-records__identity strong { font-size: 14px; font-weight: 500; }
+.workflow-records__identity span { font-size: 12px; color: var(--fg-muted); }
+.workflow-records__row .hub-btn { flex-shrink: 0; }
+.workflow-records .goal-section-link { display: inline-flex; align-items: center; min-height: 44px; }
+@media (max-width: 900px) {
+  .workflow-goal-priority { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .workflow-disclosure__body { padding: 12px; }
+  .workflow-records { padding: 16px; }
+  .workflow-agenda__list { padding: 0 12px; }
+}

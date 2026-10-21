@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import ts from 'typescript';
 import { collectGuruConversationHistory } from '../../lib/guru-chat-history.js';
+import { projectCouncilIssue } from '../../lib/project-council-context.js';
 
 const source = readFileSync(new URL('./floating-mentor-widget.jsx', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('floating-mentor-widget.jsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
@@ -42,6 +43,7 @@ function mountWidget({
     requestPersonaChat: async input => { personaRequests.push(input); return { state: 'done', text: '답변' }; },
     GURU_LENS_MAP: lensMap, GURU_LENS_CHIPS: ['voss', 'ogilvy'], renderAdviceWithCallouts: text => text,
     collectGuruConversationHistory,
+    projectCouncilIssue,
     Badge: 'Badge', Button: 'Button', IconButton: 'IconButton', Dot: 'Dot', Iconed: 'Iconed', TruthBadge: 'TruthBadge',
   };
   const Widget = new Function(...Object.keys(dependencies), `${code}; return FloatingMentorWidget;`)(...Object.values(dependencies));

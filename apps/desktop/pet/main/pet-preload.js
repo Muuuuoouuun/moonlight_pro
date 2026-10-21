@@ -12,6 +12,8 @@ const INVOKE = Object.freeze([
   'pet:journal-read', 'pet:journal-save', 'pet:calendar-week',
   'pet:notices-list', 'pet:notices-read', 'pet:notices-hide', 'pet:notices-read-all',
   'pet:chat-send', 'pet:chat-cancel', 'pet:chat-session', 'pet:council-handoff',
+  'pet:office-inbox', 'pet:office-receipt', 'pet:office-meetings', 'pet:office-meeting',
+  'pet:office-create', 'pet:office-send',
   'pet:focus-start', 'pet:focus-stop', 'pet:focus-state',
 ]);
 const EVENTS = Object.freeze(['pet:state-changed', 'pet:wash', 'pet:notice', 'pet:badge', 'pet:chat-reply', 'pet:focus-tick', 'pet:hub-status']);

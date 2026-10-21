@@ -4,9 +4,11 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { resolveCalendarView } from '../calendar-view.js';
+import { CalendarAgenda } from '../calendar-agenda.jsx';
 import { resolveCalendarCapabilities } from '../../../lib/calendar-capabilities.js';
 import { mapTasksToCalendar } from '../../../lib/calendar-task-view.js';
-import { calendarEventWhenLabel, mapGoogleEventsToGrid } from '../../../lib/calendar-event-view.js';
+import { calendarEventCardGeometry, calendarEventWhenLabel, calendarGridRange, mapGoogleEventsToGrid } from '../../../lib/calendar-event-view.js';
 
 const source = readFileSync(new URL('./work.jsx', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('work.jsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
@@ -42,7 +44,7 @@ function mountedCalendar(events, { mode = 'week', selectedDate = new Date(2026, 
   };
   const box = ({ children }) => React.createElement('div', null, children);
   const Outcome = ({ eventKey, whenLabel }) => React.createElement('span', { 'data-event-key': eventKey }, whenLabel);
-  const deps = { React: hooks, resolveCalendarCapabilities, mapTasksToCalendar, calendarEventWhenLabel, mapGoogleEventsToGrid,
+  const deps = { React: hooks, resolveCalendarView, useCalendarCompactView: () => false, CalendarAgenda, resolveCalendarCapabilities, mapTasksToCalendar, calendarEventCardGeometry, calendarEventWhenLabel, calendarGridRange, mapGoogleEventsToGrid,
     useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace() {} }), usePathname: () => '/dashboard/work/calendar',
     CalendarOutcome: Outcome, Card: box, Drawer: box, Button: box, IconButton: box, SegmentedControl: box, SyncBadge: box, TruthBadge: box, Iconed: () => null,
   };
@@ -84,10 +86,10 @@ test('Calendar day view keeps an event that began before the selected day', () =
   assert.equal(harness.buttons(harness.render()).length, 1);
 });
 
-test('multi-day timed cards stay inside the existing grid while the drawer keeps original dates', () => {
+test('multi-day timed cards extend the hour range while the drawer keeps original dates', () => {
   const input = event({ start: '2026-10-05T17:00:00', end: '2026-10-06T10:00:00' });
   const harness = mountedCalendar([input]), cards = harness.buttons(harness.render());
-  assert.deepEqual(cards.map(card => ({ top: card.props.style.top, height: card.props.style.height })), [{ top: 468, height: 154 }, { top: 0, height: 102 }]);
+  assert.deepEqual(cards.map(card => ({ top: card.props.style.top, height: card.props.style.height })), [{ top: 884, height: 362 }, { top: 0, height: 518 }]);
   cards[1].props.onClick();
   const [outcome] = harness.outcomes(harness.render());
   assert.equal(outcome.props.eventKey, input.outcomeKey);
@@ -105,10 +107,10 @@ test('single-day timed and all-day rendering positions and drawer copy remain co
   assert.equal(harness.outcomes(harness.render())[0].props.whenLabel, '종일');
 });
 
-test('a single-day 01:00-only event keeps its existing position without widening the grid', () => {
+test('a single-day 01:00-only event extends the time origin without changing its duration', () => {
   const harness = mountedCalendar([event({ start: '2026-10-05T01:00:00', end: '2026-10-05T02:00:00' })]);
   const [card] = harness.buttons(harness.render());
-  assert.equal(card.props.style.top, -364);
+  assert.equal(card.props.style.top, 0);
   assert.equal(card.props.style.height, 50);
   card.props.onClick();
   assert.equal(harness.outcomes(harness.render())[0].props.whenLabel, '1:00 – 2:00');
@@ -118,5 +120,6 @@ test('midnight/01:00 ends do not create an extra full-day card', () => {
   const midnight = mountedCalendar([event({ start: '2026-10-05T17:00:00', end: '2026-10-06T00:00:00' })]);
   assert.equal(midnight.buttons(midnight.render()).length, 1);
   const early = mountedCalendar([event({ start: '2026-10-05T17:00:00', end: '2026-10-06T01:00:00' })]);
-  assert.equal(early.buttons(early.render()).length, 1, 'the 00–01 segment stays outside the current 08–20 time grid');
+  assert.equal(early.buttons(early.render()).length, 2, 'the actual 00–01 segment is now visible, not a full-day extension');
+  assert.equal(early.buttons(early.render())[1].props.style.height, 50);
 });

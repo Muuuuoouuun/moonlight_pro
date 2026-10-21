@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import "./hub-futura.css";
+import "./hub-depth.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 import { DailyReviewProvider } from "./daily-review-provider";
 import { GOAL_WORK_BASE, goalHref, goalView } from "@/lib/goal-client";
@@ -21,6 +22,7 @@ import { savedSharedCaptureTarget, snapshotSharedCaptureQuery } from "@/lib/shar
 import { OfficeSessionProvider } from "./office-session-provider";
 import { OfficeWorkflowSessionProvider } from "./office-workflow-sessions";
 import { CelebrationCanvas } from "./celebration-fx";
+import { dismissTopEscLayer, hasOpenEscLayer } from "./esc-layers";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
   beginMobileNavigationRoute,
@@ -28,6 +30,7 @@ import {
   completeMobileNavigationDesktopHandoff,
   deriveSidebarScope,
   dismissMobileNavigation,
+  dismissTopMobileOverlay,
   getMobileNavigationState,
   normalizeScope,
   readMobileNavigationRouteFocus,
@@ -508,6 +511,20 @@ export function HubApp({ memoDraftContext = "preview" }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [closeMobileNavigation, mobileNavState.open, paletteOpen, helpOpen]);
 
+  // 안드로이드 앱 셸(MainActivity) 뒤로 가기 브리지 — 드로어·바텀 시트·팔레트·모바일 내비게이션이
+  // 열려 있을 때는 WebView 기록 이동이나 앱 종료 대신 최상위 오버레이만 닫는다.
+  React.useEffect(() => {
+    window.moonlightDismissTopOverlay = () => dismissTopMobileOverlay({
+      hasEscLayer: hasOpenEscLayer(),
+      dismissEscLayer: () => dismissTopEscLayer(window),
+      mobileNavOpen: mobileNavState.open,
+      closeMobileNavigation,
+    });
+    return () => {
+      delete window.moonlightDismissTopOverlay;
+    };
+  }, [closeMobileNavigation, mobileNavState.open]);
+
   React.useEffect(() => {
     const media = window.matchMedia(MOBILE_NAV_QUERY);
     const onBreakpointChange = (event) => {
@@ -636,7 +653,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const sidebarCollapsed = collapsed && !isMobileViewport;
 
   return (
-    <div ref={rootRef} className="hub-app" data-theme={theme}>
+    <div ref={rootRef} className="hub-app" data-theme={theme} data-visual-system="depth-b">
       <ToastProvider>
         <OfficeSessionProvider key={memoDraftContext}>
           <OfficeWorkflowSessionProvider>

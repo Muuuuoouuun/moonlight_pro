@@ -6,13 +6,14 @@ const net = require('node:net');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const capability = { protocolVersion: 2, capabilities: { logoutIntent: true } };
 const { startHubSessionBridge } = require('./hub-session-bridge');
 
 function exchange(socketPath, value) {
   return new Promise((resolve, reject) => {
     const client = net.createConnection(socketPath);
     let response = '';
-    client.on('connect', () => client.write(`${JSON.stringify(value)}\n`));
+    client.on('connect', () => client.write(`${JSON.stringify({ protocolVersion: 2, ...value })}\n`));
     client.on('data', (chunk) => { response += chunk; });
     client.on('end', () => { try { resolve(JSON.parse(response)); } catch { reject(new Error('Invalid bridge response')); } });
     client.on('error', reject);
@@ -37,13 +38,13 @@ test('Mac session IPC shares login/logout in both directions, scoped to the curr
   assert.equal((await fs.stat(directory)).mode & 0o777, 0o700);
   assert.equal((await fs.stat(bridge.socketPath)).mode & 0o777, 0o600);
   const read = { action: 'read', origin: hub };
-  assert.deepEqual(await exchange(bridge.socketPath, read), { origin: hub, session: null, signedOut: false });
+  assert.deepEqual(await exchange(bridge.socketPath, read), { ...capability, origin: hub, session: null, signedOut: false });
   const saved = { value: 'signed_payload.signature', expiresAt: Date.now() / 1000 + 86400 };
-  assert.deepEqual(await exchange(bridge.socketPath, { ...read, action: 'write', session: saved }), { origin: hub, session: saved, signedOut: false });
+  assert.deepEqual(await exchange(bridge.socketPath, { ...read, action: 'write', session: saved }), { ...capability, origin: hub, session: saved, signedOut: false });
   assert.equal(cookie.httpOnly, true);
   assert.equal(cookie.secure, true);
   assert.equal(cookie.sameSite, 'lax');
-  assert.deepEqual(await exchange(bridge.socketPath, read), { origin: hub, session: saved, signedOut: false });
+  assert.deepEqual(await exchange(bridge.socketPath, read), { ...capability, origin: hub, session: saved, signedOut: false });
   for (const origin of ['https://other.example.test', `${hub}/`, `${hub}.evil.test`, 'http://hub.example.test']) {
     assert.deepEqual(await exchange(bridge.socketPath, { ...read, origin }), { error: 'rejected' });
   }
@@ -53,10 +54,12 @@ test('Mac session IPC shares login/logout in both directions, scoped to the curr
   cookie = null;
   const changedCookie = { name: 'com_moon_operator_session', domain: 'hub.example.test' };
   cookieChanged({}, changedCookie, 'expired', true);
-  assert.deepEqual(await exchange(bridge.socketPath, read), { origin: hub, session: null, signedOut: false });
+  assert.deepEqual(await exchange(bridge.socketPath, read), { ...capability, origin: hub, session: null, signedOut: false });
   cookieChanged({}, changedCookie, 'expired-overwrite', true);
-  assert.deepEqual(await exchange(bridge.socketPath, read), { origin: hub, session: null, signedOut: true });
-  assert.deepEqual(await exchange(bridge.socketPath, { ...read, action: 'write', session: null }), { origin: hub, session: null, signedOut: true });
+  assert.deepEqual(await exchange(bridge.socketPath, read), { ...capability, origin: hub, session: null, signedOut: false });
+  const loggedOut = await exchange(bridge.socketPath, { ...read, action: 'write', session: null });
+  assert.equal(loggedOut.signedOut, true);
+  assert.equal(loggedOut.logoutIntent.persistence, 'persisted');
   assert.equal(cookie, null);
   assert.equal(flushes, 2);
   hub = 'https://changed.example.test';

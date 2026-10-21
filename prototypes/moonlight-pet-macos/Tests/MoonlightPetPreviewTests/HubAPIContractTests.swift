@@ -81,6 +81,36 @@ private func memoJSON(_ command: HubMemoCommand, body: String? = nil, revision: 
 func runHubAPIContractTests() async throws -> Int {
     var count = 0
 
+    do {
+        let id = UUID()
+        let transport = ScriptedHubTransport([try contractResponse(["status": "saved"])])
+        try await HubAPI(transport: transport).deleteTask(id)
+        let requests = await transport.recorded()
+        try contractCheck(requests.count == 1, "Deleting one task must send exactly one command")
+        let request = requests[0], body = try requestJSON(request)
+        try contractCheck(request.method == "DELETE" && request.path == "/api/hub/tasks", "Task deletion must reuse the guarded DELETE route")
+        try contractCheck(body.count == 1 && body["id"] as? String == id.uuidString.lowercased(), "Delete must target only the selected canonical task ID")
+        count += 1
+    }
+
+    do {
+        let envelopes: [[String: Any]] = [
+            ["status": "preview"], ["status": "error"], ["status": "duplicate"],
+            ["status": "saved", "source": "preview"], ["status": "unknown"], [:],
+        ]
+        for envelope in envelopes {
+            let transport = ScriptedHubTransport([try contractResponse(envelope)])
+            try await contractRejects("Only a persisted deletion may remove a task") { try await HubAPI(transport: transport).deleteTask(UUID()) }
+        }
+        for failure in [HubTransportError.offline, .timeout, .unauthorized] {
+            let transport = ScriptedHubTransport([.error(failure)])
+            try await contractRejects("Failed deletion cannot be reported as saved") { try await HubAPI(transport: transport).deleteTask(UUID()) }
+            let requests = await transport.recorded()
+            try contractCheck(requests.count == 1, "A destructive command must not silently retry")
+        }
+        count += 1
+    }
+
     // Both task read and save response shapes retain PostgreSQL microseconds.
     do {
         let id = UUID()

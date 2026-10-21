@@ -23,6 +23,7 @@ import {
   buildTaskPatch,
   contentPipelineReloadContains,
   createClientId,
+  isValidGitHubRepoInput,
   mergeProjectDetailQuery,
   projectReloadContains,
   projectAreaLabel,
@@ -38,6 +39,8 @@ import { ProjectCreateDrawer, ProjectCreateInline } from "./project-create-drawe
 import { MemoWorkspace } from "./memo-workspace";
 import { ProjectDeliveryEditor } from "./project-delivery";
 import { ProjectDetailPanel } from "./project-detail-panel";
+import { useProjectBrandContent } from "./use-project-brand-content";
+import { selectProjectBrandContent } from "@/lib/project-brand-content";
 import { projectCustomerRef } from '@/lib/project-customer-context';
 import { ContextMemoDrawer } from '../context-memo-drawer';
 import { FloatingMentorWidget } from "../floating-mentor-widget";
@@ -170,7 +173,6 @@ export function Projects({ workspace }) {
   const [todos, setTodos] = React.useState(cachedProjects ? cachedProjects.todos : []);
   const memoTask = (todos.find(t => t.id === memoTaskId) || (memoTaskFallback?.id === memoTaskId ? memoTaskFallback : null));
   const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
-  const [contentItems, setContentItems] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [showTerminal, setShowTerminal] = React.useState(false);
@@ -232,10 +234,11 @@ export function Projects({ workspace }) {
     setCustomerSaving(pending);
   }, []);
   const [openDetail, setOpenDetail] = React.useState(null);
+  const brandContent = useProjectBrandContent(openDetail);
   const [mobileDetail, setMobileDetail] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(true);
   const [containerPickerOpen, setContainerPickerOpen] = React.useState(false);
-  const [syncState, setSyncState] = React.useState(cachedProjects ? cachedProjects.syncState : 'preview');
+  const [syncState, setSyncState] = React.useState(cachedProjects ? cachedProjects.syncState : 'loading');
   const [readError, setReadError] = React.useState(null);
   const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
   const taskStatusPendingRef = React.useRef(new Set());
@@ -243,7 +246,6 @@ export function Projects({ workspace }) {
   if (!quickTaskWriterRef.current) quickTaskWriterRef.current = createProjectTaskWriter();
   const quickTaskRequestsRef = React.useRef(new Map());
   const inlineTaskIntentRef = React.useRef(null);
-  const contentLoadedRef = React.useRef(false);
   const detailSheetRef = React.useRef(null);
   const detailReturnFocusRef = React.useRef(null);
   const detailListScrollRef = React.useRef(null);
@@ -545,7 +547,7 @@ export function Projects({ workspace }) {
   }, []);
 
   // ?project= 딥링크가 "기록 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
-  // 기록한다 — syncState 초기값이 'preview'라서 상태만으로는 로드 전/후를 구분 못 한다.
+  // 기록한다 — 캐시가 있으면 live/partial로 시작하므로 상태만으로는 로드 전/후를 구분 못 한다.
   const initialLoadDoneRef = React.useRef(false);
   React.useEffect(() => {
     loadLedger({ initial: true }).finally(() => { initialLoadDoneRef.current = true; });
@@ -560,27 +562,6 @@ export function Projects({ workspace }) {
     if ((!selectedProjectId && !taskProjectSelection) || !initialLoadDoneRef.current) return;
     loadLedger({ projectId: selectedProjectId || taskProjectSelection });
   }, [selectedProjectId, taskProjectSelection, loadLedger]);
-
-  // 프로젝트 상세의 "연관 콘텐츠" 섹션용. 상세를 실제로 열기 전에는 큰 콘텐츠
-  // 기록을 요청하지 않고, 성공한 첫 조회만 재사용한다.
-  React.useEffect(() => {
-    if (!openDetail || contentLoadedRef.current) return undefined;
-    const controller = new AbortController();
-    (async () => {
-      try {
-        const res = await fetch('/api/hub/content', { cache: 'no-store', signal: controller.signal });
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data || data.source === 'error' || controller.signal.aborted) return;
-        if (data.source === 'supabase' && Array.isArray(data.items)) {
-          setContentItems(data.items);
-        }
-        contentLoadedRef.current = true;
-      } catch {
-        // 콘텐츠 기록 읽기 실패는 무시 — 상세 패널의 보조 섹션이다.
-      }
-    })();
-    return () => { controller.abort(); };
-  }, [openDetail]);
 
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
@@ -1161,6 +1142,9 @@ export function Projects({ workspace }) {
     if (projectDraft.status === 'blocked' && !projectDraft.blocker?.trim()
       && (projectEditSource.statusKey !== 'blocked' || Boolean(projectEditSource.delivery?.blocker))) {
       return { ok: false, status: 'invalid-input', message: '막힘 상태에는 막힌 이유를 적어주세요.' };
+    }
+    if (!isValidGitHubRepoInput(projectDraft.githubRepo)) {
+      return { ok: false, status: 'invalid-input', message: 'GitHub 저장소는 owner/repo 형식으로 적어주세요.' };
     }
     const patch = buildProjectPatch(projectEditSource, projectDraft);
     const dirtyKeys = Object.keys(patch).filter((key) => !['id', 'expectedUpdatedAt'].includes(key));
@@ -2737,7 +2721,7 @@ export function Projects({ workspace }) {
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id);
               const pChecks = (ledger.checks || []).filter(c => c.projectId === p.id).slice(0, 4);
-              const pContent = p.brandId ? contentItems.filter(c => c.brandId === p.brandId).slice(0, 5) : [];
+              const pContent = selectProjectBrandContent(brandContent.items, p.brandId);
               const detailFailedSources = ledger.selection?.projectId === p.id
                 ? ledger.selection.failedSources
                 : ledger.failedSources;
@@ -2763,6 +2747,8 @@ export function Projects({ workspace }) {
                     notesPartial={(ledger.selection?.projectId === p.id ? ledger.selection.partialSources : ledger.partialSources)?.includes('notes') === true}
                     checks={pChecks}
                     content={pContent}
+                    contentState={brandContent.state}
+                    onReloadContent={brandContent.reload}
                     syncState={syncState}
                     failedSources={detailFailedSources}
                     updateTone={updateTone}
@@ -2974,6 +2960,7 @@ export function Projects({ workspace }) {
               key: 'genre', label: '장르', type: 'select',
               options: [{ value: '', label: '장르 없음' }, ...PROJECT_GENRES.map(item => ({ value: item.key, label: item.label }))],
             },
+            { key: 'githubRepo', label: 'GitHub 저장소', placeholder: 'owner/repo · 열린 PR이 할 일로 들어옵니다' },
             { key: 'nextAction', label: '다음 행동', placeholder: '다음에 할 한 가지' },
             ...(!projectEditSource?.delivery ? [{ key: 'dueAt', label: '기한', inputType: 'date' }] : []),
           ]}
@@ -3038,10 +3025,11 @@ export function Projects({ workspace }) {
         contextTitle={councilWidgetProject?.name || councilWidgetProject?.title || "프로젝트"}
         contextData={{
           id: councilWidgetProject?.id,
+          orgScope: councilWidgetProject?.orgScope,
           title: councilWidgetProject?.name || councilWidgetProject?.title,
           status: councilWidgetProject?.status,
           desc: councilWidgetProject?.displaySummary || councilWidgetProject?.summary || councilWidgetProject?.desc,
-          todos: councilWidgetProject ? (ledger.todos || []).filter(t => t.projectId === councilWidgetProject.id) : [],
+          todos: councilWidgetProject ? (todosByProject.get(councilWidgetProject.id) || []) : [],
           updates: councilWidgetProject ? (ledger.updates || []).filter(u => u.projectId === councilWidgetProject.id) : [],
         }}
         // 위젯이 건네는 건 제목이다 — 2번째 인자는 initialStatus라, 제목을 거기에 넣으면

@@ -99,6 +99,7 @@ export function useDailyReview() {
         attemptRef.current = cached?.attempt || null;
         setReview(null);
         setEntries([]);
+        setToday(null);
         setRecent(null);
         setActivity(null);
         setMonthActivity(null);
@@ -126,8 +127,10 @@ export function useDailyReview() {
   // 셸의 Provider·딥링크 effect가 의존하므로 날짜가 바뀔 때만 새 함수가 된다.
   const chooseDate = React.useCallback((date) => {
     if (savingRef.current || !isDailyReviewDate(date)) return;
-    if (date === currentDate) return;
     setSource('loading');
+    // The shell keeps this model mounted. Reopening today's review must refresh
+    // execution facts; load() reconciles the date's saved draft without erasing it.
+    if (date === currentDate) { setReload(value => value + 1); return; }
     setSelectedDate(date);
   }, [currentDate]);
 

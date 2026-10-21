@@ -3,6 +3,12 @@ import Foundation
 import FoundationNetworking
 #endif
 
+private struct UnusedMemoryCredentials: HubCredentialStoring {
+    func load(origin: String) throws -> HubCredentials? { nil }
+    func save(_ credentials: HubCredentials, origin: String) throws { preconditionFailure("Unexpected synthetic credential save") }
+    func remove(origin: String) throws { preconditionFailure("Unexpected synthetic credential removal") }
+}
+
 private final class SharedSessionProtocol: URLProtocol {
     static var expectedCookie = "com_moon_operator_session=first-session"
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -33,7 +39,8 @@ private final class SharedSessionProtocol: URLProtocol {
                      "Concurrent startup reads must share a validated session")
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [SharedSessionProtocol.self]
-        let client = try HubTransport(baseURL: origin, configuration: configuration, sharedSession: { await bridge.read() })
+        let client = try HubTransport(baseURL: origin, configuration: configuration,
+            credentialStore: UnusedMemoryCredentials(), sharedSession: { await bridge.read() })
         let authenticated = try await client.sessionStatus()
         precondition(authenticated.isAuthenticated, "Hub session must authenticate without another login")
         try await Task.sleep(for: .milliseconds(1100))

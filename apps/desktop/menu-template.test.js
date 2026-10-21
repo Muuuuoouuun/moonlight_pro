@@ -44,10 +44,10 @@ test('macOS: 윈도우 메뉴와 ⌘[ ⌘] 뒤로·앞으로', () => {
   assert.equal(view.find((item) => item.label === '앞으로').accelerator, 'Command+]');
 });
 
-test('Windows: 예전 모양 그대로(앱·보기 두 메뉴, Alt+Left/Right, 사용자 종료)', () => {
+test('Windows: 앱·보기 두 메뉴, 연결 정보, Alt+Left/Right, 사용자 종료', () => {
   const menus = build('win32');
   assert.deepEqual(menus.map((menu) => menu.label), ['Moonlight', '보기']);
-  assert.deepEqual(labels(menus[0].submenu), ['빠른 입력', '위젯 열기', '허브 주소 바꾸기', 'separator', '종료']);
+  assert.deepEqual(labels(menus[0].submenu), ['빠른 입력', '위젯 열기', '허브 주소 바꾸기', '앱 정보 · 허브 연결 확인', 'separator', '종료']);
   const quit = menus[0].submenu.at(-1);
   assert.equal(quit.accelerator, 'CommandOrControl+Q');
   assert.equal(quit.click, actions.quit);
