@@ -16,7 +16,7 @@
 .gauge { width: 72px; height: 6px; border-width: 0; }
 .notes { display: grid; gap: 2px; margin-top: -10px; color: var(--fg-muted); font-size: 10.5px; }
 
-.next { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px 16px; min-height: 56px; padding: 8px 10px 8px 16px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface-2); }
+.next { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px 16px; min-height: 56px; padding: 8px 10px 8px 16px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--well, var(--surface-2)); box-shadow: var(--shadow-inset, none); }
 .nextLabel { color: var(--fg-muted); font-size: 12px; }
 .nextTitle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; padding: 4px 6px; margin-left: -6px; border-radius: var(--r-sm); text-align: left; color: var(--fg); }
 .nextTitle > strong { font-size: 14px; font-weight: 500; line-height: 1.45; overflow-wrap: anywhere; }
@@ -30,7 +30,7 @@
 .siblings { display: grid; gap: 12px; min-width: 0; }
 .siblings > h3 { margin: 0; color: var(--fg-dim); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; }
 .siblingGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.siblings .sibling { display: grid; gap: 10px; min-width: 0; padding: 16px 18px; border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--surface); text-align: left; color: var(--fg); }
+.siblings .sibling { display: grid; gap: 10px; min-width: 0; padding: 16px 18px; border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-card); text-align: left; color: var(--fg); }
 .sibling > span { display: flex; justify-content: space-between; gap: 8px; color: var(--fg-muted); font-size: 11px; }
 .sibling [data-tone="danger"] { color: var(--danger); }
 .sibling > strong { font-size: 13.5px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
