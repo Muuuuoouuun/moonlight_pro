@@ -156,6 +156,7 @@ function mapEventItems(events, todayKey, weekEndKey) {
       title: e.summary || "(제목 없는 일정)",
       bucket: bucketFor(start, todayKey, weekEndKey),
       whenAt: start,
+      endAt: end || null,
       whenLabel: allDay
         ? `${shortDate(start)} 종일`
         : `${shortDate(start)} ${timeLabel(start)}${end ? `–${timeLabel(end)}` : ""}`,

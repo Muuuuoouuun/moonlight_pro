@@ -9,6 +9,7 @@ import { Iconed } from '../hub-icons.jsx';
 import * as mute from './my-work-mute.js';
 import { createMyWorkQuickTask } from '../../../lib/my-work-quick-task.js';
 import { MAX_FOCUS_PER_DAY, focusLimitMessage } from '../../../lib/task-today.js';
+import { buildNowModel } from './my-work-now.jsx';
 
 // QA regression: preview/unknown empty reads and filtered/stale lists claimed all work complete.
 // Run the actual loader with synthetic responses, then render the actual MyWork JSX and primitives.
@@ -25,9 +26,10 @@ const noAction = () => { throw new Error('A regression test must not write data 
 function evaluate(hookReact, fetchImpl) {
   const scope = {
     ...primitives, ...mute, createMyWorkQuickTask, React: hookReact, Iconed, MAX_FOCUS_PER_DAY, focusLimitMessage,
-    fetch: fetchImpl, useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: noAction }), usePathname: () => '/dashboard/work/my',
+    fetch: fetchImpl, // 이 시험들은 리스트 렌즈의 빈 상태·완주 판정을 본다 — 착지 렌즈가 지금(2026-10-21)으로 바뀌어 명시한다.
+    useSearchParams: () => new URLSearchParams('lens=list'), useRouter: () => ({ replace: noAction }), usePathname: () => '/dashboard/work/my',
     useToast: () => ({}), useUndoableAction: () => ({ schedule: noAction, cancel: noAction }), UNDO_WINDOW_MS: 3500,
-    JournalSources: () => null, MeetingWatchCard: () => null,
+    JournalSources: () => null, MeetingWatchCard: () => null, MyWorkNow: () => null, buildNowModel,
     TASK_PRIORITY_OPTIONS: [], TASK_STATUS_OPTIONS: [], TASK_OUTCOME: {},
     clearSubmittedQuickTaskDraft: noAction, shouldSubmitQuickTask: noAction, freezeTaskCommand: noAction, saveTaskCommand: noAction,
     triggerCelebration: noAction, triggerSparkleAt: noAction, requestPersonaChat: noAction,
