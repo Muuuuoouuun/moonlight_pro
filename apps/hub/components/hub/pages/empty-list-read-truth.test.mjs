@@ -40,7 +40,8 @@ function followups(syncState,items=[],runtime=React,reload=()=>{}){
   });
 }
 function queue(syncState,rows=[],runtime=React,retry=()=>{}){
-  return component('./content.jsx','Queue',runtime,{
+  // 목록 보기 — 2026-10-21부터 Queue는 만들기·보드·목록 보기를 나누고, 예전 화면은 ContentQueueList가 그린다.
+  return component('./content.jsx','ContentQueueList',runtime,{
     getWorkspace:()=>null,useRouter:()=>({push(){}}),useSearchParams:()=>new URLSearchParams(),useContentLedger:()=>({syncState,brands:[],queue:rows,tagTrends:[]}),
     filterBrandsByWorkspace:rows=>rows,filterContentByWorkspace:rows=>rows,contentQueueScope,contentQueueTabs,statusKeyOf:item=>item.statusKey,
     CONTENT_QUEUE_PAGE_SIZE:30,usePageCreateHotkey(){},readContentLedger:retry,
@@ -101,4 +102,30 @@ test('Content queue keeps partial rows visible and empty retry is explicit read-
   let reads=0;const Page=queue('partial',[],inertReact,()=>reads++);
   const tree=Page({});assert.equal(reads,0);
   const state=find(tree,node=>node.type==='EmptyState')[0];state.props.action.props.onClick();assert.equal(reads,1);
+});
+
+function contentFlow(syncState,view='make'){
+  const marker=name=>()=>React.createElement('section',null,name);
+  const Flow=component('./content-flow.jsx','ContentFlow',React,{
+    getWorkspace:()=>null,useSearchParams:()=>new URLSearchParams(),useViewNavigation:()=>()=>{},usePageCreateHotkey(){},
+    useContentLedger:()=>({syncState,brands:[],items:[],variants:[],publishLogs:[]}),useContentSchedule:()=>({status:'live',schedules:[],reload(){}}),
+    filterBrandsByWorkspace:rows=>rows,filterContentByWorkspace:rows=>rows,contentQueueScope:rows=>rows,readContentLedger(){},
+    buildFlow:()=>({idea:[],plan:[],make:[],polish:[],ship:[]}),buildPublishLog:()=>[],flowWeek:()=>[],
+    FlowSkeleton:()=>React.createElement('div',{role:'status'},'콘텐츠 흐름 불러오는 중'),MakeView:marker('만들기 화면'),BoardView:marker('보드 화면'),
+    TruthBadge:({state})=>React.createElement('span',null,`truth:${state}`),ContentPageHead:({note})=>React.createElement('header',null,note),
+  });
+  return ()=>React.createElement(Flow,{view});
+}
+
+test('Content 만들기·보드 never draw an empty flow while the ledger is loading, failed or unconnected',()=>{
+  const loading=html(contentFlow('loading'));
+  assert.match(loading,/콘텐츠 흐름 불러오는 중/);assert.doesNotMatch(loading,/만들기 화면/);
+  const failed=html(contentFlow('error','board'));
+  assert.match(failed,/truth:error/);assert.match(failed,/비어 있다는 뜻은 아닙니다/);assert.doesNotMatch(failed,/보드 화면/);
+  const preview=html(contentFlow('preview'));
+  assert.match(preview,/truth:preview/);assert.doesNotMatch(preview,/만들기 화면/);
+  assert.match(html(contentFlow('live')),/만들기 화면/);
+  assert.match(html(contentFlow('live','board')),/보드 화면/);
+  const partial=html(contentFlow('partial'));
+  assert.match(partial,/truth:partial/);assert.match(partial,/만들기 화면/);
 });

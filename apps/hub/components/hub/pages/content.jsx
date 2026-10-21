@@ -14,6 +14,8 @@ import { ContentIdeaCapture } from "./content-idea-capture";
 import { contentQueueScope, contentQueueTabs } from "@/lib/content-workflow";
 import { useContentLedger, readContentLedger } from "../use-content-ledger";
 import { campaignStudioHref } from '@/lib/content-studio-routing';
+import { resolveContentView } from '@/lib/content-flow';
+import { ContentFlow, ContentPageHead } from './content-flow';
 import "./content-workflow.css";
 
 function statusKeyOf(item) {
@@ -47,7 +49,7 @@ const CADENCE_PLOT_H = 38;
 function ContentCadencePanel({ cadence, syncState }) {
   if (!cadence) {
     return (
-      <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <SectionTitle style={{ marginBottom: 0 }}>발행 리듬</SectionTitle>
         {syncState === 'loading'
           ? <Skeleton lines={3} />
@@ -63,7 +65,7 @@ function ContentCadencePanel({ cadence, syncState }) {
   const goalY = CADENCE_BASELINE - ((cadence.goal || 0) / scaleMax) * CADENCE_PLOT_H;
 
   return (
-    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <SectionTitle style={{ marginBottom: 0 }}>발행 리듬</SectionTitle>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
         <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{cadence.published}</span>
@@ -98,7 +100,7 @@ function ContentTagTrendPanel({ tagTrends, syncState }) {
   const maxCount = Math.max(1, ...tagTrends.map((entry) => entry.count));
 
   return (
-    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', padding: 14, display: 'flex', flexDirection: 'column', gap: 9 }}>
+    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 9 }}>
       <SectionTitle style={{ marginBottom: 0 }}>최근 태그</SectionTitle>
       {loading && <Skeleton lines={4} />}
       {showEmptyNote && (
@@ -113,7 +115,7 @@ function ContentTagTrendPanel({ tagTrends, syncState }) {
       {tagTrends.map((entry) => (
         <div key={entry.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 84px) minmax(0, 1fr) minmax(22px, max-content) 30px', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{entry.tag}</span>
-          <span style={{ height: 5, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
+          <span style={{ height: 5, borderRadius: 3, background: 'var(--well, var(--surface-3))', boxShadow: 'var(--shadow-inset, none)', overflow: 'hidden' }}>
             <span style={{ display: 'block', height: '100%', width: `${Math.round((entry.count / maxCount) * 100)}%`, background: 'var(--moon-300)', borderRadius: 3 }} />
           </span>
           <span className="num" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{entry.count}</span>
@@ -124,7 +126,13 @@ function ContentTagTrendPanel({ tagTrends, syncState }) {
   );
 }
 
-export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
+// 소재·제작 — 보기 셋: 만들기(기본, 13b) · 보드(13a) · 목록(예전 화면). `?view=`로 남는다(2026-10-21 운영자 확정).
+export function Queue(props) {
+  const view = resolveContentView(useSearchParams().get('view'));
+  return view === 'list' ? <ContentQueueList {...props} /> : <ContentFlow workspace={props.workspace} view={view} />;
+}
+
+function ContentQueueList({ workspace, onNavigate, onGuidanceAsk }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -156,28 +164,25 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
   React.useEffect(() => { if (focusIndex >= 0) setPage(Math.floor(focusIndex / CONTENT_QUEUE_PAGE_SIZE) + 1); }, [focusIndex]);
   return (
     <div className="hub-page content-queue" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>콘텐츠</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>소재를 담고, 원고를 이어 쓰고, 발행 기록을 남깁니다. <SyncBadge state={ledger.syncState} /></div>
-        </div>
-        <div style={{ flex: 1 }} />
-        <Button variant="outline" size="sm" icon="plus" onClick={createDraft}>바로 원고 쓰기 <Kbd>N</Kbd></Button>
-        {(workspace === 'brand' || selectedBrand?.orgScope === 'personal') && (
-          <ContextMentorRail
-            domain="content"
-            contextKey={['idea', 'draft', 'review'].includes(tab) ? `content:${tab}` : undefined}
-            contextLabel={selectedBrand?.name || '콘텐츠'}
-            disabled={selectedBrand?.orgScope !== 'personal'}
-            onGuidanceAsk={card => onGuidanceAsk?.(card, { ref: selectedBrand?.key, label: selectedBrand?.name })}
-            onNavigate={onNavigate}
-          />
-        )}
-      </div>
+      <ContentPageHead view="list"
+        note={<>소재를 담고, 원고를 이어 쓰고, 발행 기록을 남깁니다. <SyncBadge state={ledger.syncState} /></>}
+        actions={<>
+          <Button variant="outline" size="sm" icon="plus" onClick={createDraft}>바로 원고 쓰기 <Kbd>N</Kbd></Button>
+          {(workspace === 'brand' || selectedBrand?.orgScope === 'personal') && (
+            <ContextMentorRail
+              domain="content"
+              contextKey={['idea', 'draft', 'review'].includes(tab) ? `content:${tab}` : undefined}
+              contextLabel={selectedBrand?.name || '콘텐츠'}
+              disabled={selectedBrand?.orgScope !== 'personal'}
+              onGuidanceAsk={card => onGuidanceAsk?.(card, { ref: selectedBrand?.key, label: selectedBrand?.name })}
+              onNavigate={onNavigate}
+            />
+          )}
+        </>} />
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
           브랜드
-          <select aria-label="콘텐츠 브랜드 필터" value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} style={{ minHeight: 40, maxWidth: '100%', background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: '6px 10px' }}>
+          <select aria-label="콘텐츠 브랜드 필터" value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} style={{ minHeight: 40, maxWidth: '100%', background: 'var(--well, var(--surface-2))', boxShadow: 'var(--shadow-inset, none)', color: 'var(--fg)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: '6px 10px' }}>
             <option value="all">전체 브랜드 · 미지정 포함</option>
             {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
           </select>
