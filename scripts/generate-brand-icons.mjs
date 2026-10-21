@@ -17,11 +17,15 @@ for (const size of [192, 512]) {
   await writeFile(resolve(publicDir, `icon-${size}.png`), await png(size));
 }
 
-// Full-bleed: 타일 둥근 모서리 밖을 타일 가장자리 색으로 채워 Android 원형·스퀘어클 마스크와
-// iOS 자체 라운딩이 투명 모서리를 드러내지 않게 한다. 기호는 타일 가운데 60% 안이라 안전 영역(80%) 안이다.
-const { data: edge } = await sharp(source).extract({ left: 512, top: 24, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
-const fullBleed = sharp({ create: { width: 512, height: 512, channels: 4, background: { r: edge[0], g: edge[1], b: edge[2], alpha: 1 } } })
-  .composite([{ input: await png(512) }]);
+// Full-bleed: 타일 둥근 모서리 밖을 타일과 같은 대각 그라데이션(왼쪽 위 밝음 → 오른쪽 아래 어두움)으로 채워
+// Android 원형·스퀘어클 마스크와 iOS 자체 라운딩이 투명 모서리나 색 이음매를 드러내지 않게 한다.
+// 기호는 타일 가운데 60% 안이라 안전 영역(80%) 안이다.
+const hex = async (x, y) => {
+  const { data } = await sharp(source).extract({ left: x, top: y, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
+  return `#${[0, 1, 2].map((k) => data[k].toString(16).padStart(2, "0")).join("")}`;
+};
+const corners = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${await hex(180, 180)}"/><stop offset="1" stop-color="${await hex(844, 844)}"/></linearGradient></defs><rect width="512" height="512" fill="url(#g)"/></svg>`);
+const fullBleed = sharp(corners).composite([{ input: await png(512) }]);
 const maskable = await fullBleed.png().toBuffer();
 await writeFile(resolve(publicDir, "icon-maskable-512.png"), maskable);
 await writeFile(resolve(publicDir, "apple-touch-icon.png"), await sharp(maskable).resize(180, 180).png().toBuffer());
