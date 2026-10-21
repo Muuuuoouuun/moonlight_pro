@@ -19,7 +19,8 @@ for (const count of [0, 1, 8, 9, 100]) {
     assert.equal(agenda.state, "live");
     assert.deepEqual(ids(agenda.items), ids(items));
     assert.deepEqual(agenda.items.map((item) => item.outcomeKey), items.map((item) => item.outcomeKey));
-    assert.ok(agenda.items.every((item) => !("completed" in item) && !("endAt" in item)));
+    // 끝 시각은 제공자 값 그대로만 싣는다(없으면 null) — 완료 여부는 만들지 않는다(2026-10-21 오늘 13a 하루 띠).
+    assert.ok(agenda.items.every((item) => !("completed" in item) && item.endAt === null));
   });
 }
 
@@ -118,7 +119,8 @@ test('Today retains supplied cross-midnight travel without inventing ongoing or 
     assert.equal(agenda.items[0].whenLabel, '2026-10-19 23:00 시작');
     assert.equal(agenda.items[0].outcomeKey, travel.outcomeKey);
     assert.equal(todayAgendaRows(agenda.items, new Date(now))[0].label, '시작 시각 지남');
-    assert.ok(!('endAt' in agenda.items[0]) && !('completed' in agenda.items[0]));
+    assert.equal(agenda.items[0].endAt, travel.end.dateTime);
+    assert.ok(!('completed' in agenda.items[0]));
   }
 });
 
