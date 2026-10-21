@@ -1,6 +1,6 @@
 # Moonlight Vertex Cloud 연결
 
-상태: 코드와 로컬 빌드 검증 완료. Google ADC 로그인, 운영 IAM 연결, 실제 모델 호출, Vercel 배포, 결제 반영 확인은 아직 진행 전이다.
+상태: 코드/로컬 빌드 검증, 정상화 계정 ADC 로그인, 운영 IAM 생성 완료. 로컬에서 Vertex의 gemini-3.5-flash와 gemini-3.1-pro-preview 실제 호출 HTTP 200 확인. Vercel 배포/운영 호출과 결제 반영 확인은 진행 중이다.
 
 ## 대상과 과금 경로
 
@@ -42,7 +42,7 @@ node --env-file=apps/engine/.env.local scripts/check-vertex-connection.mjs
 
 확인 스크립트는 짧은 연결 프롬프트만 보내고, 비밀값/프롬프트/공급자 오류 원문 없이 상태와 토큰 수만 출력한다.
 
-## Vercel 운영 인증 계획
+## Vercel 운영 인증 구성
 
 조회로 확인한 운영 대상:
 
@@ -53,7 +53,7 @@ node --env-file=apps/engine/.env.local scripts/check-vertex-connection.mjs
 
 팀: `muuuuoouuuns-projects`, ID `team_0jcdDqLABZA9p1S2imXZMMLd`.
 
-다음 권한/리소스는 아직 생성하지 않았다. 새 접근 권한을 부여하는 단계는 실행 전 확인한다.
+사용자의 실행 전 승인 후 다음 권한/리소스를 생성했고, provider ACTIVE 상태와 두 운영 subject의 impersonation 권한을 조회로 검증했다.
 
 1. 서비스 계정 `moonlight-vertex@project-1dd9933a-77b3-4f19-b3f.iam.gserviceaccount.com`을 생성한다. 장기 키는 만들지 않는다.
 2. 프로젝트의 커스텀 역할 `moonlightVertexCaller`에 `aiplatform.endpoints.predict`, `serviceusage.services.use`만 넣어 이 서비스 계정에 부여한다.
@@ -91,6 +91,7 @@ Vercel에서는 `VERCEL=1`이면 OIDC 인증을 사용하며 불완전한 연동
 
 - 전체 회귀 테스트: 6,211개 중 6,196개 통과, 15개 건너뜀, 실패 0개.
 
+- 로컬 ADC 실제 호출: gemini-3.5-flash HTTP 200 (총 130토큰), gemini-3.1-pro-preview HTTP 200 (총 179토큰).
 - Engine TypeScript 및 프로덕션 빌드 통과.
 - Hub 프로덕션 빌드 통과. 브라우저용 회의 요약 포맷 함수를 별도 파일로 분리하여 Google 인증 코드가 클라이언트에 포함되지 않도록 했다.
 - 공통 transport: Vertex 주소/프로젝트/Bearer, 지역 주소, 잘못된 설정, 인증 실패 시 대체 호출 금지, Vercel federation 설정, 호출 전 취소, 기존 API 키 호환 검증.

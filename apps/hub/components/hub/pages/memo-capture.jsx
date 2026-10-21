@@ -130,7 +130,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
           return;
         }
         if (envelope.status === "preview") {
-          setMessage(envelope.message || "GEMINI_API_KEY 설정이 필요합니다.");
+          setMessage(envelope.message || "AI 연결 설정이 필요합니다.");
           return;
         }
         const data = envelope.status === "ok" ? envelope.data : null;
