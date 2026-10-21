@@ -14,6 +14,7 @@ import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
 import { isTemplateNextAction } from "../sales-os/lead-enrichment.js";
 import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
 import { normalizeGenreLabels } from "../sales-os/customer-labels.js";
+import { webEnrichmentView } from "../sales-os/web-enrichment.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 import { normalizeRevenueTargets } from "../revenue-target.js";
 import { formatWon } from "../won-format.js";
@@ -205,6 +206,8 @@ export function mapLead(row, companyById, contactById, trackingStartedAt = null,
     contactEmail: contact?.email || null,
     contactPhone: contact?.phone || row.phone || null,
     contactTitle: contact?.title || null,
+    // 웹 보강 정보(companies.meta.enrichment_web) — 고객 상세가 읽기만 한다. 없으면 null.
+    webEnrichment: webEnrichmentView(company),
     // record_contact_outcome_v1이 남기는 마지막 반응 — 첫 화면 집중 고객 행이 서로 다른
     // 말을 하게 만드는 유일한 사실이다(0c). 없으면 null.
     lastReaction: meta.last_reaction || null,
@@ -318,6 +321,8 @@ export function mapAccount(row, dealStatsByCompany, companyById = new Map()) {
       ? row.meta.focus_override
       : "default",
     owner: row.owner_id ? "Me" : "Unassigned",
+    // 웹 보강 정보(companies.meta.enrichment_web) — 고객 상세가 읽기만 한다. 없으면 null.
+    webEnrichment: webEnrichmentView(row.company_id ? companyById.get(row.company_id) : null),
   };
 }
 
