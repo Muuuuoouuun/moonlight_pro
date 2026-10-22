@@ -324,10 +324,14 @@
   .hub-app .hub-card-link { transition: none; transform: none !important; }
 }
 
-/* Checkbox tap halo — visual box stays 14px, touch target grows to ≥32px on coarse
-   pointers only (§11 touch-target floor without inflating desktop density). */
+/* Bare checkbox tap halo — keep the 14px face and desktop density, but center a
+   44px target on coarse pointers (§11). CheckboxRow already owns its full-row target. */
 @media (pointer: coarse) {
-  .hub-app .hub-checkbox::before { content: ''; position: absolute; inset: -9px; }
+  .hub-app button.hub-checkbox::before {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: max(100%, 44px); height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
 }
 
 /* Kanban card hover (rests at --surface-2, one step lighter than .hub-row's --surface/--bg
@@ -1718,8 +1722,7 @@
   }
 
   /* Checkboxes keep their 14px face — the blanket 44px floors turned them into tall
-     pills on phones. Their rows carry the touch height; a padded hit-area wrapper is
-     the eventual fix if bare-checkbox taps prove fiddly. */
+     pills on phones. The centered ::before halo above owns the coarse-pointer target. */
   .hub-app button[role="checkbox"] {
     min-width: 0;
     min-height: 0 !important;
