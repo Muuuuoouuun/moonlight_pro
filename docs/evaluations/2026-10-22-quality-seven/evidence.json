@@ -1,0 +1,580 @@
+{
+  "checkedAt": "2026-10-23 Asia/Seoul",
+  "baseline": "c89ecbf2",
+  "scope": [
+    "Hub",
+    "Engine",
+    "desktop",
+    "shared packages"
+  ],
+  "tests": {
+    "root": {
+      "total": 5609,
+      "pass": 5595,
+      "fail": 0,
+      "skip": 14,
+      "sourceHead": "2efb3c3d",
+      "durationMs": 76631.001834
+    },
+    "desktop": {
+      "total": 353,
+      "pass": 353,
+      "fail": 0,
+      "skip": 0
+    }
+  },
+  "previewBrowser": {
+    "conditions": 108,
+    "routes": 27,
+    "widths": [
+      390,
+      1440
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "errors": 0,
+    "overflowCases": 0,
+    "sourceHead": "48746ea4"
+  },
+  "liveReadBrowser": {
+    "desktopRoutes": 8,
+    "mobileRoutes": 27,
+    "errors": 0,
+    "overflowCases": 0,
+    "blockedWrites": 0,
+    "writesAttempted": 0,
+    "partialReadPaths": [
+      "/api/hub/finance",
+      "/api/hub/overview",
+      "/api/hub/research/briefs"
+    ]
+  },
+  "claudeApi": {
+    "budgetUsd": 50,
+    "accountedUsd": 0.521038,
+    "calls": [
+      {
+        "name": "freshness-review",
+        "model": "claude-sonnet-5-5",
+        "costUsd": 0.099214,
+        "inputTokens": 14607,
+        "outputTokens": 7000
+      },
+      {
+        "name": "freshness-review-text",
+        "model": "claude-sonnet-5-5",
+        "costUsd": 0.0579,
+        "inputTokens": 14605,
+        "outputTokens": 2869
+      },
+      {
+        "name": "final-code-review",
+        "model": "claude-opus-5-5",
+        "costUsd": 0.270024,
+        "inputTokens": 18486,
+        "outputTokens": 9804
+      },
+      {
+        "name": "design-review",
+        "model": "claude-sonnet-5-5",
+        "costUsd": 0.028344,
+        "inputTokens": 3472,
+        "outputTokens": 2140
+      },
+      {
+        "name": "design-after-review",
+        "model": "claude-sonnet-5-5",
+        "costUsd": 0.026472,
+        "inputTokens": 3551,
+        "outputTokens": 1937
+      },
+      {
+        "name": "design-final-review",
+        "model": "claude-sonnet-5-5",
+        "costUsd": 0.039084,
+        "inputTokens": 4972,
+        "outputTokens": 2914
+      }
+    ]
+  },
+  "limitations": [
+    "No Windows hardware smoke",
+    "No production deployment",
+    "No production business writes",
+    "Local network and emulated mobile performance, not field Web Vitals",
+    "Managed full-platform restore point unavailable; verified backup covers public and moonlight_ops only"
+  ],
+  "database": {
+    "version": "17.11",
+    "platformBuild": "17.11.0.003",
+    "completedAt": "2026-10-22T23:50:11+09:00",
+    "firstAllCoreReadsConfirmedAt": "2026-10-22T23:56:31+09:00",
+    "finalRepeatedReadCheckAt": "2026-10-23T00:02:25+09:00",
+    "comparedTables": 114,
+    "comparedRows": 7694,
+    "comparedFunctions": 100,
+    "differences": 0,
+    "readinessPass": 48,
+    "coreReadChecks": 15,
+    "coreReadLive": 15,
+    "healthChecks": 6,
+    "healthOk": 6,
+    "lateHealthCheck": {
+      "at": "2026-10-23T01:34:50+09:00",
+      "hub": {
+        "http": 200,
+        "status": "ok"
+      },
+      "engine": {
+        "http": 200,
+        "status": "ok"
+      },
+      "scope": "public health only, separate from the earlier authenticated reads/data-integrity checks"
+    }
+  },
+  "sourceHead": "2efb3c3d",
+  "authenticationRuntime": {
+    "environment": "isolated local production, not deployed",
+    "checks": 17,
+    "pass": 17,
+    "missingConfiguration": "503 fail closed",
+    "unauthenticatedPrivateReads": "401",
+    "foreignOriginWrites": "403"
+  },
+  "accessibility": {
+    "engine": "axe-core 4.14.0 / Chromium 151",
+    "settledConditions": 20,
+    "baselineViolationNodeInstances": 70,
+    "finalProductionViolationNodeInstances": 0,
+    "finalStatus": "passed automated settled scan; manual compatibility limitations remain",
+    "manualChecks": [
+      "6 shortcut accessible names, Tab order and Enter navigation",
+      "320/390/1440 quick-input row containment and mobile 44px targets",
+      "computed glyph contrast 6.49 light / 8.57 dark"
+    ],
+    "limitations": [
+      "No VoiceOver or text-only zoom validation",
+      "Real browser 200% checks cover five Preview routes and four interaction conditions, not whole WCAG compliance"
+    ],
+    "buildId": "iZ8NrCtJituF7IygMkERY",
+    "routes": [
+      "home",
+      "daily-brief",
+      "work/my",
+      "agents/office-council",
+      "revenue/customers"
+    ],
+    "genericAriaIncompleteNodes": 0,
+    "sourceHead": "2efb3c3d",
+    "mentorKeyboardAndAx": [
+      {
+        "width": 390,
+        "role": "button",
+        "name": "멘토 관점 열기",
+        "description": "전체 고객 멘토 관점 열기",
+        "enterOpened": true,
+        "escapeClosed": true,
+        "focusRestored": true
+      },
+      {
+        "width": 1440,
+        "role": "button",
+        "name": "멘토 관점 열기",
+        "description": "전체 고객 멘토 관점 열기",
+        "enterOpened": true,
+        "escapeClosed": true,
+        "focusRestored": true
+      }
+    ],
+    "browserZoom": {
+      "sourceHead": "caa200cf",
+      "buildId": "x2R7y2GNe4yPedk6--9eU",
+      "engine": "Chromium 151",
+      "factor": 2,
+      "mechanism": "chrome.tabs.setZoom automatic mode in an isolated temporary profile; getZoom=2 and innerWidth exactly half of viewport verified",
+      "conditions": 20,
+      "viewportWidths": [
+        1440,
+        1280
+      ],
+      "cssViewportWidths": [
+        720,
+        640
+      ],
+      "routes": 5,
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "horizontalOverflowCases": 0,
+      "pageErrors": [],
+      "interactionCases": [
+        {
+          "width": 1440,
+          "theme": "light",
+          "zoom": 2,
+          "searchEditable": true,
+          "customerNOpened": true,
+          "customerDialogWithinViewport": true,
+          "firstDialogFocus": {
+            "tag": "INPUT",
+            "type": "text"
+          },
+          "memoMOpened": true,
+          "memoTwoLinesEditable": true,
+          "memoEscapeClosed": true,
+          "errors": []
+        },
+        {
+          "width": 1440,
+          "theme": "dark",
+          "zoom": 2,
+          "searchEditable": true,
+          "customerNOpened": true,
+          "customerDialogWithinViewport": true,
+          "firstDialogFocus": {
+            "tag": "INPUT",
+            "type": "text"
+          },
+          "memoMOpened": true,
+          "memoTwoLinesEditable": true,
+          "memoEscapeClosed": true,
+          "errors": []
+        },
+        {
+          "width": 1280,
+          "theme": "light",
+          "zoom": 2,
+          "searchEditable": true,
+          "customerNOpened": true,
+          "customerDialogWithinViewport": true,
+          "firstDialogFocus": {
+            "tag": "INPUT",
+            "type": "text"
+          },
+          "memoMOpened": true,
+          "memoTwoLinesEditable": true,
+          "memoEscapeClosed": true,
+          "errors": []
+        },
+        {
+          "width": 1280,
+          "theme": "dark",
+          "zoom": 2,
+          "searchEditable": true,
+          "customerNOpened": true,
+          "customerDialogWithinViewport": true,
+          "firstDialogFocus": {
+            "tag": "INPUT",
+            "type": "text"
+          },
+          "memoMOpened": true,
+          "memoTwoLinesEditable": true,
+          "memoEscapeClosed": true,
+          "errors": []
+        }
+      ],
+      "visualEvidence": "10 CDP viewport screenshots; initial Playwright fullPage screenshots were cropped at browser zoom and are excluded",
+      "limitations": [
+        "Preview only",
+        "Not text-only zoom",
+        "Not screen reader speech",
+        "Not every control or workflow"
+      ]
+    },
+    "checkboxTouch": {
+      "source": "2efb3c3d (equivalent to 64569953)",
+      "visualFacePx": 14,
+      "computedHitRegionBeforePx": 30,
+      "computedHitRegionAfterPx": 44,
+      "relatedTestsPass": 24,
+      "visualComparisonConditions": 4,
+      "pixelDifferences": 0,
+      "databaseBoundaryTap": "fresh production build with matching source: right center +21px touch caused exactly one PATCH HTTP200 saved and SQL done; no CSS injection",
+      "limitation": "last row bottom-left corner clipped by existing rounded Card overflow; not every ancestor clipping context certified"
+    }
+  },
+  "localDatabaseRoundtrip": {
+    "sourceHead": "34ff2ea4f53a5a2eb5173244ab520baa45518a70",
+    "basicFlowsPassed": 3,
+    "lostResponseRecoveryPassed": true,
+    "sqlPassed": true,
+    "report": "local-roundtrip.md",
+    "runtime": "Next development, 1440x1000",
+    "productionWrites": 0
+  },
+  "freshness": {
+    "geminiDefault": "gemini-3.6-flash",
+    "pricingBoundaryUtc": "2027-01-01T00:00:00Z",
+    "usdKrw": 1334.03,
+    "fxObservedAt": "2026-10-16",
+    "fxReleasedAt": "2026-10-19",
+    "checkedAt": "2026-10-23",
+    "report": "../2026-10-23-gemini-default-and-pricing.md",
+    "productionModelOverrideInspection": {
+      "status": "unverified",
+      "reason": "Local production env source files absent; Vercel connector returned HTTP403 for the documented team scope. No environment variables or deployments changed."
+    }
+  },
+  "savedTaskViewNavigation": {
+    "sourceHead": "050e12f4",
+    "buildId": "6uIhEc4EipPMxud_5ZbpV",
+    "scope": "UI navigation only; synthetic read/write envelopes intercepted in local production browser, not persistence evidence",
+    "results": [
+      {
+        "width": 390,
+        "viewAfterHighlight": true,
+        "reloadPersisted": true,
+        "postsIntercepted": 1,
+        "externalBusinessWrites": 0,
+        "pageErrors": []
+      },
+      {
+        "width": 1440,
+        "viewAfterHighlight": true,
+        "reloadPersisted": true,
+        "postsIntercepted": 1,
+        "externalBusinessWrites": 0,
+        "pageErrors": []
+      }
+    ]
+  },
+  "builds": {
+    "hub": {
+      "source": "2efb3c3d",
+      "buildId": "iZ8NrCtJituF7IygMkERY",
+      "status": "passed"
+    },
+    "engine": {
+      "source": "fbb0bfcb",
+      "status": "passed; no later Engine code changes"
+    },
+    "typecheck": {
+      "source": "2efb3c3d",
+      "successful": 4,
+      "cached": 0,
+      "status": "passed"
+    },
+    "syntax": {
+      "source": "2efb3c3d",
+      "files": 1749,
+      "issues": 0,
+      "scope": "syntax only, not semantic lint"
+    }
+  },
+  "interimIndependentAssessment": {
+    "sourceHead": "caa200cf",
+    "performanceSource": "027a6785 / EFZ1n3Y1HNSSZOV4a9uEq",
+    "weightedAverage": 89.3,
+    "minimum": 86,
+    "targetMet": false,
+    "scores": {
+      "speed": 86,
+      "practicality": 90,
+      "coreFocus": 89,
+      "design": 87,
+      "stability": 93,
+      "securityAndEnvironment": 91,
+      "freshness": 91
+    },
+    "weights": {
+      "speed": 20,
+      "practicality": 20,
+      "coreFocus": 20,
+      "design": 10,
+      "stability": 15,
+      "securityAndEnvironment": 10,
+      "freshness": 5
+    },
+    "scope": "historical midpoint; subsequent mobile real database, zoom, touch, Undo and final performance evidence require independent final scoring"
+  },
+  "taskUndoAnimation": {
+    "source": "e2cc44d8",
+    "regression": "Undo before 180ms left a visual timer hiding the restored row despite SQL todo",
+    "testedUndoAtMs": [
+      0,
+      100,
+      250
+    ],
+    "relatedTestsPassed": 40,
+    "productionDatabaseRetest": {
+      "source": "212d68060a57b193f9dc466ec7cdfcb1ae4fab33",
+      "trials": 5,
+      "observedClickGapsMs": [
+        47.6,
+        102.8,
+        154.7,
+        67.7,
+        67.3
+      ],
+      "allVisible300And3600Ms": true,
+      "patchCount": 0,
+      "eachSqlRows": 1,
+      "eachSqlTodo": true,
+      "normalCompletion": {
+        "productionBoundary": {
+          "x": 67,
+          "y": 735.1875,
+          "hit": true,
+          "pseudoWidth": "44px"
+        },
+        "http": 200,
+        "status": "saved",
+        "patchCount": 1,
+        "sql": {
+          "rows": 1,
+          "done": true
+        }
+      },
+      "report": "mobile-roundtrip.md",
+      "equivalentUndoAndCheckboxSource": "2efb3c3d",
+      "equivalenceScope": "Only my-work.jsx, my-work-quick-recovery.test.mjs and hub-tokens.css plus the Undo/checkbox patch IDs match; 212d6806 excludes the separate cf9a97cc compression change."
+    }
+  },
+  "mobileProductionRoundtrip": {
+    "baseline": "caa200cf",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "touch": true
+    },
+    "runtime": {
+      "next": "production",
+      "database": "PostgreSQL17.10",
+      "rest": "PostgREST14.18"
+    },
+    "flowsPassed": [
+      "task create, View, reload and rediscovery",
+      "contact summary, next action and date",
+      "two-line memo after closing browser and new login"
+    ],
+    "finalSql": {
+      "tasks": 3,
+      "completedTasks": 3,
+      "leads": 1,
+      "activities": 1,
+      "journal": 1,
+      "receipts": 1,
+      "memoUnchanged": true,
+      "contactUnchanged": true,
+      "backupUnchanged": true,
+      "at": "2026-10-22T17:16:54.742Z"
+    },
+    "productionBusinessWrites": 0,
+    "limitations": [
+      "Emulation, not real mobile keyboard",
+      "Local PostgreSQL17.10, not production17.11",
+      "Rounded Card bottom-left extreme checkbox corner remains clipped",
+      "Not human workflow effectiveness or long-term omission rate"
+    ],
+    "report": "mobile-roundtrip.md",
+    "cleanupVerified": true,
+    "equivalentUndoAndCheckboxSource": "2efb3c3d",
+    "equivalenceScope": "Only my-work.jsx, my-work-quick-recovery.test.mjs and hub-tokens.css plus the Undo/checkbox patch IDs match; 212d6806 excludes the separate cf9a97cc compression change."
+  },
+  "finalPerformance": {
+    "sourceHead": "2efb3c3d",
+    "buildId": "iZ8NrCtJituF7IygMkERY",
+    "conditions": {
+      "repeatsPerRoute": 5,
+      "networkLatencyMs": 150,
+      "downloadBytesPerSecond": 200000,
+      "cpuThrottle": 4,
+      "cache": "disabled",
+      "viewport": "390x844",
+      "environment": "local production with live Seoul reads; not field Web Vitals"
+    },
+    "runs": 20,
+    "medians": {
+      "home": {
+        "lcp": 5556,
+        "cls": 0.0003574371990400382,
+        "jsBytes": 277311,
+        "totalBytes": 1008886,
+        "longTaskExcessMs": 0,
+        "lcpAll": [
+          5580,
+          5556,
+          3288,
+          5556,
+          5564
+        ],
+        "apiErrors": []
+      },
+      "daily-brief": {
+        "lcp": 3556,
+        "cls": 0.07856944418047605,
+        "jsBytes": 330867,
+        "totalBytes": 1057650,
+        "longTaskExcessMs": 0,
+        "lcpAll": [
+          3568,
+          3556,
+          3524,
+          3556,
+          3560
+        ],
+        "apiErrors": []
+      },
+      "work/my": {
+        "lcp": 2960,
+        "cls": 0.0031924271260062235,
+        "jsBytes": 261186,
+        "totalBytes": 997285,
+        "longTaskExcessMs": 0,
+        "lcpAll": [
+          2972,
+          2984,
+          2960,
+          2956,
+          2956
+        ],
+        "apiErrors": []
+      },
+      "revenue/customers": {
+        "lcp": 4144,
+        "cls": 1.4033932020844096e-05,
+        "jsBytes": 363520,
+        "totalBytes": 1127979,
+        "longTaskExcessMs": 0,
+        "lcpAll": [
+          4220,
+          4144,
+          4140,
+          4140,
+          4172
+        ],
+        "apiErrors": []
+      }
+    },
+    "report": "performance.json"
+  },
+  "assessmentAfterFinal11": {
+    "sourceHead": "2efb3c3d",
+    "weightedAverage": 89.9,
+    "minimum": 87,
+    "targetMet": false,
+    "scores": {
+      "speed": 87,
+      "practicality": 91,
+      "coreFocus": 89,
+      "design": 89,
+      "stability": 93,
+      "securityAndEnvironment": 91,
+      "freshness": 91
+    },
+    "weights": {
+      "speed": 20,
+      "practicality": 20,
+      "coreFocus": 20,
+      "design": 10,
+      "stability": 15,
+      "securityAndEnvironment": 10,
+      "freshness": 5
+    },
+    "report": "final-assessment.md",
+    "scope": "Independent judgment of verified source and evidence; not deployed whole-product certification. Further remediation remains."
+  }
+}

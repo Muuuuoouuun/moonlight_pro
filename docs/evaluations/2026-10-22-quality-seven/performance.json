@@ -1,0 +1,3755 @@
+{
+  "conditions": {
+    "networkLatencyMs": 150,
+    "downloadBytesPerSecond": 200000,
+    "cpuThrottle": 4,
+    "cache": "disabled",
+    "viewport": "390x844",
+    "environment": "local production Preview; not public network or real device"
+  },
+  "samplesPerRoute": 3,
+  "medians": [
+    {
+      "route": "home",
+      "before": {
+        "lcp": 4460,
+        "jsBytes": 608665,
+        "initialLayoutShiftSum": 0.1253,
+        "longTaskExcessMs": 26
+      },
+      "after": {
+        "lcp": 4080,
+        "jsBytes": 318516,
+        "initialLayoutShiftSum": 0.1168,
+        "longTaskExcessMs": 10
+      }
+    },
+    {
+      "route": "daily-brief",
+      "before": {
+        "lcp": 4164,
+        "jsBytes": 608665,
+        "initialLayoutShiftSum": 0.0417,
+        "longTaskExcessMs": 20
+      },
+      "after": {
+        "lcp": 4128,
+        "jsBytes": 361789,
+        "initialLayoutShiftSum": 0.0417,
+        "longTaskExcessMs": 17
+      }
+    },
+    {
+      "route": "work/my",
+      "before": {
+        "lcp": 4128,
+        "jsBytes": 608665,
+        "initialLayoutShiftSum": 0.2427,
+        "longTaskExcessMs": 18
+      },
+      "after": {
+        "lcp": 3372,
+        "jsBytes": 260005,
+        "initialLayoutShiftSum": 0.2427,
+        "longTaskExcessMs": 18
+      }
+    },
+    {
+      "route": "revenue/customers",
+      "before": {
+        "lcp": 4916,
+        "jsBytes": 647653,
+        "initialLayoutShiftSum": 0,
+        "longTaskExcessMs": 19
+      },
+      "after": {
+        "lcp": 4740,
+        "jsBytes": 399010,
+        "initialLayoutShiftSum": 0,
+        "longTaskExcessMs": 11
+      }
+    }
+  ],
+  "metricNote": "Historical cls field is the sum of initial loading layout shifts, not the session-window CLS. TBT field is all observed long-task excess over 50ms, not Lighthouse TBT. LCP and transferred JS are directly observed.",
+  "liveConditionNote": "Same emulation using live Seoul DB reads; this is a state comparison, not another code before/after improvement.",
+  "liveMedians": [
+    {
+      "route": "home",
+      "lcp": 4456,
+      "initialLayoutShiftSum": 0.17202779360388268
+    },
+    {
+      "route": "daily-brief",
+      "lcp": 4108,
+      "initialLayoutShiftSum": 0.022988319686647444
+    },
+    {
+      "route": "work/my",
+      "lcp": 3228,
+      "initialLayoutShiftSum": 0.004895994571526027
+    },
+    {
+      "route": "revenue/customers",
+      "lcp": 4792,
+      "initialLayoutShiftSum": 1.6706478515549913e-05
+    }
+  ],
+  "finalMeasurement": {
+    "preview": {
+      "metricsVersion": 2,
+      "sourceHead": "48746ea4",
+      "buildId": "1x8LSkEiAY33Wr7u_kSPX",
+      "conditions": {
+        "networkLatencyMs": 150,
+        "downloadBytesPerSecond": 200000,
+        "cpuThrottle": 4,
+        "cache": "disabled",
+        "viewport": "390x844",
+        "environment": "local production Preview; not field Web Vitals"
+      },
+      "rows": [
+        {
+          "route": "home",
+          "samples": 3,
+          "median": {
+            "lcp": 3756,
+            "cls": 0.11775750164572293,
+            "layoutShiftSum": 0.11778766963328743,
+            "jsBytes": 278097,
+            "longTaskExcessMs": 22
+          },
+          "lcpRange": [
+            3712,
+            3812
+          ],
+          "clsRange": [
+            0.09474448531635028,
+            0.11775751612616672
+          ]
+        },
+        {
+          "route": "daily-brief",
+          "samples": 3,
+          "median": {
+            "lcp": 3820,
+            "cls": 0.04162492606485329,
+            "layoutShiftSum": 0.04167004564955374,
+            "jsBytes": 330829,
+            "longTaskExcessMs": 4
+          },
+          "lcpRange": [
+            3804,
+            3832
+          ],
+          "clsRange": [
+            0.04162492606485329,
+            0.04162492606485329
+          ]
+        },
+        {
+          "route": "work/my",
+          "samples": 3,
+          "median": {
+            "lcp": 3504,
+            "cls": 0.23676230635938728,
+            "layoutShiftSum": 0.23970437266459962,
+            "jsBytes": 260119,
+            "longTaskExcessMs": 42
+          },
+          "lcpRange": [
+            3400,
+            3512
+          ],
+          "clsRange": [
+            0.18499017916098653,
+            0.23676230635938728
+          ]
+        },
+        {
+          "route": "revenue/customers",
+          "samples": 3,
+          "median": {
+            "lcp": 4648,
+            "cls": 0,
+            "layoutShiftSum": 0,
+            "jsBytes": 395299,
+            "longTaskExcessMs": 16
+          },
+          "lcpRange": [
+            4636,
+            4672
+          ],
+          "clsRange": [
+            0,
+            0
+          ]
+        }
+      ],
+      "apiHttpOrEnvelopeErrors": 0
+    },
+    "live": {
+      "metricsVersion": 2,
+      "sourceHead": "48746ea4",
+      "buildId": "1x8LSkEiAY33Wr7u_kSPX",
+      "conditions": {
+        "networkLatencyMs": 150,
+        "downloadBytesPerSecond": 200000,
+        "cpuThrottle": 4,
+        "cache": "disabled",
+        "viewport": "390x844",
+        "environment": "local production with live Seoul reads; not field Web Vitals"
+      },
+      "rows": [
+        {
+          "route": "home",
+          "samples": 3,
+          "median": {
+            "lcp": 4108,
+            "cls": 0.22839482728980098,
+            "layoutShiftSum": 0.22875226448884103,
+            "jsBytes": 278097,
+            "longTaskExcessMs": 9
+          },
+          "lcpRange": [
+            4008,
+            4800
+          ],
+          "clsRange": [
+            0.005551701617041569,
+            0.22875226448884103
+          ]
+        },
+        {
+          "route": "daily-brief",
+          "samples": 3,
+          "median": {
+            "lcp": 3856,
+            "cls": 0.07856944418047605,
+            "layoutShiftSum": 0.07856944418047605,
+            "jsBytes": 330829,
+            "longTaskExcessMs": 12
+          },
+          "lcpRange": [
+            3844,
+            3888
+          ],
+          "clsRange": [
+            0.02323655316217815,
+            0.07856944418047605
+          ]
+        },
+        {
+          "route": "work/my",
+          "samples": 3,
+          "median": {
+            "lcp": 3244,
+            "cls": 0.0031924271260062235,
+            "layoutShiftSum": 0.005843669968083342,
+            "jsBytes": 260119,
+            "longTaskExcessMs": 18
+          },
+          "lcpRange": [
+            3244,
+            3272
+          ],
+          "clsRange": [
+            0.0031924271260062235,
+            0.0031924271260062235
+          ]
+        },
+        {
+          "route": "revenue/customers",
+          "samples": 3,
+          "median": {
+            "lcp": 4692,
+            "cls": 1.6706478515549913e-05,
+            "layoutShiftSum": 1.6706478515549913e-05,
+            "jsBytes": 395299,
+            "longTaskExcessMs": 9
+          },
+          "lcpRange": [
+            4684,
+            4692
+          ],
+          "clsRange": [
+            1.6706478515549913e-05,
+            1.6706478515549913e-05
+          ]
+        }
+      ],
+      "apiHttpOrEnvelopeErrors": 0
+    }
+  },
+  "homeSelectedReadExperiment": {
+    "integratedCommit": "84136cc7",
+    "candidateSource": "8de44c6a",
+    "candidateBuild": "izk5oNMQaC529Gkq14SSn",
+    "baselineSource": "050e12f4",
+    "conditions": "390x844; CPU4; 150ms; 200000B/s; cache disabled; real local production Live reads",
+    "samplesPerArm": 3,
+    "measurements": [
+      {
+        "base": "http://localhost:3038",
+        "build": "6uIhEc4EipPMxud_5ZbpV",
+        "lcp": [
+          4016,
+          3964,
+          3972
+        ],
+        "medianLcp": 3972,
+        "cls": [
+          0.22839482728980098,
+          0.22839482728980098,
+          0.0003574371990400382
+        ],
+        "medianCls": 0.22839482728980098,
+        "firstActionDom": [
+          4076.600000023842,
+          4025.2000000476837,
+          3936.2000000476837
+        ],
+        "medianFirstActionDom": 4025.2000000476837,
+        "dailyBriefStarts": [
+          3471.2999999523163,
+          3463.3000000715256,
+          3456.100000023842
+        ],
+        "dailyBriefEnds": [
+          4068.5,
+          4017,
+          3928.3000000715256
+        ],
+        "dailyBriefCounts": [
+          1,
+          1,
+          1
+        ],
+        "jsBytes": [
+          278097,
+          278097,
+          278097
+        ],
+        "lcpNodes": [
+          {
+            "tag": "SPAN",
+            "className": "guidance-inline-tip__copy",
+            "size": 8092
+          },
+          {
+            "tag": "SPAN",
+            "className": "guidance-inline-tip__copy",
+            "size": 8092
+          },
+          {
+            "tag": "H3",
+            "className": "fx-card-title",
+            "size": 7416
+          }
+        ],
+        "fontCompletions": [
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 5532.199999928474
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1384.1999999284744
+            }
+          ],
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 5541.400000095367
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1393.8000000715256
+            }
+          ],
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 5525.700000047684
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1191.1000000238419
+            }
+          ]
+        ]
+      },
+      {
+        "base": "http://localhost:3150",
+        "build": "izk5oNMQaC529Gkq14SSn",
+        "lcp": [
+          5564,
+          5556,
+          5556
+        ],
+        "medianLcp": 5556,
+        "cls": [
+          0.0003574371990400382,
+          0.0003574371990400382,
+          0.0003574371990400382
+        ],
+        "medianCls": 0.0003574371990400382,
+        "firstActionDom": [
+          3484.7999999523163,
+          3460.2999999523163,
+          3530.1999999284744
+        ],
+        "medianFirstActionDom": 3484.7999999523163,
+        "dailyBriefStarts": [
+          2483.399999976158,
+          2472.899999976158,
+          2478.5
+        ],
+        "dailyBriefEnds": [
+          3441.2999999523163,
+          3419.6999999284744,
+          3485.5
+        ],
+        "dailyBriefCounts": [
+          1,
+          1,
+          1
+        ],
+        "jsBytes": [
+          277318,
+          277318,
+          277318
+        ],
+        "lcpNodes": [
+          {
+            "tag": "H3",
+            "className": "fx-card-title",
+            "size": 8138
+          },
+          {
+            "tag": "H3",
+            "className": "fx-card-title",
+            "size": 8138
+          },
+          {
+            "tag": "H3",
+            "className": "fx-card-title",
+            "size": 8138
+          }
+        ],
+        "fontCompletions": [
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 5518.299999952316
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1176.2999999523163
+            }
+          ],
+          [
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1169.6999999284744
+            },
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 5509.299999952316
+            }
+          ],
+          [
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1369.2999999523163
+            },
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 5510.5
+            }
+          ]
+        ]
+      }
+    ],
+    "conclusion": "Adopted for first-action DOM availability and session CLS; measured LCP regressed and is reported. DOM availability is not completed-animation paint."
+  },
+  "fontPreloadExperiment": {
+    "integratedCommit": "33dd8573",
+    "sourceChange": "Remove only the two font preload links; font files, CSS, family and displayed content remain unchanged.",
+    "liveSourceComparison": {
+      "builds": {
+        "baseline": "6uIhEc4EipPMxud_5ZbpV",
+        "candidate": "R3t9-zCF2rlotf50yBwdk"
+      },
+      "conditions": {
+        "viewport": "390x844",
+        "isMobile": true,
+        "deviceScaleFactor": 1,
+        "latencyMs": 150,
+        "downloadBytesPerSecond": 200000,
+        "uploadBytesPerSecond": 93750,
+        "cpuThrottle": 4,
+        "cache": "disabled, fresh browser context per navigation",
+        "theme": "app default dark",
+        "fonts": "real production HTTP; no intercepted resource fulfillment",
+        "api": "actual GET/HEAD only; browser writes blocked after isolated session login"
+      },
+      "groups": [
+        {
+          "route": "home",
+          "variant": "baseline",
+          "runs": 3,
+          "lcp": [
+            4112,
+            4040,
+            3540
+          ],
+          "medianLcp": 4040,
+          "cls": [
+            0.22839482728980098,
+            0.22839482728980098,
+            0.2357059838226731
+          ],
+          "medianCls": 0.22839482728980098,
+          "firstActionDom": [
+            4198.100000023842,
+            4109.299999952316,
+            4070.7999999523163
+          ],
+          "medianFirstActionDom": 4109.299999952316,
+          "jsBytes": [
+            278097,
+            278097,
+            278097
+          ],
+          "medianJsBytes": 278097,
+          "totalResourceBytes": [
+            1009634,
+            1009634,
+            1009634
+          ],
+          "medianTotalResourceBytes": 1009634,
+          "lcpNodes": [
+            {
+              "tag": "SPAN",
+              "className": "guidance-inline-tip__copy",
+              "size": 8092
+            },
+            {
+              "tag": "SPAN",
+              "className": "guidance-inline-tip__copy",
+              "size": 8092
+            },
+            {
+              "tag": "SPAN",
+              "className": "guidance-inline-tip__copy",
+              "size": 8092
+            }
+          ],
+          "fonts": [
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 187.60000002384186,
+                "end": 5571.200000047684
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 187.70000004768372,
+                "end": 1234.8999999761581
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 169.69999992847443,
+                "end": 5531.399999976158
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 169.79999995231628,
+                "end": 1392.8999999761581
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 167.5,
+                "end": 5540.699999928474
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 168.5,
+                "end": 1190.8999999761581
+              }
+            ]
+          ],
+          "pageErrors": 0,
+          "apiFailures": [],
+          "blockedWrites": 0
+        },
+        {
+          "route": "home",
+          "variant": "candidate",
+          "runs": 3,
+          "lcp": [
+            3820,
+            3812,
+            3728
+          ],
+          "medianLcp": 3812,
+          "cls": [
+            0.22839482728980098,
+            0.22839482728980098,
+            0.22839482728980098
+          ],
+          "medianCls": 0.22839482728980098,
+          "firstActionDom": [
+            3824.6999999284744,
+            3819.6999999284744,
+            3839.6999999284744
+          ],
+          "medianFirstActionDom": 3824.6999999284744,
+          "jsBytes": [
+            278097,
+            278097,
+            278097
+          ],
+          "medianJsBytes": 278097,
+          "totalResourceBytes": [
+            1009634,
+            1009634,
+            1009634
+          ],
+          "medianTotalResourceBytes": 1009634,
+          "lcpNodes": [
+            {
+              "tag": "SPAN",
+              "className": "guidance-inline-tip__copy",
+              "size": 8092
+            },
+            {
+              "tag": "SPAN",
+              "className": "guidance-inline-tip__copy",
+              "size": 8092
+            },
+            {
+              "tag": "SPAN",
+              "className": "guidance-inline-tip__copy",
+              "size": 8092
+            }
+          ],
+          "fonts": [
+            [
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 543.7999999523163,
+                "end": 1903.2999999523163
+              },
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 543.7999999523163,
+                "end": 5532.100000023842
+              }
+            ],
+            [
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 536.7999999523163,
+                "end": 1871.5
+              },
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 536.7999999523163,
+                "end": 5541.299999952316
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 568.6999999284744,
+                "end": 5540.699999928474
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 568.7999999523163,
+                "end": 1925.1000000238419
+              }
+            ]
+          ],
+          "pageErrors": 0,
+          "apiFailures": [],
+          "blockedWrites": 0
+        },
+        {
+          "route": "revenue/customers",
+          "variant": "baseline",
+          "runs": 3,
+          "lcp": [
+            4692,
+            4656,
+            4656
+          ],
+          "medianLcp": 4656,
+          "cls": [
+            1.6706478515549913e-05,
+            1.6706478515549913e-05,
+            1.6706478515549913e-05
+          ],
+          "medianCls": 1.6706478515549913e-05,
+          "firstActionDom": [],
+          "jsBytes": [
+            395299,
+            395299,
+            395299
+          ],
+          "medianJsBytes": 395299,
+          "totalResourceBytes": [
+            1328925,
+            1328925,
+            1328925
+          ],
+          "medianTotalResourceBytes": 1328925,
+          "lcpNodes": [
+            {
+              "tag": "H2",
+              "className": "fx-page-title",
+              "size": 6895
+            },
+            {
+              "tag": "H2",
+              "className": "fx-page-title",
+              "size": 6895
+            },
+            {
+              "tag": "H2",
+              "className": "fx-page-title",
+              "size": 6895
+            }
+          ],
+          "fonts": [
+            [
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 168.40000009536743,
+                "end": 1198.2000000476837
+              },
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 168.40000009536743,
+                "end": 7145.5
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 167.5,
+                "end": 7144.299999952316
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 167.59999990463257,
+                "end": 1173.8999999761581
+              }
+            ],
+            [
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 168.89999997615814,
+                "end": 1182
+              },
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 168.89999997615814,
+                "end": 7143.899999976158
+              }
+            ]
+          ],
+          "pageErrors": 0,
+          "apiFailures": [],
+          "blockedWrites": 0
+        },
+        {
+          "route": "revenue/customers",
+          "variant": "candidate",
+          "runs": 3,
+          "lcp": [
+            4420,
+            4388,
+            4424
+          ],
+          "medianLcp": 4420,
+          "cls": [
+            1.6706478515549913e-05,
+            1.6706478515549913e-05,
+            1.6706478515549913e-05
+          ],
+          "medianCls": 1.6706478515549913e-05,
+          "firstActionDom": [],
+          "jsBytes": [
+            395299,
+            395299,
+            395299
+          ],
+          "medianJsBytes": 395299,
+          "totalResourceBytes": [
+            1328925,
+            1328925,
+            1328925
+          ],
+          "medianTotalResourceBytes": 1328925,
+          "lcpNodes": [
+            {
+              "tag": "H2",
+              "className": "fx-page-title",
+              "size": 6895
+            },
+            {
+              "tag": "H2",
+              "className": "fx-page-title",
+              "size": 6895
+            },
+            {
+              "tag": "H2",
+              "className": "fx-page-title",
+              "size": 6895
+            }
+          ],
+          "fonts": [
+            [
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 530.7000000476837,
+                "end": 1918.2999999523163
+              },
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 530.7000000476837,
+                "end": 7147
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 530.6000000238419,
+                "end": 7144.700000047684
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 531.2000000476837,
+                "end": 1910.8000000715256
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 560.1000000238419,
+                "end": 7145.5
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 560.2000000476837,
+                "end": 1926
+              }
+            ]
+          ],
+          "pageErrors": 0,
+          "apiFailures": [],
+          "blockedWrites": 0
+        }
+      ],
+      "pairs": [
+        {
+          "route": "home",
+          "repeat": 0,
+          "lcpDeltaMs": -292,
+          "firstActionDeltaMs": -373.40000009536743,
+          "clsDelta": 0.0
+        },
+        {
+          "route": "home",
+          "repeat": 1,
+          "lcpDeltaMs": -228,
+          "firstActionDeltaMs": -289.60000002384186,
+          "clsDelta": 0.0
+        },
+        {
+          "route": "home",
+          "repeat": 2,
+          "lcpDeltaMs": 188,
+          "firstActionDeltaMs": -231.10000002384186,
+          "clsDelta": -0.007311156532872121
+        },
+        {
+          "route": "revenue/customers",
+          "repeat": 0,
+          "lcpDeltaMs": -272,
+          "firstActionDeltaMs": null,
+          "clsDelta": 0.0
+        },
+        {
+          "route": "revenue/customers",
+          "repeat": 1,
+          "lcpDeltaMs": -268,
+          "firstActionDeltaMs": null,
+          "clsDelta": 0.0
+        },
+        {
+          "route": "revenue/customers",
+          "repeat": 2,
+          "lcpDeltaMs": -232,
+          "firstActionDeltaMs": null,
+          "clsDelta": 0.0
+        }
+      ],
+      "render": [
+        {
+          "route": "home",
+          "contentHashEqual": true,
+          "textNodes": [
+            82,
+            82
+          ],
+          "matchingTextNodes": 82,
+          "changedRects": 0,
+          "screenshotSameSize": true,
+          "changedPixels": 0,
+          "pixelChangedBounds": null
+        },
+        {
+          "route": "revenue/customers",
+          "contentHashEqual": true,
+          "textNodes": [
+            990,
+            990
+          ],
+          "matchingTextNodes": 990,
+          "changedRects": 0,
+          "screenshotSameSize": true,
+          "changedPixels": 0,
+          "pixelChangedBounds": null
+        }
+      ]
+    },
+    "homeReadCombination": {
+      "builds": {
+        "baseline": "izk5oNMQaC529Gkq14SSn",
+        "candidate": "ff2p_9bw-fWUdS5KkYPCm"
+      },
+      "conditions": {
+        "viewport": "390x844",
+        "isMobile": true,
+        "deviceScaleFactor": 1,
+        "latencyMs": 150,
+        "downloadBytesPerSecond": 200000,
+        "uploadBytesPerSecond": 93750,
+        "cpuThrottle": 4,
+        "cache": "disabled, fresh browser context per navigation",
+        "theme": "app default dark",
+        "fonts": "real production HTTP; no intercepted resource fulfillment",
+        "api": "actual GET/HEAD only; browser writes blocked after isolated session login"
+      },
+      "groups": [
+        {
+          "route": "home",
+          "variant": "baseline",
+          "runs": 3,
+          "lcp": [
+            3760,
+            5568,
+            3592
+          ],
+          "medianLcp": 3760,
+          "cls": [
+            0.005551701617041569,
+            0.0003574371990400382,
+            0.005551701617041569
+          ],
+          "medianCls": 0.005551701617041569,
+          "firstActionDom": [
+            3733.2000000476837,
+            3533.600000023842,
+            3540.100000023842
+          ],
+          "medianFirstActionDom": 3540.100000023842,
+          "jsBytes": [
+            277318,
+            277318,
+            277318
+          ],
+          "medianJsBytes": 277318,
+          "totalResourceBytes": [
+            1008855,
+            1008855,
+            1008855
+          ],
+          "medianTotalResourceBytes": 1008855,
+          "lcpNodes": [
+            {
+              "tag": "H3",
+              "className": "fx-card-title",
+              "size": 7416
+            },
+            {
+              "tag": "H3",
+              "className": "fx-card-title",
+              "size": 8138
+            },
+            {
+              "tag": "H3",
+              "className": "fx-card-title",
+              "size": 7416
+            }
+          ],
+          "fonts": [
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 178,
+                "end": 5549.300000071526
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 178.10000002384186,
+                "end": 1227.2000000476837
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 168.10000002384186,
+                "end": 5518.800000071526
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 168.5,
+                "end": 1174.2000000476837
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 169.5,
+                "end": 5516.600000023842
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 170.30000007152557,
+                "end": 1385.4000000953674
+              }
+            ]
+          ],
+          "pageErrors": 0,
+          "apiFailures": [],
+          "blockedWrites": 0
+        },
+        {
+          "route": "home",
+          "variant": "candidate",
+          "runs": 3,
+          "lcp": [
+            3440,
+            3296,
+            5576
+          ],
+          "medianLcp": 3440,
+          "cls": [
+            0.005551701617041569,
+            0.005551701617041569,
+            0.0003574371990400382
+          ],
+          "medianCls": 0.005551701617041569,
+          "firstActionDom": [
+            3418.3000000715256,
+            3275.399999976158,
+            3416.7999999523163
+          ],
+          "medianFirstActionDom": 3416.7999999523163,
+          "jsBytes": [
+            277318,
+            277318,
+            277318
+          ],
+          "medianJsBytes": 277318,
+          "totalResourceBytes": [
+            1008855,
+            1008855,
+            1008855
+          ],
+          "medianTotalResourceBytes": 1008855,
+          "lcpNodes": [
+            {
+              "tag": "H3",
+              "className": "fx-card-title",
+              "size": 7416
+            },
+            {
+              "tag": "H3",
+              "className": "fx-card-title",
+              "size": 7416
+            },
+            {
+              "tag": "H3",
+              "className": "fx-card-title",
+              "size": 8138
+            }
+          ],
+          "fonts": [
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 547.1000000238419,
+                "end": 5526.200000047684
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 547.4000000953674,
+                "end": 1918.7000000476837
+              }
+            ],
+            [
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 560.3999999761581,
+                "end": 5525.399999976158
+              },
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 560.5999999046326,
+                "end": 1917
+              }
+            ],
+            [
+              {
+                "file": "/fonts/JetBrainsMono-Variable.woff2",
+                "bytes": 40704,
+                "start": 564.3999999761581,
+                "end": 1910.5
+              },
+              {
+                "file": "/fonts/SUIT-Variable.woff2",
+                "bytes": 624836,
+                "start": 564.3999999761581,
+                "end": 5516.799999952316
+              }
+            ]
+          ],
+          "pageErrors": 0,
+          "apiFailures": [],
+          "blockedWrites": 0
+        }
+      ],
+      "pairs": [
+        {
+          "route": "home",
+          "repeat": 0,
+          "lcpDeltaMs": -320,
+          "firstActionDeltaMs": -314.89999997615814,
+          "clsDelta": 0.0
+        },
+        {
+          "route": "home",
+          "repeat": 1,
+          "lcpDeltaMs": -2272,
+          "firstActionDeltaMs": -258.2000000476837,
+          "clsDelta": 0.005194264418001531
+        },
+        {
+          "route": "home",
+          "repeat": 2,
+          "lcpDeltaMs": 1984,
+          "firstActionDeltaMs": -123.30000007152557,
+          "clsDelta": -0.005194264418001531
+        }
+      ],
+      "render": [
+        {
+          "route": "home",
+          "contentHashEqual": true,
+          "textNodes": [
+            82,
+            82
+          ],
+          "matchingTextNodes": 82,
+          "changedRects": 0,
+          "screenshotSameSize": true,
+          "changedPixels": 0,
+          "pixelChangedBounds": null
+        }
+      ]
+    },
+    "stateRenderComparison": [
+      {
+        "state": "preview",
+        "http": [
+          200,
+          200
+        ],
+        "contentEqual": true,
+        "matchingNodes": 51,
+        "changedRects": 0,
+        "dimensionsEqual": true,
+        "changedPixels": 0,
+        "fontStatuses": [
+          [
+            "loaded",
+            "loaded"
+          ],
+          [
+            "loaded",
+            "loaded"
+          ]
+        ],
+        "firstActionCount": [
+          0,
+          0
+        ],
+        "forcedErrors": [
+          0,
+          0
+        ],
+        "pageErrors": []
+      },
+      {
+        "state": "error",
+        "http": [
+          200,
+          200
+        ],
+        "contentEqual": true,
+        "matchingNodes": 52,
+        "changedRects": 0,
+        "dimensionsEqual": true,
+        "changedPixels": 0,
+        "fontStatuses": [
+          [
+            "loaded",
+            "loaded"
+          ],
+          [
+            "loaded",
+            "loaded"
+          ]
+        ],
+        "firstActionCount": [
+          0,
+          0
+        ],
+        "forcedErrors": [
+          1,
+          1
+        ],
+        "pageErrors": []
+      }
+    ],
+    "limitations": "Customer LCP and Home first-action DOM improved in all three pairs; Home LCP improved in two pairs with a regression in the third in each experiment. DOM availability is not actual paint or completed animation."
+  },
+  "customerOfficeExperiment": {
+    "integratedCommit": "0ffbfe94",
+    "candidateSource": "2c766a9a",
+    "baselineSource": "8de44c6a",
+    "summary": [
+      {
+        "base": "http://localhost:3150",
+        "buildId": "izk5oNMQaC529Gkq14SSn",
+        "lcp": [
+          4648,
+          4644,
+          4672
+        ],
+        "medianLcp": 4648,
+        "cls": [
+          1.6706478515549913e-05,
+          1.6706478515549913e-05,
+          1.6706478515549913e-05
+        ],
+        "jsBytes": [
+          396284,
+          396284,
+          396284
+        ],
+        "firstRowDom": [
+          6630.5,
+          6614.5,
+          6630.899999976158
+        ],
+        "medianFirstRowDom": 6630.5,
+        "fontResources": [
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 7153.899999976158
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1401
+            }
+          ],
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 7146.300000071526
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1174.3999999761581
+            }
+          ],
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 7151.600000023842
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1183.1000000238419
+            }
+          ]
+        ],
+        "lcpNodes": [
+          {
+            "tag": "H2",
+            "className": "fx-page-title",
+            "size": 6895
+          },
+          {
+            "tag": "H2",
+            "className": "fx-page-title",
+            "size": 6895
+          },
+          {
+            "tag": "H2",
+            "className": "fx-page-title",
+            "size": 6895
+          }
+        ],
+        "apiStates": [
+          [
+            {
+              "path": "/api/hub/inquiries",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/followups",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/revenue",
+              "status": "live",
+              "http": 200
+            }
+          ],
+          [
+            {
+              "path": "/api/hub/inquiries",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/followups",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/revenue",
+              "status": "live",
+              "http": 200
+            }
+          ],
+          [
+            {
+              "path": "/api/hub/inquiries",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/followups",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/revenue",
+              "status": "live",
+              "http": 200
+            }
+          ]
+        ]
+      },
+      {
+        "base": "http://localhost:3152",
+        "buildId": "tR0KNBkbazyd5xQXoYWC5",
+        "lcp": [
+          4340,
+          4360,
+          4388
+        ],
+        "medianLcp": 4360,
+        "cls": [
+          1.6706478515549913e-05,
+          1.6706478515549913e-05,
+          1.6706478515549913e-05
+        ],
+        "jsBytes": [
+          363520,
+          363520,
+          363520
+        ],
+        "firstRowDom": [
+          6328.799999952316,
+          6331.099999904633,
+          6371.5
+        ],
+        "medianFirstRowDom": 6331.099999904633,
+        "fontResources": [
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 6956.399999976158
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1176.7000000476837
+            }
+          ],
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 6956.799999952316
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1386.1999999284744
+            }
+          ],
+          [
+            {
+              "name": "/fonts/SUIT-Variable.woff2",
+              "bytes": 624836,
+              "end": 6966.300000071526
+            },
+            {
+              "name": "/fonts/JetBrainsMono-Variable.woff2",
+              "bytes": 40704,
+              "end": 1206
+            }
+          ]
+        ],
+        "lcpNodes": [
+          {
+            "tag": "H2",
+            "className": "fx-page-title",
+            "size": 6895
+          },
+          {
+            "tag": "H2",
+            "className": "fx-page-title",
+            "size": 6895
+          },
+          {
+            "tag": "H2",
+            "className": "fx-page-title",
+            "size": 6895
+          }
+        ],
+        "apiStates": [
+          [
+            {
+              "path": "/api/hub/inquiries",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/followups",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/revenue",
+              "status": "live",
+              "http": 200
+            }
+          ],
+          [
+            {
+              "path": "/api/hub/inquiries",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/followups",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/revenue",
+              "status": "live",
+              "http": 200
+            }
+          ],
+          [
+            {
+              "path": "/api/hub/inquiries",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/followups",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "status": "live",
+              "http": 200
+            },
+            {
+              "path": "/api/hub/revenue",
+              "status": "live",
+              "http": 200
+            }
+          ]
+        ]
+      }
+    ],
+    "limitation": "Customer first-row DOM availability remains around6.33seconds in this cold throttled Live condition; LCP measures the title, not availability of customer data. This experiment excludes the separate preload change."
+  },
+  "finalIntegratedLive": {
+    "sourceHead": "027a6785",
+    "buildId": "EFZ1n3Y1HNSSZOV4a9uEq",
+    "metricsVersion": 2,
+    "conditions": {
+      "networkLatencyMs": 150,
+      "downloadBytesPerSecond": 200000,
+      "cpuThrottle": 4,
+      "cache": "disabled",
+      "viewport": "390x844",
+      "environment": "local production with live Seoul reads; not field Web Vitals"
+    },
+    "samplesPerRoute": 3,
+    "medians": [
+      {
+        "route": "home",
+        "samples": 3,
+        "lcp": 5564,
+        "fcp": 600,
+        "cls": 0.0003574371990400382,
+        "layoutShiftSum": 0.0003574371990400382,
+        "jsBytes": 277309,
+        "totalBytes": 1008853,
+        "longTaskExcessMs": 0,
+        "lcpRangeMs": [
+          3404,
+          5564
+        ],
+        "apiErrors": 0
+      },
+      {
+        "route": "daily-brief",
+        "samples": 3,
+        "lcp": 3588,
+        "fcp": 584,
+        "cls": 0.07856944418047605,
+        "layoutShiftSum": 0.07856944418047605,
+        "jsBytes": 330865,
+        "totalBytes": 1057617,
+        "longTaskExcessMs": 0,
+        "lcpRangeMs": [
+          3556,
+          3604
+        ],
+        "apiErrors": 0
+      },
+      {
+        "route": "work/my",
+        "samples": 3,
+        "lcp": 2956,
+        "fcp": 604,
+        "cls": 0.0031924271260062235,
+        "layoutShiftSum": 0.005843669968083342,
+        "jsBytes": 261104,
+        "totalBytes": 997172,
+        "longTaskExcessMs": 0,
+        "lcpRangeMs": [
+          2956,
+          2972
+        ],
+        "apiErrors": 0
+      },
+      {
+        "route": "revenue/customers",
+        "samples": 3,
+        "lcp": 4140,
+        "fcp": 612,
+        "cls": 1.6706478515549913e-05,
+        "layoutShiftSum": 1.6706478515549913e-05,
+        "jsBytes": 363517,
+        "totalBytes": 1296457,
+        "longTaskExcessMs": 0,
+        "lcpRangeMs": [
+          4124,
+          4208
+        ],
+        "apiErrors": 0
+      }
+    ],
+    "rawResults": [
+      {
+        "route": "home",
+        "repeat": 0,
+        "status": 200,
+        "lcp": 3404,
+        "cls": 0.005551701617041569,
+        "layoutShiftSum": 0.005909138816081607,
+        "fcp": 660,
+        "jsBytes": 277309,
+        "totalBytes": 1008853,
+        "duration": 6117.399999976158,
+        "longTaskExcessMs": 19,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-brief",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/content/schedule",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/guru-recommendations",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/calendar/google/event",
+            "http": 200,
+            "status": "live",
+            "source": "oauth"
+          },
+          {
+            "path": "/api/hub/calendar-outcomes",
+            "http": 200,
+            "status": "live"
+          }
+        ]
+      },
+      {
+        "route": "home",
+        "repeat": 1,
+        "status": 200,
+        "lcp": 5564,
+        "cls": 0.0003574371990400382,
+        "layoutShiftSum": 0.0003574371990400382,
+        "fcp": 580,
+        "jsBytes": 277309,
+        "totalBytes": 1008853,
+        "duration": 6074.299999952316,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/daily-brief",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/content/schedule",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/guru-recommendations",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/calendar/google/event",
+            "http": 200,
+            "status": "live",
+            "source": "oauth"
+          },
+          {
+            "path": "/api/hub/calendar-outcomes",
+            "http": 200,
+            "status": "live"
+          }
+        ]
+      },
+      {
+        "route": "home",
+        "repeat": 2,
+        "status": 200,
+        "lcp": 5564,
+        "cls": 0.0003574371990400382,
+        "layoutShiftSum": 0.0003574371990400382,
+        "fcp": 600,
+        "jsBytes": 277309,
+        "totalBytes": 1008853,
+        "duration": 6081.799999952316,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/daily-brief",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/content/schedule",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/guru-recommendations",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/calendar/google/event",
+            "http": 200,
+            "status": "live",
+            "source": "oauth"
+          },
+          {
+            "path": "/api/hub/calendar-outcomes",
+            "http": 200,
+            "status": "live"
+          }
+        ]
+      },
+      {
+        "route": "daily-brief",
+        "repeat": 0,
+        "status": 200,
+        "lcp": 3588,
+        "cls": 0.07856944418047605,
+        "layoutShiftSum": 0.07856944418047605,
+        "fcp": 584,
+        "jsBytes": 330865,
+        "totalBytes": 1057617,
+        "duration": 6312.100000023842,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/guru-recommendations",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-brief",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/calendar-outcomes",
+            "http": 200,
+            "status": "live"
+          }
+        ]
+      },
+      {
+        "route": "daily-brief",
+        "repeat": 1,
+        "status": 200,
+        "lcp": 3556,
+        "cls": 0.02323655316217815,
+        "layoutShiftSum": 0.02323655316217815,
+        "fcp": 608,
+        "jsBytes": 330865,
+        "totalBytes": 1057617,
+        "duration": 6314.800000071526,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/guru-recommendations",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-brief",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/calendar-outcomes",
+            "http": 200,
+            "status": "live"
+          }
+        ]
+      },
+      {
+        "route": "daily-brief",
+        "repeat": 2,
+        "status": 200,
+        "lcp": 3604,
+        "cls": 0.07856944418047605,
+        "layoutShiftSum": 0.07856944418047605,
+        "fcp": 576,
+        "jsBytes": 330865,
+        "totalBytes": 1057617,
+        "duration": 6312.700000047684,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/guru-recommendations",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-brief",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/calendar-outcomes",
+            "http": 200,
+            "status": "live"
+          }
+        ]
+      },
+      {
+        "route": "work/my",
+        "repeat": 0,
+        "status": 200,
+        "lcp": 2972,
+        "cls": 0.0031924271260062235,
+        "layoutShiftSum": 0.005843669968083342,
+        "fcp": 604,
+        "jsBytes": 261104,
+        "totalBytes": 997172,
+        "duration": 5985.099999904633,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/operator/session",
+            "http": 200,
+            "status": "authenticated"
+          },
+          {
+            "path": "/api/hub/attention",
+            "http": 200,
+            "status": "ok",
+            "failedSources": []
+          }
+        ]
+      },
+      {
+        "route": "work/my",
+        "repeat": 1,
+        "status": 200,
+        "lcp": 2956,
+        "cls": 0.0031924271260062235,
+        "layoutShiftSum": 0.005843669968083342,
+        "fcp": 580,
+        "jsBytes": 261104,
+        "totalBytes": 997172,
+        "duration": 5974.5,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/operator/session",
+            "http": 200,
+            "status": "authenticated"
+          },
+          {
+            "path": "/api/hub/attention",
+            "http": 200,
+            "status": "ok",
+            "failedSources": []
+          }
+        ]
+      },
+      {
+        "route": "work/my",
+        "repeat": 2,
+        "status": 200,
+        "lcp": 2956,
+        "cls": 0.0031924271260062235,
+        "layoutShiftSum": 0.005843669968083342,
+        "fcp": 612,
+        "jsBytes": 261104,
+        "totalBytes": 997172,
+        "duration": 5972.299999952316,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/operator/session",
+            "http": 200,
+            "status": "authenticated"
+          },
+          {
+            "path": "/api/hub/attention",
+            "http": 200,
+            "status": "ok",
+            "failedSources": []
+          }
+        ]
+      },
+      {
+        "route": "revenue/customers",
+        "repeat": 0,
+        "status": 200,
+        "lcp": 4124,
+        "cls": 1.6706478515549913e-05,
+        "layoutShiftSum": 1.6706478515549913e-05,
+        "fcp": 612,
+        "jsBytes": 363517,
+        "totalBytes": 1296457,
+        "duration": 7508.300000071526,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/crm-nudges",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/revenue",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          }
+        ]
+      },
+      {
+        "route": "revenue/customers",
+        "repeat": 1,
+        "status": 200,
+        "lcp": 4140,
+        "cls": 1.6706478515549913e-05,
+        "layoutShiftSum": 1.6706478515549913e-05,
+        "fcp": 640,
+        "jsBytes": 363517,
+        "totalBytes": 1296457,
+        "duration": 7515.800000071526,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/crm-nudges",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/revenue",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          }
+        ]
+      },
+      {
+        "route": "revenue/customers",
+        "repeat": 2,
+        "status": 200,
+        "lcp": 4208,
+        "cls": 1.6706478515549913e-05,
+        "layoutShiftSum": 1.6706478515549913e-05,
+        "fcp": 588,
+        "jsBytes": 363517,
+        "totalBytes": 1296457,
+        "duration": 7522.799999952316,
+        "longTaskExcessMs": 0,
+        "api": [
+          {
+            "path": "/api/hub/inquiries",
+            "http": 200,
+            "status": "live",
+            "source": "supabase"
+          },
+          {
+            "path": "/api/hub/followups",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/daily-review",
+            "http": 200,
+            "status": "live"
+          },
+          {
+            "path": "/api/hub/crm-nudges",
+            "http": 200,
+            "status": "live",
+            "failedSources": []
+          },
+          {
+            "path": "/api/hub/revenue",
+            "http": 200,
+            "status": "live",
+            "source": "supabase",
+            "failedSources": []
+          }
+        ]
+      }
+    ],
+    "limitation": "Home measured LCP remains font-time limited; first-action DOM improvements are separately measured, not substituted for LCP. longTaskExcessMs is all observed task excess, not Lighthouse TBT or field INP."
+  },
+  "warmNavigationFinal9": {
+    "buildId": "EFZ1n3Y1HNSSZOV4a9uEq",
+    "conditions": {
+      "viewport": "390x844",
+      "cpuThrottle": 4,
+      "latencyMs": 150,
+      "downloadBytesPerSecond": 200000,
+      "cache": "enabled; one full route cycle before five measured cycles",
+      "scope": "authenticated local production Live reads; actual mobile sidebar clicks; no writes",
+      "metric": "native click to destination primary input/card DOM; does not certify completion of background revalidation; twoFrames is two requestAnimationFrame callbacks after DOM, not field INP or completed entrance animation"
+    },
+    "rows": [
+      {
+        "cycle": 0,
+        "label": "\uc624\ub298",
+        "domMs": 32.700000047683716,
+        "twoFramesMs": 48.200000047683716,
+        "path": "/dashboard/daily-brief"
+      },
+      {
+        "cycle": 0,
+        "label": "\ub0b4 \uc791\uc5c5",
+        "domMs": 30.300000071525574,
+        "twoFramesMs": 45.10000002384186,
+        "path": "/dashboard/work/my"
+      },
+      {
+        "cycle": 0,
+        "label": "\ud648",
+        "domMs": 26,
+        "twoFramesMs": 52.199999928474426,
+        "path": "/dashboard/home"
+      },
+      {
+        "cycle": 1,
+        "label": "\uc624\ub298",
+        "domMs": 35,
+        "twoFramesMs": 47.5,
+        "path": "/dashboard/daily-brief"
+      },
+      {
+        "cycle": 1,
+        "label": "\ub0b4 \uc791\uc5c5",
+        "domMs": 26.5,
+        "twoFramesMs": 46.200000047683716,
+        "path": "/dashboard/work/my"
+      },
+      {
+        "cycle": 1,
+        "label": "\ud648",
+        "domMs": 25.100000023841858,
+        "twoFramesMs": 46.39999997615814,
+        "path": "/dashboard/home"
+      },
+      {
+        "cycle": 2,
+        "label": "\uc624\ub298",
+        "domMs": 32.5,
+        "twoFramesMs": 47,
+        "path": "/dashboard/daily-brief"
+      },
+      {
+        "cycle": 2,
+        "label": "\ub0b4 \uc791\uc5c5",
+        "domMs": 28.100000023841858,
+        "twoFramesMs": 46.800000071525574,
+        "path": "/dashboard/work/my"
+      },
+      {
+        "cycle": 2,
+        "label": "\ud648",
+        "domMs": 24.899999976158142,
+        "twoFramesMs": 46.5,
+        "path": "/dashboard/home"
+      },
+      {
+        "cycle": 3,
+        "label": "\uc624\ub298",
+        "domMs": 32.5,
+        "twoFramesMs": 46.60000002384186,
+        "path": "/dashboard/daily-brief"
+      },
+      {
+        "cycle": 3,
+        "label": "\ub0b4 \uc791\uc5c5",
+        "domMs": 26.399999976158142,
+        "twoFramesMs": 45.5,
+        "path": "/dashboard/work/my"
+      },
+      {
+        "cycle": 3,
+        "label": "\ud648",
+        "domMs": 26.399999976158142,
+        "twoFramesMs": 47.39999997615814,
+        "path": "/dashboard/home"
+      },
+      {
+        "cycle": 4,
+        "label": "\uc624\ub298",
+        "domMs": 34.299999952316284,
+        "twoFramesMs": 48.60000002384186,
+        "path": "/dashboard/daily-brief"
+      },
+      {
+        "cycle": 4,
+        "label": "\ub0b4 \uc791\uc5c5",
+        "domMs": 26.200000047683716,
+        "twoFramesMs": 49.200000047683716,
+        "path": "/dashboard/work/my"
+      },
+      {
+        "cycle": 4,
+        "label": "\ud648",
+        "domMs": 27,
+        "twoFramesMs": 47,
+        "path": "/dashboard/home"
+      }
+    ],
+    "errors": [],
+    "blocked": []
+  },
+  "customerSelfHostedCompression": {
+    "source": "cf9a97cc (equivalent to 0f4418d1)",
+    "summary": {
+      "conditions": {
+        "networkLatencyMs": 150,
+        "downloadBytesPerSecond": 200000,
+        "cpuThrottle": 4,
+        "cache": "disabled",
+        "viewport": "390x844",
+        "environment": "local production live Seoul reads; uncompressed self-host baseline/config-header compression alternating pairs; production Vercel already compresses; not field Web Vitals"
+      },
+      "results": {
+        "http://localhost:3165": {
+          "buildId": "x2R7y2GNe4yPedk6--9eU",
+          "lcp": [
+            4256,
+            4156,
+            4156
+          ],
+          "lcpMedian": 4156,
+          "firstAction": [
+            6257.299999952316,
+            6140.200000047684,
+            6125.200000047684
+          ],
+          "firstActionMedian": 6140.200000047684,
+          "cls": [
+            1.6706478515549913e-05,
+            1.6706478515549913e-05,
+            1.6706478515549913e-05
+          ],
+          "jsBytes": [
+            363521,
+            363521,
+            363521
+          ],
+          "api": [
+            {
+              "path": "/api/hub/revenue",
+              "start": 4038.399999976158,
+              "end": 6214.299999952316,
+              "bytes": 201526,
+              "encoded": 201226,
+              "decoded": 201226
+            },
+            {
+              "path": "/api/hub/revenue",
+              "start": 3903.100000023842,
+              "end": 6110.700000047684,
+              "bytes": 201526,
+              "encoded": 201226,
+              "decoded": 201226
+            },
+            {
+              "path": "/api/hub/revenue",
+              "start": 3916.399999976158,
+              "end": 6095,
+              "bytes": 201526,
+              "encoded": 201226,
+              "decoded": 201226
+            }
+          ],
+          "headers": [
+            [
+              {
+                "kind": "request"
+              },
+              {
+                "kind": "response",
+                "encoding": null,
+                "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+                "contentType": "application/json"
+              }
+            ],
+            [
+              {
+                "kind": "request"
+              },
+              {
+                "kind": "response",
+                "encoding": null,
+                "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+                "contentType": "application/json"
+              }
+            ],
+            [
+              {
+                "kind": "request"
+              },
+              {
+                "kind": "response",
+                "encoding": null,
+                "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+                "contentType": "application/json"
+              }
+            ]
+          ]
+        },
+        "http://localhost:3166": {
+          "buildId": "Y40AizvfP4aUu3oVXU11q",
+          "lcp": [
+            4140,
+            4132,
+            4208
+          ],
+          "lcpMedian": 4140,
+          "firstAction": [
+            4422.399999976158,
+            4424.699999928474,
+            4491.399999976158
+          ],
+          "firstActionMedian": 4424.699999928474,
+          "cls": [
+            1.4033932020844096e-05,
+            1.4033932020844096e-05,
+            1.4033932020844096e-05
+          ],
+          "jsBytes": [
+            363521,
+            363521,
+            363521
+          ],
+          "api": [
+            {
+              "path": "/api/hub/revenue",
+              "start": 3893.5,
+              "end": 4392.300000071526,
+              "bytes": 33014,
+              "encoded": 32714,
+              "decoded": 201226
+            },
+            {
+              "path": "/api/hub/revenue",
+              "start": 3895.6999999284744,
+              "end": 4394.699999928474,
+              "bytes": 33014,
+              "encoded": 32714,
+              "decoded": 201226
+            },
+            {
+              "path": "/api/hub/revenue",
+              "start": 3969.5999999046326,
+              "end": 4459.5,
+              "bytes": 33014,
+              "encoded": 32714,
+              "decoded": 201226
+            }
+          ],
+          "headers": [
+            [
+              {
+                "kind": "request"
+              },
+              {
+                "kind": "response",
+                "encoding": "gzip",
+                "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding",
+                "contentType": "application/json"
+              }
+            ],
+            [
+              {
+                "kind": "request"
+              },
+              {
+                "kind": "response",
+                "encoding": "gzip",
+                "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding",
+                "contentType": "application/json"
+              }
+            ],
+            [
+              {
+                "kind": "request"
+              },
+              {
+                "kind": "response",
+                "encoding": "gzip",
+                "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding",
+                "contentType": "application/json"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "productionAlreadyCompressed": {
+      "url": "https://moonlight-pro-hub.vercel.app/api/hub/revenue",
+      "testedAt": "2026-10-22T17:02:48.367Z",
+      "results": [
+        {
+          "encoding": "gzip",
+          "httpStatus": 200,
+          "envelope": "live",
+          "source": "supabase",
+          "contentType": "application/json",
+          "contentEncoding": "gzip",
+          "cacheControl": "public, max-age=0, must-revalidate",
+          "wireBytes": 45433,
+          "decodedBytes": 252561,
+          "durationMs": 561.4651250000001
+        },
+        {
+          "encoding": "identity",
+          "httpStatus": 200,
+          "envelope": "live",
+          "source": "supabase",
+          "contentType": "application/json",
+          "contentEncoding": null,
+          "cacheControl": "public, max-age=0, must-revalidate",
+          "wireBytes": 252561,
+          "decodedBytes": 252561,
+          "durationMs": 263.794709
+        }
+      ]
+    },
+    "scope": "Fix for self-hosted Next response headers; deployed Vercel already compresses. No claim of newly improved production latency."
+  },
+  "finalIntegratedLive11": {
+    "sourceHead": "2efb3c3d",
+    "raw": {
+      "metricsVersion": 2,
+      "buildId": "iZ8NrCtJituF7IygMkERY",
+      "conditions": {
+        "repeatsPerRoute": 5,
+        "networkLatencyMs": 150,
+        "downloadBytesPerSecond": 200000,
+        "cpuThrottle": 4,
+        "cache": "disabled",
+        "viewport": "390x844",
+        "environment": "local production with live Seoul reads; not field Web Vitals"
+      },
+      "results": [
+        {
+          "route": "home",
+          "repeat": 0,
+          "status": 200,
+          "lcp": 5580,
+          "cls": 0.0003574371990400382,
+          "layoutShiftSum": 0.0003574371990400382,
+          "fcp": 612,
+          "jsBytes": 277311,
+          "totalBytes": 1008886,
+          "duration": 6099.100000023842,
+          "longTaskExcessMs": 1,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/content/schedule",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/calendar/google/event",
+              "http": 200,
+              "status": "live",
+              "source": "oauth"
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "home",
+          "repeat": 1,
+          "status": 200,
+          "lcp": 5556,
+          "cls": 0.0003574371990400382,
+          "layoutShiftSum": 0.0003574371990400382,
+          "fcp": 592,
+          "jsBytes": 277311,
+          "totalBytes": 1008886,
+          "duration": 6066.400000095367,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/content/schedule",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/calendar/google/event",
+              "http": 200,
+              "status": "live",
+              "source": "oauth"
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "home",
+          "repeat": 2,
+          "status": 200,
+          "lcp": 3288,
+          "cls": 0.005551701617041569,
+          "layoutShiftSum": 0.005909138816081607,
+          "fcp": 608,
+          "jsBytes": 277311,
+          "totalBytes": 1008886,
+          "duration": 6073.199999928474,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/content/schedule",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/calendar/google/event",
+              "http": 200,
+              "status": "live",
+              "source": "oauth"
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "home",
+          "repeat": 3,
+          "status": 200,
+          "lcp": 5556,
+          "cls": 0.0003574371990400382,
+          "layoutShiftSum": 0.0003574371990400382,
+          "fcp": 592,
+          "jsBytes": 277311,
+          "totalBytes": 1008886,
+          "duration": 6062.900000095367,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/content/schedule",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/calendar/google/event",
+              "http": 200,
+              "status": "live",
+              "source": "oauth"
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "home",
+          "repeat": 4,
+          "status": 200,
+          "lcp": 5564,
+          "cls": 0.0003574371990400382,
+          "layoutShiftSum": 0.0003574371990400382,
+          "fcp": 608,
+          "jsBytes": 277311,
+          "totalBytes": 1008886,
+          "duration": 6072.199999928474,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/content/schedule",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/calendar/google/event",
+              "http": 200,
+              "status": "live",
+              "source": "oauth"
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "daily-brief",
+          "repeat": 0,
+          "status": 200,
+          "lcp": 3568,
+          "cls": 0.02323655316217815,
+          "layoutShiftSum": 0.02323655316217815,
+          "fcp": 608,
+          "jsBytes": 330867,
+          "totalBytes": 1057650,
+          "duration": 6314.599999904633,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "daily-brief",
+          "repeat": 1,
+          "status": 200,
+          "lcp": 3556,
+          "cls": 0.02323655316217815,
+          "layoutShiftSum": 0.02323655316217815,
+          "fcp": 620,
+          "jsBytes": 330867,
+          "totalBytes": 1057650,
+          "duration": 6315.5,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "daily-brief",
+          "repeat": 2,
+          "status": 200,
+          "lcp": 3524,
+          "cls": 0.07856944418047605,
+          "layoutShiftSum": 0.07856944418047605,
+          "fcp": 608,
+          "jsBytes": 330867,
+          "totalBytes": 1057650,
+          "duration": 6310,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "daily-brief",
+          "repeat": 3,
+          "status": 200,
+          "lcp": 3556,
+          "cls": 0.07856944418047605,
+          "layoutShiftSum": 0.07856944418047605,
+          "fcp": 608,
+          "jsBytes": 330867,
+          "totalBytes": 1057650,
+          "duration": 6320.399999976158,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "daily-brief",
+          "repeat": 4,
+          "status": 200,
+          "lcp": 3560,
+          "cls": 0.07856944418047605,
+          "layoutShiftSum": 0.07856944418047605,
+          "fcp": 612,
+          "jsBytes": 330867,
+          "totalBytes": 1057650,
+          "duration": 6313.399999976158,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/guru-recommendations",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-brief",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/calendar-outcomes",
+              "http": 200,
+              "status": "live"
+            }
+          ]
+        },
+        {
+          "route": "work/my",
+          "repeat": 0,
+          "status": 200,
+          "lcp": 2972,
+          "cls": 0.0031924271260062235,
+          "layoutShiftSum": 0.005843669968083342,
+          "fcp": 612,
+          "jsBytes": 261186,
+          "totalBytes": 997285,
+          "duration": 5972.799999952316,
+          "longTaskExcessMs": 2,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/operator/session",
+              "http": 200,
+              "status": "authenticated"
+            },
+            {
+              "path": "/api/hub/attention",
+              "http": 200,
+              "status": "ok",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "work/my",
+          "repeat": 1,
+          "status": 200,
+          "lcp": 2984,
+          "cls": 0.0031924271260062235,
+          "layoutShiftSum": 0.005843669968083342,
+          "fcp": 604,
+          "jsBytes": 261186,
+          "totalBytes": 997285,
+          "duration": 5967,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/operator/session",
+              "http": 200,
+              "status": "authenticated"
+            },
+            {
+              "path": "/api/hub/attention",
+              "http": 200,
+              "status": "ok",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "work/my",
+          "repeat": 2,
+          "status": 200,
+          "lcp": 2960,
+          "cls": 0.0031924271260062235,
+          "layoutShiftSum": 0.005843669968083342,
+          "fcp": 612,
+          "jsBytes": 261186,
+          "totalBytes": 997285,
+          "duration": 5976.299999952316,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/operator/session",
+              "http": 200,
+              "status": "authenticated"
+            },
+            {
+              "path": "/api/hub/attention",
+              "http": 200,
+              "status": "ok",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "work/my",
+          "repeat": 3,
+          "status": 200,
+          "lcp": 2956,
+          "cls": 0.0031924271260062235,
+          "layoutShiftSum": 0.005843669968083342,
+          "fcp": 608,
+          "jsBytes": 261186,
+          "totalBytes": 997285,
+          "duration": 5985.399999976158,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/operator/session",
+              "http": 200,
+              "status": "authenticated"
+            },
+            {
+              "path": "/api/hub/attention",
+              "http": 200,
+              "status": "ok",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "work/my",
+          "repeat": 4,
+          "status": 200,
+          "lcp": 2956,
+          "cls": 0.0031924271260062235,
+          "layoutShiftSum": 0.005843669968083342,
+          "fcp": 612,
+          "jsBytes": 261186,
+          "totalBytes": 997285,
+          "duration": 5980.199999928474,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/operator/session",
+              "http": 200,
+              "status": "authenticated"
+            },
+            {
+              "path": "/api/hub/attention",
+              "http": 200,
+              "status": "ok",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "revenue/customers",
+          "repeat": 0,
+          "status": 200,
+          "lcp": 4220,
+          "cls": 1.4033932020844096e-05,
+          "layoutShiftSum": 1.6706478515549913e-05,
+          "fcp": 588,
+          "jsBytes": 363520,
+          "totalBytes": 1127979,
+          "duration": 6684.299999952316,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/revenue",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "revenue/customers",
+          "repeat": 1,
+          "status": 200,
+          "lcp": 4144,
+          "cls": 1.4033932020844096e-05,
+          "layoutShiftSum": 1.6706478515549913e-05,
+          "fcp": 580,
+          "jsBytes": 363520,
+          "totalBytes": 1127979,
+          "duration": 6676.800000071526,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/revenue",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "revenue/customers",
+          "repeat": 2,
+          "status": 200,
+          "lcp": 4140,
+          "cls": 1.4033932020844096e-05,
+          "layoutShiftSum": 1.6706478515549913e-05,
+          "fcp": 612,
+          "jsBytes": 363520,
+          "totalBytes": 1127979,
+          "duration": 6674.899999976158,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/revenue",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "revenue/customers",
+          "repeat": 3,
+          "status": 200,
+          "lcp": 4140,
+          "cls": 1.4033932020844096e-05,
+          "layoutShiftSum": 1.6706478515549913e-05,
+          "fcp": 620,
+          "jsBytes": 363520,
+          "totalBytes": 1127979,
+          "duration": 6675.899999976158,
+          "longTaskExcessMs": 2,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/revenue",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            }
+          ]
+        },
+        {
+          "route": "revenue/customers",
+          "repeat": 4,
+          "status": 200,
+          "lcp": 4172,
+          "cls": 1.4033932020844096e-05,
+          "layoutShiftSum": 1.6706478515549913e-05,
+          "fcp": 612,
+          "jsBytes": 363520,
+          "totalBytes": 1127979,
+          "duration": 6672.799999952316,
+          "longTaskExcessMs": 0,
+          "api": [
+            {
+              "path": "/api/hub/inquiries",
+              "http": 200,
+              "status": "live",
+              "source": "supabase"
+            },
+            {
+              "path": "/api/hub/daily-review",
+              "http": 200,
+              "status": "live"
+            },
+            {
+              "path": "/api/hub/followups",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/crm-nudges",
+              "http": 200,
+              "status": "live",
+              "failedSources": []
+            },
+            {
+              "path": "/api/hub/revenue",
+              "http": 200,
+              "status": "live",
+              "source": "supabase",
+              "failedSources": []
+            }
+          ]
+        }
+      ]
+    },
+    "medians": {
+      "home": {
+        "lcp": 5556,
+        "cls": 0.0003574371990400382,
+        "jsBytes": 277311,
+        "totalBytes": 1008886,
+        "longTaskExcessMs": 0,
+        "lcpAll": [
+          5580,
+          5556,
+          3288,
+          5556,
+          5564
+        ],
+        "apiErrors": []
+      },
+      "daily-brief": {
+        "lcp": 3556,
+        "cls": 0.07856944418047605,
+        "jsBytes": 330867,
+        "totalBytes": 1057650,
+        "longTaskExcessMs": 0,
+        "lcpAll": [
+          3568,
+          3556,
+          3524,
+          3556,
+          3560
+        ],
+        "apiErrors": []
+      },
+      "work/my": {
+        "lcp": 2960,
+        "cls": 0.0031924271260062235,
+        "jsBytes": 261186,
+        "totalBytes": 997285,
+        "longTaskExcessMs": 0,
+        "lcpAll": [
+          2972,
+          2984,
+          2960,
+          2956,
+          2956
+        ],
+        "apiErrors": []
+      },
+      "revenue/customers": {
+        "lcp": 4144,
+        "cls": 1.4033932020844096e-05,
+        "jsBytes": 363520,
+        "totalBytes": 1127979,
+        "longTaskExcessMs": 0,
+        "lcpAll": [
+          4220,
+          4144,
+          4140,
+          4140,
+          4172
+        ],
+        "apiErrors": []
+      }
+    }
+  }
+}
