@@ -33,7 +33,7 @@
 /* 패널 공통 */
 .hub-app .cflow-pane {
   min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px;
-  border-radius: var(--r-xl); background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl); background: var(--surface); border: 1px solid var(--panel-edge);
   box-shadow: var(--shadow-card);
 }
 .hub-app .cflow-pane__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 4px; }
@@ -97,7 +97,7 @@
 /* 아래 띠 — 단계 칩 + 이번 주 7칸 */
 .hub-app .cflow-strip {
   display: flex; align-items: center; justify-content: space-between; gap: 14px 20px; flex-wrap: wrap; padding: 14px 18px;
-  border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line-soft); box-shadow: var(--shadow-card);
+  border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--panel-edge); box-shadow: var(--shadow-card);
 }
 .hub-app .cflow-strip > div:first-child { display: flex; flex-direction: column; gap: 3px; }
 .hub-app .cflow-eyebrow { font-size: 11px; font-weight: 500; letter-spacing: 0.12em; color: var(--fg-dim); }
@@ -127,7 +127,7 @@
 .hub-app .cflow-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(208px, 1fr); gap: 12px; align-items: start; overflow-x: auto; padding: 2px 2px 12px; }
 .hub-app .cflow-lane {
   min-width: 0; min-height: 360px; display: flex; flex-direction: column; gap: 10px; padding: 12px;
-  border-radius: var(--r-xl); background: var(--surface); border: 1px solid var(--line-soft); box-shadow: var(--shadow-card);
+  border-radius: var(--r-xl); background: var(--surface); border: 1px solid var(--panel-edge); box-shadow: var(--shadow-card);
 }
 .hub-app .cflow-lane__head { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 0; }
 .hub-app .cflow-lane__head h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }

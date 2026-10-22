@@ -73,7 +73,7 @@ export function Card({ children, style, pad = true, interactive = false, classNa
   return (
     <div {...props} className={cls} style={{
       background: 'var(--surface)',
-      ...(interactive ? {} : { border: '1px solid var(--line-soft)' }),
+      ...(interactive ? {} : { border: '1px solid var(--panel-edge)' }),
       borderRadius: 'var(--r-lg)',
       boxShadow: 'var(--shadow-card)',
       padding: pad ? 'var(--card-pad)' : 0,
@@ -384,18 +384,16 @@ export function Divider({ style }) {
   return <div style={{ height: 1, background: 'var(--line-soft)', ...style }} />;
 }
 
+// 밑줄·색 chrome은 hub-tokens.css의 .hub-tabs가 소유한다 — 인라인이면 depth C가 탭 묶음을
+// 눌린 트랙 + 잉크 현재 칸으로 바꿀 수 없었다(2026-10-22). 레이아웃만 인라인.
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
   return (
-    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
+    <div className={['hub-tabs', className].filter(Boolean).join(' ')} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, ...style }}>
       {tabs.map(t => {
         const isActive = t.key === active;
         return (
-          <button key={t.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
+          <button key={t.key} type="button" role="tab" className="hub-tabs__tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
             padding: '8px 12px', fontSize: 12.5, fontWeight: 500,
-            color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
-            borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
-            marginBottom: -1,
-            transition: 'color var(--dur-hover) var(--ease-hub)',
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
             {t.label}
@@ -995,18 +993,17 @@ const SEGMENT_SCALE = {
 // 다중 선택 칩 토글 — Leads 과목 필터 줄과 EditDrawer chips 필드가 공유한다(§8.1 primitives-first).
 // 단일 선택 뷰 전환은 SegmentedControl, on/off 다중 선택은 이것. aria-pressed로 상태 전달.
 // 선택 표시는 §5.2대로 조용한 서피스 승격(surface-3 + line-strong) — 액센트/색상 분류 금지.
+// 색·면·테두리는 hub-tokens.css의 .hub-chip이 소유한다 — depth C가 솟은 칩 + 잉크 선택으로 바꾼다(2026-10-22).
 export function ChipToggle({ label, selected, onChange, style }) {
   return (
     <button
       type="button"
+      className="hub-chip"
       aria-pressed={Boolean(selected)}
       onClick={() => onChange?.(!selected)}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
         padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
-        border: `1px solid ${selected ? 'var(--line-strong)' : 'var(--line)'}`,
-        background: selected ? 'var(--surface-3)' : 'transparent',
-        color: selected ? 'var(--fg)' : 'var(--fg-muted)',
         fontSize: 12, fontWeight: 500, lineHeight: 1.2, whiteSpace: 'nowrap',
         ...style,
       }}
@@ -1028,13 +1025,14 @@ export function SegmentedControl({ options, value, onChange, className, style, l
       role="group"
       aria-label={label}
       data-invalid={invalid ? '' : undefined}
-      style={{ display: 'flex', gap: 2, borderRadius: 'var(--r-sm)', padding: 2, ...style }}
+      data-fill={fill ? '' : undefined}
+      style={{ display: 'flex', gap: 2, borderRadius: 'var(--seg-radius, var(--r-sm))', padding: 2, ...style }}
     >
       {options.map(o => {
         const isActive = o.key === value;
         return (
           <button key={o.key} type="button" className="hub-seg__btn" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
-            padding: scale.pad, fontSize: scale.fs, borderRadius: scale.radius, whiteSpace: 'nowrap',
+            padding: scale.pad, fontSize: scale.fs, borderRadius: `var(--seg-btn-radius, ${scale.radius}px)`, whiteSpace: 'nowrap',
             display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: scale.gap,
             flex: fill ? '1 1 0' : undefined, minWidth: fill ? 0 : undefined,
           }}>
@@ -1147,8 +1145,10 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
           position: 'fixed', zIndex: 'var(--z-drawer)', background: 'var(--surface)', color: 'var(--fg)',
           display: 'flex', flexDirection: 'column',
           ...(compact ? { '--hub-compact-width': width } : {
-            top: 0, right: 0, bottom: 0, width, borderLeft: `1px solid ${borderLeft}`,
-            boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+            // depth C는 사이드바처럼 화면 끝에서 떨어져 뜬 판이 된다(--drawer-* 토큰, 2026-10-22).
+            top: 'var(--drawer-gap, 0px)', right: 'var(--drawer-gap, 0px)', bottom: 'var(--drawer-gap, 0px)', width,
+            borderLeft: `1px solid var(--drawer-edge, ${borderLeft})`, borderRadius: 'var(--drawer-radius, 0px)',
+            boxShadow: 'var(--drawer-shadow, -8px 0 32px -12px oklch(0 0 0 / 0.5))',
           }),
         }}
       >

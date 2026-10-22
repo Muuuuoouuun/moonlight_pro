@@ -72,7 +72,7 @@ export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = 
   }
 
   return (
-    <form onSubmit={capture} style={{ padding: 18, border: "1px solid var(--line-soft)", borderRadius: "var(--r-lg)", background: "var(--surface)", boxShadow: "var(--shadow-card)", display: "grid", gap: 12 }}>
+    <form onSubmit={capture} style={{ padding: 18, border: '1px solid var(--panel-edge)', borderRadius: "var(--r-lg)", background: "var(--surface)", boxShadow: "var(--shadow-card)", display: "grid", gap: 12 }}>
       <div style={{ fontSize: 14, fontWeight: 550 }}>떠오른 소재부터 담기</div>
       <TextAreaField
         label="소재 메모"

@@ -794,8 +794,8 @@ export function Leads({ workspace }) {
         return (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 14px', border: '1px solid var(--line-soft)',
-            borderRadius: 'var(--r-lg)', background: 'var(--surface)',
+            padding: '10px 14px', border: '1px solid var(--panel-edge)',
+            borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)',
           }}>
             <Badge tone={tone} size="xs">{label}</Badge>
             <span style={{ fontSize: 12.5, color: 'var(--fg-muted)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</span>
@@ -2147,14 +2147,14 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
               }}
               style={{
                 width: 260, flexShrink: 0,
-                background: 'var(--surface)',
-                border: '1px solid var(--line-soft)',
+                background: 'var(--well, var(--surface))',
+                border: '1px solid var(--panel-edge)',
                 borderRadius: 'var(--r-lg)',
                 display: 'flex', flexDirection: 'column',
                 // Stage heat as a 1px top stripe (§5.2 inset-stripe idiom, rotated to the
                 // column top) so the funnel's cold→hot gradient reads across the board and
                 // ties each column to its masthead gauge segment.
-                boxShadow: `inset 0 1px 0 0 ${STAGE_LINE[s.ramp] || 'var(--line-strong)'}`,
+                boxShadow: `inset 0 1px 0 0 ${STAGE_LINE[s.ramp] || 'var(--line-strong)'}, var(--shadow-inset, inset 0 0 0 0 transparent)`,
               }}>
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>

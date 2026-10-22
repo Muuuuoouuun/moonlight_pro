@@ -76,7 +76,7 @@
   text-align: left;
   color: var(--fg);
   background: var(--surface);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-card);
   transition: transform var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub);

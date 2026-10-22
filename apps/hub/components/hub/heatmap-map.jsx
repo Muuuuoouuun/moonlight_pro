@@ -524,7 +524,7 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
               // left/top/transform은 positionTooltip이 DOM에 직접 쓴다 — 여기 두면 재렌더가 되돌린다
               pointerEvents: "none", position: "absolute", zIndex: 30, width: 208,
               background: "var(--elevated, var(--surface-3))",
-              border: "1px solid var(--line)",
+              border: "1px solid var(--panel-edge)",
               borderRadius: "var(--r-sm)",
               padding: "10px 12px",
               boxShadow: "inset 1px 0 0 var(--moon-300), var(--shadow-pop)",

@@ -86,7 +86,7 @@ export function SuggestionTip({ reason, action, onAction, onSnooze, onDismiss, c
                 display: "flex", flexDirection: "column", gap: 4, minWidth: 148,
                 padding: 6,
                 background: "var(--surface-2)",
-                border: "1px solid var(--line)",
+                border: "1px solid var(--panel-edge)",
                 borderRadius: "var(--r-sm)",
                 boxShadow: "var(--shadow-pop)",
               }}

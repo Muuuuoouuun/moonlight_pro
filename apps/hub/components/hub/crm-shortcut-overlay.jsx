@@ -54,7 +54,7 @@ export function ShortcutOverlay({ open, onClose }) {
         onClick={(e) => e.stopPropagation()}
         style={{
         width: 380, maxWidth: "90vw", height: "fit-content",
-        background: "var(--surface-2)", border: "1px solid var(--line)",
+        background: "var(--surface-2)", border: "1px solid var(--panel-edge)",
         borderRadius: "var(--r-lg)", boxShadow: "var(--shadow-pop)", padding: 16,
         outline: "none",
       }}>
