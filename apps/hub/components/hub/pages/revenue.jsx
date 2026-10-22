@@ -1757,7 +1757,10 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
     scheduleUndoable(key, () => {
       pendingPaymentsRef.current.delete(key);
       saveRevenueRecord('deal', 'update', { id, payments: nextPayments }).then((r) => {
-        if (r.ok) return;
+        if (r.ok) {
+          toast.success(label);
+          return;
+        }
         restore();
         if (showDealConflict(r)) return;
         toast.error(r.status === 'preview'
@@ -1765,7 +1768,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
           : `결제 저장 실패 (${r.status}) — 되돌렸습니다`);
       });
     });
-    toast.success(label, { action: { label: '되돌리기', onClick: undoPaymentsChange } });
+    toast.info('결제 변경 저장 대기 · 잠시 되돌릴 수 있습니다.', { action: { label: '되돌리기', onClick: undoPaymentsChange } });
   };
   // 매달 정기 계획(deals.meta.recurring, lib/deal-recurring.js) — 같은 지연 쓰기 계약. null이면 계획을 지운다.
   // 창 안에서 연달아 고쳐도 되돌리기는 창이 열리기 전 계획으로 돌아간다.
