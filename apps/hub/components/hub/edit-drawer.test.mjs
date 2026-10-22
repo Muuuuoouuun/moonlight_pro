@@ -11,9 +11,9 @@ const javascript = ts.transpileModule(component.replace('export function EditDra
   compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete } = {}) {
+function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete, initialRecord = { id: 'drawer-keyboard', note: '' } } = {}) {
   const slots = [], effects = [], listeners = new Set();
-  let index = 0, tree, closed = 0, record = { id: 'drawer-keyboard', note: '' };
+  let index = 0, tree, closed = 0, record = initialRecord;
   const React = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
     useState: initial => {
@@ -46,7 +46,7 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
       onClose: () => { closed++; }, onSave, onDelete,
     });
     effects.splice(0).forEach(effect => effect());
-    if (tree.props.keyboardLayerRef) tree.props.keyboardLayerRef.current = layer;
+    if (tree?.props.keyboardLayerRef) tree.props.keyboardLayerRef.current = layer;
     return tree;
   }
   function findAll(predicate, node = tree) {
@@ -57,6 +57,7 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
   render();
   return {
     render, findAll, closed: () => closed,
+    shortcutCount: () => listeners.size,
     unmount: () => { slots.forEach(slot => slot?.cleanup?.()); popEscLayer(layer); },
     close: () => tree.props.onClose(),
     key: overrides => listeners.forEach(listener => listener({ key: 'Enter', metaKey: true, preventDefault() {}, ...overrides })),
@@ -64,6 +65,20 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
 }
 
 const button = (app, label) => app.findAll(node => node.type === 'Button' && node.props.children.includes(label))[0];
+
+test('the save shortcut is bound only for an open record and removed on unmount', async () => {
+  let saves = 0;
+  const closed = mount({ initialRecord: null, onSave: async () => { saves++; } });
+  try {
+    assert.equal(closed.shortcutCount(), 0);
+    closed.key(); await Promise.resolve();
+    assert.equal(saves, 0);
+  } finally { closed.unmount(); }
+  const open = mount();
+  try { assert.equal(open.shortcutCount(), 1); }
+  finally { open.unmount(); }
+  assert.equal(open.shortcutCount(), 0);
+});
 
 test('Cmd/Ctrl+Enter cannot bypass discard confirmation; continuing editing restores save', async t => {
   let saves = 0;
