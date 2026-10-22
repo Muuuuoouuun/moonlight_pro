@@ -1104,7 +1104,7 @@ const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:n
 //     hub-compact-drawer.css). Above 600px it changes nothing.
 //   `headerAction` — one action at the trailing end of the header (the sheet's 저장, so the keyboard
 //     never covers it). Close moves to the leading end so the two targets are not neighbours.
-export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyle, headerAction = null, sheet = 'auto', initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyle, headerAction = null, sheet = 'auto', initialFocusRef, keyboardLayerRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
   const asideRef = React.useRef(null);
   const bodyRef = React.useRef(null);
   const compact = presentation === 'compact';
@@ -1118,9 +1118,18 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
   onCloseRef.current = onClose;
   React.useEffect(() => {
     const layer = pushEscLayer();
-    const onKey = (e) => { if (e.key === 'Escape' && isTopEscLayer(layer)) onCloseRef.current?.(); };
+    if (keyboardLayerRef) keyboardLayerRef.current = layer;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isTopEscLayer(layer)) return;
+      e.preventDefault();
+      onCloseRef.current?.();
+    };
     window.addEventListener('keydown', onKey);
-    return () => { window.removeEventListener('keydown', onKey); popEscLayer(layer); };
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      popEscLayer(layer);
+      if (keyboardLayerRef?.current === layer) keyboardLayerRef.current = null;
+    };
   }, []);
 
   // Focus the first field on mount; restore focus to the opener on unmount.
@@ -1255,6 +1264,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   const [optionalOpen, setOptionalOpen] = React.useState(false);
   const confirmCancelRef = React.useRef(null);
   const firstFieldRef = React.useRef(null);
+  const keyboardLayerRef = React.useRef(null);
   const savingRef = React.useRef(false);
   const initialRecordSignatureRef = React.useRef(null);
   const recordIdentity = record?.id ?? record?.clientId ?? (record ? '__anonymous__' : null);
@@ -1357,6 +1367,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   React.useEffect(() => {
     if (!record) return undefined;
     const onKey = (e) => {
+      if (e.defaultPrevented || !isTopEscLayer(keyboardLayerRef.current)) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); handleDoneRef.current?.(); }
     };
     window.addEventListener('keydown', onKey);
@@ -1472,6 +1483,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       width={width}
       presentation={presentation}
       initialFocusRef={hasPanels ? firstFieldRef : undefined}
+      keyboardLayerRef={keyboardLayerRef}
       footer={
         confirming ? (
           <>
