@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오늘 하단 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@font-face { font-family: 'SUIT Variable'; src: url('fonts/SUIT-Variable.woff2') format('woff2'), url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('fonts/JetBrainsMono-Variable.woff2') format('woff2'), url('../../../apps/hub/public/fonts/JetBrainsMono-Variable.woff2') format('woff2'); font-weight: 100 800; font-display: swap; }
+
+/* 레이아웃: 문서 셸 위에 1180px 본문 열 프레임 셋. 위쪽(13a)은 한 줄로 접고 하단만 실제 크기로 그린다.
+   토큰은 hub-tokens.css · hub-depth.css(depth C)와 14안 문서의 값을 그대로 쓴다. */
+:root {
+  --canvas: oklch(0.95 0.004 250);
+  --frame-bg: linear-gradient(180deg, oklch(0.975 0.004 250), oklch(0.985 0.003 250));
+  --frame-shadow: 0 1px 2px oklch(0 0 0 / 0.05), 0 30px 80px -30px oklch(0 0 0 / 0.25);
+  --fg: oklch(0.20 0.008 250);
+  --fg-muted: oklch(0.42 0.008 250);
+  --fg-dim: oklch(0.47 0.008 250);
+  --fg-faint: oklch(0.52 0.007 250);
+  --face: oklch(0.955 0.006 255);
+  --panel: oklch(1 0 0 / 0.66);
+  --panel-solid: oklch(0.995 0.002 250);
+  --panel-edge: oklch(1 0 0 / 0.9);
+  --panel-shadow: 0 1px 2px oklch(0.3 0.02 250 / 0.05), 0 18px 40px -22px oklch(0.3 0.03 250 / 0.32), inset 0 1px 0 oklch(1 0 0);
+  --raise: -3px -3px 7px oklch(1 0 0 / 0.9), 3px 3px 8px oklch(0.5 0.02 250 / 0.2);
+  --raise-hover: -4px -4px 10px oklch(1 0 0 / 0.95), 5px 6px 14px oklch(0.5 0.02 250 / 0.26);
+  --inset: inset 2px 2px 5px oklch(0.5 0.02 250 / 0.2), inset -2px -2px 5px oklch(1 0 0 / 0.9);
+  --inset-sm: inset 1px 1px 2px oklch(0.5 0.02 250 / 0.22), inset -1px -1px 2px oklch(1 0 0 / 0.9);
+  --btn-bg: oklch(0.20 0.008 250 / 0.05);
+  --btn-shadow: 0 1px 0 oklch(1 0 0 / 0.9), inset 0 1px 2px oklch(0.3 0.02 250 / 0.07);
+  --btn-hover-bg: oklch(1 0 0 / 0.92);
+  --btn-hover-shadow: 0 2px 4px oklch(0.3 0.02 250 / 0.08), 0 10px 20px -8px oklch(0.3 0.02 250 / 0.22), inset 0 1px 0 oklch(1 0 0);
+  --ink: oklch(0.20 0.008 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.31 0.012 250), oklch(0.20 0.008 250));
+  --ink-shadow: -2px -2px 5px oklch(1 0 0 / 0.7), 3px 4px 9px -2px oklch(0.25 0.05 250 / 0.45), inset 0 1px 0 oklch(1 0 0 / 0.16);
+  --on-ink: oklch(0.985 0.003 250);
+  --row-hover: oklch(1 0 0 / 0.78);
+  --line: oklch(0.30 0.008 250 / 0.12);
+  --line-strong: oklch(0.30 0.008 250 / 0.38);
+  --track: oklch(0.30 0.008 250 / 0.08);
+  --danger: oklch(0.55 0.19 25);
+  --accent-fg: #365888;
+  --bar-now: oklch(0.30 0.008 250 / 0.22);
+  --overlay-text: oklch(0.985 0.003 250);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: oklch(0.12 0.005 250);
+    --frame-bg: linear-gradient(180deg, oklch(0.165 0.006 250), oklch(0.15 0.005 250));
+    --frame-shadow: 0 0 0 1px oklch(1 0 0 / 0.05), 0 30px 80px -30px oklch(0 0 0 / 0.8);
+    --fg: oklch(0.92 0.005 250);
+    --fg-muted: oklch(0.72 0.009 250);
+    --fg-dim: oklch(0.65 0.010 250);
+    --fg-faint: oklch(0.60 0.009 250);
+    --face: oklch(0.24 0.007 250);
+    --panel: oklch(0.205 0.006 250 / 0.9);
+    --panel-solid: oklch(0.215 0.007 250);
+    --panel-edge: oklch(1 0 0 / 0.06);
+    --panel-shadow: inset 0 1px 0 oklch(1 0 0 / 0.04), 0 18px 40px -22px oklch(0 0 0 / 0.75);
+    --raise: inset 0 1px 0 oklch(1 0 0 / 0.07), 0 4px 10px -4px oklch(0 0 0 / 0.65);
+    --raise-hover: inset 0 1px 0 oklch(1 0 0 / 0.1), 0 8px 16px -6px oklch(0 0 0 / 0.75);
+    --inset: inset 0 2px 4px oklch(0 0 0 / 0.45), inset 0 0 0 1px oklch(1 0 0 / 0.05);
+    --inset-sm: inset 0 1px 2px oklch(0 0 0 / 0.45), inset 0 0 0 1px oklch(1 0 0 / 0.05);
+    --btn-bg: oklch(1 0 0 / 0.05);
+    --btn-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
+    --btn-hover-bg: oklch(1 0 0 / 0.09);
+    --btn-hover-shadow: inset 0 1px 0 oklch(1 0 0 / 0.08), 0 8px 18px -8px oklch(0 0 0 / 0.7);
+    --ink: oklch(0.88 0.006 250);
+    --ink-grad: linear-gradient(180deg, oklch(0.92 0.005 250), oklch(0.80 0.007 250));
+    --ink-shadow: 0 4px 12px -4px oklch(0 0 0 / 0.7), inset 0 1px 0 oklch(1 0 0 / 0.5);
+    --on-ink: oklch(0.17 0.006 250);
+    --row-hover: oklch(1 0 0 / 0.045);
+    --line: oklch(0.40 0.008 250 / 0.45);
+    --line-strong: oklch(0.58 0.008 250);
+    --track: oklch(1 0 0 / 0.07);
+    --danger: oklch(0.68 0.16 25);
+    --accent-fg: oklch(0.74 0.07 255);
+    --bar-now: oklch(1 0 0 / 0.16);
+    --overlay-text: oklch(0.17 0.006 250);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas: oklch(0.12 0.005 250);
+  --frame-bg: linear-gradient(180deg, oklch(0.165 0.006 250), oklch(0.15 0.005 250));
+  --frame-shadow: 0 0 0 1px oklch(1 0 0 / 0.05), 0 30px 80px -30px oklch(0 0 0 / 0.8);
+  --fg: oklch(0.92 0.005 250);
+  --fg-muted: oklch(0.72 0.009 250);
+  --fg-dim: oklch(0.65 0.010 250);
+  --fg-faint: oklch(0.60 0.009 250);
+  --face: oklch(0.24 0.007 250);
+  --panel: oklch(0.205 0.006 250 / 0.9);
+  --panel-solid: oklch(0.215 0.007 250);
+  --panel-edge: oklch(1 0 0 / 0.06);
+  --panel-shadow: inset 0 1px 0 oklch(1 0 0 / 0.04), 0 18px 40px -22px oklch(0 0 0 / 0.75);
+  --raise: inset 0 1px 0 oklch(1 0 0 / 0.07), 0 4px 10px -4px oklch(0 0 0 / 0.65);
+  --raise-hover: inset 0 1px 0 oklch(1 0 0 / 0.1), 0 8px 16px -6px oklch(0 0 0 / 0.75);
+  --inset: inset 0 2px 4px oklch(0 0 0 / 0.45), inset 0 0 0 1px oklch(1 0 0 / 0.05);
+  --inset-sm: inset 0 1px 2px oklch(0 0 0 / 0.45), inset 0 0 0 1px oklch(1 0 0 / 0.05);
+  --btn-bg: oklch(1 0 0 / 0.05);
+  --btn-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
+  --btn-hover-bg: oklch(1 0 0 / 0.09);
+  --btn-hover-shadow: inset 0 1px 0 oklch(1 0 0 / 0.08), 0 8px 18px -8px oklch(0 0 0 / 0.7);
+  --ink: oklch(0.88 0.006 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.92 0.005 250), oklch(0.80 0.007 250));
+  --ink-shadow: 0 4px 12px -4px oklch(0 0 0 / 0.7), inset 0 1px 0 oklch(1 0 0 / 0.5);
+  --on-ink: oklch(0.17 0.006 250);
+  --row-hover: oklch(1 0 0 / 0.045);
+  --line: oklch(0.40 0.008 250 / 0.45);
+  --line-strong: oklch(0.58 0.008 250);
+  --track: oklch(1 0 0 / 0.07);
+  --danger: oklch(0.68 0.16 25);
+  --accent-fg: oklch(0.74 0.07 255);
+  --bar-now: oklch(1 0 0 / 0.16);
+  --overlay-text: oklch(0.17 0.006 250);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--canvas); color: var(--fg); font-family: 'SUIT Variable', 'Inter Tight', ui-sans-serif, system-ui, sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; word-break: keep-all; }
+button { font-family: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 1px solid var(--accent-fg); outline-offset: 2px; }
+.mono { font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.stat { font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; }
+.num { font-variant-numeric: tabular-nums; }
+svg.ic { width: 14px; height: 14px; flex-shrink: 0; display: block; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+svg.ic.sm { width: 12px; height: 12px; }
+.danger-t { color: var(--danger); }
+
+/* ── 문서 셸 ── */
+.doc { padding-block: 48px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.doc-in { max-width: 1520px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+.doc-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-dim); }
+h1 { margin: 8px 0 8px; font-size: 32px; font-weight: 300; letter-spacing: -0.02em; text-wrap: balance; }
+.sub { margin: 0; font-size: 13.5px; color: var(--fg-muted); line-height: 1.7; max-width: 66ch; }
+.sub b { color: var(--fg); font-weight: 500; }
+.tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* 세그먼트 */
+.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; border-radius: 999px; background: var(--face); box-shadow: var(--inset); }
+.seg-thumb { position: absolute; top: 4px; left: 4px; height: calc(100% - 8px); border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); transition: transform 340ms cubic-bezier(0.16, 1, 0.3, 1.04); }
+.seg button { position: relative; height: 28px; border: 0; background: transparent; border-radius: 999px; font-size: 12.5px; color: var(--fg-dim); padding: 0 14px; white-space: nowrap; transition: color 200ms; }
+.seg button[aria-pressed="true"] { color: var(--on-ink); font-weight: 600; }
+
+/* 지금 하단 진단 */
+.diag { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 24px 40px; align-items: start; }
+.diag h2, .opt h2, .pick h2 { margin: 0 0 10px; font-size: 20px; font-weight: 400; letter-spacing: -0.01em; }
+.issues { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.issues li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.6; color: var(--fg-muted); }
+.issues li:first-child { border-top: 0; }
+.issues li b { color: var(--fg); font-weight: 500; }
+.issues .n { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--fg-faint); padding-top: 3px; }
+.issues code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; padding: 1px 6px; border-radius: 6px; box-shadow: var(--inset-sm); color: var(--fg); }
+
+.len { border-radius: 24px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--panel-shadow); padding: 20px 22px 18px; display: flex; flex-direction: column; gap: 14px; }
+.len-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.len-h b { font-size: 13px; font-weight: 500; }
+.len-h span { font-size: 11.5px; color: var(--fg-dim); }
+.len-rows { position: relative; display: flex; flex-direction: column; gap: 10px; }
+.len-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 76px; gap: 12px; align-items: center; font-size: 12.5px; }
+.len-row .lbl { color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.len-row .val { text-align: right; color: var(--fg); }
+.len-bar { position: relative; height: 14px; border-radius: 999px; background: var(--face); box-shadow: var(--inset-sm); }
+.len-bar > i { position: absolute; inset: 2px auto 2px 2px; border-radius: 999px; background: var(--ink-grad); transition: width 340ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+.len-row.now .len-bar > i { background: var(--bar-now); }
+.len-screen { position: absolute; top: -6px; bottom: -6px; width: 0; border-left: 1px dashed var(--line-strong); pointer-events: none; }
+.len-screen span { position: absolute; top: -16px; left: 4px; font-size: 10.5px; color: var(--fg-dim); white-space: nowrap; }
+.len-note { font-size: 11.5px; color: var(--fg-faint); line-height: 1.6; }
+
+/* 안 캡션 */
+.opt { display: flex; flex-direction: column; gap: 16px; }
+.cap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px 40px; align-items: start; }
+.cap-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cap-title h2 { margin: 0; }
+.tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 9px; border-radius: 999px; background: var(--ink); color: var(--on-ink); }
+.from { font-size: 12px; color: var(--fg-dim); }
+.lede { margin: 8px 0 0; font-size: 13.5px; color: var(--fg-muted); line-height: 1.7; max-width: 62ch; }
+.lede b { color: var(--fg); font-weight: 500; }
+.cap ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--fg-muted); line-height: 1.75; }
+.cap ul b { color: var(--fg); font-weight: 500; }
+.stage { width: 100%; overflow-x: auto; overflow-y: hidden; border-radius: 28px; }
+.stage-in { width: 1180px; margin-inline: auto; transform-origin: 0 0; }
+
+/* ── 프레임(허브 본문 열 1180px) ── */
+.frame { position: relative; width: 1180px; border-radius: 28px; background: var(--frame-bg); box-shadow: var(--frame-shadow); padding: 22px 32px 36px; display: flex; flex-direction: column; gap: 18px; }
+.frame-tag { position: absolute; bottom: 14px; right: 22px; font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 9px; border-radius: 999px; background: var(--ink); color: var(--on-ink); }
+.frame-note { position: absolute; bottom: 16px; right: 70px; font-size: 11px; color: var(--fg-faint); }
+.ctx-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 48px; padding: 0 18px; border-radius: 18px; border: 1px dashed var(--line-strong); font-size: 12px; color: var(--fg-dim); }
+.ctx-top .chips { display: flex; gap: 6px; }
+.tail { display: flex; flex-direction: column; gap: 18px; }
+.step-label { font-size: 12px; color: var(--fg-dim); padding: 0 4px; margin-bottom: -8px; }
+
+.panel { border-radius: 24px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--panel-shadow); padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pt { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; min-height: 28px; }
+.pt-l { font-size: 12.5px; font-weight: 500; color: var(--fg-muted); display: flex; align-items: center; gap: 8px; }
+.pt-r { font-size: 12px; color: var(--fg-dim); display: flex; align-items: center; gap: 6px; }
+.pt-r b { color: var(--fg); font-weight: 500; }
+.g2 { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.g2e { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.grow { flex: 1; min-width: 0; }
+
+/* 버튼 */
+.btn { height: 34px; border: 0; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0; padding: 0 13px; background: var(--btn-bg); font-size: 12.5px; box-shadow: var(--btn-shadow); transition: transform 260ms cubic-bezier(0.3,1.3,0.5,1), box-shadow 200ms, background-color 160ms; }
+.btn:hover { background: var(--btn-hover-bg); transform: translateY(-1px); box-shadow: var(--btn-hover-shadow); }
+.btn:active { transform: scale(0.97); }
+.btn--ink { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); font-weight: 500; }
+.btn--ink:hover { background: var(--ink-grad); filter: brightness(1.08); }
+.btn--sm { height: 30px; font-size: 12px; padding: 0 11px; }
+.btn--raised { background: var(--face); box-shadow: var(--raise); }
+.btn--raised:hover { background: var(--face); box-shadow: var(--raise-hover); }
+.linkbtn { border: 0; background: none; padding: 4px 2px; font-size: 12px; color: var(--fg-dim); display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; white-space: nowrap; }
+.linkbtn:hover { color: var(--fg); }
+
+/* 행 */
+.list { display: flex; flex-direction: column; gap: 2px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 16px; transition: background-color 160ms; min-width: 0; }
+.row:hover { background: var(--row-hover); }
+.row.rail { box-shadow: inset 1px 0 0 var(--danger); border-radius: 0 16px 16px 0; }
+.av { width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; display: grid; place-items: center; font-size: 12.5px; font-weight: 600; color: var(--fg-muted); background: var(--face); box-shadow: var(--raise); }
+.kind { width: 32px; height: 32px; flex-shrink: 0; border-radius: 999px; display: grid; place-items: center; color: var(--fg-muted); box-shadow: var(--inset-sm); }
+.kind.danger { color: var(--danger); }
+.t1 { font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.t1 .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t2 { font-size: 12px; color: var(--fg-muted); margin-top: 3px; }
+.t3 { font-size: 11.5px; color: var(--fg-dim); }
+.due { font-size: 12px; color: var(--fg-dim); flex-shrink: 0; white-space: nowrap; }
+.due.urgent { color: var(--danger); font-weight: 500; }
+
+/* 칩·확실성 */
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; box-shadow: var(--inset-sm); font-size: 11.5px; color: var(--fg-muted); white-space: nowrap; flex-shrink: 0; }
+.chip--danger { color: var(--danger); }
+.chip--ink { background: var(--ink-grad); color: var(--on-ink); box-shadow: var(--ink-shadow); }
+.tip { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 16px; border: 1px dashed var(--line-strong); font-size: 12.5px; color: var(--fg-muted); min-width: 0; }
+.tip b { color: var(--fg); font-weight: 500; }
+.tip .rec { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--fg-muted); white-space: nowrap; }
+
+/* 확인할 것 한 장 */
+.cc { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 18px; background: var(--face); box-shadow: var(--raise); }
+.cc-meta { display: flex; align-items: center; gap: 8px; }
+.cc-title { font-size: 19px; font-weight: 300; letter-spacing: -0.015em; line-height: 1.35; }
+.cc-act { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.cc-more { font-size: 11.5px; color: var(--fg-faint); }
+
+/* 계기 */
+.wells { display: grid; gap: 10px; }
+.wells.w4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.wells.w3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wells.w6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.well { text-align: left; border: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 18px; background: var(--face); box-shadow: var(--inset-sm); min-width: 0; transition: box-shadow 160ms; }
+.well:hover { box-shadow: var(--inset-sm), 0 0 0 1px var(--line-strong); }
+.well.rail { box-shadow: var(--inset-sm), inset 1px 0 0 var(--danger); }
+.w-l { font-size: 11.5px; color: var(--fg-dim); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.w-v { font-size: 24px; font-weight: 400; line-height: 1.1; }
+.w-v small { font-size: 13px; font-weight: 400; color: var(--fg-muted); margin-left: 2px; letter-spacing: 0; }
+.w-s { font-size: 11.5px; color: var(--fg-muted); }
+.track { position: relative; height: 6px; border-radius: 999px; background: var(--track); }
+.track > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--fg); }
+.track .tick { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--fg-dim); }
+.cells { display: grid; gap: 4px; padding: 4px; border-radius: 999px; background: var(--face); box-shadow: var(--inset-sm); }
+.well .cells { background: transparent; box-shadow: none; padding: 0; }
+.cells i { display: block; height: 8px; border-radius: 999px; border: 1px solid var(--line-strong); }
+.cells i.on { background: var(--ink-grad); border-color: transparent; }
+.cells i.today { border-color: var(--accent-fg); border-style: dashed; }
+.cells i.today.on { border-style: solid; border-color: var(--accent-fg); }
+.c3 { grid-template-columns: repeat(3, 1fr); }
+.c5 { grid-template-columns: repeat(5, 1fr); }
+.c7 { grid-template-columns: repeat(7, 1fr); }
+.stages { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--fg-muted); white-space: nowrap; }
+.stages b { color: var(--fg); font-weight: 500; }
+.stages .ar { color: var(--fg-faint); }
+.stack-bar { display: flex; gap: 3px; height: 8px; }
+.stack-bar i { display: block; border-radius: 3px; background: var(--ink-grad); }
+.stack-bar i.d2 { background: none; border: 1px dashed var(--line-strong); }
+.stack-bar i.d3 { background: none; border: 1px dotted var(--line-strong); }
+
+/* 더 볼 것 (15a) */
+.acc { display: flex; flex-direction: column; }
+.acc-item { border-top: 1px solid var(--line); }
+.acc-item:first-child { border-top: 0; }
+.acc-h { width: 100%; display: grid; grid-template-columns: 32px 150px minmax(0, 1fr) auto 16px; align-items: center; gap: 12px; padding: 9px 10px; border: 0; background: none; border-radius: 14px; text-align: left; font-size: 13px; transition: background-color 160ms; }
+.acc-h:hover { background: var(--row-hover); }
+.acc-h .nm { font-weight: 500; }
+.acc-h .vl { color: var(--fg-muted); font-size: 12.5px; }
+.acc-h .vl b { color: var(--fg); font-weight: 500; }
+.acc-h .go { font-size: 11.5px; color: var(--fg-dim); }
+.acc-h .chev { transition: transform 200ms; color: var(--fg-faint); }
+.acc-h[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.acc-b { padding: 4px 10px 14px 54px; display: flex; flex-direction: column; gap: 10px; }
+.acc-zero { padding: 10px 10px 2px 54px; font-size: 12px; color: var(--fg-faint); border-top: 1px solid var(--line); }
+.mini-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.mini-row .grow { color: var(--fg-muted); }
+.week { display: grid; grid-template-columns: repeat(5, 40px); gap: 6px; }
+.week span { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10.5px; color: var(--fg-faint); }
+.dot { width: 14px; height: 14px; border-radius: 999px; border: 1px solid var(--line-strong); display: block; }
+.dot.on { background: var(--ink-grad); border-color: transparent; }
+.dot.today { border-style: dashed; border-color: var(--accent-fg); }
+
+/* 15b */
+.phase-h { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
+.phase-h .t2 { margin: 0; }
+.people { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pcard { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 18px; background: var(--face); box-shadow: var(--raise); min-width: 0; }
+.pcard.quiet { background: transparent; box-shadow: none; border: 1px dashed var(--line-strong); }
+.pc-time { display: flex; align-items: baseline; gap: 8px; }
+.pc-time .mono { font-size: 15px; color: var(--fg); }
+.pc-name { font-size: 16px; font-weight: 400; letter-spacing: -0.01em; }
+.pc-kv { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 2px 8px; font-size: 12px; }
+.pc-kv dt { color: var(--fg-faint); }
+.pc-kv dd { margin: 0; color: var(--fg-muted); }
+.pc-act { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.big-ev { font-size: 24px; font-weight: 300; letter-spacing: -0.02em; line-height: 1.3; }
+.prep { display: flex; gap: 6px; flex-wrap: wrap; }
+.prep .chip.done { text-decoration: line-through; color: var(--fg-dim); }
+.pulse-line { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-radius: 999px; box-shadow: var(--inset-sm); font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; }
+.pulse-line b { color: var(--fg); font-weight: 500; }
+.pulse-line .vr { width: 1px; height: 14px; background: var(--line); flex-shrink: 0; }
+.pulse-line .track { width: 72px; flex-shrink: 0; }
+.rituals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ritual { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-radius: 14px; background: var(--face); box-shadow: var(--raise); font-size: 12.5px; color: var(--fg-muted); text-align: left; }
+.ritual .ck { width: 18px; height: 18px; border-radius: 999px; box-shadow: var(--inset-sm); display: grid; place-items: center; color: transparent; flex-shrink: 0; }
+.ritual[aria-pressed="true"] { color: var(--fg-dim); }
+.ritual[aria-pressed="true"] .nm { text-decoration: line-through; }
+.ritual[aria-pressed="true"] .ck { background: var(--ink-grad); box-shadow: var(--ink-shadow); color: var(--on-ink); }
+.elsewhere { display: flex; align-items: center; gap: 4px 14px; flex-wrap: wrap; padding: 4px; font-size: 12px; color: var(--fg-dim); }
+.elsewhere b { color: var(--fg); font-weight: 500; }
+
+/* 15c */
+.friday { display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 18px; border-radius: 999px; box-shadow: var(--inset-sm); font-size: 12.5px; color: var(--fg-muted); }
+.friday b { color: var(--fg); font-weight: 500; }
+
+/* 고를 것 */
+.pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px 40px; }
+.pick ol, .pick ul { margin: 0; padding-left: 20px; font-size: 13px; color: var(--fg-muted); line-height: 1.75; }
+.pick b { color: var(--fg); font-weight: 500; }
+.sample { font-size: 11.5px; color: var(--fg-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
+}
+@media (max-width: 900px) {
+  .doc { padding-block: 28px 64px; }
+  .diag, .cap, .pick { grid-template-columns: minmax(0, 1fr); }
+  .len-row { grid-template-columns: 92px minmax(0, 1fr) 64px; }
+  h1 { font-size: 26px; }
+}
+</style>
+
+<svg width="0" height="0" style="position: absolute;" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3L12.5 5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5l4.5 4.5L6 12.5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.6 5.8v4.4M9.4 5.8v4.4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 2.5l6 10.5H2z"/><path d="M8 6.5v3"/><path d="M8 11.4v.1"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.2l2 1.3"/></symbol>
+  <symbol id="i-diamond" viewBox="0 0 16 16"><path d="M8 2.5L13.5 8 8 13.5 2.5 8z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2.5 9.5l1.8-5h7.4l1.8 5v3h-11z"/><path d="M2.5 9.5h3l1 1.5h3l1-1.5h3"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 16 16"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M6 8h4M6 10.5h4"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></symbol>
+  <symbol id="i-flow" viewBox="0 0 16 16"><path d="M2.5 12.5V8M6.5 12.5V5M10.5 12.5V9.5M14 12.5H2"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3"/><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1"/></symbol>
+  <symbol id="i-ring" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5a5.5 5.5 0 0 1 5.5 5.5"/></symbol>
+</svg>
+
+<div class="doc"><div class="doc-in">
+  <header class="doc-head">
+    <div>
+      <div class="eyebrow">15 · 오늘 탭 하단 — 13a · 14 다음</div>
+      <h1>오늘 하단 시안 세 개</h1>
+      <p class="sub">오늘 할 일 아래, <b>이어서 · 약속과 일정 → 확인할 것 → 운영 지표 → 더보기</b>를 다시 짭니다. 위쪽(머리 · 빠른 입력 · 하루 띠 · 세 자리 · 시간대 칸 | 오늘 할 일)은 13a 그대로 두고 프레임 맨 위 점선 한 줄로 접었습니다. 세 안 모두 14a · 14b · 14c 어느 위쪽과도 붙습니다.</p>
+    </div>
+    <div class="tools">
+      <div class="seg" data-seg="phase" role="group" aria-label="시간대 미리보기"><span class="seg-thumb"></span><button type="button" id="ph-morning" aria-pressed="false" data-v="morning">아침 08:40</button><button type="button" id="ph-day" aria-pressed="true" data-v="day">낮 15:20</button><button type="button" id="ph-evening" aria-pressed="false" data-v="evening">저녁 18:50</button></div>
+      <div class="seg" data-seg="theme" role="group" aria-label="테마"><span class="seg-thumb"></span><button type="button" id="th-light" aria-pressed="true" data-v="light">라이트</button><button type="button" id="th-dark" aria-pressed="false" data-v="dark">다크</button></div>
+      <div class="seg" data-seg="fit" role="group" aria-label="보기 크기"><span class="seg-thumb"></span><button type="button" id="fit-fit" aria-pressed="true" data-v="fit">화면 맞춤</button><button type="button" id="fit-real" aria-pressed="false" data-v="real">실제 크기</button></div>
+    </div>
+  </header>
+
+  <section class="diag" aria-label="지금 하단">
+    <div>
+      <h2>지금 하단에서 걸리는 것</h2>
+      <ul class="issues">
+        <li><span class="n">01</span><span><b>길다.</b> 더보기를 펼치면 하단만 2,432px, 화면 2.7장입니다. 접어도 850px이고, 접힌 안에 열 겹(주간 리포트 · 퇴근 전 정돈 · Guru 추천 · 실행 오더 · 문의 · 운영 pulse · 리듬 · 아침 브리프 · 승인 큐 · 검토 대기)이 있습니다.</span></li>
+        <li><span class="n">02</span><span><b>같은 것을 두 번 보여 줍니다.</b> 오늘 일정 카드는 위 하루 띠와, 빠른 바로가기 여섯 칸은 사이드바와, 퇴근 전 정돈은 저녁 칸의 하루 리뷰와, 운영 pulse는 현황과, 리듬 일곱 줄은 리듬 탭과 겹칩니다.</span></li>
+        <li><span class="n">03</span><span><b>영어 라벨이 섞여 있습니다.</b> <code>MRR</code> <code>PIPELINE</code> <code>PUBLISHED</code> <code>OPEN WORK</code> <code>Evening Wind-Down</code> <code>pulse</code> <code>My Tasks</code> <code>Queue</code></span></li>
+        <li><span class="n">04</span><span><b>확인할 것 카드가 무겁습니다.</b> 출처 줄에 원시 ID(<code>dddddddd-…02</code>)가 보이고, 버튼이 넷(이어쓰기 · 다른 방법으로 끝내기 · 조언 구하기 · 레코드 열기)입니다.</span></li>
+        <li><span class="n">05</span><span><b>0을 늘어놓습니다.</b> 주간 리포트의 0 다섯 칸, 문의 0, 자동화 0이 같은 무게로 자리를 차지합니다.</span></li>
+      </ul>
+    </div>
+    <div class="len" aria-label="하단 길이 비교">
+      <div class="len-h"><b>하단 길이 · 오늘 할 일 아래부터</b><span>1440×900 화면 기준</span></div>
+      <div class="len-rows" id="len-rows"></div>
+      <div class="len-note">지금 두 줄은 2026-10-22 로컬 허브에서 운영 데이터로 잰 값입니다. 15a · 15b · 15c는 이 문서의 프레임을 그대로 잰 값이라 예시 데이터 기준이고, 15b는 위 시간대 전환에 따라 바뀝니다.</div>
+    </div>
+  </section>
+
+  <!-- ───────────── 15a ───────────── -->
+  <section class="opt" aria-labelledby="h15a">
+    <div class="cap">
+      <div>
+        <div class="cap-title"><span class="tag">15a</span><h2 id="h15a">접어 둔 선반</h2><span class="from">지금 하단을 덜어 내고 한 줄씩</span></div>
+        <p class="lede">순서는 지금과 같습니다. <b>사람 · 약속</b>과 <b>확인할 것 한 장</b>을 나란히 두고, 운영 지표는 한국어 네 칸, 더보기 열 겹은 <b>더 볼 것</b> 목록 한 장으로 바꿉니다. 행마다 지금 값이 보여서 열어 보지 않고도 비었는지 압니다.</p>
+      </div>
+      <ul>
+        <li><b>뺀 것</b> — 오늘 일정 카드(위 하루 띠), 빠른 바로가기 여섯 칸(사이드바 · ⌘K), 퇴근 전 정돈 카드(저녁 칸 하루 리뷰), 운영 pulse 막대(현황).</li>
+        <li><b>확인할 것</b>은 출처 칩 · 제목 · 이유 한 줄 · 행동 하나. 나머지 셋은 <b>다른 방법</b> 메뉴로, 원시 ID는 숨깁니다.</li>
+        <li><b>더 볼 것</b>은 한 번에 하나만 펼칩니다. 0건은 맨 아래 한 줄로 모읍니다. 자동화 실패는 생길 때만 지표 줄 맨 앞에 빨간 1px 레일 칸으로 나옵니다.</li>
+        <li>바뀌는 양이 가장 적습니다. 기존 부품을 덜어 내는 쪽이고 새 읽기 모델이 없습니다.</li>
+      </ul>
+    </div>
+    <div class="stage" data-stage><div class="stage-in"><div class="frame">
+      <div class="ctx-top"><span>↑ 13a 그대로 · 세 자리 · 시간대 칸 | 오늘 할 일</span><span class="chips"><span class="chip">오늘 3개 1/3</span><span class="chip">나중 5</span></span></div>
+      <div class="tail" data-tail="15a">
+        <div class="tip"><span class="rec"><svg class="ic sm"><use href="#i-diamond"/></svg>제안</span><span class="grow">고객이 이번 대화에서 얻고 싶은 결과를 먼저 듣고, 그 결과에 연결되는 설명만 고르세요.</span><span class="t3">Guru · 고객 목표</span></div>
+        <div class="g2">
+          <section class="panel">
+            <div class="pt"><span class="pt-l">사람 · 약속</span><span class="pt-r">긴급 KA <b class="danger-t num">1</b> · 집중 고객 <b class="num">3</b>/5</span></div>
+            <div class="list">
+              <div class="row rail"><span class="av">A</span><div class="grow"><div class="t1"><span class="tx">고객 A 학원</span><span class="chip chip--danger"><svg class="ic sm"><use href="#i-alert"/></svg>긴급 KA</span></div><div class="t2">갱신 결정 회신 받기</div></div><span class="due urgent">2일 지남</span><button type="button" class="btn btn--sm">기록</button></div>
+              <div class="row"><span class="av">B</span><div class="grow"><div class="t1"><span class="tx">고객 B</span></div><div class="t2">견적서 v2 보내기 · 제안 단계 480만원</div></div><span class="due">내일까지</span><button type="button" class="btn btn--sm">기록</button></div>
+              <div class="row"><span class="av">C</span><div class="grow"><div class="t1"><span class="tx">고객 C</span></div><div class="t2">안부 연락 · 마지막 연락 3주 전</div></div><span class="due">D-4</span><button type="button" class="btn btn--sm">기록</button></div>
+            </div>
+            <div class="pt"><span></span><button type="button" class="linkbtn">오늘 연락에서 전부 보기<svg class="ic sm"><use href="#i-arrow"/></svg></button></div>
+          </section>
+          <section class="panel">
+            <div class="pt"><span class="pt-l">확인할 것</span><button type="button" class="linkbtn">4건 더 · 홈에서 한 장씩<svg class="ic sm"><use href="#i-arrow"/></svg></button></div>
+            <div class="cc">
+              <div class="cc-meta"><span class="chip"><svg class="ic sm"><use href="#i-doc"/></svg>콘텐츠 · 소재·제작</span><span class="mono t3">오늘 11:20</span></div>
+              <div class="cc-title">원고 A — 다듬기 끝, 예약 전</div>
+              <div class="t2">이번 주 발행 1/3 · 예약 칸이 비어 있어요</div>
+              <div class="cc-act"><button type="button" class="btn btn--ink btn--sm">발행 예약하기</button><button type="button" class="btn btn--sm">다른 방법<svg class="ic sm"><use href="#i-chev"/></svg></button></div>
+              <div class="cc-more">다른 방법: 오늘은 안 함 · 조언 구하기 · 원고 열기</div>
+            </div>
+          </section>
+        </div>
+        <section class="panel">
+          <div class="pt"><span class="pt-l">운영 지표</span><button type="button" class="linkbtn">현황에서 보기<svg class="ic sm"><use href="#i-arrow"/></svg></button></div>
+          <div class="wells w4">
+            <button type="button" class="well"><span class="w-l">이번 달 매출<span>입금 기준</span></span><span class="stat w-v">1,240<small>만원</small></span><span class="track"><i style="width: 62%;"></i></span><span class="w-s">목표 2,000만원의 62%</span></button>
+            <button type="button" class="well"><span class="w-l">열린 거래</span><span class="stat w-v">12<small>건</small></span><span class="stack-bar" aria-hidden="true"><i style="flex: 4;" class="d3"></i><i style="flex: 5;" class="d2"></i><i style="flex: 3;"></i></span><span class="w-s">문의 4 · 제안 5 · 협상 3 · 5,600만원</span></button>
+            <button type="button" class="well"><span class="w-l">이번 주 발행</span><span class="stat w-v">1<small>/3</small></span><span class="cells c3" aria-hidden="true"><i class="on"></i><i></i><i></i></span><span class="w-s">예약 0 · 다듬기 2</span></button>
+            <button type="button" class="well"><span class="w-l">열린 일</span><span class="stat w-v">14<small>건</small></span><span class="track"><i style="width: 77%;"></i></span><span class="w-s">이번 주 77% 끝 · <span class="danger-t">기한 지남 2</span></span></button>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="pt"><span class="pt-l">더 볼 것</span><span class="pt-r">한 번에 하나만 펼침 · 0건은 아래로</span></div>
+          <div class="acc" data-acc>
+            <div class="acc-item">
+              <button type="button" class="acc-h" aria-expanded="false" id="acc-approve"><span class="kind"><svg class="ic"><use href="#i-pause"/></svg></span><span class="nm">승인 대기</span><span class="vl">AI 초안 <b class="num">1</b>건 · 고객 B 회신</span><span class="go">요청 10:12</span><svg class="ic sm chev"><use href="#i-chev"/></svg></button>
+              <div class="acc-b" hidden><div class="mini-row"><span class="grow">고객 B 회신 초안 · 운영자 요청으로 만든 것</span><button type="button" class="btn btn--sm btn--raised">검토하기</button></div></div>
+            </div>
+            <div class="acc-item">
+              <button type="button" class="acc-h" aria-expanded="false" id="acc-inq"><span class="kind"><svg class="ic"><use href="#i-inbox"/></svg></span><span class="nm">문의</span><span class="vl">미확인 <b class="num">2</b>건</span><span class="go mono">06:55 · 07:20</span><svg class="ic sm chev"><use href="#i-chev"/></svg></button>
+              <div class="acc-b" hidden><div class="mini-row"><span class="grow">웹 폼 · 학원 도입 문의</span><span class="mono t3">06:55</span></div><div class="mini-row"><span class="grow">웹 폼 · 견적 요청</span><span class="mono t3">07:20</span></div></div>
+            </div>
+            <div class="acc-item">
+              <button type="button" class="acc-h" aria-expanded="true" id="acc-week"><span class="kind"><svg class="ic"><use href="#i-ring"/></svg></span><span class="nm">이번 주 정리</span><span class="vl">하루 리뷰 <b class="num">2</b>/5일 · 금요일에 정리</span><span class="go">월–금</span><svg class="ic sm chev"><use href="#i-chev"/></svg></button>
+              <div class="acc-b">
+                <div class="week" aria-label="이번 주 하루 리뷰: 월 완료, 화 완료, 수 쉼, 목 오늘 아직, 금 앞날"><span><i class="dot on"></i>월</span><span><i class="dot on"></i>화</span><span><i class="dot"></i>수</span><span><i class="dot today"></i>목</span><span><i class="dot"></i>금</span></div>
+                <div class="mini-row"><span class="grow">주간 리포트는 금요일에 열고, Council 평가는 열어서 요청할 때만 만듭니다.</span><button type="button" class="btn btn--sm btn--raised">한 주 정리 열기</button></div>
+              </div>
+            </div>
+            <div class="acc-item">
+              <button type="button" class="acc-h" aria-expanded="false" id="acc-rhythm"><span class="kind"><svg class="ic"><use href="#i-sun"/></svg></span><span class="nm">리듬</span><span class="vl">오늘 <b class="num">3</b>/7</span><span class="go">리듬 탭에서 체크</span><svg class="ic sm chev"><use href="#i-chev"/></svg></button>
+              <div class="acc-b" hidden><div class="mini-row"><span class="grow">산책 · 글쓰기 · QT 끝 / 독서 · 기도 · 청소 · 운동 남음</span><button type="button" class="btn btn--sm btn--raised">리듬 열기</button></div></div>
+            </div>
+            <div class="acc-item">
+              <button type="button" class="acc-h" aria-expanded="false" id="acc-flow"><span class="kind"><svg class="ic"><use href="#i-flow"/></svg></span><span class="nm">운영 흐름</span><span class="vl">콘텐츠 제작 중 <b class="num">12</b> · 발행 대기 <b class="num">0</b></span><span class="go">현황</span><svg class="ic sm chev"><use href="#i-chev"/></svg></button>
+              <div class="acc-b" hidden><div class="stages">아이디어 <b>6</b><span class="ar">→</span>제작 <b>12</b><span class="ar">→</span>발행 대기 <b>0</b><span class="ar">→</span>이번 주 발행 <b>1</b></div></div>
+            </div>
+            <div class="acc-item">
+              <button type="button" class="acc-h" aria-expanded="false" id="acc-brief"><span class="kind"><svg class="ic"><use href="#i-doc"/></svg></span><span class="nm">아침 브리프</span><span class="vl">08:10 받음 · 세 줄</span><span class="go"></span><svg class="ic sm chev"><use href="#i-chev"/></svg></button>
+              <div class="acc-b" hidden><div class="mini-row"><span class="grow">어제 끝낸 일 4 · 오늘 기한 2 · 회신 기다리는 고객 1</span></div></div>
+            </div>
+            <div class="acc-zero">0건 · 검토 대기 · 실행 오더 · 자동화 실패</div>
+          </div>
+        </section>
+      </div>
+      <span class="frame-note">예시 값 · 목업</span><span class="frame-tag">15a</span>
+    </div></div></div>
+  </section>
+
+  <!-- ───────────── 15b ───────────── -->
+  <section class="opt" aria-labelledby="h15b">
+    <div class="cap">
+      <div>
+        <div class="cap-title"><span class="tag">15b</span><h2 id="h15b">시간대 하단</h2><span class="from">13a 아침 · 낮 · 저녁을 아래까지</span></div>
+        <p class="lede">위쪽 세 자리가 시간대마다 하는 일을 바꾸듯, 하단도 그 시간에 필요한 것만 보여 줍니다. <b>아침</b>은 오늘 만날 사람과 밤사이 들어온 것, <b>낮</b>은 다음 약속 준비와 확인할 것 한 장, <b>저녁</b>은 리듬 체크 · 이번 주 정리 · 내일 첫 일입니다.</p>
+      </div>
+      <ul>
+        <li>위의 <b>시간대 전환</b>으로 세 장을 봅니다. 실제로는 13a와 같은 기기 시계(11시 · 18시)가 정합니다.</li>
+        <li><b>오늘 만날 사람</b>은 일정에 고객이 연결돼 있을 때만 그 고객을 붙입니다. 연결이 없으면 일정 제목으로 짐작하지 않고 집중 고객만 보입니다.</li>
+        <li>운영 지표는 아침에만 한 줄로 나오고, 낮과 저녁에는 맨 아래 <b>다른 곳에서</b> 링크로만 남습니다.</li>
+        <li>퇴근 전 정돈은 저녁 칸의 버튼 하나입니다. 누를 때만 AI가 초안을 만들어 승인 대기에 올립니다.</li>
+      </ul>
+    </div>
+    <div class="stage" data-stage><div class="stage-in"><div class="frame">
+      <div class="ctx-top"><span>↑ 13a 그대로 · 세 자리 · 시간대 칸 | 오늘 할 일</span><span class="chips"><span class="chip" data-phase-chip>낮 · 지금 자리 1번</span></span></div>
+      <div class="tail" data-tail="15b">
+        <!-- 아침 -->
+        <div class="tail" data-phase="morning" hidden>
+          <div class="phase-h"><span class="chip chip--ink"><svg class="ic sm"><use href="#i-clock"/></svg>아침 08:40</span><span class="t2">고르고 준비하는 시간</span></div>
+          <section class="panel">
+            <div class="pt"><span class="pt-l">오늘 만날 사람</span><span class="pt-r">일정에 걸린 고객 <b class="num">2</b> · 집중 고객 <b class="num">1</b></span></div>
+            <div class="people">
+              <article class="pcard"><div class="pc-time"><span class="mono">10:30</span><span class="t3">통화 · 30분</span></div><div class="pc-name">고객 A 학원</div><dl class="pc-kv"><dt>지난 기록</dt><dd>9/30 · 갱신 때 반 편성 문의</dd><dt>다음 행동</dt><dd class="danger-t">갱신 결정 회신 · 2일 지남</dd></dl><div class="pc-act"><button type="button" class="btn btn--sm btn--raised">기록 열기</button><button type="button" class="btn btn--sm">준비 메모</button></div></article>
+              <article class="pcard"><div class="pc-time"><span class="mono">16:00</span><span class="t3">방문 상담 · 40분</span></div><div class="pc-name">고객 B</div><dl class="pc-kv"><dt>지난 기록</dt><dd>9/30 통화 · 3월 개강 반 견적 요청</dd><dt>다음 행동</dt><dd>견적서 v2 보내기 · 내일까지</dd></dl><div class="pc-act"><button type="button" class="btn btn--sm btn--raised">기록 열기</button><button type="button" class="btn btn--sm">준비 메모</button></div></article>
+              <article class="pcard quiet"><div class="pc-time"><span class="t3">일정 없음 · 집중 고객</span></div><div class="pc-name">고객 C</div><dl class="pc-kv"><dt>지난 기록</dt><dd>3주 전 · 안부 통화</dd><dt>다음 행동</dt><dd>안부 연락 · D-4</dd></dl><div class="pc-act"><button type="button" class="btn btn--sm">오늘 연락에 넣기</button></div></article>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="pt"><span class="pt-l">밤사이 들어온 것</span><span class="pt-r"><b class="num">4</b>건 · 처리하면 빠짐</span></div>
+            <div class="list">
+              <div class="row rail"><span class="kind danger"><svg class="ic"><use href="#i-alert"/></svg></span><div class="grow"><div class="t1"><span class="tx">블로그 예약 발행 실패</span></div><div class="t2 danger-t">03:10 · 자동화 · 원고 B — 인증이 만료됐어요</div></div><button type="button" class="btn btn--sm">다시 시도</button></div>
+              <div class="row"><span class="kind"><svg class="ic"><use href="#i-pause"/></svg></span><div class="grow"><div class="t1"><span class="tx">AI 초안 승인 대기 · 고객 B 회신</span></div><div class="t2">어제 21:40 요청</div></div><button type="button" class="btn btn--sm">검토</button></div>
+              <div class="row"><span class="kind"><svg class="ic"><use href="#i-inbox"/></svg></span><div class="grow"><div class="t1"><span class="tx">새 문의 2건</span></div><div class="t2">웹 폼 · <span class="mono">06:55 · 07:20</span></div></div><button type="button" class="btn btn--sm">보기</button></div>
+              <div class="row"><span class="kind"><svg class="ic"><use href="#i-doc"/></svg></span><div class="grow"><div class="t1"><span class="tx">원고 A 예약 전</span></div><div class="t2">이번 주 발행 1/3</div></div><button type="button" class="btn btn--sm">예약</button></div>
+            </div>
+          </section>
+          <div class="pulse-line"><span>이번 달 매출 <b class="num">1,240만원</b></span><span class="track"><i style="width: 62%;"></i></span><span class="vr"></span><span>열린 거래 <b class="num">12</b>건</span><span class="vr"></span><span>이번 주 발행 <b class="num">1</b>/3</span><span class="vr"></span><span>열린 일 <b class="num">14</b></span><span class="grow"></span><button type="button" class="linkbtn">현황<svg class="ic sm"><use href="#i-arrow"/></svg></button></div>
+        </div>
+        <!-- 낮 -->
+        <div class="tail" data-phase="day">
+          <div class="phase-h"><span class="chip chip--ink"><svg class="ic sm"><use href="#i-clock"/></svg>낮 15:20</span><span class="t2">하는 시간</span></div>
+          <div class="g2">
+            <section class="panel">
+              <div class="pt"><span class="pt-l">다음 약속</span><span class="pt-r"><b class="num">40</b>분 뒤</span></div>
+              <div style="padding: 0 4px; display: flex; flex-direction: column; gap: 12px;">
+                <div><div class="mono t3">16:00 – 16:40</div><div class="big-ev">고객 B 방문 상담</div></div>
+                <dl class="pc-kv" style="grid-template-columns: 72px minmax(0, 1fr); font-size: 12.5px; gap: 6px 10px;"><dt>지난 기록</dt><dd>9/30 통화 · 3월 개강 반 견적 요청</dd><dt>다음 행동</dt><dd>견적서 v2 보내기 · 내일까지</dd><dt>열린 거래</dt><dd>제안 단계 · <span class="num">480만원</span></dd></dl>
+                <div class="prep"><span class="chip done"><svg class="ic sm"><use href="#i-check"/></svg>견적서 v2</span><span class="chip">시간표 출력</span><span class="chip">상담 질문 세 개</span></div>
+                <div class="tip"><span class="rec"><svg class="ic sm"><use href="#i-diamond"/></svg>제안</span><span class="grow">상담이 끝나면 기록을 남기세요. 누르면 기록창이 열립니다.</span><button type="button" class="btn btn--sm btn--raised">기록 열기</button></div>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="pt"><span class="pt-l">확인할 것</span><button type="button" class="linkbtn">4건 더<svg class="ic sm"><use href="#i-arrow"/></svg></button></div>
+              <div class="cc">
+                <div class="cc-meta"><span class="chip"><svg class="ic sm"><use href="#i-doc"/></svg>콘텐츠 · 소재·제작</span><span class="mono t3">오늘 11:20</span></div>
+                <div class="cc-title">원고 A — 다듬기 끝, 예약 전</div>
+                <div class="t2">이번 주 발행 1/3 · 예약 칸이 비어 있어요</div>
+                <div class="cc-act"><button type="button" class="btn btn--ink btn--sm">발행 예약하기</button><button type="button" class="btn btn--sm">다른 방법<svg class="ic sm"><use href="#i-chev"/></svg></button></div>
+              </div>
+            </section>
+          </div>
+          <section class="panel">
+            <div class="pt"><span class="pt-l">진행 흐름</span><button type="button" class="linkbtn">현황에서 보기<svg class="ic sm"><use href="#i-arrow"/></svg></button></div>
+            <div class="wells w3">
+              <button type="button" class="well"><span class="w-l">열린 일</span><span class="stat w-v">14<small>건</small></span><span class="track"><i style="width: 77%;"></i></span><span class="w-s">이번 주 77% 끝 · <span class="danger-t">기한 지남 2</span></span></button>
+              <button type="button" class="well"><span class="w-l">콘텐츠</span><span class="stat w-v">12<small>제작 중</small></span><span class="stages">아이디어 <b>6</b><span class="ar">→</span>제작 <b>12</b><span class="ar">→</span>발행 대기 <b>0</b></span><span class="w-s">이번 주 발행 1/3</span></button>
+              <button type="button" class="well"><span class="w-l">거래</span><span class="stat w-v">12<small>건</small></span><span class="stack-bar" aria-hidden="true"><i style="flex: 4;" class="d3"></i><i style="flex: 5;" class="d2"></i><i style="flex: 3;"></i></span><span class="w-s">문의 4 · 제안 5 · 협상 3</span></button>
+            </div>
+          </section>
+        </div>
+        <!-- 저녁 -->
+        <div class="tail" data-phase="evening" hidden>
+          <div class="phase-h"><span class="chip chip--ink"><svg class="ic sm"><use href="#i-clock"/></svg>저녁 18:50</span><span class="t2">닫는 시간</span></div>
+          <div class="g2">
+            <section class="panel">
+              <div class="pt"><span class="pt-l">오늘 리듬</span><span class="pt-r"><b class="num" data-ritual-count>3</b>/7 · 누르면 체크, 다시 누르면 취소</span></div>
+              <div class="rituals" data-rituals>
+                <button type="button" class="ritual" id="rt-1" aria-pressed="true"><span class="ck"><svg class="ic sm"><use href="#i-check"/></svg></span><span class="nm">산책하기</span></button>
+                <button type="button" class="ritual" id="rt-2" aria-pressed="true"><span class="ck"><svg class="ic sm"><use href="#i-check"/></svg></span><span class="nm">글쓰기</span></button>
+                <button type="button" class="ritual" id="rt-3" aria-pressed="false"><span class="ck"><svg class="ic sm"><use href="#i-check"/></svg></span><span class="nm">독서</span></button>
+                <button type="button" class="ritual" id="rt-4" aria-pressed="true"><span class="ck"><svg class="ic sm"><use href="#i-check"/></svg></span><span class="nm">QT · 말씀</span></button>
+                <button type="button" class="ritual" id="rt-5" aria-pressed="false"><span class="ck"><svg class="ic sm"><use href="#i-check"/></svg></span><span class="nm">기도하기</span></button>
+                <button type="button" class="ritual" id="rt-6" aria-pressed="false"><span class="ck"><svg class="ic sm"><use href="#i-check"/></svg></span><span class="nm">청소</span></button>
+                <button type="button" class="ritual" id="rt-7" aria-pressed="false"><span class="ck"><svg class="ic sm"><use href="#i-check"/></svg></span><span class="nm">운동하기</span></button>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="pt"><span class="pt-l">이번 주 정리</span><span class="pt-r">하루 리뷰 <b class="num">2</b>/5일</span></div>
+              <div style="padding: 0 4px; display: flex; flex-direction: column; gap: 12px;">
+                <div class="week" aria-label="이번 주 하루 리뷰: 월 완료, 화 완료, 수 쉼, 목 오늘 아직, 금 앞날"><span><i class="dot on"></i>월</span><span><i class="dot on"></i>화</span><span><i class="dot"></i>수</span><span><i class="dot today"></i>목</span><span><i class="dot"></i>금</span></div>
+                <div class="t2">오늘은 위 저녁 칸의 하루 리뷰만. 한 주 정리는 금요일에 엽니다.</div>
+                <div><button type="button" class="btn btn--sm btn--raised">한 주 정리 열기</button></div>
+              </div>
+            </section>
+          </div>
+          <section class="panel">
+            <div class="pt"><span class="pt-l">내일 첫 일</span><span class="pt-r">내일로 넘긴 것 <b class="num">2</b></span></div>
+            <div class="list">
+              <div class="row"><span class="kind"><svg class="ic"><use href="#i-clock"/></svg></span><div class="grow"><div class="t1"><span class="tx">내일 09:30 · 고객 C 통화</span></div><div class="t2">첫 일정 · 지난 기록 3주 전</div></div></div>
+              <div class="row"><span class="kind"><svg class="ic"><use href="#i-arrow"/></svg></span><div class="grow"><div class="t1"><span class="tx">견적서 v2 보내기</span></div><div class="t2">오늘 내일로 넘김 · 고객 B</div></div></div>
+              <div class="row"><span class="kind"><svg class="ic"><use href="#i-arrow"/></svg></span><div class="grow"><div class="t1"><span class="tx">원고 B 초안</span></div><div class="t2">오늘 내일로 넘김</div></div></div>
+            </div>
+            <div class="pt"><span class="t3">누를 때만 AI가 정돈 초안을 만들어 승인 대기에 올립니다.</span><button type="button" class="btn btn--sm btn--raised">퇴근 전 정돈 받기</button></div>
+          </section>
+        </div>
+        <div class="elsewhere"><span>다른 곳에서</span><button type="button" class="linkbtn">현황</button><button type="button" class="linkbtn">리듬 기록</button><button type="button" class="linkbtn">문의 <b class="num">2</b></button><button type="button" class="linkbtn">승인 대기 <b class="num">1</b></button><button type="button" class="linkbtn">주간 정리</button></div>
+      </div>
+      <span class="frame-note">예시 값 · 목업</span><span class="frame-tag">15b</span>
+    </div></div></div>
+  </section>
+
+  <!-- ───────────── 15c ───────────── -->
+  <section class="opt" aria-labelledby="h15c">
+    <div class="cap">
+      <div>
+        <div class="cap-title"><span class="tag">15c</span><h2 id="h15c">계기판 한 줄</h2><span class="from">더보기를 없애고 숫자로 한 번에</span></div>
+        <p class="lede">하단 맨 위에 <b>계기 여섯 칸</b>을 눌린 홈 한 줄로 놓고, 칸을 누르면 그 탭으로 갑니다. 그 아래는 <b>사람</b>과 <b>확인할 것 세 줄</b> 두 열. 더보기는 없습니다. 이번 주 정리는 금요일에만 맨 아래 한 줄로 올라옵니다.</p>
+      </div>
+      <ul>
+        <li>여섯 칸: 이번 달 매출 · 열린 거래 · 콘텐츠 · 열린 일 · 리듬 · 받은 것(문의 · 승인 · 자동화 실패).</li>
+        <li><b>받은 것</b> 칸에 자동화 실패가 있으면 그 칸만 빨간 1px 레일 + 글자. 나머지 다섯 칸은 중립이고, 상태는 채움 · 점선 · 칸 수로 말합니다.</li>
+        <li>확인할 것은 큰 카드 대신 세 줄, 줄마다 행동 하나. 나머지는 홈에서 한 장씩 끝냅니다.</li>
+        <li>가장 짧습니다. 대신 리듬 체크 · 주간 리포트 본문 · 문의 목록은 오늘에서 빠지고 각 탭으로 갑니다.</li>
+      </ul>
+    </div>
+    <div class="stage" data-stage><div class="stage-in"><div class="frame">
+      <div class="ctx-top"><span>↑ 13a 그대로 · 세 자리 · 시간대 칸 | 오늘 할 일</span><span class="chips"><span class="chip">오늘 3개 1/3</span><span class="chip">나중 5</span></span></div>
+      <div class="tail" data-tail="15c">
+        <section class="panel">
+          <div class="pt"><span class="pt-l">계기판</span><span class="pt-r">칸을 누르면 그 탭으로</span></div>
+          <div class="wells w6">
+            <button type="button" class="well"><span class="w-l">이번 달 매출</span><span class="stat w-v">1,240<small>만원</small></span><span class="track"><i style="width: 62%;"></i><span class="tick" style="left: 68%;"></span></span><span class="w-s">목표 2,000만원 · 눈금은 기간 경과</span></button>
+            <button type="button" class="well"><span class="w-l">열린 거래</span><span class="stat w-v">12<small>건</small></span><span class="stack-bar" aria-hidden="true"><i style="flex: 4;" class="d3"></i><i style="flex: 5;" class="d2"></i><i style="flex: 3;"></i></span><span class="w-s">5,600만원 · 협상 3</span></button>
+            <button type="button" class="well"><span class="w-l">콘텐츠</span><span class="stat w-v">1<small>/3 발행</small></span><span class="cells c3" aria-hidden="true"><i class="on"></i><i></i><i></i></span><span class="w-s">제작 12 · 대기 0</span></button>
+            <button type="button" class="well"><span class="w-l">열린 일</span><span class="stat w-v">14<small>건</small></span><span class="track"><i style="width: 77%;"></i></span><span class="w-s danger-t">기한 지남 2</span></button>
+            <button type="button" class="well"><span class="w-l">리듬</span><span class="stat w-v">3<small>/7 오늘</small></span><span class="cells c7" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i></i><i></i><i></i></span><span class="w-s">이번 주 18/49</span></button>
+            <button type="button" class="well rail"><span class="w-l">받은 것<svg class="ic sm danger-t"><use href="#i-alert"/></svg></span><span class="stat w-v">4<small>건</small></span><span class="w-s">문의 2 · 승인 1</span><span class="w-s danger-t">자동화 실패 1</span></button>
+          </div>
+        </section>
+        <div class="g2e">
+          <section class="panel">
+            <div class="pt"><span class="pt-l">사람</span><span class="pt-r">긴급 KA <b class="danger-t num">1</b> · 집중 고객 <b class="num">3</b>/5</span></div>
+            <div class="list">
+              <div class="row rail"><span class="av">A</span><div class="grow"><div class="t1"><span class="tx">고객 A 학원</span></div><div class="t2">갱신 결정 회신 받기</div></div><span class="due urgent">2일 지남</span><button type="button" class="btn btn--sm">기록</button></div>
+              <div class="row"><span class="av">B</span><div class="grow"><div class="t1"><span class="tx">고객 B</span></div><div class="t2">16:00 방문 상담 · 견적서 v2</div></div><span class="due">내일까지</span><button type="button" class="btn btn--sm">기록</button></div>
+              <div class="row"><span class="av">C</span><div class="grow"><div class="t1"><span class="tx">고객 C</span></div><div class="t2">안부 연락 · 3주 전</div></div><span class="due">D-4</span><button type="button" class="btn btn--sm">기록</button></div>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="pt"><span class="pt-l">확인할 것</span><button type="button" class="linkbtn">홈에서 4건 더<svg class="ic sm"><use href="#i-arrow"/></svg></button></div>
+            <div class="list">
+              <div class="row rail"><span class="kind danger"><svg class="ic"><use href="#i-alert"/></svg></span><div class="grow"><div class="t1"><span class="tx">블로그 예약 발행 실패</span></div><div class="t2 danger-t">03:10 · 인증 만료</div></div><button type="button" class="btn btn--sm">다시 시도</button></div>
+              <div class="row"><span class="kind"><svg class="ic"><use href="#i-doc"/></svg></span><div class="grow"><div class="t1"><span class="tx">원고 A 예약 전</span></div><div class="t2">이번 주 발행 1/3</div></div><button type="button" class="btn btn--sm">예약</button></div>
+              <div class="row"><span class="kind"><svg class="ic"><use href="#i-pause"/></svg></span><div class="grow"><div class="t1"><span class="tx">AI 초안 · 고객 B 회신</span></div><div class="t2">승인 대기 · 요청 10:12</div></div><button type="button" class="btn btn--sm">검토</button></div>
+            </div>
+          </section>
+        </div>
+        <div class="friday"><svg class="ic"><use href="#i-ring"/></svg><span class="grow">금요일에만 · <b>이번 주 정리할 때</b> — 하루 리뷰 2/5일, 끝낸 일 11건</span><button type="button" class="btn btn--sm btn--raised">한 주 정리 열기</button></div>
+      </div>
+      <span class="frame-note">예시 값 · 목업</span><span class="frame-tag">15c</span>
+    </div></div></div>
+  </section>
+
+  <section class="pick" aria-label="운영자가 고를 것">
+    <div>
+      <h2>고를 것</h2>
+      <ol>
+        <li><b>세 안 중 하나, 또는 조합.</b> 예: 15a 선반을 기본으로 하고 저녁에만 15b의 하루 닫기 칸을 띄우기.</li>
+        <li><b>오늘에서 뺄 것.</b> 오늘 일정 카드 · 빠른 바로가기 · 퇴근 전 정돈 카드 · 운영 pulse를 오늘에서 빼도 되는지(세 안 모두 뺍니다).</li>
+        <li><b>지표 이름.</b> MRR 대신 이번 달 매출(입금 기준), PIPELINE 대신 열린 거래, OPEN WORK 대신 열린 일로 부를지.</li>
+        <li><b>14안과의 관계.</b> 14a 드로어나 14c 정리대를 고르면 15의 확인할 것 · 더 볼 것이 그쪽으로 흡수됩니다. 14b를 고르면 15 어느 안이든 그 아래에 붙습니다.</li>
+      </ol>
+    </div>
+    <div>
+      <h2>지킨 규칙</h2>
+      <ul>
+        <li>빨강은 기한 지남 · 긴급 KA · 자동화 실패에만, 1px 레일과 글자로. 승인 대기는 일시정지 글리프와 중립 글자입니다.</li>
+        <li>제안(Guru 한 줄 · 상담 뒤 기록)은 점선과 ◇ 제안 라벨. 누를 때만 움직이고, AI 초안은 운영자가 요청한 것만 승인 대기에 오릅니다.</li>
+        <li>금액은 만원 단위, 큰 수는 산세리프 표 숫자, 시각은 고정폭입니다. 새 색 · 새 토큰은 없습니다.</li>
+        <li>고객 · 원고 이름과 숫자는 모두 예시 값입니다. 코드에는 넣지 않습니다.</li>
+      </ul>
+      <p class="sample">지금 하단 길이(2,432px · 850px)만 실측값입니다.</p>
+    </div>
+  </section>
+</div></div>
+
+<script>
+(function () {
+  const root = document.documentElement;
+  const NOW_OPEN = 2432, NOW_CLOSED = 850, SCREEN = 900;
+
+  function placeThumb(seg) {
+    const buttons = [...seg.querySelectorAll('button')];
+    const i = Math.max(0, buttons.findIndex(b => b.getAttribute('aria-pressed') === 'true'));
+    const thumb = seg.querySelector('.seg-thumb');
+    thumb.style.width = `calc((100% - 8px) / ${buttons.length})`;
+    thumb.style.transform = `translateX(${i * 100}%)`;
+  }
+  function press(seg, value) {
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === value)));
+    placeThumb(seg);
+  }
+
+  const segs = Object.fromEntries([...document.querySelectorAll('[data-seg]')].map(s => [s.dataset.seg, s]));
+  let fit = 'fit';
+
+  function scaleStages() {
+    document.querySelectorAll('[data-stage]').forEach(stage => {
+      const inner = stage.querySelector('.stage-in');
+      const frame = inner.querySelector('.frame');
+      const s = fit === 'fit' ? Math.min(1, stage.clientWidth / frame.offsetWidth) : 1;
+      inner.style.transform = `scale(${s})`;
+      stage.style.height = `${Math.ceil(frame.offsetHeight * s)}px`;
+    });
+  }
+
+  function drawLengths() {
+    const rows = [
+      { label: '지금 · 더보기 펼침', v: NOW_OPEN, now: true },
+      { label: '지금 · 접음', v: NOW_CLOSED, now: true },
+      ...['15a', '15b', '15c'].map(k => ({ label: k === '15b' ? `15b · ${phaseName()}` : k, v: document.querySelector(`[data-tail="${k}"]`).offsetHeight })),
+    ];
+    const max = NOW_OPEN;
+    const box = document.getElementById('len-rows');
+    box.innerHTML = rows.map(r => `<div class="len-row${r.now ? ' now' : ''}"><span class="lbl">${r.label}</span><span class="len-bar"><i style="width: calc(${(r.v / max) * 100}% - 4px);"></i></span><span class="val mono">${r.v.toLocaleString('ko-KR')}px</span></div>`).join('')
+      + `<span class="len-screen" data-screen><span>화면 한 장 900px</span></span>`;
+    const bar = box.querySelector('.len-bar');
+    const line = box.querySelector('[data-screen]');
+    line.style.left = `${bar.offsetLeft + bar.offsetWidth * (SCREEN / max)}px`;
+  }
+
+  let phase = 'day';
+  const phaseName = () => ({ morning: '아침', day: '낮', evening: '저녁' }[phase]);
+  function setPhase(p) {
+    phase = p;
+    press(segs.phase, p);
+    document.querySelectorAll('[data-phase]').forEach(el => { el.hidden = el.dataset.phase !== p; });
+    const chip = document.querySelector('[data-phase-chip]');
+    if (chip) chip.textContent = { morning: '아침 · 세 자리 고르는 중', day: '낮 · 지금 자리 1번', evening: '저녁 · 하루 리뷰 칸' }[p];
+    relayout();
+  }
+
+  function relayout() { scaleStages(); drawLengths(); }
+
+  segs.phase.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPhase(b.dataset.v); });
+  segs.theme.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; root.dataset.theme = b.dataset.v; press(segs.theme, b.dataset.v); });
+  segs.fit.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; fit = b.dataset.v; press(segs.fit, fit); scaleStages(); });
+
+  document.querySelectorAll('[data-acc]').forEach(acc => acc.addEventListener('click', e => {
+    const h = e.target.closest('.acc-h'); if (!h) return;
+    const open = h.getAttribute('aria-expanded') !== 'true';
+    acc.querySelectorAll('.acc-h').forEach(x => { x.setAttribute('aria-expanded', 'false'); x.nextElementSibling.hidden = true; });
+    h.setAttribute('aria-expanded', String(open)); h.nextElementSibling.hidden = !open;
+    relayout();
+  }));
+
+  const rituals = document.querySelector('[data-rituals]');
+  rituals.addEventListener('click', e => {
+    const b = e.target.closest('.ritual'); if (!b) return;
+    b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'));
+    document.querySelector('[data-ritual-count]').textContent = rituals.querySelectorAll('[aria-pressed="true"]').length;
+  });
+
+  const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  press(segs.theme, root.dataset.theme || (dark ? 'dark' : 'light'));
+  press(segs.fit, 'fit');
+  const h = new Date().getHours();
+  setPhase(h < 11 ? 'morning' : h < 18 ? 'day' : 'evening');
+  window.addEventListener('resize', relayout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
+})();
+</script>
+
+</html>
