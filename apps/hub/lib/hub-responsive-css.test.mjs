@@ -75,10 +75,16 @@ test("mobile navigation opener keeps a 44px target through the full drawer break
   );
 });
 
-test("Daily Brief ledger toggle exposes an accessible 44px mobile target", () => {
-  assert.match(dailyBriefSource, /aria-label=\{open \? ['"]기록 상태 숨기기['"] : ['"]기록 상태 펼치기['"]\}/);
-  assert.match(dailyBriefSource, /aria-expanded=\{open\}/);
-  assert.match(dailyBriefSource, /aria-controls="daily-brief-ledger-statuses"/);
+test("Daily Brief ledger toggle uses its visible label and exposes its disclosure state", () => {
+  const toggle = dailyBriefSource.match(/<button\b[\s\S]*?<\/button>/g)
+    ?.find((button) => button.includes('className="daily-brief__status-toggle"'));
+  assert.ok(toggle, "the ledger disclosure remains a native button");
+  // Let the native name follow both visible states, including the source count.
+  // A separate aria-label previously hid that count and failed label-in-name.
+  assert.doesNotMatch(toggle, /aria-(?:label|labelledby)=/);
+  assert.match(toggle, /<span>\{open \? '기록 숨기기' : `기록 \$\{sourceCount\}`\}<\/span>/);
+  assert.match(toggle, /aria-expanded=\{open\}/);
+  assert.match(toggle, /aria-controls="daily-brief-ledger-statuses"/);
   assert.match(dailyBriefSource, /id="daily-brief-ledger-statuses"/);
 });
 
