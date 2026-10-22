@@ -7,7 +7,7 @@
 .research-filters .hub-field { min-width: 185px; max-width: 240px; }
 .research-status { overflow-x: auto; max-width: 100%; }
 .research-workspace { display: grid; grid-template-columns: minmax(290px, 0.9fr) minmax(420px, 1.25fr); gap: 14px; align-items: start; }
-.research-list, .research-report { min-width: 0; border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-card); }
+.research-list, .research-report { min-width: 0; border: 1px solid var(--panel-edge); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-card); }
 .research-list-head { padding: 15px 18px; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .research-list-head strong { font-size: 14px; font-weight: 600; }
 .hub-app .research-row { display: flex; flex-direction: column; gap: 7px; width: 100%; min-height: 133px; padding: 16px 18px; text-align: left; color: var(--fg); border: 0; border-bottom: 1px solid var(--line-soft); background: transparent; cursor: pointer; }

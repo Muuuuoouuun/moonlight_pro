@@ -88,9 +88,15 @@ test('supporting actions rise, press into a well, primary is ink, ghost and disa
 });
 
 test('inputs and tracks are wells that keep the 3:1 control edge and the focus ring', () => {
-  for (const sel of ['.hub-input', '.hub-field', '.hub-seg']) assert.equal(rule(`${marker} ${sel}`)['box-shadow'], 'var(--shadow-inset)', sel);
-  assert.equal(rule(`${marker} .hub-input`)['border-color'], undefined); // --line-control 경계는 기본 규칙 그대로
-  assert.match(rule(`${marker} .hub-field:focus-within`)['box-shadow'], /0 0 0 1px var\(--moon-300\)/);
+  // 2026-10-22: 테두리 대신 음영 — 입력 홈의 3:1 경계는 위·왼쪽 안쪽 모서리 1px(--line-control)이 맡는다.
+  for (const sel of ['.hub-input', '.hub-field', '.hub-quick-capture__field']) {
+    assert.equal(rule(`${marker} ${sel}`)['box-shadow'], 'var(--shadow-inset-edge)', sel);
+    assert.equal(rule(`${marker} ${sel}`)['border-color'], 'transparent', sel);
+  }
+  assert.match(strip(depth), /--shadow-inset-edge: inset 1px 1px 0 var\(--line-control\), var\(--shadow-inset\);/);
+  assert.equal(rule(`${marker} .hub-input[aria-invalid="true"]`)['border-color'], 'var(--danger)');
+  assert.equal(rule(`${marker} .hub-seg`)['box-shadow'], 'var(--shadow-inset)');
+  assert.match(rule(`${marker} .hub-field:focus-within`)['box-shadow'], /^0 0 0 1px var\(--moon-300\), var\(--shadow-inset-edge\)$/);
   assert.doesNotMatch(strip(depth), /(?<![\w-])outline\s*:|!important|font-size\s*:|font-weight\s*:/);
 });
 

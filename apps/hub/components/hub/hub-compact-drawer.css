@@ -5,7 +5,7 @@
   width: min(var(--hub-compact-width), calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
   transform: translate(-50%, -50%);
-  border: 1px solid var(--line);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-pop);
   overflow: hidden;

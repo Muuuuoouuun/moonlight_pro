@@ -106,6 +106,10 @@
     0 1px 0 0 oklch(1 0 0 / 0.06) inset,
     0 0 0 1px var(--line),
     0 20px 60px -20px oklch(0 0 0 / 0.6);
+  /* 판(카드·패널·창)의 테두리 색. 기본은 1px 선이고, depth C(hub-depth.css)는 음영이 경계를 맡아
+     투명으로 바꾼다(2026-10-22 운영자 "테두리보다 음영 입체감"). 판을 새로 만들면 이 토큰을 쓴다 —
+     panel-edge.test.mjs가 그림자 토큰과 1px 선 테두리를 함께 쓰는 판을 막는다. */
+  --panel-edge: var(--line-soft);
 
   --font-sans: 'SUIT Variable', 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace;
@@ -321,7 +325,7 @@
 
 /* Interactive card (border emphasis instead of bg fill) — same no-JS-hover contract as .hub-row
    for card-shaped click targets like quick-command tiles. */
-.hub-app .hub-card-link { border: 1px solid var(--line-soft); transition: border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub); }
+.hub-app .hub-card-link { border: 1px solid var(--panel-edge); transition: border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub); }
 .hub-app .hub-card-link:hover { border-color: var(--line); transform: translateY(-1px); box-shadow: var(--shadow-card); }
 .hub-app .hub-card-link:active { transform: translateY(0); }
 @media (prefers-reduced-motion: reduce) {
@@ -501,9 +505,9 @@
 /* Clickable KPI card — border lifts on hover. CSS, not onMouseEnter handlers. */
 .hub-app .hub-metric-card {
   background: var(--surface);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-card);
   transition: border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
 }
 .hub-app .hub-metric-card[role="button"]:hover {
@@ -896,6 +900,17 @@
   background: var(--surface-3);
 }
 
+/* Tabs — 탭(role="tab") 묶음. 기본은 밑줄 탭이고 depth C가 눌린 트랙 + 잉크 현재 칸으로 바꾼다. */
+.hub-app .hub-tabs { border-bottom: 1px solid var(--line-soft); }
+.hub-app .hub-tabs__tab {
+  margin-bottom: -1px;
+  color: var(--fg-dim);
+  border-bottom: 1px solid transparent;
+  transition: color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-tabs__tab:hover:not([aria-selected="true"]) { color: var(--fg-muted); }
+.hub-app .hub-tabs__tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--moon-200); }
+
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hub-app .fade-up { animation: mlFadeUp var(--dur-enter) var(--ease-hub); }
@@ -1169,7 +1184,7 @@
   padding: 8px 10px;
   color: var(--fg-muted);
   background: var(--surface);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-left-color: var(--brief-panel-line);
   border-radius: var(--r-sm);
   box-shadow: var(--brief-panel-shadow);
@@ -2975,6 +2990,11 @@
 /* ── Brand content log (2026-09-01) ── */
 /* Card/chip hover — CSS only, no JS onMouseEnter/Leave handlers (§8.1). */
 .brand-log-card:hover { border-color: var(--line-strong); }
+/* 칩(필터 토글) — ChipToggle과 브랜드 로그 칩. 선택 = aria-pressed. depth C는 솟은 칩 + 잉크 선택. */
+.hub-app .hub-chip { color: var(--fg-muted); background: transparent; border: 1px solid var(--line); }
+.hub-app .hub-chip[aria-pressed="true"] { color: var(--fg); background: var(--surface-3); border-color: var(--line-strong); }
+.hub-app .brand-log-chip { color: var(--fg); background: var(--surface); border: 1px solid var(--line); }
+.hub-app .brand-log-chip[aria-pressed="true"] { color: var(--bg); background: var(--moon-200); border-color: transparent; }
 .brand-log-chip:hover { border-color: var(--line-strong); }
 
 /* Mobile-only combined meta line (when · brand · channel · type · metric), nested inside

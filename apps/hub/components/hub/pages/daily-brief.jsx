@@ -1102,7 +1102,7 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
     <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
       position: 'relative', overflow: 'hidden',
       background: 'var(--surface)',
-      border: '1px solid var(--line-soft)',
+      border: '1px solid var(--panel-edge)',
       borderRadius: 'var(--r-lg)',
       padding: '18px 20px',
     }}>
@@ -1178,7 +1178,7 @@ function CommandClear({ signalCount, state }) {
     : '목록이 비어 보여도 실제로 확인할 일이 있을 수 있습니다.';
   return (
     <div className="daily-brief__panel" style={{
-      background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)',
+      background: 'var(--surface)', border: '1px solid var(--panel-edge)', borderRadius: 'var(--r-lg)',
       padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14,
     }}>
       {/* all-clear도 중립 체크 — 녹색 완료 상태 금지(§5.3 done = neutral, not green). */}
@@ -1214,7 +1214,7 @@ function MoreDetail({ title, summary, children }) {
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           padding: '11px 14px',
           background: 'var(--surface)',
-          border: '1px solid var(--line-soft)',
+          border: '1px solid var(--panel-edge)',
           borderRadius: 'var(--r-lg)',
           color: 'var(--fg-muted)', fontSize: 12.5, textAlign: 'left',
         }}
