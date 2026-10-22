@@ -1782,7 +1782,7 @@ export function MyWork({ onNavigate }) {
             placeholder="새 할 일 — Enter로 저장"
             // outline을 죽이지 않는다 — 전역 :focus-visible 링(§11)이 키보드 포커스를 표시한다.
             style={{
-              flex: 1, height: 36, padding: '0 12px', fontSize: 13,
+              flex: 1, minWidth: 0, height: 36, padding: '0 12px', fontSize: 13,
               background: 'var(--surface)', border: '1px solid var(--line)',
               borderRadius: 'var(--r-sm)',
             }}
