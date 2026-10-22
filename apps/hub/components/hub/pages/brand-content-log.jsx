@@ -1,6 +1,9 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from "next/navigation";
+import { normalizeScope } from "../hub-nav";
+import { brandInWorkspace, filterBrandsByWorkspace, filterContentByWorkspace } from "../workspace-map";
 
 import {
   Button,
@@ -75,16 +78,35 @@ function sortButtonStyle(selected) {
 }
 
 export function BrandContentLog({ onNavigate }) {
+  const queryScope = useSearchParams().get("scope");
+  const scope = normalizeScope(queryScope);
+  const workspace = scope === "personal" ? "brand" : scope === "classin" ? "classin" : null;
   const ledger = useContentLedger();
-  const brands = ledger.brands || [];
-  const items = ledger.items || [];
+  const allBrands = ledger.brands || [];
+  const allItems = ledger.items || [];
+  const brands = React.useMemo(() => filterBrandsByWorkspace(allBrands, workspace), [allBrands, workspace]);
+  const items = React.useMemo(() => {
+    if (!workspace) return allItems;
+    return allItems.filter((item) => {
+      if (!item) return false;
+      if (["personal", "company", "classin"].includes(item.orgScope) || item.workspace) {
+        return filterContentByWorkspace([item], workspace).length > 0;
+      }
+      const brand = allBrands.find((b) => (item.brandKey && b.key === item.brandKey) || (item.brandId && b.id === item.brandId));
+      // 기존 live 브랜드 → canonical → 개인 기본을 재사용한다. 소속 미상을 새 분류로 바꾸지 않는다.
+      return brandInWorkspace(brand || { key: item.brand || item.brandKey || item.brandId || item.program }, workspace);
+    });
+  }, [allItems, allBrands, workspace]);
 
-  const entries = React.useMemo(() => buildContentLogEntries(items, brands), [items, brands]);
-  const brandColors = React.useMemo(() => resolveBrandLogColors(brands), [brands]);
+  // 전체 브랜드 순서로 색을 계산하여 소속 전환만으로 같은 브랜드 색이 바뀌지 않는다.
+  const entries = React.useMemo(() => buildContentLogEntries(items, allBrands), [items, allBrands]);
+  const brandColors = React.useMemo(() => resolveBrandLogColors(allBrands), [allBrands]);
   const channelOptions = React.useMemo(() => contentLogChannelOptions(entries), [entries]);
 
   const [view, setView] = React.useState("board");
-  const [brandFilter, setBrandFilter] = React.useState(null);
+  const [requestedBrandFilter, setBrandFilter] = React.useState(null);
+  // 이전 소속에서 선택한 브랜드를 새 콘텐츠의 seed로 넘기지 않는다.
+  const brandFilter = brands.some((brand) => brand.key === requestedBrandFilter) ? requestedBrandFilter : null;
   const [channelFilter, setChannelFilter] = React.useState(null);
   const [query, setQuery] = React.useState("");
   const [sort, setSort] = React.useState("latest");
@@ -130,7 +152,7 @@ export function BrandContentLog({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Content Log</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
-            전 브랜드 콘텐츠 기록 · <span className="num">{entries.length}</span>건
+            {scope === "classin" ? "ClassIn" : scope === "personal" ? "개인" : "전 브랜드"} 콘텐츠 기록 · <span className="num">{entries.length}</span>건
             <SyncBadge state={ledger.syncState} />
           </div>
         </div>
@@ -245,7 +267,7 @@ export function BrandContentLog({ onNavigate }) {
               : ledger.syncState === "preview"
                 ? "Supabase가 연결되지 않아 라이브 기록을 읽을 수 없습니다 — 가짜 행은 만들지 않습니다."
                 : ledger.syncState === "live"
-                  ? "Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다."
+                  ? "선택한 범위의 content_items/content_variants 기록에 표시할 콘텐츠가 없습니다."
                   : "콘텐츠가 쌓이면 여기에 모입니다."
           }
           action={<Button variant="primary" size="sm" icon="plus" onClick={createContent}>새 콘텐츠 <Kbd>N</Kbd></Button>}
