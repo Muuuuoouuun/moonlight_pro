@@ -141,7 +141,7 @@ test('compact calendar keeps one state-appropriate CTA and truthful error/previe
     ['live', '캘린더 열기', '오늘 예정된 일정이 없습니다'],
   ]) {
     const tree = app.render(focusOf(state));
-    const card = findAll(tree, (n) => n.type === 'Card' && n.props['aria-label'] === '오늘 일정')[0];
+    const card = findAll(tree, (n) => n.type === 'Card' && text(n).includes('오늘 일정'))[0];
     const buttons = findAll(card, (n) => n.type === 'Button');
     assert.equal(buttons.length, 1, `${state}: calendar card has one CTA`);
     assert.equal(text(buttons[0]), label);
@@ -156,7 +156,7 @@ test('compact agenda exposes three events and an honest count for remaining even
   const items = Array.from({ length: 5 }, (_, i) => ({ id: `local-${i}`, title: `합성 일정 ${i + 1}`, whenLabel: '09:00' }));
   const app = mount(focusOf('live', items));
   const tree = app.render();
-  const card = findAll(tree, (n) => n.type === 'Card' && n.props['aria-label'] === '오늘 일정')[0];
+  const card = findAll(tree, (n) => n.type === 'Card' && text(n).includes('오늘 일정'))[0];
   assert.deepEqual(findAll(card, (n) => n.type === 'CalendarOutcome').map((n) => n.props.title), items.slice(0, 3).map((n) => n.title));
   assert.ok(text(card).includes('외 2건 더 있음'));
 });

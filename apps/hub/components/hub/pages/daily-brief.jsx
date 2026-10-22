@@ -267,7 +267,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   };
 
   return (
-    <div aria-label="오늘 할 일">
+    <div>
       <SectionTitle right={(
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
           <BurningStreakBadge
@@ -957,7 +957,7 @@ function BriefNavigation({ taskToday, onNavigate }) {
   };
 
   return (
-    <Card pad={false} className="daily-brief__panel daily-brief__nav-card" aria-label="빠른 바로가기">
+    <Card pad={false} className="daily-brief__panel daily-brief__nav-card">
       <nav aria-label="Daily Brief 빠른 이동" className="daily-brief__nav">
         <div className="daily-brief__card-head" style={{ borderBottom: '1px solid var(--line-soft)' }}>
           <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1546,7 +1546,7 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
 
   return (
     <div className="hub-grid--two daily-brief__focus" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'stretch' }}>
-      <Card pad={false} className="daily-brief__panel" aria-label="긴급 KA와 집중 고객" style={{ display: 'flex', flexDirection: 'column' }}>
+      <Card pad={false} className="daily-brief__panel" role="group" aria-label="긴급 KA와 집중 고객" style={{ display: 'flex', flexDirection: 'column' }}>
         {/* 긴급 KA — §5.2 허용 red: urgent KA (최대 1건). live인데 후보가 없으면 침묵하지
             않고 부재와 지정 경로(Sales Ledger 시트의 companies.meta.ka)를 고지한다 —
             존재하지 않는 기능이 존재하는 척하지 않기(2026-08-05 re-audit #1). */}
@@ -1711,7 +1711,7 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
 
       {/* 우측 패널: 오늘 일정 + 빠른 바로가기 (컴팩트 사이드 덱) */}
       <div className="daily-brief__side-deck" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-        <Card pad={false} className="daily-brief__panel" aria-label="오늘 일정" style={{ display: 'flex', flexDirection: 'column' }}>
+        <Card pad={false} className="daily-brief__panel" style={{ display: 'flex', flexDirection: 'column' }}>
           {eyebrow(
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Iconed name="calendar" size={13} style={{ color: 'var(--fg-dim)' }} />

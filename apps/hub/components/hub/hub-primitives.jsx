@@ -935,7 +935,6 @@ export function TruthBadge({ state = 'error', label, reason, style }) {
   return (
     <span
       data-truth={state}
-      aria-label={`데이터 상태: ${fullLabel}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: '2px 6px', borderRadius: 999,
