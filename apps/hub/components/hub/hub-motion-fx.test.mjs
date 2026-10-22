@@ -79,9 +79,12 @@ test("project-execution.css defines checklist item completion styling and smooth
   assert.match(projectExecCss, /transition:[\s\S]*?var\(--ease-hub\)/);
 });
 
-test("daily-brief rhythm visualizer integrates ProgressRing alongside linear progress", () => {
-  assert.match(dailyBriefSource, /import \{[^}]*ProgressRing[^}]*\} from "\.\.\/hub-primitives"/);
-  assert.match(dailyBriefSource, /<ProgressRing\s+value=\{percent\}\s+size=\{28\}/);
+test("daily-brief rhythm card draws one gauge — the linear bar — and says the percent once", () => {
+  // 2026-10-22: 원형 게이지가 아래 막대와 같은 값을 두 번 그렸다. 막대 하나 + 퍼센트 글자로 줄이고,
+  // 바깥 래퍼가 이미 progressbar/status를 말하므로 안쪽 막대는 decorative로 숨긴다(중첩 progressbar 금지).
+  assert.doesNotMatch(dailyBriefSource, /<ProgressRing\b/);
+  assert.match(dailyBriefSource, /<div \{\.\.\.rhythmProgressProps\}[^>]*><Progress value=\{percent\} decorative \/><\/div>/);
+  assert.match(dailyBriefSource, /\{percent\}%<\/span>/);
 });
 
 test("home check-items never celebrate a navigation-only 'done' count", () => {
