@@ -310,6 +310,30 @@ test("insertSupabaseRecord accepts an array as one bulk POST", async () => {
   assert.deepEqual(result.records.map((r) => r.id), ["1", "2"]);
 });
 
+test('nonempty inserts cannot confirm persistence from an empty representation', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return jsonResponse([], { status: 201 }); };
+  for (const record of [{ title: 'test' }, [{ title: 'first' }, { title: 'second' }]]) {
+    const result = await insertSupabaseRecord('tasks', record, { returnRepresentation: true });
+    assert.equal(result.persisted, false);
+    assert.equal(result.reason, 'no-matching-row');
+    assert.deepEqual(result.records, []);
+  }
+  assert.equal(calls, 2, 'a write with no confirmed row must not be automatically repeated');
+});
+
+test('duplicate-ignoring upserts retain their valid empty representation outcome', async () => {
+  globalThis.fetch = async (_url, init) => {
+    assert.match(init.headers.prefer, /resolution=ignore-duplicates/);
+    return jsonResponse([]);
+  };
+  const result = await upsertSupabaseRecords('tasks', [{ id: 'one' }], {
+    ignoreDuplicates: true, returnRepresentation: true,
+  });
+  assert.equal(result.persisted, true);
+  assert.deepEqual(result.records, []);
+});
+
 test("insertSupabaseRecord maps unique violations to reason duplicate", async () => {
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ code: "23505", message: "duplicate key value violates unique constraint" }), {
@@ -326,7 +350,7 @@ test("empty bulk insert short-circuits without any HTTP call", async () => {
     throw new Error("must not fetch");
   };
 
-  const result = await insertSupabaseRecord("leads", []);
+  const result = await insertSupabaseRecord("leads", [], { returnRepresentation: true });
   assert.equal(result.persisted, true);
   assert.deepEqual(result.records, []);
 });

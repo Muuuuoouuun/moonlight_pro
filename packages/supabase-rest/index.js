@@ -335,7 +335,7 @@ function isDuplicateViolation(status, detail) {
   );
 }
 
-function buildWriteResult(result, { returnRepresentation, bulk }) {
+function buildWriteResult(result, { returnRepresentation, bulk, requireRows = false }) {
   if (!result.ok) {
     const reason = result.failureReason
       || (isDuplicateViolation(result.status, result.text) ? "duplicate" : `http-${result.status}`);
@@ -353,6 +353,11 @@ function buildWriteResult(result, { returnRepresentation, bulk }) {
   const rows = parseRows(result.text);
   if (rows === null) {
     return { persisted: false, reason: "invalid-rows", detail: "Expected a JSON array of records." };
+  }
+  // A nonempty plain INSERT must confirm at least one row. Upsert can validly
+  // return [] when every input row was skipped by ignore-duplicates.
+  if (requireRows && rows.length === 0) {
+    return { persisted: false, reason: "no-matching-row", records: [] };
   }
   const row = rows[0] || null;
 
@@ -400,7 +405,7 @@ export async function insertSupabaseRecord(table, record, options = {}) {
     timeoutMs: options.timeoutMs,
   });
 
-  const outcome = buildWriteResult(result, { returnRepresentation, bulk });
+  const outcome = buildWriteResult(result, { returnRepresentation, bulk, requireRows: true });
   if (!outcome.persisted) {
     logSupabaseFailure("insert", table, outcome.reason, outcome.detail);
   }
