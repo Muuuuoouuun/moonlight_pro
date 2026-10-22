@@ -975,7 +975,6 @@ function BriefNavigation({ taskToday, onNavigate }) {
                 key={item.key}
                 type="button"
                 className="daily-brief__jump"
-                aria-label={`${item.label}: ${detailByKey[item.key]}`}
                 onClick={() => onNavigate?.(item.target)}
               >
                 <span className="daily-brief__jump-icon"><Iconed name={item.icon} size={14} /></span>

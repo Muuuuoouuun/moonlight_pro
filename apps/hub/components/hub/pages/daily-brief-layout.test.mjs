@@ -114,7 +114,8 @@ test('production DailyBrief renders one navigable shortcut set for missing/live/
     assert.equal(navs.length, 1, 'the same shortcut set must remain visible exactly once');
     const jumps = findAll(navs[0], (n) => n.type === 'button');
     assert.equal(jumps.length, routes.length);
-    assert.equal(jumps[0].props['aria-label'], '내 작업: 5건 확인');
+    for (const jump of jumps) assert.equal(jump.props['aria-label'], undefined, 'native button names follow their visible label and detail');
+    assert.equal(text(jumps[0]), '내 작업5건 확인');
     app.navigations.length = 0;
     jumps.forEach((button) => button.props.onClick());
     assert.deepEqual(app.navigations, routes);
@@ -166,7 +167,8 @@ test('real React server render retains the accessible nav for every read state',
     const html = renderToStaticMarkup(React.createElement(DailyBrief, { onNavigate() {} }));
     assert.equal((html.match(/aria-label="Daily Brief 빠른 이동"/g) || []).length, 1);
     assert.equal((html.match(/class="daily-brief__jump"/g) || []).length, routes.length);
-    assert.match(html, /aria-label="내 작업: 5건 확인"/);
+    assert.doesNotMatch(html, /class="daily-brief__jump"[^>]*aria-label=/);
+    assert.match(html, /<strong>내 작업<\/strong><small>5건 확인<\/small>/);
   }
 });
 
