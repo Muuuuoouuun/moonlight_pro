@@ -118,7 +118,7 @@ export function getGeminiIntegrationStatus() {
     model:
       process.env.GEMINI_MODEL?.trim() ||
       process.env.AI_DEFAULT_MODEL?.trim() ||
-      "gemini-3.5-flash",
+      "gemini-3.6-flash",
     apiBaseUrl:
       process.env.GEMINI_API_BASE_URL?.trim() ||
       "https://generativelanguage.googleapis.com/v1beta",
@@ -207,7 +207,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
   // 0 is a meaningful budget (thinking off), so test for undefined rather than falsiness.
   // Same family guard as thinkingLevel above, mirrored: thinkingBudget is the Gemini 2.5
   // option and the 3-series rejects it, which would fail every draft cron (the draft modes
-  // send DRAFT_GENERATION_BOUNDS.thinkingBudget on the default gemini-3.5-flash). Merge
+  // send DRAFT_GENERATION_BOUNDS.thinkingBudget on the default gemini-3.6-flash). Merge
   // rather than assign so a caller that sends both never loses thinkingLevel silently.
   if (typeof input.thinkingBudget === "number" && !/^gemini-3[.-]/.test(targetModel)) {
     generationConfig.thinkingConfig = {

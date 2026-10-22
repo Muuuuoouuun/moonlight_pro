@@ -24,7 +24,7 @@ function generationMetadata(result, requestId, { missing = [], replayed = false,
   // per-call long-context tiers cannot be reconstructed above 200k tokens.
   const known = usage && ['promptTokens', 'outputTokens', 'totalTokens'].every(key => Number.isSafeInteger(usage[key]) && usage[key] >= 0)
     && usage.totalTokens >= usage.promptTokens + usage.outputTokens && usage.promptTokens <= 200000;
-  const estimatedCostUsd = known ? estimateCallCostUsd({ model: generation.model, promptTokens: usage.promptTokens,
+  const estimatedCostUsd = known ? estimateCallCostUsd({ model: generation.model, at: result?.createdAt ?? null, promptTokens: usage.promptTokens,
     outputTokens: usage.totalTokens - usage.promptTokens }) : null;
   return { status: result?.status || 'unknown', requestId, replayed, attempted,
     missing: Array.isArray(absent) ? absent.filter(item => typeof item === 'string') : [],

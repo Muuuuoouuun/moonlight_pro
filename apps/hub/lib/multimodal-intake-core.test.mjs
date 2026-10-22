@@ -2,6 +2,21 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { extractMultimodalIntakeHub, formatMeetingBriefForShare, getMultimodalStatus } from "./multimodal-intake-core.js";
 
+test("multimodal defaults to 3.6 Flash and retains its module-time model override", async () => {
+  const before = process.env.GEMINI_MODEL;
+  try {
+    delete process.env.GEMINI_MODEL;
+    const defaults = await import("./multimodal-intake-core.js?model-default");
+    assert.equal(defaults.getMultimodalStatus().model, "gemini-3.6-flash");
+    process.env.GEMINI_MODEL = "configured-model";
+    const configured = await import("./multimodal-intake-core.js?model-override");
+    assert.equal(configured.getMultimodalStatus().model, "configured-model");
+  } finally {
+    if (before === undefined) delete process.env.GEMINI_MODEL;
+    else process.env.GEMINI_MODEL = before;
+  }
+});
+
 test("getMultimodalStatus checks GEMINI_API_KEY", () => {
   const orig = process.env.GEMINI_API_KEY;
   try {

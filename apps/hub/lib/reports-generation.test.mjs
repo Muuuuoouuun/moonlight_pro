@@ -141,6 +141,17 @@ test('run cost includes thinking from aggregate totals and remains unpriced when
   }
 });
 
+test('3.6 report replays price the stored receipt creation time without another generation', async () => {
+  for (const [createdAt, expected] of [['2026-12-31T23:59:59Z', 0.45], ['2027-01-01T00:00:00Z', 0.9], [undefined, null]]) {
+    const result = await prepareWeeklyReport(command, { identity, now: new Date('2027-02-01T00:00:00Z'), enabled: true,
+      capture: async () => snapshot,
+      office: { receipt: async () => ({ status: 'generated', createdAt, result: { context: { missing: [] },
+        generation: { model: 'gemini-3.6-flash', usage: { promptTokens: 100000, outputTokens: 100000, totalTokens: 200000 } } } }),
+        execute: () => assert.fail('replay must not generate') } });
+    assert.equal(result.ai.estimatedCostUsd, expected);
+  }
+});
+
 test('Monday sweep includes the news roundup independently of personal AI and exposes save failures', async () => {
   let calls=0;
   const result=await runReportsSweep({identity,enabled:false,env:{COM_MOON_RESEARCH_ENABLED:'true'},now:new Date('2026-10-05T08:30:00+09:00'),

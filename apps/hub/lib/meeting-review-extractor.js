@@ -269,7 +269,7 @@ export async function extractMeetingReviewText(input = {}) {
   if (!apiKey) return { ok: false, reason: "gemini-not-configured", error: "GEMINI_API_KEY not configured", data: null };
 
   const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
   const body = {
     system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
     contents: [{ role: "user", parts: [{ text: `다음은 분석할 원문입니다. 원문 밖의 내용을 만들지 마십시오.\n\n<source>\n${sourceText}\n</source>` }] }],

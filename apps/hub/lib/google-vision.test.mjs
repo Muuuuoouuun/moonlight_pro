@@ -2,6 +2,19 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getVisionStatus, extractBusinessCard } from "./google-vision.js";
 
+test("vision defaults to 3.6 Flash and retains its configured model", () => {
+  const before = process.env.GEMINI_MODEL;
+  try {
+    delete process.env.GEMINI_MODEL;
+    assert.equal(getVisionStatus().model, "gemini-3.6-flash");
+    process.env.GEMINI_MODEL = "configured-model";
+    assert.equal(getVisionStatus().model, "configured-model");
+  } finally {
+    if (before === undefined) delete process.env.GEMINI_MODEL;
+    else process.env.GEMINI_MODEL = before;
+  }
+});
+
 test("getVisionStatus recognizes GEMINI_API_KEY and GOOGLE_GENERATIVE_AI_API_KEY alias", () => {
   const originalGemini = process.env.GEMINI_API_KEY;
   const originalGoogle = process.env.GOOGLE_GENERATIVE_AI_API_KEY;

@@ -2,7 +2,7 @@
 // Matches the hub lib/google-vision pattern (x-goog-api-key header).
 
 const BASE = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 export const MAX_MULTIMODAL_MEDIA_BYTES = 14 * 1024 * 1024;
 // 14 MiB becomes 19,573,420 base64 bytes, leaving room for JSON and prompts
