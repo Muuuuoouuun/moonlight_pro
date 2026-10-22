@@ -2301,6 +2301,14 @@
   }
 }
 
+@media (max-width: 600px) {
+  /* Keep the final My Work row above the fixed 48px memo launcher at maximum
+     scroll: its safe-area-aware bottom offset plus 16px of clear space. */
+  .hub-app .hub-mywork-page {
+    padding-bottom: calc(48px + max(16px, env(safe-area-inset-bottom)) + 16px) !important;
+  }
+}
+
 @media (max-width: 560px) {
   .hub-app {
     --section-gap: 12px;
