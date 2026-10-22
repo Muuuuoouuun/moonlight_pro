@@ -4,6 +4,8 @@ import { checkpointQuickTask, isQuickTaskContext, readQuickTaskRecovery, recover
 export const QUICK_TASK_UNKNOWN = '저장 응답을 확인하지 못했어요. 이전 요청 확인을 누르면 같은 요청으로 확인합니다. 다음 입력은 유지합니다.';
 const EXPIRED = '복구 시간이 지났거나 기기 시계가 바뀌어 이전 요청을 다시 보내지 않았습니다. 이미 저장됐을 수 있으니 내 작업에서 확인한 뒤 새 입력을 시작하세요.';
 const STORAGE_ERROR = '브라우저 복구 기록을 확인하거나 정리하지 못해 이번 요청은 전송하지 않았습니다. 이전 요청은 이미 저장됐을 수 있으니 입력을 보관하고 저장 공간을 확인하세요.';
+const CONTEXT_ERROR = '로그인 또는 작업 범위를 확인하지 못해 요청 전송을 막았습니다. 입력은 유지했으니 연결 상태와 작업 범위를 확인한 뒤 다시 시도하세요.';
+class QuickTaskContextError extends Error {}
 const sameContext = (a, b) => a?.ownerKey === b?.ownerKey && a?.workspaceId === b?.workspaceId && a?.expiresAt === b?.expiresAt;
 const sameDue = (actual, requested) => requested ? typeof actual === 'string' && Number.isFinite(Date.parse(actual)) && new Date(actual).toISOString() === new Date(requested).toISOString() : actual === null;
 
@@ -25,6 +27,7 @@ export function createMyWorkQuickTask({ createId = () => crypto.randomUUID(),
   let listener = () => {}, unsubscribe = null;
   let snapshot = { status: 'loading', recoverable: false, message: '' };
   const store = () => typeof storage === 'function' ? storage() : storage;
+  const failureMessage = error => pending?.attempted ? QUICK_TASK_UNKNOWN : error instanceof QuickTaskContextError ? CONTEXT_ERROR : STORAGE_ERROR;
   const publish = (status, message = '') => {
     snapshot = { status, recoverable: pending?.state === 'pending', message };
     if (active) listener(snapshot);
@@ -53,7 +56,9 @@ export function createMyWorkQuickTask({ createId = () => crypto.randomUUID(),
   }
   async function verify(fetchImpl, fence) {
     const ticket = ++verification;
-    const next = await getContext(fetchImpl);
+    let next;
+    try { next = await getContext(fetchImpl); }
+    catch (error) { throw new QuickTaskContextError('quick-task-context-unavailable', { cause: error }); }
     if (!active || generation !== fence || verification !== ticket) return false;
     if (!next || !isQuickTaskContext(next, now())) {
       invalidate(); publish('unauthorized', '로그인과 작업 범위를 다시 확인하세요. 이전 요청 전송을 막았습니다.');
@@ -90,7 +95,7 @@ export function createMyWorkQuickTask({ createId = () => crypto.randomUUID(),
     try {
       if (!await verify(fetchImpl, fence)) return snapshot;
       publish(pending?.state === 'expired' ? 'expired' : 'ready', pending?.state === 'expired' ? EXPIRED : pending ? `이전 요청 · ${pending.payload.title} · ${QUICK_TASK_UNKNOWN}` : '');
-    } catch { if (active && generation === fence) publish('blocked', STORAGE_ERROR); }
+    } catch (error) { if (active && generation === fence) publish('blocked', failureMessage(error)); }
     return snapshot;
   }
   async function perform(draft, { details = false, fetchImpl = fetch, timeoutMs = 20000 } = {}) {
@@ -134,9 +139,9 @@ export function createMyWorkQuickTask({ createId = () => crypto.randomUUID(),
         : data?.status === 'preview' ? '서버 저장이 연결되지 않았어요. 입력을 유지했으니 연결 후 이전 요청을 확인하세요.' : QUICK_TASK_UNKNOWN;
       publish('ready', message);
       return { status: data?.status === 'preview' ? 'preview' : 'error', message };
-    } catch {
+    } catch (error) {
       if (!active || generation !== fence) return { status: 'stale' };
-      const message = pending?.attempted ? QUICK_TASK_UNKNOWN : STORAGE_ERROR;
+      const message = failureMessage(error);
       publish(pending?.attempted ? 'ready' : 'blocked', message);
       return { status: 'error', message };
     }

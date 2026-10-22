@@ -45,6 +45,18 @@ function harness(storage,fetchImpl){
 }
 async function pending(storage){const first=createMyWorkQuickTask({storage,getContext:async()=>CONTEXT,createId:()=>ID});await first.submit({title:'합성 첫 요청'},{fetchImpl:async()=>{throw new TypeError('synthetic lost');}});first.deactivate();}
 
+test('actual MyWork keeps capture blocked and input intact when the session has no recovery workspace',async()=>{
+  const storage=memory();let posts=0;
+  const view=harness(storage,async(url)=>{if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:null});posts++;throw Error('unexpected POST');});
+  await tick();view.input().props.onChange({target:{value:'합성 보관할 입력'}});
+  assert.equal(view.button().props.disabled,true);
+  const notice=view.nodes().find(n=>typeof n.props.children==='string'&&/로그인.*작업 범위/.test(n.props.children));
+  assert.ok(notice);assert.doesNotMatch(notice.props.children,/브라우저 복구 기록|저장 공간/);
+  const retry=view.nodes().find(n=>n.props.onClick&&n.props.children==='다시 확인');assert.ok(retry);
+  await retry.props.onClick();await view.button().props.onClick();
+  assert.equal(view.button().props.disabled,true);assert.equal(posts,0);assert.equal(view.input().props.value,'합성 보관할 입력');
+});
+
 test('actual MyWork mount restores pending without POST and can verify an empty input',async()=>{
   const storage=memory();await pending(storage);let posts=0;
   const view=harness(storage,async(url,options)=>{if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:CONTEXT});posts++;const p=JSON.parse(options.body);return Response.json({status:'duplicate',task:{id:p.id,workspace_id:WORK,title:p.title,status:"todo",priority:p.priority||"medium",due_at:p.dueAt?new Date(p.dueAt).toISOString():null}});});
