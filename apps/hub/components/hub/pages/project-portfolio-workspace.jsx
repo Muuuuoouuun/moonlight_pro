@@ -512,7 +512,7 @@ export function ProjectPortfolioWorkspace({
         </div>
       </aside>
 
-      <main className="hub-project-portfolio-stage scroll-y">
+      <div className="hub-project-portfolio-stage scroll-y">
         {createSurface ? (
           <div className="hub-project-portfolio-stage__create">{createSurface}</div>
         ) : (
@@ -661,7 +661,7 @@ export function ProjectPortfolioWorkspace({
           )}
           </div>
         )}
-      </main>
+      </div>
       {showMonthlyPreview && (
         <Drawer
           title={`${monthlyPreview.month.replace('-', '년 ')}월 프로젝트 평가`}
