@@ -117,7 +117,11 @@ test('people without a card, explicit entries, card ids and a focus heading all 
   assert.equal(mirroring.text, '핵심 프레임워크 6: **Mirroring**');
   const view = buildEntryView(voss);
   const holder = view.sections.findIndex(section => mirroring.line >= section.heading.line && mirroring.line <= section.endLine);
-  assert.equal(view.sections[holder].heading.text, '📚 책 요약 & 프레임워크');
+  const sourceSection = voss.headings
+    .filter(heading => heading.line < mirroring.line && heading.level < mirroring.level)
+    .at(-1);
+  assert.ok(holder > 0, 'the focus is inside a later section, not the default first section');
+  assert.deepEqual(view.sections[holder].heading, sourceSection, 'the containing heading follows the current verbatim source');
   const states = expandedStates(focused);
   assert.equal(states[holder], 'true');
   assert.equal(states.filter(state => state === 'true').length, 1, 'the focused section opens instead of the first');
