@@ -332,6 +332,12 @@
     width: max(100%, 44px); height: max(100%, 44px);
     transform: translate(-50%, -50%);
   }
+  /* My Work clips rows to rounded cards. Reserve a 44px checkbox column: the
+     14px face clears the card radius on the left, while space on the right keeps
+     title taps separate from its halo. Row height and fine-pointer density stay put. */
+  .hub-app .hub-mywork-grid .hub-row > button.hub-checkbox { margin-left: var(--r-lg); margin-right: 16px; }
+  /* Let the existing ellipsis yield space to a status badge and the date at 320px. */
+  .hub-app .hub-mywork-grid .hub-row > button.hub-checkbox + span { min-width: 0 !important; }
 }
 
 /* Kanban card hover (rests at --surface-2, one step lighter than .hub-row's --surface/--bg
