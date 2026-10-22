@@ -136,7 +136,7 @@ function TodaySchedule({ onNavigate, schedule, onReload }) {
 export function Home({ onNavigate, onGuidanceAsk }) {
   const [reloadKey, reload] = React.useReducer(value => value + 1, 0);
   // keepPrevious: 끝낼 때마다 다시 읽는데, 그동안 카드가 로딩으로 깜빡이지 않게 지난 읽기를 둔다.
-  const brief = useDailyBriefSignals(reloadKey, { keepPrevious: true });
+  const brief = useDailyBriefSignals(reloadKey, { keepPrevious: true, homeRoute: true });
   const schedule = useTodaySchedule(reloadKey);
   const { status, signals } = brief;
   const checkItems = brief.checkItems;

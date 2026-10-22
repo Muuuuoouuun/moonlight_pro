@@ -176,7 +176,7 @@ async function actualHooks(brief) {
   const signalSource = await readFile(new URL("./daily-brief-signals.js", import.meta.url), "utf8");
   const signalBody = signalSource.slice(signalSource.indexOf("function signalsFromRead("))
     .replaceAll("export async function ", "async function ").replaceAll("export function ", "function ");
-  const useSignals = new Function("React", "peekDailyBrief", "readDailyBrief", "briefEnvelope", `${signalBody}\nreturn useDailyBriefSignals;`)(runtime.React, brief.peekDailyBrief, brief.readDailyBrief, brief.briefEnvelope);
+  const useSignals = new Function("React", "peekDailyBrief", "readDailyBrief", "briefEnvelope", "peekHomeDailyBriefRead", "takeHomeDailyBriefRead", `${signalBody}\nreturn useDailyBriefSignals;`)(runtime.React, brief.peekDailyBrief, brief.readDailyBrief, brief.briefEnvelope, brief.peekHomeDailyBriefRead, brief.takeHomeDailyBriefRead);
   const todaySource = await readFile(new URL("./pages/daily-brief.jsx", import.meta.url), "utf8");
   const todayStart = todaySource.indexOf("const EMPTY_DAILY_BRIEF_STATE =");
   const todayEnd = todaySource.indexOf("function MetricCard(", todayStart);
@@ -292,4 +292,185 @@ test("a task read started before a full-brief 401 cannot restore the task slice"
   assert.equal(await tasks, false);
   assert.notEqual(today.render().taskToday.state, "live");
   assert.equal(brief.peekDailyBrief(), null);
+});
+
+
+for (const status of ['live', 'preview', 'error', 'unauthorized']) test(`Home starts from a settled ${status} route read and consumes it once, including Strict Mode replay`, async (t) => {
+  const brief = await freshBrief();
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return reply({ status, signals: [] }, status === 'unauthorized' ? 401 : 200); });
+  await brief.startHomeDailyBriefRead();
+  const hooks = await actualHooks(brief);
+  const home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  assert.equal(home.render().status, status);
+  home.flushEffects(); home.replayEffects();
+  assert.equal(home.render().status, status, 'settled truth must not flash back to loading');
+  await tick();
+  assert.equal(home.render().status, status);
+  assert.equal(calls, 1, 'mount and Strict Mode replay consume the prepared request without a second fetch');
+  home.render(1); home.flushEffects(); await tick();
+  assert.equal(calls, 2, 'explicit retry must make a new read');
+  const later = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  later.render(); later.flushEffects(); await tick();
+  assert.equal(calls, 3, 'a later mount must refresh, not reuse the consumed prepared read');
+});
+
+test('Home mounts during a prepared request without waiting for it or starting a duplicate', async (t) => {
+  const brief = await freshBrief(), { reads, fetchImpl } = deferredReads();
+  t.mock.method(globalThis, 'fetch', fetchImpl);
+  const prepared = brief.startHomeDailyBriefRead();
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  assert.equal(home.render().status, 'loading'); home.flushEffects(); home.replayEffects();
+  assert.equal(reads.length, 1);
+  reads[0].resolve(reply({ status: 'live', signals: [] })); await prepared; await tick();
+  assert.equal(home.render().status, 'live');
+});
+
+test('a prepared transport failure is observed and becomes error truth at Home mount', async (t) => {
+  const brief = await freshBrief(); let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; throw Error('offline'); });
+  brief.startHomeDailyBriefRead(); await tick();
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  assert.equal(home.render().status, 'error'); home.flushEffects(); await tick();
+  assert.equal(home.render().status, 'error'); assert.equal(calls, 1);
+});
+
+test('missing fetch during route preparation neither throws synchronously nor hides failure', async (t) => {
+  const brief = await freshBrief(); t.mock.property(globalThis, 'fetch', undefined);
+  assert.doesNotThrow(() => brief.startHomeDailyBriefRead()); await tick();
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  assert.equal(home.render().status, 'error'); home.flushEffects(); await tick();
+  assert.equal(home.render().status, 'error');
+});
+
+test('a forced generation supersedes a prepared read before Home consumes it', async (t) => {
+  const brief = await freshBrief(), { reads, fetchImpl } = deferredReads();
+  t.mock.method(globalThis, 'fetch', fetchImpl);
+  const prepared = brief.startHomeDailyBriefRead();
+  const forced = brief.readDailyBrief({ force: true });
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  home.render(); home.flushEffects(); assert.equal(reads.length, 2);
+  reads[1].resolve(reply({ status: 'live', signals: [{ id: 'current' }] }));
+  reads[0].resolve(reply({ status: 'live', signals: [{ id: 'stale' }] }));
+  await Promise.all([prepared, forced]); await tick();
+  assert.equal(home.render().signals[0].id, 'current');
+});
+
+test('a later auth invalidation replaces prepared private data with the unauthorized truth', async (t) => {
+  const brief = await freshBrief(); let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return reply({ status: 'live', signals: [{ id: 'private' }] }); });
+  await brief.startHomeDailyBriefRead(); brief.invalidateDailyBriefAuth();
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  assert.equal(home.render().status, 'unauthorized'); assert.deepEqual(home.render().signals, []);
+  home.flushEffects(); await tick();
+  assert.equal(home.render().status, 'unauthorized'); assert.deepEqual(home.render().signals, []);
+  assert.equal(brief.peekDailyBrief(), null); assert.equal(calls, 1);
+});
+
+test('an abandoned prepared read expires with the existing five-minute freshness limit', async (t) => {
+  const brief = await freshBrief(); let now = Date.now(), calls = 0;
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return reply({ status: 'live', signals: [] }); });
+  await brief.startHomeDailyBriefRead(); now += DAILY_BRIEF_FRESH_MS;
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  assert.equal(home.render().status, 'loading'); home.flushEffects(); await tick(); assert.equal(calls, 2);
+});
+
+test('only the selected Home loader starts the read and it never waits for data before resolving code', async () => {
+  const source = await readFile(new URL('./hub-app.jsx', import.meta.url), 'utf8');
+  const start = source.indexOf('const Home = lazyPage('), end = source.indexOf('const DailyBrief =', start);
+  const body = source.slice(start, end).replace('import("./pages/home")', 'loadHome()');
+  const calls = []; let release;
+  const loader = new Function('lazyPage', 'startHomeDailyBriefRead', 'loadHome', body + '\nreturn Home;')(fn => fn,
+    () => { calls.push('read'); return new Promise(() => {}); },
+    () => { calls.push('code'); return new Promise(resolve => { release = resolve; }); });
+  assert.deepEqual(calls, [], 'creating the lazy route must not prefetch business data');
+  const pending = loader(); assert.deepEqual(calls, ['read', 'code']);
+  const component = () => null; release({ Home: component }); assert.equal(await pending, component);
+  assert.match(source, /loading: PageChunkFallback, ssr: false/);
+  const homeSource = await readFile(new URL('./pages/home.jsx', import.meta.url), 'utf8');
+  assert.match(homeSource, /useDailyBriefSignals\(reloadKey, \{ keepPrevious: true, homeRoute: true \}\)/);
+  const idlePages = source.slice(source.indexOf('const PREFETCH_PAGES ='), source.indexOf('// Data-saver'));
+  assert.doesNotMatch(idlePages, /startHomeDailyBriefRead/);
+});
+
+
+test('an auth invalidation during prepared loading prevents a late private response from first paint', async (t) => {
+  const brief = await freshBrief(), { reads, fetchImpl } = deferredReads();
+  t.mock.method(globalThis, 'fetch', fetchImpl);
+  const pending = brief.startHomeDailyBriefRead(); brief.invalidateDailyBriefAuth();
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  assert.equal(home.render().status, 'unauthorized'); home.flushEffects();
+  reads[0].resolve(reply({ status: 'live', signals: [{ id: 'late-private' }] })); await pending; await tick();
+  assert.equal(home.render().status, 'unauthorized'); assert.deepEqual(home.render().signals, []);
+  assert.equal(brief.peekDailyBrief(), null); assert.equal(reads.length, 1);
+});
+
+test('changed fetch identity cannot consume a prepared result from an older provider', async (t) => {
+  const brief = await freshBrief();
+  await brief.startHomeDailyBriefRead({ fetchImpl: async () => reply({ status: 'error' }) });
+  let calls = 0; t.mock.method(globalThis, 'fetch', async () => { calls++; return reply({ status: 'live', signals: [] }); });
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  home.render(); home.flushEffects(); await tick();
+  assert.equal(home.render().status, 'live'); assert.equal(calls, 1);
+});
+
+test('a prepared response cannot republish private data when 401 lands between take and publication', async (t) => {
+  const brief = await freshBrief();
+  t.mock.method(globalThis, 'fetch', async () => reply({ status: 'live', signals: [{ id: 'private' }] }));
+  await brief.startHomeDailyBriefRead();
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  home.render(); home.flushEffects();
+  brief.invalidateDailyBriefAuth();
+  await tick();
+  assert.equal(home.render().status, 'unauthorized');
+  assert.deepEqual(home.render().signals, []);
+  assert.equal(brief.peekDailyBrief(), null);
+});
+
+test('a prepared publication follows a forced pending generation instead of republishing the old success', async (t) => {
+  const brief = await freshBrief(); let release, calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => ++calls === 1
+    ? reply({ status: 'live', signals: [{ id: 'old' }] })
+    : new Promise(resolve => { release = resolve; }));
+  await brief.startHomeDailyBriefRead();
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  home.render(); home.flushEffects();
+  const forced = brief.readDailyBrief({ force: true });
+  await tick();
+  release(reply({ status: 'error' })); await forced; await tick();
+  assert.equal(home.render().status, 'error');
+  assert.deepEqual(home.render().signals, []);
+  assert.equal(calls, 2, 'following a forced read must not start a third read');
+});
+
+test('leaving Home during chunk loading discards only preparation, so returning always revalidates cached paint', async (t) => {
+  const brief = await freshBrief(); let now = Date.now(), calls = 0, release;
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(globalThis, 'fetch', async () => ++calls === 1
+    ? new Promise(resolve => { release = resolve; })
+    : reply({ status: 'live', signals: [{ id: 'fresh-after-return' }] }));
+  const prepared = brief.startHomeDailyBriefRead();
+  brief.releaseHomeDailyBriefRead();
+  release(reply({ status: 'live', signals: [{ id: 'before-leaving' }] })); await prepared;
+  assert.equal(brief.peekDailyBrief().data.signals[0].id, 'before-leaving', 'shared read/cache is not aborted or discarded');
+  now += 3 * 60 * 1000;
+  const hooks = await actualHooks(brief), home = hooks.mount(key => hooks.useSignals(key, { homeRoute: true }));
+  assert.equal(home.render().signals[0].id, 'before-leaving', 'existing fresh cache can still paint immediately');
+  home.flushEffects(); await tick();
+  assert.equal(calls, 2, 'returning after leaving must revalidate even inside cache freshness');
+  assert.equal(home.render().signals[0].id, 'fresh-after-return');
+});
+
+
+test('the actual route effect preserves Home preparation and releases it only after leaving Home', async () => {
+  const source = await readFile(new URL('./hub-app.jsx', import.meta.url), 'utf8');
+  const match = source.match(/React\.useEffect\(\(\) => \{([^}]*releaseHomeDailyBriefRead\(\);[^}]*)\}, \[path\]\)/);
+  assert.ok(match, 'route lifecycle must release the handoff when pathname leaves Home');
+  let releases = 0;
+  const effect = new Function('path', 'releaseHomeDailyBriefRead', match[1]);
+  effect('dashboard/home', () => releases++); effect('dashboard/home', () => releases++);
+  assert.equal(releases, 0, 'Home and its Strict Mode replay retain preparation');
+  effect('dashboard/revenue/customers', () => releases++);
+  assert.equal(releases, 1);
 });
