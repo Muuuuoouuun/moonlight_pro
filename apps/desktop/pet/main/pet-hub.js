@@ -149,11 +149,10 @@ function createPetHub(input = {}) {
   let bannerGate = typeof options.canPresentBanner === 'function' ? options.canPresentBanner : () => true;
   let chatVisible = typeof options.isChatVisible === 'function' ? options.isChatVisible : () => true;
 
-  let conn = null; // { origin, client, api, pending, ready }
+  let conn = null; // { origin, client, api, pending, ready, controller, pollInFlight }
   let hubStatus = 'unknown';
   let lastBadge = 0;
   let stopPollingFn = null;
-  let pollInFlight = null;
 
   function emit(name, payload) {
     try {
@@ -200,6 +199,7 @@ function createPetHub(input = {}) {
   function connect(originInput) {
     const origin = canonicalOrigin(originInput);
     if (conn && origin === conn.origin) return conn.ready;
+    conn?.controller.abort();
     conn = null;
     if (!origin) {
       chat.configure({ service: null, origin: null });
@@ -207,13 +207,14 @@ function createPetHub(input = {}) {
       setHubStatus('not-configured');
       return ready.then(() => undefined);
     }
+    const controller = new AbortController();
     const client = createHubClient({
-      origin, fetch: options.fetch, cookieHeader: options.cookieHeader, storeCookies: options.storeCookies,
+      signal: controller.signal, origin, fetch: options.fetch, cookieHeader: options.cookieHeader, storeCookies: options.storeCookies,
       setTimeout: options.setTimeout, clearTimeout: options.clearTimeout,
     });
     const api = createHubApi(client);
     const pending = createPending({ api, store, origin, now: clock });
-    const next = { origin, client, api, pending, ready: null };
+    const next = { origin, client, api, pending, ready: null, controller, pollInFlight: null };
     chat.configure({ service: api, origin });
     next.ready = Promise.all([pending.load(), activity.configure({ service: api, origin })]).then(() => undefined);
     conn = next;
@@ -228,6 +229,7 @@ function createPetHub(input = {}) {
     const current = conn;
     if (!current) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
     await current.ready;
+    if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
     let envelope;
     try {
       const result = await fn(current);
@@ -340,6 +342,7 @@ function createPetHub(input = {}) {
       const current = conn;
       if (!current) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
       await current.ready;
+      if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
       if (!activity.isLoaded() || PROBE_ONLY_STATUSES.includes(hubStatus)) await hub.tick();
       if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
       const list = activity.list();
@@ -373,6 +376,7 @@ function createPetHub(input = {}) {
     async chatSend(input) {
       const current = conn;
       if (current) await current.ready;
+      if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
       const envelope = await chat.send(payloadOf(input));
       if (current && current === conn) setHubStatus(statusFromEnvelope(envelope));
       return envelope;
@@ -446,8 +450,9 @@ function createPetHub(input = {}) {
       const current = conn;
       if (!current) return { skipped: true };
       await current.ready;
-      if (pollInFlight) return pollInFlight;
-      pollInFlight = (async () => {
+      if (current !== conn) return { skipped: true };
+      if (current.pollInFlight) return current.pollInFlight;
+      const poll = (async () => {
         if (PROBE_ONLY_STATUSES.includes(hubStatus)) {
           await hub.session();
           if (current !== conn || hubStatus !== 'connected') return { skipped: true, probed: true, status: hubStatus };
@@ -459,10 +464,11 @@ function createPetHub(input = {}) {
         }
         return result;
       })();
+      current.pollInFlight = poll;
       try {
-        return await pollInFlight;
+        return await poll;
       } finally {
-        pollInFlight = null;
+        if (current.pollInFlight === poll) current.pollInFlight = null;
       }
     },
     startPolling(intervalMs = LIMITS.pollMs) {
@@ -531,6 +537,7 @@ function createPetHub(input = {}) {
     },
     dispose() {
       hub.stopPolling();
+      conn?.controller.abort();
       chat.configure({ service: null, origin: null });
       activity.configure({ service: null, origin: null }).catch(() => {});
       conn = null;

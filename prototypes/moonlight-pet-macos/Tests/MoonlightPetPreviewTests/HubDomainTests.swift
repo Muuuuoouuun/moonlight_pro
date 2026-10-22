@@ -139,6 +139,7 @@ struct HubDomainTests {
             try await anonymousMemoNoticeChecks()
             try await connectionRecoveryChecks()
             try await sessionExpiryChecks()
+            try await desktopSessionRecoveryChecks()
             try await recoveryChecks()
             try await storeChecks()
             try await taskDeletionChecks()
@@ -408,6 +409,33 @@ struct HubDomainTests {
         try check(finished && defaults.string(forKey: "petPreview.hubURL") == "https://slow.test",
                   "The first sign-in retains ownership of the saved address")
         print("PASS: Hub address recovery checks (6)")
+    }
+
+    @MainActor static func desktopSessionRecoveryChecks() async throws {
+        let suite = "pet-desktop-session-recovery-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let api = ControlledHub()
+        var publishedOrigins: [String?] = []
+        var creations = 0
+        let store = HubStore(defaults: defaults, makeAPI: { _ in creations += 1; return api })
+        store.onConnectionChanged = { service, origin in publishedOrigins.append(service == nil ? nil : origin) }
+        await store.connect(baseURL: "https://session-recovery.test")
+        _ = await store.signOut()
+        try check(publishedOrigins.last! == nil, "Sign-out disconnects Office and notification consumers")
+        await store.connect(baseURL: "https://session-recovery.test")
+        try check(publishedOrigins.last! == nil && store.needsLogin, "Anonymous refresh must not reconnect consumers")
+        // The shell imported a valid session; its URL command rechecks this same transport.
+        await api.setAnonymous(false)
+        await store.connect(baseURL: "https://session-recovery.test")
+        try check(!store.needsLogin && store.taskReady, "A shared desktop login restores task access")
+        try check(publishedOrigins.last! == "https://session-recovery.test",
+                  "A shared desktop login must also restore Office and notification consumers")
+        let publishedCount = publishedOrigins.count
+        await store.connect(baseURL: "https://session-recovery.test")
+        try check(publishedOrigins.count == publishedCount && creations == 1,
+                  "Ordinary same-origin refresh keeps active downstream conversations intact")
+        print("PASS: Desktop session consumer recovery checks (5)")
     }
 
     @MainActor static func captureChecks() async throws {
