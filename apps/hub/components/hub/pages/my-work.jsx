@@ -1058,7 +1058,15 @@ export function MyWork({ onNavigate }) {
           tone: 'ok',
           label,
           action: created
-            ? { label: '보기', onClick: () => { setJustAddedId(created.id); scrollToRow(created.id); } }
+            ? { label: '보기', onClick: () => {
+              // Q120의 무기한 분리를 지키면서 하이라이트가 끝나도 저장한 행에 머문다.
+              setLens('list');
+              setLane('task');
+              setBucketFilter(normalizeBucket(created) === 'later' ? 'later' : 'all');
+              setSearch('');
+              setJustAddedId(created.id);
+              scrollToRow(created.id);
+            } }
             : undefined,
         });
         toast.success(label);

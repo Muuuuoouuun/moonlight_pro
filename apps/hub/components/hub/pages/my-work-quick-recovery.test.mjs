@@ -21,27 +21,28 @@ function memory(){const values=new Map();return{getItem:key=>values.get(key)??nu
 const noAction=()=>{throw Error('unexpected unrelated action');};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function descendants(node){if(!node||typeof node!=='object')return[];return[node,...React.Children.toArray(node.props?.children).flatMap(descendants)];}
-function harness(storage,fetchImpl){
-  const slots=[],effects=[];let cursor=0;
+function harness(storage,fetchImpl,readOverrides={}){
+  const slots=[],effects=[],routes=[];let cursor=0;
   const hookReact={...React,
     useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value;}];},
     useRef(initial){const i=cursor++;if(!(i in slots))slots[i]={current:initial};return slots[i];},
     useMemo:fn=>fn(),useCallback:fn=>fn,
     useEffect(fn,deps){const i=cursor++;if(!(i in slots)){slots[i]=deps;effects.push(fn);}},
   };
-  globalThis.window={sessionStorage:storage,localStorage:memory(),addEventListener:()=>{},removeEventListener:()=>{}};
+  globalThis.window={sessionStorage:storage,localStorage:memory(),setTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{}};
   globalThis.document={visibilityState:'visible',addEventListener:()=>{},removeEventListener:()=>{}};
   globalThis.BroadcastChannel=undefined;globalThis.fetch=fetchImpl;
   const read={items:[],sources:{tasks:'live',deals:'live',calendar:'live'},projects:[],focusToday:null,state:'ready',reload:async()=>({items:[{lane:'task',entityId:'22222222-2222-4222-8222-222222222222',title:'합성 첫 요청',id:'wrong-row',bucket:'today'}]})};
+  Object.assign(read,readOverrides);
   const scope={...primitives,...mute,React:hookReact,Iconed,createMyWorkQuickTask,clearSubmittedQuickTaskDraft,shouldSubmitQuickTask,MAX_FOCUS_PER_DAY,focusLimitMessage,
-    fetch:fetchImpl,useSearchParams:()=>new URLSearchParams(),useRouter:()=>({replace:noAction}),usePathname:()=>'/dashboard/work/my',useToast:()=>({success:()=>{},error:()=>{}}),
+    fetch:fetchImpl,useSearchParams:()=>new URLSearchParams(),useRouter:()=>({replace:path=>routes.push(path)}),usePathname:()=>'/dashboard/work/my',useToast:()=>({success:()=>{},error:()=>{}}),
     useUndoableAction:()=>({schedule:noAction,cancel:noAction}),UNDO_WINDOW_MS:3500,JournalSources:()=>null,MeetingWatchCard:()=>null,TASK_PRIORITY_OPTIONS:[],TASK_STATUS_OPTIONS:[],TASK_OUTCOME:{},
     freezeTaskCommand:noAction,saveTaskCommand:noAction,triggerCelebration:noAction,triggerSparkleAt:noAction,requestPersonaChat:noAction,buildMyWorkChecklistToggle:noAction,readMyWorkChecklistReceipt:noAction};
   // read is intentionally passed as a real captured dependency, not a rewritten loader.
   const evaluate=new Function(...Object.keys(scope),'read',`${compiled}\nuseAttentionLedger=()=>read;return MyWork;`)(...Object.values(scope),read);
   const render=()=>{cursor=0;return evaluate({onNavigate:noAction});};
   render();for(const effect of effects.splice(0)){const cleanup=effect();if(cleanup)cleanups.push(cleanup);}
-  return {render,input:()=>descendants(render()).find(n=>n.type==='input'&&n.props['aria-label']==='새 할 일 제목'),button:()=>descendants(render()).find(n=>n.props.onClick&&n.props.icon==='plus'),nodes:()=>descendants(render())};
+  return {render,routes,input:()=>descendants(render()).find(n=>n.type==='input'&&n.props['aria-label']==='새 할 일 제목'),button:()=>descendants(render()).find(n=>n.props.onClick&&n.props.icon==='plus'),nodes:()=>descendants(render())};
 }
 async function pending(storage){const first=createMyWorkQuickTask({storage,getContext:async()=>CONTEXT,createId:()=>ID});await first.submit({title:'합성 첫 요청'},{fetchImpl:async()=>{throw new TypeError('synthetic lost');}});first.deactivate();}
 
@@ -78,6 +79,29 @@ test('actual MyWork owner change clears prior input and suppresses a late saved 
   const view=harness(storage,async(url,options)=>{if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:context});const p=JSON.parse(options.body);return new Promise(r=>{resolve=()=>r(Response.json({status:'saved',task:{id:p.id,workspace_id:WORK,title:p.title,status:"todo",priority:p.priority||"medium",due_at:p.dueAt?new Date(p.dueAt).toISOString():null}}));});});await tick();
   view.input().props.onChange({target:{value:'합성 이전 입력'}});const request=view.button().props.onClick();await tick();context={...CONTEXT,ownerKey:'b'.repeat(64)};resolve();await request;
   assert.equal(view.input().props.value,'');assert.equal(view.nodes().some(n=>typeof n.props.children==='string'&&/할 일 저장됨/.test(n.props.children)),false);
+});
+
+for(const bucket of ['later','today']) test(`saved task View keeps the ${bucket} task reachable beyond its temporary highlight`,async()=>{
+  const storage=memory();await pending(storage);
+  const item={lane:'task',entityId:ID,title:'합성 첫 요청',id:`task-${ID}`,bucket};
+  const view=harness(storage,async(url,options)=>{
+    if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:CONTEXT});
+    const p=JSON.parse(options.body);
+    return Response.json({status:'duplicate',task:{id:p.id,workspace_id:WORK,title:p.title,status:'todo',priority:'medium',due_at:null}});
+  },{items:[item],reload:async()=>({items:[item]})});
+  await tick();await view.button().props.onClick();
+  // Filters can change after saving, before the persistent receipt's View action.
+  view.nodes().find(n=>n.props.label==='레인 필터').props.onChange('deal');
+  view.nodes().find(n=>n.props.placeholder==='제목 검색').props.onChange('unrelated search');
+  view.nodes().find(n=>n.props.label==='기한 필터').props.onChange('overdue');
+  view.nodes().find(n=>n.props.onClick&&n.props.children==='보기').props.onClick();
+  const nodes=view.nodes();
+  assert.equal(view.routes.at(-1),'/dashboard/work/my');
+  assert.equal(nodes.find(n=>n.props.label==='기한 필터').props.value,bucket==='later'?'later':'all');
+  assert.equal(window.localStorage.getItem('mlp.mywork.bucket'),bucket==='later'?'later':'all','the destination must persist independently of the highlight timer');
+  assert.equal(nodes.find(n=>n.props.label==='레인 필터').props.value,'task');
+  assert.equal(nodes.find(n=>n.props.placeholder==='제목 검색').props.value,'');
+  assert.ok(nodes.some(n=>n.props.item?.id===item.id),'the saved row is visible in its destination');
 });
 
 function logout(storage,fetchImpl,{blockedAccess=false}={}){globalThis.window={sessionStorage:storage,location:{replace:href=>{redirect=href;}}};if(blockedAccess)Object.defineProperty(window,'sessionStorage',{get(){throw new DOMException('blocked','SecurityError');}});globalThis.BroadcastChannel=undefined;let redirect='',error='',busy=false;
