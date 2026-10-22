@@ -1831,16 +1831,17 @@ export function MyWork({ onNavigate }) {
         <span
           role={notice.tone === 'err' ? 'alert' : 'status'}
           aria-live="polite"
-          style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%', overflowWrap: 'anywhere', gap: 8 }}
+          style={{ fontSize: 12, lineHeight: 1.6, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%', overflowWrap: 'anywhere', gap: 8 }}
         >
-          {notice.label}
+          <span style={{ maxWidth: '80ch' }}>{notice.label}</span>
           {notice.action && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={notice.action.onClick}
-              style={{ fontSize: 11.5, color: 'var(--moon-200)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
             >
               {notice.action.label}
-            </button>
+            </Button>
           )}
         </span>
       )}

@@ -20,7 +20,7 @@ export function HomeMorningBrief({ brief, schedule, onNavigate, now = new Date()
       <div className="home-morning__heading">
         <h3 id="home-morning-title">아침 브리핑</h3>
         {state !== 'live' && state !== 'loading' ? (
-          <TruthBadge state={state} reason={state === 'partial' ? '일부 기록만 확인했습니다' : state === 'preview' ? '연결된 기록이 필요합니다' : '기록을 확인하지 못했습니다'} />
+          <TruthBadge state={state} reason={state === 'partial' ? '일부 기록만 확인했습니다' : state === 'preview' ? undefined : '기록을 확인하지 못했습니다'} />
         ) : null}
       </div>
       <div className="fx-card home-morning__card">

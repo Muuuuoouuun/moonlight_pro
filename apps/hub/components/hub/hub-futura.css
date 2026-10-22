@@ -263,6 +263,15 @@
 }
 
 /* ── 오늘의 시간표 ────────────────────────────────────────────── */
+.hub-app .fx-read-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hub-app .fx-read-state > .hub-btn { flex-shrink: 0; margin-left: auto; }
+
 .hub-app .fx-section-head {
   display: flex;
   align-items: baseline;
