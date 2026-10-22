@@ -35,6 +35,16 @@ Ten direct CDP viewport screenshots cover the1280 viewport in both themes. Initi
 The actual390px production database workflow found bare Checkbox buttons with14px faces and a30px computed pseudo-element hit region. Commit64569953 (integrated2efb3c3d) centers a44px minimum pseudo-element on `button.hub-checkbox` only. CheckboxRow retains its existing whole-row target. Related24 tests, actual source-component hit tests and four desktop/mobile/light/dark visual comparisons passed with zero pixel or DOM geometry changes. Actual DB tests with the candidate CSS confirm a right-edge tap completing the task and Undo retaining todo. The bottom-left corner of the last row can still be clipped by the existing rounded Card overflow; the other corners and centerline extents were verified. This evidence does not certify every possible parent clipping context. The unrelated immediate-Undo animation race discovered during this work is separately fixed in e2cc44d8.
 
 
-## 최종 통합 확인
+## `2efb3c3d` 통합 확인 (후속 보정 전)
 
 `2efb3c3d` / build `iZ8NrCtJituF7IygMkERY`에서5경로×2폭×2테마20조건을 다시 검사해 확정 위반0건·generic ARIA 보조 확인0건이다. axe의 color-contrast incomplete는 자동 판정 불가능한 항목으로 남으며 전체 수동 WCAG 인증이 아니다. 체크박스44px 변경은 CSS 주입 단계 뒤 실제 production으로 재빌드했다. 같은 소스의 오른쪽 중심+21px touch가 PATCH1회 HTTP200 saved·SQL done으로 이어졌고, 빠른 Undo5회에서는300ms·3.6초 뒤에도 행이 유지됐다([실제 DB 후속 검증](mobile-roundtrip.md)). 둥근 Card 마지막 행의 좌하 외곽 모서리 clipping은 남아 있다.
+
+## 최종 터치 및 최하단 가림 보정
+
+후속 `172238f9`에서 My Work의44px 체크박스 열을 확보해 위에서 기록한 둥근 Card의 외곽 잘림과 제목 첫 글자 tap이 완료로 잘못 전달되는 문제를 해결했다. 소스 컴포넌트28조건에서30,976개 hit sample은 누락0건이며, 실제 production4조건(320/390×light/dark)에서도15,488개 누락0건·32개 모서리 tap+Undo·8개 제목 첫 글자→정확한 상세 열기가 통과했다.
+
+이 production 검사에서320px 최대 스크롤에서도 마지막 날짜가 고정 메모 버튼에 가리는 별도 결함을 찾아 `4fcc1a7c`로 수정했다. My Work에만600px 이하 하단 여백을 확보했다. 최종 후보 `7c4e7bb7` / build `kXWAzuJhiEg_D_HNcmKTK`는 통합 소스와 Hub runtime diff가0이다. CSS 주입 없이 위4조건 상호작용을 다시 통과했고, 메모 열고 닫기도4회 통과했다.320px dark에서 마지막 행 bottom818.5→762.5, 날짜 bottom803→747, 메모 버튼 top780으로 전체 행이 가림에서 벗어났다.
+
+320/390/600/1440×light/dark×2행/빈 상태의16개 전후 비교에서 상단 제목·빠른 입력·첫 행 위치는 동일했고,1440px의 전체 geometry도 동일했다. 모바일 long-title은 기존 말줄임을 유지하며 상태 배지·날짜를 보존한다. 실제 기기의 nonzero safe-area inset, VoiceOver, 가상 키보드는 검증하지 않았다.
+
+최종 터치 검사의 읽기와 PATCH는 격리된 로컬 응답으로 제어했다. 각 조건의 정상 완료 요청은 정확히1회였으나 이 결과를 실제 DB 저장 증거로 계산하지 않는다. 앞 절의 실제 DB 왕복은 그 절에 명시한 별도 소스를 따른다. [소스 컴포넌트 보정](touch-targets.md) · [production 및 하단 여백 검증](touch-targets-production.md).

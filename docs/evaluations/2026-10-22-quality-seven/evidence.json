@@ -13,8 +13,9 @@
       "pass": 5595,
       "fail": 0,
       "skip": 14,
-      "sourceHead": "2efb3c3d",
-      "durationMs": 76631.001834
+      "sourceHead": "4fcc1a7c",
+      "durationMs": 76508.781166,
+      "checkout": "original checkout including all three preserved pre-existing user edits"
     },
     "desktop": {
       "total": 353,
@@ -134,7 +135,7 @@
       "scope": "public health only, separate from the earlier authenticated reads/data-integrity checks"
     }
   },
-  "sourceHead": "2efb3c3d",
+  "sourceHead": "4fcc1a7c",
   "authenticationRuntime": {
     "environment": "isolated local production, not deployed",
     "checks": 17,
@@ -293,7 +294,8 @@
       "visualComparisonConditions": 4,
       "pixelDifferences": 0,
       "databaseBoundaryTap": "fresh production build with matching source: right center +21px touch caused exactly one PATCH HTTP200 saved and SQL done; no CSS injection",
-      "limitation": "last row bottom-left corner clipped by existing rounded Card overflow; not every ancestor clipping context certified"
+      "limitation": "At the recorded 2efb3c3d source, the last row bottom-left corner was clipped by rounded Card overflow. This is not the remaining status of 4fcc1a7c.",
+      "status": "Historical 2efb3c3d evidence; corner limitation resolved in 172238f9 and whole-route rechecked with 4fcc1a7c; see checkboxCornerCorrection/myWorkFooterClearance"
     }
   },
   "localDatabaseRoundtrip": {
@@ -343,22 +345,28 @@
   },
   "builds": {
     "hub": {
-      "source": "2efb3c3d",
-      "buildId": "iZ8NrCtJituF7IygMkERY",
-      "status": "passed"
+      "source": "4fcc1a7c plus all three preserved pre-existing user edits",
+      "buildId": "Jo7NJ3reDQjBaoh_81ef9",
+      "distDirectory": ".next.quality-seven-final",
+      "status": "passed",
+      "previousVerifiedBuild": {
+        "source": "2efb3c3d",
+        "buildId": "iZ8NrCtJituF7IygMkERY",
+        "scope": "final11 performance and 20-condition accessibility scan"
+      }
     },
     "engine": {
       "source": "fbb0bfcb",
       "status": "passed; no later Engine code changes"
     },
     "typecheck": {
-      "source": "2efb3c3d",
+      "source": "4fcc1a7c plus preserved user edits",
       "successful": 4,
       "cached": 0,
       "status": "passed"
     },
     "syntax": {
-      "source": "2efb3c3d",
+      "source": "4fcc1a7c plus preserved user edits",
       "files": 1749,
       "issues": 0,
       "scope": "syntax only, not semantic lint"
@@ -549,7 +557,8 @@
         "apiErrors": []
       }
     },
-    "report": "performance.json"
+    "report": "performance.json",
+    "laterSourceChanges": "Subsequent runtime changes are My Work touch-column spacing and narrow-screen bottom padding only; final11 measurements remain attributed to 2efb3c3d and were not rerun after those layout changes."
   },
   "assessmentAfterFinal11": {
     "sourceHead": "2efb3c3d",
@@ -575,6 +584,153 @@
       "freshness": 5
     },
     "report": "final-assessment.md",
-    "scope": "Independent judgment of verified source and evidence; not deployed whole-product certification. Further remediation remains."
+    "scope": "Historical independent judgment before subsequent touch/title/date corrections; superseded by finalAssessment without rewriting its score."
+  },
+  "originalCheckoutIntegration": {
+    "at": "2026-10-23 Asia/Seoul",
+    "branch": "codex/local-snapshot-20261014",
+    "sourceHead": "4fcc1a7c",
+    "method": "fast-forward from c89ecbf2 via cb1fcaf9, a53ee5ef, 172238f9 and 4fcc1a7c; npm install completed without lockfile changes",
+    "preExistingUserFilesPreservedBySha256": 3,
+    "firstCombinedSuite": {
+      "sourceHead": "cb1fcaf9",
+      "total": 5609,
+      "pass": 5594,
+      "fail": 1,
+      "skip": 14,
+      "durationMs": 75573.614084,
+      "failure": "A reader test pinned an older chapter title; preserved user edits changed the source heading. Rendered source, focused section and anchor were correct."
+    },
+    "resolution": {
+      "sourceHead": "a53ee5ef",
+      "productionCodeChanged": false,
+      "userContentChanged": false,
+      "contract": "Verify the containing heading from the current source hierarchy, a later section, exactly one expanded section and the precise Mirroring focus anchor",
+      "cleanSourceTestsPass": 11,
+      "userEditedSourceTestsPass": 11
+    },
+    "finalCombinedSuite": {
+      "total": 5609,
+      "pass": 5595,
+      "fail": 0,
+      "skip": 14,
+      "sourceHead": "4fcc1a7c",
+      "durationMs": 76508.781166,
+      "checkout": "original checkout including all three preserved pre-existing user edits"
+    }
+  },
+  "checkboxCornerCorrection": {
+    "sourceHead": "172238f9",
+    "equivalentCandidate": "80495703",
+    "filesChanged": 1,
+    "cssLinesAdded": 6,
+    "scope": "coarse pointer My Work rows with a bare checkbox",
+    "visibleFacePx": 14,
+    "hitRegionPx": 44,
+    "checkboxShiftPx": 14,
+    "titleShiftPx": 30,
+    "titleMinWidth": "0 on the adjacent title only; existing ellipsis retained",
+    "sourceComponentBrowserConditions": 28,
+    "hitSamples": 30976,
+    "misses": 0,
+    "cornerTaps": "four per row all complete only that row",
+    "titleTaps": "first letter and center open only that row detail, no completion",
+    "finePointerPixelDifference": 0,
+    "relatedTestsPass": 79,
+    "report": "touch-targets.md",
+    "wholeProductionRoute": {
+      "sourceHead": "80495703 (runtime equivalent to 172238f9)",
+      "buildId": "dfS5PRd0Y8ucSFcDWGK2m",
+      "conditions": 4,
+      "hitSamples": 15488,
+      "misses": 0,
+      "cornerTapsAndUndo": 32,
+      "titleFirstLetterDetailTaps": 8,
+      "interceptedCompletionPatchPerCondition": 1,
+      "memoOpenCloseCycles": 4,
+      "pageOrConsoleErrors": 0,
+      "limitation": "Local controlled read/write responses; not database persistence. A separate max-scroll date obstruction was found and corrected below."
+    }
+  },
+  "myWorkFooterClearance": {
+    "sourceHead": "4fcc1a7c",
+    "equivalentCandidate": "7c4e7bb7",
+    "buildId": "kXWAzuJhiEg_D_HNcmKTK",
+    "filesChanged": 2,
+    "linesAdded": 9,
+    "linesRemoved": 1,
+    "scope": "My Work page bottom padding at max-width600 only; 48px launcher plus max(16px, safe-area inset) plus16px gap",
+    "productionConditions": 4,
+    "hitSamples": 15488,
+    "misses": 0,
+    "cornerTapsAndUndo": 32,
+    "titleFirstLetterDetailTaps": 8,
+    "interceptedCompletionPatchPerCondition": 1,
+    "memoOpenCloseCycles": 4,
+    "pageOrConsoleErrors": 0,
+    "beforeAfterGeometryConditions": 16,
+    "topHeadingInputFirstRowUnchanged": true,
+    "desktop1440GeometryUnchanged": true,
+    "mobile320Dark": {
+      "mainScrollMaxBefore": 122,
+      "mainScrollMaxAfter": 178,
+      "lastRowBottomBefore": 818.5,
+      "lastRowBottomAfter": 762.5,
+      "dateBottomBefore": 803,
+      "dateBottomAfter": 747,
+      "memoButtonTop": 780
+    },
+    "cssInjection": false,
+    "productionBusinessWrites": 0,
+    "externalEgressAttempts": 0,
+    "limitations": [
+      "Locally controlled reads and intercepted PATCH; not DB persistence",
+      "Emulated Chromium zero safe-area inset; physical device nonzero inset not measured"
+    ],
+    "report": "touch-targets-production.md",
+    "auxiliaryWorktreeRemoved": true,
+    "ownedServerAndBrowserStopped": true
+  },
+  "finalAssessment": {
+    "sourceHead": "4fcc1a7c",
+    "weightedAverage": 90.0,
+    "minimum": 87,
+    "targetMet": true,
+    "scores": {
+      "speed": 87,
+      "practicality": 91,
+      "coreFocus": 89,
+      "design": 90,
+      "stability": 93,
+      "securityAndEnvironment": 91,
+      "freshness": 91
+    },
+    "weights": {
+      "speed": 20,
+      "practicality": 20,
+      "coreFocus": 20,
+      "design": 10,
+      "stability": 15,
+      "securityAndEnvironment": 10,
+      "freshness": 5
+    },
+    "report": "final-assessment.md",
+    "changeFromPrevious": "Only design 89 to90, based on verified correction of title touch causing completion, rounded-card corner misses and last-date obstruction at maximum scroll; no duplicated points in other categories",
+    "scope": "Independent evaluator judgment of the whole product within recorded evidence; no production code deployment, physical Windows or VoiceOver certification"
+  },
+  "finalCredentialScan": {
+    "scope": "known credential values in task-changed tracked and pending files, compared against existing local environment sources without printing values",
+    "filesScanned": 97,
+    "credentialValuesCompared": 23,
+    "matchingFiles": [],
+    "matches": 0
+  },
+  "cleanup": {
+    "ownedLocalServersStopped": true,
+    "isolatedDatabaseHarnessRemoved": true,
+    "auxiliaryFontAndTouchWorktreesRemoved": true,
+    "managedPrimaryWorktree": "ready to archive after final documentation fast-forward",
+    "protectedApplicationLedgerBackup": "retained outside worktrees; public and moonlight_ops only",
+    "originalUserFilesPreserved": 3
   }
 }
