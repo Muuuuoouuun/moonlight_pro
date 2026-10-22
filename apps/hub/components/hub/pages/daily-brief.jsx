@@ -24,7 +24,7 @@ import { WEEKLY_STAT_FIELDS, weeklySourceLabels, weeklyStatValue } from '@/lib/w
 import { goalHref } from '@/lib/goal-client';
 import { BurningStreakBadge, StreakMark, streakLevel } from "../burning-streak";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
-import { ContactRecordDrawer } from "../contact-record-form";
+import { ContactRecordDrawer } from "../deferred-contact-record-drawer";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";

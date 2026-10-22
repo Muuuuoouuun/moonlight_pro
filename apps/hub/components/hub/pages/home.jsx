@@ -6,7 +6,7 @@ import { Button, Skeleton, TruthBadge, EmptyState, Kbd, useToast } from "../hub-
 import { CalendarOutcome } from "../calendar-outcome";
 import { PublishDue } from "./publish-due";
 import { SIGNAL_TARGETS, withEntityRef } from '@/lib/signal-targets';
-import { ContactRecordDrawer } from '../contact-record-form';
+import { ContactRecordDrawer } from '../deferred-contact-record-drawer';
 import { CheckItemProgress, FinishedTodayList, FocusCard, RemainingList, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card';
 import { cancelScheduled, postReceipt, undoReceipt } from '../check-items/check-item-actions';
 import { ScheduledList } from '../check-items/schedule-band';
