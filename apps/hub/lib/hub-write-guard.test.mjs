@@ -1,10 +1,46 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { HUB_WRITE_SECRET_HEADER, assertHubWriteAllowed } from "./hub-write-guard.js";
+import { HUB_WRITE_SECRET_HEADER, assertHubWriteAllowed, readHubWriteJson } from "./hub-write-guard.js";
 import { createOperatorSessionToken, OPERATOR_SESSION_COOKIE } from "./operator-session.js";
 
 const ORIGINAL_ENV = { ...process.env };
+
+test('Hub JSON reader cancels a chunked oversized body before reading its tail', async () => {
+  let pulls = 0, cancelled = false;
+  const body = new ReadableStream({
+    pull(controller) {
+      pulls += 1;
+      if (pulls <= 3) controller.enqueue(new TextEncoder().encode('12345678'));
+      else controller.close();
+    },
+    cancel() { cancelled = true; },
+  }, { highWaterMark: 0 });
+  const req = new Request('https://hub.example.test/api/tasks', { method: 'POST', body, duplex: 'half' });
+  const result = await readHubWriteJson(req, { maxBytes: 8 });
+  assert.equal(result.error.status, 413);
+  assert.equal(pulls, 2);
+  assert.equal(cancelled, true);
+});
+
+test('Hub JSON reader returns a bounded invalid-json response for interrupted bodies', async () => {
+  const body = new ReadableStream({ start(controller) { controller.error(new Error('private transport failure')); } });
+  const req = new Request('https://hub.example.test/api/tasks', { method: 'POST', body, duplex: 'half' });
+  const result = await readHubWriteJson(req);
+  assert.equal(result.error.status, 400);
+  assert.equal((await result.error.json()).status, 'invalid-json');
+});
+
+test('Hub JSON reader counts UTF-8 bytes and accepts a valid split multibyte character', async () => {
+  const bytes = new TextEncoder().encode('{"title":"한"}');
+  const body = new ReadableStream({ start(controller) {
+    controller.enqueue(bytes.slice(0, 11));
+    controller.enqueue(bytes.slice(11));
+    controller.close();
+  } });
+  const req = new Request('https://hub.example.test/api/tasks', { method: 'POST', body, duplex: 'half' });
+  assert.deepEqual(await readHubWriteJson(req, { maxBytes: bytes.length }), { data: { title: '한' }, byteLength: bytes.length });
+});
 
 beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };

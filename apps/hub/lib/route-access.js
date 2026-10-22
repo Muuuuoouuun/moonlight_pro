@@ -10,17 +10,17 @@
 // 세션 없이 도달해야 하는 경로. 전부 *자체* 인증을 갖고 있거나(cron·webhook·agent),
 // 세션을 만들기 위한 입구(로그인)이거나, 외부가 리다이렉트로 돌려보내는 곳이다.
 export const OPEN_PREFIXES = [
-  "/api/operator/session", // 로그인·로그아웃 — 여기를 막으면 세션을 만들 수 없다
   "/api/cron/", // Vercel Cron — CRON_SECRET Bearer 자체 검증
   "/api/webhooks/", // 외부 웹훅 — provider secret 자체 검증
   "/api/agent/v1/", // Agent API — authorizeAgentRequest 자체 검증
-  "/api/health", // 상태 점검 — 기록 데이터를 반환하지 않는다
-  "/login", // 로그인 화면
 ];
 
 // OAuth 콜백과 공급자 심사용 정적 법률 페이지는 세션 없이 접근해야 한다.
 // 명시 목록으로 둔다 — 접미사 매칭은 새 경로가 조용히 열리는 길을 만든다(fail-closed).
 export const OPEN_EXACT = [
+  "/api/operator/session", // 로그인·로그아웃 — 이 입구만 공개한다.
+  "/api/health", // 상태 점검 — 인접 이름과 하위 경로까지 열지 않는다.
+  "/login",
   "/api/calendar/google/callback",
   "/api/email/gmail/callback",
   "/api/integrations/sheets/callback",
