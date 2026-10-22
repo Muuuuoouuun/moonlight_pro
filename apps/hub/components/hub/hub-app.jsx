@@ -190,7 +190,9 @@ function useMobileViewport() {
 
 function useIdlePagePrefetch() {
   React.useEffect(() => {
-    if (prefersOnDemandLoading()) return undefined;
+    // CPU idle does not mean the current page's network requests have finished.
+    // Touch devices load destinations on demand, like the shell overlays above.
+    if (window.matchMedia?.("(hover: none) and (pointer: coarse)").matches || prefersOnDemandLoading()) return undefined;
     let cancelled = false;
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
     const cancelIdle = window.cancelIdleCallback || clearTimeout;
