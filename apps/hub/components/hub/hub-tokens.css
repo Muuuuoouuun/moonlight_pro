@@ -957,6 +957,33 @@
   }
 }
 
+/* 연속 달성 띠 + 최근 7일 게이지(2026-10-22). 게이지는 눌린 홈 한 줄 안의 일곱 칸 — 채움은 잉크,
+   빈 칸은 1px 선, 오늘 칸은 Moonstone 선(아직이면 점선). 좁으면 게이지가 글 아래로 내려간다. */
+.hub-app .hub-streak-band { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; min-width: 0; }
+.hub-app .hub-streak-band__lead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hub-app .hub-streak-band__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hub-app .hub-streak-band__line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
+.hub-app .hub-streak-band__headline { font-size: 13.5px; font-weight: 600; color: var(--fg-muted); }
+.hub-app .hub-streak-band[data-sustained] .hub-streak-band__headline { color: var(--fg); }
+.hub-app .hub-streak-band__today { font-size: 11.5px; color: var(--fg-muted); }
+.hub-app .hub-streak-band__sub { font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .hub-streak-week { display: grid; gap: 4px; flex-shrink: 0; }
+.hub-app .hub-streak-week__track,
+.hub-app .hub-streak-week__labels { display: grid; grid-template-columns: repeat(7, 22px); gap: 4px; padding-inline: 4px; }
+.hub-app .hub-streak-week__track {
+  padding-block: 4px; border-radius: 999px;
+  background: var(--well, var(--surface-2)); box-shadow: var(--shadow-inset, inset 0 0 0 1px var(--line-soft));
+}
+.hub-app .hub-streak-week__cell {
+  display: block; height: 10px; border-radius: 999px; border: 1px solid var(--line);
+  transition: background var(--dur-enter) var(--ease-hub), border-color var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-streak-week__cell[data-done] { border-color: transparent; background: var(--ink-face, var(--fg-muted)); }
+.hub-app .hub-streak-week__cell[data-today] { border-color: var(--moon-300); border-style: dashed; }
+.hub-app .hub-streak-week__cell[data-today][data-done] { border-style: solid; }
+.hub-app .hub-streak-week__labels span { font-size: 10.5px; line-height: 1.2; text-align: center; color: var(--fg-faint); white-space: nowrap; }
+.hub-app .hub-streak-week__labels span[data-today] { color: var(--fg); font-weight: 500; }
+
 /* Celebration & 100% Milestone Motion & Styles */
 @keyframes hubProgressShimmer {
   0% { transform: translateX(-120%); opacity: 0; }
@@ -1002,6 +1029,15 @@
 .hub-app .hub-progress-track {
   position: relative;
   overflow: hidden;
+  border-radius: 999px;
+  background: var(--well, var(--surface-3));
+}
+
+.hub-app .hub-progress-bar {
+  height: 100%;
+  min-width: 0;
+  border-radius: 999px;
+  transition: width var(--dur-enter) var(--ease-hub);
 }
 
 .hub-app .hub-progress--completed {
