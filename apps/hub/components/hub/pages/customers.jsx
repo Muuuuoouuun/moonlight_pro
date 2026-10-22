@@ -26,7 +26,7 @@
 // 메모 모드는 휴대폰에서도 같다.
 
 import React from "react";
-import { OfficeWorkflowPanel } from '../office-workflow-panel';
+import { OfficeWorkflowPanel } from '../deferred-office-workflow-panel';
 import { RelatedCustomerProjects } from '../related-customer-projects';
 import { ContextMemoDrawer } from '../context-memo-drawer';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
