@@ -876,7 +876,7 @@
 }
 .hub-app .hub-seg::-webkit-scrollbar { display: none; }
 .hub-app .hub-seg__btn {
-  color: var(--fg-faint);
+  color: var(--fg-dim);
   background: transparent;
   border: 1px solid transparent;
   touch-action: manipulation;

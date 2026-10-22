@@ -919,7 +919,6 @@ function StatusLine({ state, onRetry }) {
       {sourceCount > 0 && (
         <button
           type="button"
-          aria-label={open ? '기록 상태 숨기기' : '기록 상태 펼치기'}
           aria-expanded={open}
           aria-controls="daily-brief-ledger-statuses"
           onClick={() => setOpen((o) => !o)}

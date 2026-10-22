@@ -136,7 +136,7 @@ export function BurningStreakBadge({
         <span className="mono" style={{ fontWeight: 600, color: sustained ? "var(--fg)" : "var(--fg-dim)" }}>
           {activeStreak}일
         </span>
-        <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>
+        <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>
           {activeStreak > 0 ? "연속" : "대기"}
         </span>
       </div>
@@ -170,7 +170,7 @@ export function BurningStreakBadge({
               </span>
             )}
           </div>
-          <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>
+          <span style={{ fontSize: 10.5, color: "var(--fg-dim)" }}>
             {sustained ? "오늘도 이어가는 중" : "하루 한 건 완료하면 이어집니다"}
           </span>
         </div>
