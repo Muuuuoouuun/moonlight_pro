@@ -729,7 +729,7 @@
     "ownedLocalServersStopped": true,
     "isolatedDatabaseHarnessRemoved": true,
     "auxiliaryFontAndTouchWorktreesRemoved": true,
-    "managedPrimaryWorktree": "ready to archive after final documentation fast-forward",
+    "managedPrimaryWorktree": "archived after final documentation fast-forward; app artifact is archived_worktree and checkout directory is removed",
     "protectedApplicationLedgerBackup": "retained outside worktrees; public and moonlight_ops only",
     "originalUserFilesPreserved": 3
   }
