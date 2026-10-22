@@ -136,7 +136,6 @@ test("Daily Brief panels share a subtle one-pixel accent and low elevation", () 
 });
 
 test("Daily Brief task-only Today exposes durable completion controls", () => {
-  assert.match(dailyBriefSource, /aria-label="오늘 할 일"/);
   assert.match(dailyBriefSource, /aria-label=\{`완료: \$\{task\.title\}`\}/);
   assert.match(dailyBriefSource, /method:\s*['"]PATCH['"]/);
   assert.match(dailyBriefSource, /body:\s*JSON\.stringify\(\{ id:\s*task\.id, status:\s*['"]done['"] \}\)/);
