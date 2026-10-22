@@ -21,7 +21,7 @@ function memory(){const values=new Map();return{getItem:key=>values.get(key)??nu
 const noAction=()=>{throw Error('unexpected unrelated action');};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function descendants(node){if(!node||typeof node!=='object')return[];return[node,...React.Children.toArray(node.props?.children).flatMap(descendants)];}
-function harness(storage,fetchImpl,readOverrides={}){
+function harness(storage,fetchImpl,readOverrides={},undoable={schedule:noAction,cancel:noAction}){
   const slots=[],effects=[],routes=[];let cursor=0;
   const hookReact={...React,
     useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value;}];},
@@ -30,13 +30,13 @@ function harness(storage,fetchImpl,readOverrides={}){
     useEffect(fn,deps){const i=cursor++;if(!(i in slots)){slots[i]=deps;effects.push(fn);}},
   };
   globalThis.window={sessionStorage:storage,localStorage:memory(),setTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{}};
-  globalThis.document={visibilityState:'visible',addEventListener:()=>{},removeEventListener:()=>{}};
+  globalThis.document={visibilityState:'visible',addEventListener:()=>{},removeEventListener:()=>{},getElementById:()=>null};
   globalThis.BroadcastChannel=undefined;globalThis.fetch=fetchImpl;
   const read={items:[],sources:{tasks:'live',deals:'live',calendar:'live'},projects:[],focusToday:null,state:'ready',reload:async()=>({items:[{lane:'task',entityId:'22222222-2222-4222-8222-222222222222',title:'합성 첫 요청',id:'wrong-row',bucket:'today'}]})};
   Object.assign(read,readOverrides);
   const scope={...primitives,...mute,React:hookReact,Iconed,createMyWorkQuickTask,clearSubmittedQuickTaskDraft,shouldSubmitQuickTask,MAX_FOCUS_PER_DAY,focusLimitMessage,
-    fetch:fetchImpl,useSearchParams:()=>new URLSearchParams(),useRouter:()=>({replace:path=>routes.push(path)}),usePathname:()=>'/dashboard/work/my',useToast:()=>({success:()=>{},error:()=>{}}),
-    useUndoableAction:()=>({schedule:noAction,cancel:noAction}),UNDO_WINDOW_MS:3500,JournalSources:()=>null,MeetingWatchCard:()=>null,TASK_PRIORITY_OPTIONS:[],TASK_STATUS_OPTIONS:[],TASK_OUTCOME:{},
+    fetch:fetchImpl,useSearchParams:()=>new URLSearchParams(),useRouter:()=>({replace:path=>routes.push(path)}),usePathname:()=>'/dashboard/work/my',useToast:()=>({success:()=>{},error:()=>{},info:()=>{}}),
+    useUndoableAction:()=>undoable,UNDO_WINDOW_MS:3500,JournalSources:()=>null,MeetingWatchCard:()=>null,TASK_PRIORITY_OPTIONS:[],TASK_STATUS_OPTIONS:[],TASK_OUTCOME:{},
     freezeTaskCommand:noAction,saveTaskCommand:noAction,triggerCelebration:noAction,triggerSparkleAt:noAction,requestPersonaChat:noAction,buildMyWorkChecklistToggle:noAction,readMyWorkChecklistReceipt:noAction};
   // read is intentionally passed as a real captured dependency, not a rewritten loader.
   const evaluate=new Function(...Object.keys(scope),'read',`${compiled}\nuseAttentionLedger=()=>read;return MyWork;`)(...Object.values(scope),read);
@@ -45,6 +45,25 @@ function harness(storage,fetchImpl,readOverrides={}){
   return {render,routes,input:()=>descendants(render()).find(n=>n.type==='input'&&n.props['aria-label']==='새 할 일 제목'),button:()=>descendants(render()).find(n=>n.props.onClick&&n.props.icon==='plus'),nodes:()=>descendants(render())};
 }
 async function pending(storage){const first=createMyWorkQuickTask({storage,getContext:async()=>CONTEXT,createId:()=>ID});await first.submit({title:'합성 첫 요청'},{fetchImpl:async()=>{throw new TypeError('synthetic lost');}});first.deactivate();}
+
+for(const undoAt of [0,100,250]) test(`actual MyWork keeps an undone row visible after Undo at ${undoAt}ms`,async(t)=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const item={lane:'task',entityId:ID,title:'합성 완료 복구',id:`task-${ID}`,bucket:'today'};
+  const scheduled=new Map();let writes=0;
+  const view=harness(memory(),async(url)=>{
+    if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:CONTEXT});
+    writes++;throw Error('Undo must not write');
+  },{items:[item]},{schedule:(key,run)=>scheduled.set(key,run),cancel:key=>scheduled.delete(key)});
+  await tick();
+  const row=()=>view.nodes().find(n=>n.props.item?.id===item.id&&n.props.onComplete);
+  assert.ok(row());row().props.onComplete(item);
+  t.mock.timers.tick(undoAt);
+  const undo=view.nodes().find(n=>n.props.onClick&&n.props.children==='되돌리기');assert.ok(undo);
+  undo.props.onClick();assert.ok(row(),'Undo restores the row immediately');
+  t.mock.timers.tick(400);
+  assert.ok(row(),'a late strike animation must not hide an undone row');
+  assert.equal(row().props.completing,false);assert.equal(scheduled.size,0);assert.equal(writes,0);
+});
 
 test('actual MyWork keeps capture blocked and input intact when the session has no recovery workspace',async()=>{
   const storage=memory();let posts=0;

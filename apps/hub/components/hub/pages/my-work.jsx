@@ -941,6 +941,11 @@ export function MyWork({ onNavigate }) {
   // fires when a timer runs out, so "되돌리기" is a real cancel, not a re-create.
   const [completingIds, setCompletingIds] = React.useState(() => new Set());
   const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
+  const completionVisualTimers = React.useRef(new Map());
+  React.useEffect(() => () => {
+    completionVisualTimers.current.forEach(clearTimeout);
+    completionVisualTimers.current.clear();
+  }, []);
   // 낙관적 기한 변경 오버레이 — PATCH 응답을 기다리지 않고 카드가 즉시 버킷을 옮긴다.
   // 배경 reload가 서버 진실로 덮으면 해당 패치를 걷어낸다.
   const [itemPatches, setItemPatches] = React.useState({});
@@ -1130,10 +1135,14 @@ export function MyWork({ onNavigate }) {
       }
     }
     setCompletingIds((s) => new Set(s).add(id));
-    setTimeout(() => {
+    clearTimeout(completionVisualTimers.current.get(id));
+    const visualTimer = setTimeout(() => {
+      if (completionVisualTimers.current.get(id) !== visualTimer) return;
+      completionVisualTimers.current.delete(id);
       setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
       setHiddenIds((s) => new Set(s).add(id));
     }, STRIKE_MS);
+    completionVisualTimers.current.set(id, visualTimer);
 
     // 이 완료로 남은 할 일이 없어지면 저장 확인 뒤 축하한다(persistComplete).
     const remainingTasks = visible.filter((i) => i.lane === 'task' && !hiddenIds.has(i.id) && !completingIds.has(i.id) && i.id !== id);
@@ -1153,6 +1162,9 @@ export function MyWork({ onNavigate }) {
   const undoComplete = (item) => {
     const id = item.id;
     if (!cancelUndoable(id)) return; // 창이 이미 닫혔으면 PATCH가 나갔다 — 되돌릴 수 없음
+    // 즉시 Undo 때도 뒤늦은 취소선 타이머가 복구한 행을 다시 숨기지 않는다.
+    clearTimeout(completionVisualTimers.current.get(id));
+    completionVisualTimers.current.delete(id);
     setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setHiddenIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setNotice({ tone: 'ok', label: '완료 취소됨' });
