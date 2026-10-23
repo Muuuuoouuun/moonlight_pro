@@ -119,7 +119,8 @@ test('production DailyBrief renders one navigable shortcut set for missing/live/
     assert.equal(navs.length, 1, 'the same shortcut set must remain visible exactly once');
     const jumps = findAll(navs[0], (n) => n.type === 'button');
     assert.equal(jumps.length, routes.length);
-    assert.equal(jumps[0].props['aria-label'], '내 작업: 5건 확인');
+    for (const jump of jumps) assert.equal(jump.props['aria-label'], undefined, 'native button names follow their visible label and detail');
+    assert.equal(text(jumps[0]), '내 작업5건 확인');
     app.navigations.length = 0;
     jumps.forEach((button) => button.props.onClick());
     assert.deepEqual(app.navigations, routes);
@@ -145,7 +146,7 @@ test('compact calendar keeps one state-appropriate CTA and truthful error/previe
     ['live', '캘린더 열기', '오늘 예정된 일정이 없습니다'],
   ]) {
     const tree = app.render(focusOf(state));
-    const card = findAll(tree, (n) => n.type === 'Card' && n.props['aria-label'] === '오늘 일정')[0];
+    const card = findAll(tree, (n) => n.type === 'Card' && text(n).includes('오늘 일정'))[0];
     const buttons = findAll(card, (n) => n.type === 'Button');
     assert.equal(buttons.length, 1, `${state}: calendar card has one CTA`);
     assert.equal(text(buttons[0]), label);
@@ -160,7 +161,7 @@ test('compact agenda exposes three events and an honest count for remaining even
   const items = Array.from({ length: 5 }, (_, i) => ({ id: `local-${i}`, outcomeKey: `original-${i}`, title: `합성 일정 ${i + 1}`, whenLabel: '09:00' }));
   const app = mount(focusOf('live', items));
   const tree = app.render();
-  const card = findAll(tree, (n) => n.type === 'Card' && n.props['aria-label'] === '오늘 일정')[0];
+  const card = findAll(tree, (n) => n.type === 'Card' && text(n).includes('오늘 일정'))[0];
   assert.deepEqual(findAll(card, (n) => n.type === 'CalendarOutcome').map((n) => n.props.title), items.slice(0, 3).map((n) => n.title));
   assert.ok(text(card).includes('일정 2건 더 보기'));
   const expand = findAll(card, node => node.type === 'Button' && node.props['aria-expanded'] === false)[0];
@@ -199,7 +200,8 @@ test('real React server render retains the accessible nav for every read state',
     const html = renderToStaticMarkup(React.createElement(DailyBrief, { onNavigate() {} }));
     assert.equal((html.match(/aria-label="Daily Brief 빠른 이동"/g) || []).length, 1);
     assert.equal((html.match(/class="daily-brief__jump"/g) || []).length, routes.length);
-    assert.match(html, /aria-label="내 작업: 5건 확인"/);
+    assert.doesNotMatch(html, /class="daily-brief__jump"[^>]*aria-label=/);
+    assert.match(html, /<strong>내 작업<\/strong><small>5건 확인<\/small>/);
   }
 });
 

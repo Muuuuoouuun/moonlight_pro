@@ -80,7 +80,7 @@ export function GuidanceInlineTip({ variant, context = null, onNavigate, now: fi
     <button
       type="button"
       className={`guidance-inline-tip hub-card-link${variant === 'home' ? ' guidance-inline-tip--home' : ''}`}
-      aria-label={`${kind} 자료 요약 · ${card.person} · ${card.text} · 상세 보기`}
+      title="상세 보기"
       onClick={() => onNavigate?.(href)}
     >
       <span className="guidance-inline-tip__kind">

@@ -310,6 +310,30 @@ test("insertSupabaseRecord accepts an array as one bulk POST", async () => {
   assert.deepEqual(result.records.map((r) => r.id), ["1", "2"]);
 });
 
+test('nonempty inserts cannot confirm persistence from an empty representation', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return jsonResponse([], { status: 201 }); };
+  for (const record of [{ title: 'test' }, [{ title: 'first' }, { title: 'second' }]]) {
+    const result = await insertSupabaseRecord('tasks', record, { returnRepresentation: true });
+    assert.equal(result.persisted, false);
+    assert.equal(result.reason, 'no-matching-row');
+    assert.deepEqual(result.records, []);
+  }
+  assert.equal(calls, 2, 'a write with no confirmed row must not be automatically repeated');
+});
+
+test('duplicate-ignoring upserts retain their valid empty representation outcome', async () => {
+  globalThis.fetch = async (_url, init) => {
+    assert.match(init.headers.prefer, /resolution=ignore-duplicates/);
+    return jsonResponse([]);
+  };
+  const result = await upsertSupabaseRecords('tasks', [{ id: 'one' }], {
+    ignoreDuplicates: true, returnRepresentation: true,
+  });
+  assert.equal(result.persisted, true);
+  assert.deepEqual(result.records, []);
+});
+
 test("insertSupabaseRecord maps unique violations to reason duplicate", async () => {
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ code: "23505", message: "duplicate key value violates unique constraint" }), {
@@ -326,7 +350,7 @@ test("empty bulk insert short-circuits without any HTTP call", async () => {
     throw new Error("must not fetch");
   };
 
-  const result = await insertSupabaseRecord("leads", []);
+  const result = await insertSupabaseRecord("leads", [], { returnRepresentation: true });
   assert.equal(result.persisted, true);
   assert.deepEqual(result.records, []);
 });
@@ -432,16 +456,36 @@ test("timeouts surface as reason timeout instead of hanging", async () => {
   }
 });
 
-test('opt-in strict rows distinguish malformed HTTP 200 payloads from an empty array', async () => {
-  for (const body of ['', 'not JSON', '{}', 'null', '{"error":"private detail"}']) {
+test('all table reads distinguish malformed HTTP 200 payloads from an empty array', async () => {
+  for (const body of ['', 'not JSON', '{}', 'null', '{"error":"private detail"}', '[null]', '[1]', '[[]]']) {
     globalThis.fetch = async () => new Response(body, { status: 200 });
-    const result = await fetchSupabaseRowsDetailed('discovery_records', { strictRows: true });
+    const result = await fetchSupabaseRowsDetailed('tasks');
     assert.equal(result.rows, null, body);
     assert.equal(result.error?.reason, 'invalid-rows');
-    assert.equal(result.error?.detail, 'Expected a JSON array.');
+    assert.equal(result.error?.detail, 'Expected a JSON array of records.');
     assert.equal(await fetchSupabaseRows('discovery_records', { strictRows: true }), null);
-    assert.deepEqual(await fetchSupabaseRows('legacy_records'), []);
+    assert.equal(await fetchSupabaseRows('tasks'), null);
   }
   globalThis.fetch = async () => jsonResponse([]);
   assert.deepEqual(await fetchSupabaseRows('discovery_records', { strictRows: true }), []);
+});
+
+test('malformed write representations never confirm persistence and are not retried', async () => {
+  for (const body of ['', 'not JSON', '{}', 'null', '[null]', '[1]', '[[]]']) {
+    let calls = 0;
+    globalThis.fetch = async () => { calls += 1; return new Response(body, { status: 200 }); };
+    const writes = [
+      () => insertSupabaseRecord('tasks', { title: 'test' }, { returnRepresentation: true }),
+      () => upsertSupabaseRecords('tasks', [{ title: 'test' }], { returnRepresentation: true }),
+      () => updateSupabaseRecord('tasks', [['id', 'eq.one']], { title: 'test' }, { returnRepresentation: true }),
+      () => deleteSupabaseRecord('tasks', [['id', 'eq.one']]),
+    ];
+    for (const write of writes) {
+      const result = await write();
+      assert.equal(result.persisted, false, body);
+      assert.equal(result.reason, 'invalid-rows', body);
+      assert.equal(result.detail, 'Expected a JSON array of records.');
+    }
+    assert.equal(calls, writes.length, 'an unconfirmed write must never be automatically repeated');
+  }
 });

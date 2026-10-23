@@ -385,19 +385,62 @@ export function Divider({ style }) {
 }
 
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
+  const activeRef = React.useRef(null);
+  React.useEffect(() => {
+    if (activeRef.current) {
+      const prefersReduced = typeof window !== 'undefined'
+        && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      activeRef.current.scrollIntoView({
+        inline: 'nearest',
+        block: 'nearest',
+        behavior: prefersReduced ? 'auto' : 'smooth',
+      });
+    }
+  }, [active]);
+
   return (
-    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
+    <div
+      className={className}
+      role="tablist"
+      aria-label={ariaLabel}
+      style={{
+        display: 'flex',
+        gap: 2,
+        borderBottom: '1px solid var(--line-soft)',
+        overflowX: 'auto',
+        scrollbarWidth: 'none',
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehaviorX: 'contain',
+        ...style,
+      }}
+    >
       {tabs.map(t => {
         const isActive = t.key === active;
         return (
-          <button key={t.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
-            padding: '8px 12px', fontSize: 12.5, fontWeight: 500,
-            color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
-            borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
-            marginBottom: -1,
-            transition: 'color var(--dur-hover) var(--ease-hub)',
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-          }}>
+          <button
+            key={t.key}
+            ref={isActive ? activeRef : undefined}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange?.(t.key)}
+            style={{
+              padding: '8px 12px',
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
+              borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
+              marginBottom: -1,
+              transition: 'color var(--dur-hover) var(--ease-hub)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
             {t.label}
             {t.count != null && (
               <span className="mono" style={{
@@ -895,7 +938,6 @@ export function TruthBadge({ state = 'error', label, reason, style }) {
   return (
     <span
       data-truth={state}
-      aria-label={`데이터 상태: ${fullLabel}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: '2px 6px', borderRadius: 999,
@@ -1068,7 +1110,7 @@ function isDrawerFocusTarget(element) {
 //     hub-compact-drawer.css). Above 600px it changes nothing.
 //   `headerAction` — one action at the trailing end of the header (the sheet's 저장, so the keyboard
 //     never covers it). Close moves to the leading end so the two targets are not neighbours.
-export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyle, headerAction = null, sheet = 'auto', initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyle, headerAction = null, sheet = 'auto', initialFocusRef, keyboardLayerRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
   const asideRef = React.useRef(null);
   const bodyRef = React.useRef(null);
   const compact = presentation === 'compact';
@@ -1082,14 +1124,22 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
   onCloseRef.current = onClose;
   React.useEffect(() => {
     const layer = pushEscLayer();
+    if (keyboardLayerRef) keyboardLayerRef.current = layer;
     const onKey = (e) => {
-      if (!isTopEscLayer(layer)) return;
-      if (e.key === 'Escape') onCloseRef.current?.();
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isTopEscLayer(layer)) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCloseRef.current?.();
+      }
       // Escaped focus cannot bubble through the aside's onKeyDown.
       else if (e.key === 'Tab' && !asideRef.current?.contains(document.activeElement)) handleKeyDown(e);
     };
     window.addEventListener('keydown', onKey);
-    return () => { window.removeEventListener('keydown', onKey); popEscLayer(layer); };
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      popEscLayer(layer);
+      if (keyboardLayerRef?.current === layer) keyboardLayerRef.current = null;
+    };
   }, []);
 
   // Focus the first field on mount; restore focus to the opener on unmount.
@@ -1129,6 +1179,23 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
 
+  let swipeStart = null;
+  const handleHeaderPointerDown = compact ? (e) => {
+    if (e.button != null && e.button !== 0) return;
+    if (typeof e.target?.closest === 'function' && e.target.closest('button, [role="button"], a, input, select, textarea')) return;
+    swipeStart = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  } : undefined;
+  const handleHeaderPointerUp = compact ? (e) => {
+    if (!swipeStart || (e.pointerId != null && swipeStart.id != null && e.pointerId !== swipeStart.id)) return;
+    const dy = (e.clientY ?? 0) - (swipeStart.y ?? 0);
+    const dx = Math.abs((e.clientX ?? 0) - (swipeStart.x ?? 0));
+    swipeStart = null;
+    if (dy >= 56 && dy > dx * 1.2) {
+      onCloseRef.current?.();
+    }
+  } : undefined;
+  const handleHeaderPointerCancel = compact ? () => { swipeStart = null; } : undefined;
+
   return (
     <>
       <div className="hub-drawer-overlay" data-presentation={presentation} data-exiting={exiting} aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-drawer-overlay)' }} />
@@ -1152,7 +1219,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
           }),
         }}
       >
-        <div className="hub-drawer__header" data-action={headerAction ? '' : undefined} style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="hub-drawer__header" data-action={headerAction ? '' : undefined} onPointerDown={handleHeaderPointerDown} onPointerUp={handleHeaderPointerUp} onPointerCancel={handleHeaderPointerCancel} style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           {headerAction && <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: '-10px 0 -10px -10px' }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
@@ -1212,6 +1279,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   const [optionalOpen, setOptionalOpen] = React.useState(false);
   const confirmCancelRef = React.useRef(null);
   const firstFieldRef = React.useRef(null);
+  const keyboardLayerRef = React.useRef(null);
   const savingRef = React.useRef(false);
   const initialRecordSignatureRef = React.useRef(null);
   const recordIdentity = record?.id ?? record?.clientId ?? (record ? '__anonymous__' : null);
@@ -1314,6 +1382,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   React.useEffect(() => {
     if (!record) return undefined;
     const onKey = (e) => {
+      if (e.defaultPrevented || !isTopEscLayer(keyboardLayerRef.current)) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); handleDoneRef.current?.(); }
     };
     window.addEventListener('keydown', onKey);
@@ -1429,6 +1498,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       width={width}
       presentation={presentation}
       initialFocusRef={hasPanels ? firstFieldRef : undefined}
+      keyboardLayerRef={keyboardLayerRef}
       footer={
         confirming ? (
           <>

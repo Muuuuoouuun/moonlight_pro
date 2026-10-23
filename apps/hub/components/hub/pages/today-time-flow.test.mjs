@@ -146,3 +146,11 @@ test('partial timeline labels the next known start rather than claiming the true
   const next = rows(tree).find(row => row.props['data-next']);
   assert.equal(find(next, node => node.type === 'span')[0].props.children[0], '읽힌 일정 중 다음 시작');
 });
+
+
+test('the named schedule card exposes group semantics for its accessible name', () => {
+  const tree = mount([], '2026-10-20T10:30:00+09:00').render();
+  const card = find(tree, node => node.type === 'Card')[0];
+  assert.equal(card.props.role, 'group');
+  assert.equal(card.props['aria-label'], '오늘 일정');
+});

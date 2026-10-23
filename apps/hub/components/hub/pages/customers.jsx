@@ -28,7 +28,7 @@
 import React from "react";
 import { newRevenueCreateId } from '@/lib/sales-os/revenue-create-command';
 import { pendingRevenueCreates, rememberRevenueDraft } from './revenue-create-client';
-import { OfficeWorkflowPanel } from '../office-workflow-panel';
+import { OfficeWorkflowPanel } from '../deferred-office-workflow-panel';
 import { RelatedCustomerProjects } from '../related-customer-projects';
 import { ContextMemoDrawer } from '../context-memo-drawer';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";

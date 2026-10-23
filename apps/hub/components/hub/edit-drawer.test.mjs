@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
+import { isTopEscLayer, popEscLayer, pushEscLayer } from './esc-layers.js';
 
 // Exercise the real field, footer, and window shortcut handlers without persistence.
 const source = readFileSync(new URL('./hub-primitives.jsx', import.meta.url), 'utf8');
@@ -10,9 +11,9 @@ const javascript = ts.transpileModule(component.replace('export function EditDra
   compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete } = {}) {
+function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete, initialRecord = { id: 'drawer-keyboard', note: '' } } = {}) {
   const slots = [], effects = [], listeners = new Set();
-  let index = 0, tree, closed = 0, record = { id: 'drawer-keyboard', note: '' };
+  let index = 0, tree, closed = 0, record = initialRecord;
   const React = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
     useState: initial => {
@@ -33,7 +34,9 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
     React, DRAWER_INPUT_STYLE: {}, Drawer: 'Drawer', Button: 'Button', Tabs: 'Tabs', ChipToggle: 'ChipToggle',
     requestAnimationFrame: () => 1, cancelAnimationFrame() {},
     window: { addEventListener: (_, listener) => listeners.add(listener), removeEventListener: (_, listener) => listeners.delete(listener) },
+    isTopEscLayer,
   };
+  const layer = pushEscLayer();
   const EditDrawer = new Function(...Object.keys(dependencies), `${javascript}; return EditDrawer;`)(...Object.values(dependencies));
   function render() {
     index = 0;
@@ -43,6 +46,7 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
       onClose: () => { closed++; }, onSave, onDelete,
     });
     effects.splice(0).forEach(effect => effect());
+    if (tree?.props.keyboardLayerRef) tree.props.keyboardLayerRef.current = layer;
     return tree;
   }
   function findAll(predicate, node = tree) {
@@ -53,6 +57,8 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
   render();
   return {
     render, findAll, closed: () => closed,
+    shortcutCount: () => listeners.size,
+    unmount: () => { slots.forEach(slot => slot?.cleanup?.()); popEscLayer(layer); },
     close: () => tree.props.onClose(),
     key: overrides => listeners.forEach(listener => listener({ key: 'Enter', metaKey: true, preventDefault() {}, ...overrides })),
   };
@@ -60,8 +66,9 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
 
 const button = (app, label) => app.findAll(node => node.type === 'Button' && node.props.children.includes(label))[0];
 
-test('conflict keeps the drawer and input open with explicit retry guidance', async () => {
+test('conflict keeps the drawer and input open with explicit retry guidance', async t => {
   const app = mount({ onSave: async () => ({ ok: false, status: 'conflict' }) });
+  t.after(app.unmount);
   app.findAll(node => node.type === 'textarea')[0].props.onChange({ target: { value: '보존할 합성 입력' } });
   app.render(); app.key(); await Promise.resolve(); app.render();
   assert.equal(app.closed(), 0);
@@ -69,9 +76,24 @@ test('conflict keeps the drawer and input open with explicit retry guidance', as
   assert.match(JSON.stringify(app.findAll(node => node.type === 'span')), /입력을 유지.*기록을 확인.*다시 시도/);
 });
 
-test('Cmd/Ctrl+Enter cannot bypass discard confirmation; continuing editing restores save', async () => {
+test('the save shortcut is bound only for an open record and removed on unmount', async () => {
+  let saves = 0;
+  const closed = mount({ initialRecord: null, onSave: async () => { saves++; } });
+  try {
+    assert.equal(closed.shortcutCount(), 0);
+    closed.key(); await Promise.resolve();
+    assert.equal(saves, 0);
+  } finally { closed.unmount(); }
+  const open = mount();
+  try { assert.equal(open.shortcutCount(), 1); }
+  finally { open.unmount(); }
+  assert.equal(open.shortcutCount(), 0);
+});
+
+test('Cmd/Ctrl+Enter cannot bypass discard confirmation; continuing editing restores save', async t => {
   let saves = 0;
   const app = mount({ onSave: async () => { saves++; return { ok: false, status: 'error' }; } });
+  t.after(app.unmount);
   app.findAll(node => node.type === 'textarea')[0].props.onChange({ target: { value: '작성 중인 내용' } });
   app.render(); app.close(); app.render();
   assert.ok(button(app, '버리고 닫기'));
@@ -85,12 +107,30 @@ test('Cmd/Ctrl+Enter cannot bypass discard confirmation; continuing editing rest
   assert.equal(saves, 1);
 });
 
-test('save shortcut leaves delete confirmation intact until the explicit delete action', async () => {
+test('a higher dialog owns Cmd/Ctrl+Enter and cannot save the obscured editor', async t => {
+  let saves = 0;
+  const app = mount({ onSave: async () => { saves++; return { ok: false, status: 'error' }; } });
+  t.after(app.unmount);
+  const palette = pushEscLayer();
+  try {
+    app.key(); app.key({ metaKey: false, ctrlKey: true });
+    await Promise.resolve();
+    assert.equal(saves, 0);
+  } finally { popEscLayer(palette); }
+  app.key({ defaultPrevented: true });
+  await Promise.resolve();
+  assert.equal(saves, 0, 'a consumed keyboard event cannot save the editor');
+  app.key(); await Promise.resolve();
+  assert.equal(saves, 1, 'editor owns the shortcut again after the upper dialog closes');
+});
+
+test('save shortcut leaves delete confirmation intact until the explicit delete action', async t => {
   let saves = 0, deletes = 0;
   const app = mount({
     onSave: async () => { saves++; return { ok: false, status: 'error' }; },
     onDelete: async () => { deletes++; return { ok: true, status: 'saved' }; },
   });
+  t.after(app.unmount);
   button(app, '삭제').props.onClick(); app.render();
   app.key(); await Promise.resolve();
   assert.equal(saves, 0);
@@ -101,9 +141,10 @@ test('save shortcut leaves delete confirmation intact until the explicit delete 
   assert.equal(app.closed(), 1);
 });
 
-test('save shortcut still ignores IME composition and duplicate in-flight submissions', async () => {
+test('save shortcut still ignores IME composition and duplicate in-flight submissions', async t => {
   let saves = 0, finish;
   const app = mount({ onSave: () => { saves++; return new Promise(resolve => { finish = resolve; }); } });
+  t.after(app.unmount);
   app.key({ isComposing: true }); app.key({ keyCode: 229 });
   assert.equal(saves, 0);
   app.key({ metaKey: false, ctrlKey: true }); app.render(); app.key();

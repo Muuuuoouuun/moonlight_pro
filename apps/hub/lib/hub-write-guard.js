@@ -160,36 +160,34 @@ export function assertHubWriteAllowed(req) {
 }
 
 export async function readHubWriteJson(req, { maxBytes = DEFAULT_MAX_JSON_BYTES } = {}) {
-  const contentLength = Number.parseInt(req.headers.get("content-length") || "0", 10);
+  const tooLarge = () => ({
+    error: NextResponse.json(
+      {
+        status: "payload-too-large",
+        error: `JSON payload must be ${maxBytes} bytes or smaller.`,
+      },
+      { status: 413 },
+    ),
+  });
+  const contentLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) return tooLarge();
 
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    return {
-      error: NextResponse.json(
-        {
-          status: "payload-too-large",
-          error: `JSON payload must be ${maxBytes} bytes or smaller.`,
-        },
-        { status: 413 },
-      ),
-    };
-  }
-
-  const text = await req.text();
-
-  const byteLength = Buffer.byteLength(text, "utf8");
-  if (byteLength > maxBytes) {
-    return {
-      error: NextResponse.json(
-        {
-          status: "payload-too-large",
-          error: `JSON payload must be ${maxBytes} bytes or smaller.`,
-        },
-        { status: 413 },
-      ),
-    };
-  }
-
+  let reader;
   try {
+    reader = req.body?.getReader();
+    const chunks = [];
+    let byteLength = 0;
+    while (reader) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      byteLength += value.byteLength;
+      if (byteLength > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return tooLarge();
+      }
+      chunks.push(value);
+    }
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
     return {
       data: text ? JSON.parse(text) : {},
       byteLength,
@@ -204,5 +202,7 @@ export async function readHubWriteJson(req, { maxBytes = DEFAULT_MAX_JSON_BYTES 
         { status: 400 },
       ),
     };
+  } finally {
+    reader?.releaseLock();
   }
 }

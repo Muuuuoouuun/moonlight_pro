@@ -64,7 +64,7 @@ export function summarizeAiUsage(rows, windows) {
     const slot = ["current", "previous"].find((name) => time >= Date.parse(windows[name].from) && time < Date.parse(windows[name].to));
     if (!slot) continue;
     const model = typeof row.model === "string" && row.model ? row.model : "unknown";
-    const costUsd = estimateCallCostUsd({ model, promptTokens: count(row.prompt_tokens), outputTokens: count(row.output_tokens), thinkingTokens: count(row.thinking_tokens) });
+    const costUsd = estimateCallCostUsd({ model, at, promptTokens: count(row.prompt_tokens), outputTokens: count(row.output_tokens), thinkingTokens: count(row.thinking_tokens) });
     const month = months[slot];
     addRow(month.totals, row, costUsd);
     if (!month.models.has(model)) month.models.set(model, emptyTotals());
@@ -90,7 +90,8 @@ export async function readAiUsage({
   const windows = kstMonthWindows(now);
   const meta = {
     scope: "moonlight-calls",
-    pricing: { ...AI_PRICING_SOURCE, usdKrw: USD_KRW.rate, usdKrwCheckedAt: USD_KRW.checkedAt },
+    pricing: { ...AI_PRICING_SOURCE, usdKrw: USD_KRW.rate, usdKrwCheckedAt: USD_KRW.checkedAt,
+      usdKrwObservedAt: USD_KRW.observedAt, usdKrwReleasedAt: USD_KRW.releasedAt, usdKrwSource: USD_KRW.source },
   };
   if (!workspaceId) return { status: "preview", source: "preview", ...meta };
   const rows = [];

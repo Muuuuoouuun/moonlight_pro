@@ -1,6 +1,6 @@
 // Gemini multimodal: photo/audio/text -> structured fields. Raw fetch, no SDK.
 import { getGenaiStatus, prepareGenaiRequest, resolveGenaiApiKey } from '@com-moon/genai-transport';
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 export const MAX_MULTIMODAL_MEDIA_BYTES = 14 * 1024 * 1024;
 // 14 MiB becomes 19,573,420 base64 bytes, leaving room for JSON and prompts

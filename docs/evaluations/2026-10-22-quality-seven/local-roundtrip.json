@@ -1,0 +1,40 @@
+{
+  "normalTaskCount": 1,
+  "recoveredTaskCount": 1,
+  "allTasks": 2,
+  "contactCount": 1,
+  "contactNextActionMatches": true,
+  "linkedContactActivities": 1,
+  "totalContactActivities": 1,
+  "journalCount": 1,
+  "journalContentMatches": true,
+  "journalReceiptCount": 1,
+  "journalReceiptSaved": true,
+  "mutationReceiptCount": 0,
+  "backupArchiveUnchanged": true,
+  "checkedAt": "2026-10-22T15:34:30.508Z",
+  "passed": true,
+  "sourceHead": "34ff2ea4f53a5a2eb5173244ab520baa45518a70",
+  "database": "isolated PostgreSQL 17.10 / PostgREST 14.18",
+  "runtime": "Next development, 1440x1000",
+  "basicFlowsPassed": 3,
+  "lostResponseRecoveryPassed": true,
+  "coldContactInputMs": 277,
+  "coldContactSamples": 1,
+  "productionWrites": 0,
+  "cleanup": {
+    "checkedAt": "2026-10-22T15:35:39.935Z",
+    "browserClosed": true,
+    "postgresStopped": true,
+    "portsClosed": {
+      "19441": true,
+      "19442": true,
+      "19443": true,
+      "19444": true
+    },
+    "privateRuntimeRemoved": true,
+    "preserved": "Only sanitized evidence and screenshots of locally created QA records",
+    "sourceWorktreeRemovalPending": false,
+    "sourceWorktreeRemoved": true
+  }
+}

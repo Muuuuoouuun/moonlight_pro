@@ -1,0 +1,142 @@
+{
+  "baseline": "caa200cf",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "touch": true
+  },
+  "runtime": {
+    "next": "production",
+    "database": "PostgreSQL17.10",
+    "rest": "PostgREST14.18"
+  },
+  "flowsPassed": [
+    "task create, View, reload and rediscovery",
+    "contact summary, next action and date",
+    "two-line memo after closing browser and new login"
+  ],
+  "undoFixedProduction": {
+    "source": "212d68060a57b193f9dc466ec7cdfcb1ae4fab33",
+    "base": "caa200cf",
+    "patches": [
+      "e2cc44d8",
+      "64569953"
+    ],
+    "productionRebuilt": true,
+    "cssInjected": false,
+    "undoTrials": [
+      {
+        "requestedDelayMs": 0,
+        "observedClickGapMs": 47.60000002384186,
+        "visible300": true,
+        "visible3600": true,
+        "patchCount": 0,
+        "sql": {
+          "rows": 1,
+          "todo": true
+        }
+      },
+      {
+        "requestedDelayMs": 50,
+        "observedClickGapMs": 102.79999995231628,
+        "visible300": true,
+        "visible3600": true,
+        "patchCount": 0,
+        "sql": {
+          "rows": 1,
+          "todo": true
+        }
+      },
+      {
+        "requestedDelayMs": 100,
+        "observedClickGapMs": 154.69999992847443,
+        "visible300": true,
+        "visible3600": true,
+        "patchCount": 0,
+        "sql": {
+          "rows": 1,
+          "todo": true
+        }
+      },
+      {
+        "requestedDelayMs": 10,
+        "observedClickGapMs": 67.70000004768372,
+        "visible300": true,
+        "visible3600": true,
+        "patchCount": 0,
+        "sql": {
+          "rows": 1,
+          "todo": true
+        }
+      },
+      {
+        "requestedDelayMs": 20,
+        "observedClickGapMs": 67.29999995231628,
+        "visible300": true,
+        "visible3600": true,
+        "patchCount": 0,
+        "sql": {
+          "rows": 1,
+          "todo": true
+        }
+      }
+    ],
+    "within100msTrials": 3,
+    "normalCompletion": {
+      "productionBoundary": {
+        "x": 67,
+        "y": 735.1875,
+        "hit": true,
+        "pseudoWidth": "44px"
+      },
+      "http": 200,
+      "status": "saved",
+      "patchCount": 1,
+      "sql": {
+        "rows": 1,
+        "done": true
+      }
+    },
+    "errors": [],
+    "completedAt": "2026-10-22T17:16:09.887Z"
+  },
+  "finalSql": {
+    "tasks": 3,
+    "completedTasks": 3,
+    "leads": 1,
+    "activities": 1,
+    "journal": 1,
+    "receipts": 1,
+    "memoUnchanged": true,
+    "contactUnchanged": true,
+    "backupUnchanged": true,
+    "at": "2026-10-22T17:16:54.742Z"
+  },
+  "cleanup": {
+    "at": "2026-10-22T17:17:33.281Z",
+    "portsClosed": [
+      19451,
+      19452,
+      19453,
+      19454
+    ],
+    "postgresPidFileAbsent": true,
+    "runtimeDeleted": true,
+    "browserClosed": true,
+    "sourceBackupRetained": true,
+    "directoryMode": "700",
+    "sourceBackupRemoved": false,
+    "worktreeRemoved": true,
+    "preservedBranch": "codex/quality-mobile-roundtrip-20261023",
+    "preservedCommit": "212d68060a57b193f9dc466ec7cdfcb1ae4fab33"
+  },
+  "productionBusinessWrites": 0,
+  "limitations": [
+    "Emulation, not real mobile keyboard",
+    "Local PostgreSQL17.10, not production17.11",
+    "Rounded Card bottom-left extreme checkbox corner remains clipped",
+    "Not human workflow effectiveness or long-term omission rate"
+  ],
+  "equivalentUndoAndCheckboxSource": "2efb3c3d",
+  "equivalenceScope": "Only my-work.jsx, my-work-quick-recovery.test.mjs and hub-tokens.css plus the Undo/checkbox patch IDs match; 212d6806 excludes the separate cf9a97cc compression change."
+}

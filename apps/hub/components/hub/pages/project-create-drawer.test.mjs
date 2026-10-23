@@ -187,9 +187,9 @@ test("project detail reads back the deal backlink without adding a deal field to
   assert.doesNotMatch(createDrawerSource, /originDealId|dealId/);
 });
 
-test("EditDrawer only binds its save shortcut for an open record and blocks re-entry", () => {
-  assert.match(primitivesSource, /if \(!record\) return[\s\S]{0,240}addEventListener\('keydown'/);
-  assert.match(primitivesSource, /savingRef\.current/);
+test("EditDrawer supports multiline project fields", () => {
+  // Shortcut mount/unmount and in-flight re-entry run the actual component handlers
+  // in ../edit-drawer.test.mjs; their contract does not depend on source length.
   assert.match(primitivesSource, /f\.type === 'textarea'/);
 });
 

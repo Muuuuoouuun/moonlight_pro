@@ -93,7 +93,7 @@ export const SOURCE_PEOPLE = [
     "collection": "marketing",
     "personId": "seth-godin",
     "name": "Seth Godin",
-    "charCount": 2928
+    "charCount": 8851
   },
   {
     "entryId": "marketing.david-ogilvy",
@@ -114,14 +114,14 @@ export const SOURCE_PEOPLE = [
     "collection": "content",
     "personId": "kane-kallaway",
     "name": "Kane Kallaway",
-    "charCount": 5007
+    "charCount": 59898
   },
   {
     "entryId": "content.alex-hormozi",
     "collection": "content",
     "personId": "alex-hormozi",
     "name": "Alex Hormozi",
-    "charCount": 4224
+    "charCount": 9447
   },
   {
     "entryId": "content.mrbeast",

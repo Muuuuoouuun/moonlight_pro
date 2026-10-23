@@ -14,7 +14,7 @@ export interface SupabaseQueryOptions {
   timeoutMs?: number;
   /** Set false to bypass in-flight GET dedup for this call. */
   dedupe?: boolean;
-  /** Reject successful non-array or invalid JSON payloads instead of treating them as empty. */
+  /** @deprecated All table reads now reject malformed row payloads. Retained for source compatibility. */
   strictRows?: boolean;
   /** "exact" adds Prefer: count=exact and fills `count` in the detailed result. */
   count?: "exact";

@@ -25,6 +25,12 @@ const nextConfig = {
     return [{
       source: "/fonts/:path*",
       headers: [{ key: "Cache-Control", value: "public, max-age=2592000, stale-while-revalidate=604800" }],
+    }, {
+      // Next 16 App Route의 Content-Type 배열은 기본 압축기가 거부한다. 이 JSON read에
+      // 문자열 헤더를 먼저 설정해 자체 호스팅에서도 Next의 압축 협상을 그대로 쓴다.
+      // Vercel은 이미 응답을 압축하므로 CDN 성능 개선이나 별도 캐시 정책은 아니다.
+      source: "/api/hub/revenue",
+      headers: [{ key: "Content-Type", value: "application/json" }],
     }];
   },
   // QA/secondary dev instances set NEXT_DIST_DIR (e.g. ".next.qa") so they

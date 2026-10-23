@@ -58,6 +58,9 @@ export function createRevenueLedgerCache({ fetcher = (...args) => fetch(...args)
       return await Promise.race([interrupted, (async () => {
         if (controller.signal.aborted) throw Error('revenue-read-aborted');
         const response = await fetcher('/api/hub/revenue', { cache: 'no-store', signal: controller.signal });
+        if (response.status === 401 || response.status === 403) {
+          throw Object.assign(Error('revenue-access-denied'), { accessDenied: true });
+        }
         if (!response.ok || controller.signal.aborted) throw Error('revenue-read-failed');
         return revenueSnapshot(await response.json(), now());
       })()]);
@@ -86,8 +89,14 @@ export function createRevenueLedgerCache({ fetcher = (...args) => fetch(...args)
             const next = await request(work);
             if (pending === work) publish(next);
             break;
-          } catch {
+          } catch (error) {
             if (pending !== work) break;
+            // Session loss is not a temporary transport failure: discard private
+            // rows immediately and wait for an explicit read after signing in.
+            if (error?.accessDenied) {
+              publish({ ...INITIAL_SNAPSHOT, syncState: 'error' });
+              break;
+            }
             if (attempt === 0) {
               await retryPause(work);
             } else {

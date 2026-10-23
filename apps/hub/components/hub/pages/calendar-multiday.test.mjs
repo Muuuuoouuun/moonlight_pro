@@ -53,9 +53,10 @@ function mountedCalendar(events, { mode = 'week', selectedDate = new Date(2026, 
   const find = (tree, predicate) => {
     if (!tree || typeof tree !== 'object') return [];
     if (Array.isArray(tree)) return tree.flatMap(child => find(child, predicate));
+    if (tree.type === CalendarAgenda) return find(CalendarAgenda(tree.props), predicate);
     return [...(predicate(tree) ? [tree] : []), ...find(tree.props?.children, predicate)];
   };
-  const buttons = tree => find(tree, node => node.type === 'button' && node.props.className === 'hub-card-link');
+  const buttons = tree => find(tree, node => node.type === 'button' && ['hub-card-link', 'calendar-agenda__event hub-row'].includes(node.props.className));
   const outcomes = tree => find(tree, node => node.type === Outcome);
   return { render, buttons, outcomes };
 }
@@ -122,4 +123,19 @@ test('midnight/01:00 ends do not create an extra full-day card', () => {
   const early = mountedCalendar([event({ start: '2026-10-05T17:00:00', end: '2026-10-06T01:00:00' })]);
   assert.equal(early.buttons(early.render()).length, 2, 'the actual 00–01 segment is now visible, not a full-day extension');
   assert.equal(early.buttons(early.render())[1].props.style.height, 50);
+});
+
+test('Calendar agenda view renders vertical day list without time grid and opens outcome drawer on tap', () => {
+  const input = event({ start: '2026-10-05T09:00:00', end: '2026-10-05T10:00:00' });
+  const harness = mountedCalendar([input], { mode: 'agenda' });
+  const tree = harness.render();
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /class="calendar-agenda\b/);
+  assert.doesNotMatch(html, /class="hub-calendar-grid/);
+  const cards = harness.buttons(tree);
+  assert.equal(cards.length, 1);
+  cards[0].props.onClick();
+  const [outcome] = harness.outcomes(harness.render());
+  assert.equal(outcome.props.eventKey, input.outcomeKey);
+  assert.equal(outcome.props.whenLabel, '9:00 – 10:00');
 });

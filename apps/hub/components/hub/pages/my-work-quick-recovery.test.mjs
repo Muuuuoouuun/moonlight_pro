@@ -23,29 +23,62 @@ function memory(){const values=new Map();return{getItem:key=>values.get(key)??nu
 const noAction=()=>{throw Error('unexpected unrelated action');};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function descendants(node){if(!node||typeof node!=='object')return[];return[node,...React.Children.toArray(node.props?.children).flatMap(descendants)];}
-function harness(storage,fetchImpl){
-  const slots=[],effects=[];let cursor=0;
+function harness(storage,fetchImpl,readOverrides={},undoable={schedule:noAction,cancel:noAction}){
+  const slots=[],effects=[],routes=[];let cursor=0,searchParams=new URLSearchParams();
   const hookReact={...React,
     useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value;}];},
     useRef(initial){const i=cursor++;if(!(i in slots))slots[i]={current:initial};return slots[i];},
     useMemo:fn=>fn(),useCallback:fn=>fn,
     useEffect(fn,deps){const i=cursor++;if(!(i in slots)){slots[i]=deps;effects.push(fn);}},
   };
-  globalThis.window={sessionStorage:storage,localStorage:memory(),addEventListener:()=>{},removeEventListener:()=>{}};
-  globalThis.document={visibilityState:'visible',addEventListener:()=>{},removeEventListener:()=>{}};
+  globalThis.window={sessionStorage:storage,localStorage:memory(),setTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{}};
+  globalThis.document={visibilityState:'visible',addEventListener:()=>{},removeEventListener:()=>{},getElementById:()=>null};
   globalThis.BroadcastChannel=undefined;globalThis.fetch=fetchImpl;
   const read={items:[],sources:{tasks:'live',deals:'live',calendar:'live'},projects:[],focusToday:null,state:'ready',reload:async()=>({items:[{lane:'task',entityId:'22222222-2222-4222-8222-222222222222',title:'합성 첫 요청',id:'wrong-row',bucket:'today'}]})};
+  Object.assign(read,readOverrides);
   const scope={...primitives,...mute,React:hookReact,Iconed,createMyWorkQuickTask,clearSubmittedQuickTaskDraft,shouldSubmitQuickTask,MAX_FOCUS_PER_DAY,focusLimitMessage,
-    fetch:fetchImpl,useSearchParams:()=>new URLSearchParams(),useRouter:()=>({replace:noAction}),usePathname:()=>'/dashboard/work/my',useToast:()=>({success:()=>{},error:()=>{}}),
-    useUndoableAction:()=>({schedule:noAction,cancel:noAction}),UNDO_WINDOW_MS:3500,JournalSources:()=>null,MeetingWatchCard:()=>null,MyWorkNow:()=>null,buildNowModel,TASK_PRIORITY_OPTIONS:[],TASK_STATUS_OPTIONS:[],TASK_OUTCOME:{},
+    fetch:fetchImpl,useSearchParams:()=>searchParams,useRouter:()=>({replace:path=>{routes.push(path);searchParams=new URL(path,"http://localhost").searchParams;}}),usePathname:()=>'/dashboard/work/my',useToast:()=>({success:()=>{},error:()=>{},info:()=>{}}),
+    useUndoableAction:()=>undoable,UNDO_WINDOW_MS:3500,JournalSources:()=>null,MeetingWatchCard:()=>null,MyWorkNow:()=>null,buildNowModel,TASK_PRIORITY_OPTIONS:[],TASK_STATUS_OPTIONS:[],TASK_OUTCOME:{},
     freezeTaskCommand:noAction,saveTaskCommand:noAction,triggerCelebration:noAction,triggerSparkleAt:noAction,requestPersonaChat:noAction,buildMyWorkChecklistToggle:noAction,readMyWorkChecklistReceipt:noAction};
   // read is intentionally passed as a real captured dependency, not a rewritten loader.
   const evaluate=new Function(...Object.keys(scope),'read',`${compiled}\nuseAttentionLedger=()=>read;return MyWork;`)(...Object.values(scope),read);
   const render=()=>{cursor=0;return evaluate({onNavigate:noAction});};
   render();for(const effect of effects.splice(0)){const cleanup=effect();if(cleanup)cleanups.push(cleanup);}
-  return {render,input:()=>descendants(render()).find(n=>n.type==='input'&&n.props['aria-label']==='새 할 일 제목'),button:()=>descendants(render()).find(n=>n.props.onClick&&n.props.icon==='plus'),nodes:()=>descendants(render())};
+  return {render,routes,input:()=>descendants(render()).find(n=>n.type==='input'&&n.props['aria-label']==='새 할 일 제목'),button:()=>descendants(render()).find(n=>n.props.onClick&&n.props.icon==='plus'),nodes:()=>descendants(render())};
 }
 async function pending(storage){const first=createMyWorkQuickTask({storage,getContext:async()=>CONTEXT,createId:()=>ID});await first.submit({title:'합성 첫 요청'},{fetchImpl:async()=>{throw new TypeError('synthetic lost');}});first.deactivate();}
+
+for(const undoAt of [0,100,250]) test(`actual MyWork keeps an undone row visible after Undo at ${undoAt}ms`,async(t)=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const item={lane:'task',entityId:ID,title:'합성 완료 복구',id:`task-${ID}`,bucket:'today'};
+  const scheduled=new Map();let writes=0;
+  const view=harness(memory(),async(url)=>{
+    if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:CONTEXT});
+    writes++;throw Error('Undo must not write');
+  },{items:[item]},{schedule:(key,run)=>scheduled.set(key,run),cancel:key=>scheduled.delete(key)});
+  await tick();
+  view.nodes().find(n=>n.props.label==='보기 렌즈').props.onChange('list');
+  const row=()=>view.nodes().find(n=>n.props.item?.id===item.id&&n.props.onComplete);
+  assert.ok(row());row().props.onComplete(item);
+  t.mock.timers.tick(undoAt);
+  const undo=view.nodes().find(n=>n.props.onClick&&n.props.children==='되돌리기');assert.ok(undo);
+  undo.props.onClick();assert.ok(row(),'Undo restores the row immediately');
+  t.mock.timers.tick(400);
+  assert.ok(row(),'a late strike animation must not hide an undone row');
+  assert.equal(row().props.completing,false);assert.equal(scheduled.size,0);assert.equal(writes,0);
+});
+
+test('actual MyWork keeps capture blocked and input intact when the session has no recovery workspace',async()=>{
+  const storage=memory();let posts=0;
+  const view=harness(storage,async(url)=>{if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:null});posts++;throw Error('unexpected POST');});
+  await tick();view.input().props.onChange({target:{value:'합성 보관할 입력'}});
+  assert.equal(view.button().props.disabled,true);
+  const notice=view.nodes().find(n=>typeof n.props.children==='string'&&/로그인.*작업 범위/.test(n.props.children));
+  assert.ok(notice);assert.doesNotMatch(notice.props.children,/브라우저 복구 기록|저장 공간/);
+  const retry=view.nodes().find(n=>n.props.onClick&&n.props.children==='다시 확인');assert.ok(retry);
+  await retry.props.onClick();await view.button().props.onClick();
+  assert.equal(view.button().props.disabled,true);assert.equal(posts,0);assert.equal(view.input().props.value,'합성 보관할 입력');
+});
 
 test('actual MyWork mount restores pending without POST and can verify an empty input',async()=>{
   const storage=memory();await pending(storage);let posts=0;
@@ -68,6 +101,30 @@ test('actual MyWork owner change clears prior input and suppresses a late saved 
   const view=harness(storage,async(url,options)=>{if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:context});const p=JSON.parse(options.body);return new Promise(r=>{resolve=()=>r(Response.json({status:'saved',task:{id:p.id,workspace_id:WORK,title:p.title,status:"todo",priority:p.priority||"medium",due_at:p.dueAt?new Date(p.dueAt).toISOString():null}}));});});await tick();
   view.input().props.onChange({target:{value:'합성 이전 입력'}});const request=view.button().props.onClick();await tick();context={...CONTEXT,ownerKey:'b'.repeat(64)};resolve();await request;
   assert.equal(view.input().props.value,'');assert.equal(view.nodes().some(n=>typeof n.props.children==='string'&&/할 일 저장됨/.test(n.props.children)),false);
+});
+
+for(const bucket of ['later','today']) test(`saved task View keeps the ${bucket} task reachable beyond its temporary highlight`,async()=>{
+  const storage=memory();await pending(storage);
+  const item={lane:'task',entityId:ID,title:'합성 첫 요청',id:`task-${ID}`,bucket};
+  const view=harness(storage,async(url,options)=>{
+    if(url==='/api/operator/session')return Response.json({status:'authenticated',recovery:CONTEXT});
+    const p=JSON.parse(options.body);
+    return Response.json({status:'duplicate',task:{id:p.id,workspace_id:WORK,title:p.title,status:'todo',priority:'medium',due_at:null}});
+  },{items:[item],reload:async()=>({items:[item]})});
+  await tick();await view.button().props.onClick();
+  // Filters can change after saving, before the persistent receipt's View action.
+  view.nodes().find(n=>n.props.label==='보기 렌즈').props.onChange('list');
+  view.nodes().find(n=>n.props.label==='레인 필터').props.onChange('deal');
+  view.nodes().find(n=>n.props.placeholder==='제목 검색').props.onChange('unrelated search');
+  view.nodes().find(n=>n.props.label==='기한 필터').props.onChange('overdue');
+  view.nodes().find(n=>n.props.onClick&&n.props.children==='보기').props.onClick();
+  const nodes=view.nodes();
+  assert.equal(view.routes.at(-1),'/dashboard/work/my?lens=list');
+  assert.equal(nodes.find(n=>n.props.label==='기한 필터').props.value,bucket==='later'?'later':'all');
+  assert.equal(window.localStorage.getItem('mlp.mywork.bucket'),bucket==='later'?'later':'all','the destination must persist independently of the highlight timer');
+  assert.equal(nodes.find(n=>n.props.label==='레인 필터').props.value,'task');
+  assert.equal(nodes.find(n=>n.props.placeholder==='제목 검색').props.value,'');
+  assert.ok(nodes.some(n=>n.props.item?.id===item.id),'the saved row is visible in its destination');
 });
 
 function logout(storage,fetchImpl,{blockedAccess=false}={}){globalThis.window={sessionStorage:storage,location:{replace:href=>{redirect=href;}}};if(blockedAccess)Object.defineProperty(window,'sessionStorage',{get(){throw new DOMException('blocked','SecurityError');}});globalThis.BroadcastChannel=undefined;let redirect='',error='',busy=false;

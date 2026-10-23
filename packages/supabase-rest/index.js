@@ -204,7 +204,7 @@ function parseRows(text) {
 
   try {
     const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : null;
+    return Array.isArray(parsed) && parsed.every(row => row && typeof row === "object" && !Array.isArray(row)) ? parsed : null;
   } catch {
     return null;
   }
@@ -272,17 +272,19 @@ export async function fetchSupabaseRowsDetailed(table, options = {}) {
   }
 
   const rows = parseRows(result.text);
-  if (options.strictRows && rows === null) {
+  // A malformed 2xx response is not evidence that the table is empty. All
+  // consumers need this distinction, including callers predating strictRows.
+  if (rows === null) {
     return {
       rows: null,
       count: null,
       configured: true,
-      error: { reason: "invalid-rows", status: result.status, detail: "Expected a JSON array." },
+      error: { reason: "invalid-rows", status: result.status, detail: "Expected a JSON array of records." },
     };
   }
 
   return {
-    rows: rows ?? [],
+    rows,
     count: withCount ? extractCount(result.contentRange) : null,
     configured: true,
     error: null,
@@ -333,7 +335,7 @@ function isDuplicateViolation(status, detail) {
   );
 }
 
-function buildWriteResult(result, { returnRepresentation, bulk }) {
+function buildWriteResult(result, { returnRepresentation, bulk, requireRows = false }) {
   if (!result.ok) {
     const reason = result.failureReason
       || (isDuplicateViolation(result.status, result.text) ? "duplicate" : `http-${result.status}`);
@@ -348,7 +350,15 @@ function buildWriteResult(result, { returnRepresentation, bulk }) {
     return { persisted: true, reason: "ok" };
   }
 
-  const rows = parseRows(result.text) || [];
+  const rows = parseRows(result.text);
+  if (rows === null) {
+    return { persisted: false, reason: "invalid-rows", detail: "Expected a JSON array of records." };
+  }
+  // A nonempty plain INSERT must confirm at least one row. Upsert can validly
+  // return [] when every input row was skipped by ignore-duplicates.
+  if (requireRows && rows.length === 0) {
+    return { persisted: false, reason: "no-matching-row", records: [] };
+  }
   const row = rows[0] || null;
 
   if (bulk) {
@@ -395,7 +405,7 @@ export async function insertSupabaseRecord(table, record, options = {}) {
     timeoutMs: options.timeoutMs,
   });
 
-  const outcome = buildWriteResult(result, { returnRepresentation, bulk });
+  const outcome = buildWriteResult(result, { returnRepresentation, bulk, requireRows: true });
   if (!outcome.persisted) {
     logSupabaseFailure("insert", table, outcome.reason, outcome.detail);
   }
@@ -474,7 +484,10 @@ export async function updateSupabaseRecord(table, filters = [], record = {}, opt
   });
 
   if (result.ok && returnRepresentation) {
-    const rows = parseRows(result.text) || [];
+    const rows = parseRows(result.text);
+    if (rows === null) {
+      return { persisted: false, reason: "invalid-rows", detail: "Expected a JSON array of records." };
+    }
     const row = rows[0] || null;
     return {
       persisted: Boolean(row),
@@ -515,7 +528,10 @@ export async function deleteSupabaseRecord(table, filters = [], options = {}) {
     // 0행 DELETE 감지 — return=minimal에선 RLS 거부·이미 삭제됨·workspace 불일치가
     // 성공과 구분되지 않아 "삭제됨" 영수증 뒤 다음 로드에 레코드가 부활했다(8차 안정성 M).
     // update의 no-matching-row 계약과 동일한 분류.
-    const rows = parseRows(result.text) || [];
+    const rows = parseRows(result.text);
+    if (rows === null) {
+      return { persisted: false, reason: "invalid-rows", detail: "Expected a JSON array of records." };
+    }
     if (rows.length === 0) {
       logSupabaseFailure("delete", table, "no-matching-row", result.text);
       return { persisted: false, reason: "no-matching-row", records: [] };

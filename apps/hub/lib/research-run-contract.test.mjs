@@ -23,3 +23,9 @@ test('estimated run cost includes actual thinking usage and incomplete or unknow
   assert.equal(projectResearchRun({...row,usage:{promptTokenCount:1000,candidatesTokenCount:100}}).estimatedCostUsd,null);
   assert.equal(projectResearchRun({...row,model:'unknown-new-model'}).estimatedCostUsd,null);
 });
+test('3.6 research estimates use the recorded run start, not the viewing date',()=>{
+  const row={model:'gemini-3.6-flash',usage:{promptTokenCount:1000000,candidatesTokenCount:500000,thoughtsTokenCount:500000,totalTokenCount:2000000}};
+  assert.equal(projectResearchRun({...row,started_at:'2026-12-31T23:59:59Z'}).estimatedCostUsd,4.5);
+  assert.equal(projectResearchRun({...row,started_at:'2027-01-01T00:00:00Z'}).estimatedCostUsd,9);
+  assert.equal(projectResearchRun(row).estimatedCostUsd,null);
+});
