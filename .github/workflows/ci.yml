@@ -1,6 +1,12 @@
 name: CI
 
 on:
+  workflow_dispatch:
+    inputs:
+      windows_desktop:
+        description: Build and verify Windows installers on a disposable runner
+        type: boolean
+        default: false
   pull_request:
   push:
     branches:
@@ -9,7 +15,7 @@ on:
 
 jobs:
   windows-desktop:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/codex/office-connection-20261002' || github.ref == 'refs/heads/codex/moonlight-r18-review-20261020') && github.event.repository.private == false
+    if: ((github.event_name == 'workflow_dispatch' && github.event.inputs.windows_desktop == 'true') || (github.event_name == 'push' && (github.ref == 'refs/heads/codex/office-connection-20261002' || github.ref == 'refs/heads/codex/moonlight-r18-review-20261020' || startsWith(github.ref, 'refs/heads/codex/desktop-release-')))) && github.event.repository.private == false
     runs-on: windows-2025
     timeout-minutes: 25
     permissions:
@@ -51,7 +57,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-desktop-${{ github.sha }}
-          retention-days: 1
+          retention-days: 7
           compression-level: 0
           path: |
             apps/desktop/dist/*.exe

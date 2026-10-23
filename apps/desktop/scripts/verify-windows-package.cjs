@@ -61,32 +61,81 @@ async function main() {
   assert.equal(sha256(path.join(install, 'resources/app.asar')), sha256(archive));
   report.installation = { mode: 'current user, disposable runner', exeMatchesUnpacked: true, archiveMatchesUnpacked: true };
   save();
-  const profile = path.join(temporary, 'isolated-profile');
-  const screenshot = path.join(output, 'windows-widget.png');
-  let log = '';
-  const code = await new Promise((resolve, reject) => {
-    const child = spawn(executable, ['--smoke-widget', `--smoke-out=${screenshot}`, `--user-data-dir=${profile}`],
-      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false });
-    const timeout = setTimeout(() => {
-      try { execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); } catch {}
-      reject(new Error('installed app smoke timeout'));
-    }, 130000);
-    for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { log += chunk; process.stdout.write(chunk); });
-    child.once('error', error => { clearTimeout(timeout); reject(error); });
-    child.once('close', code => { clearTimeout(timeout); resolve(code); });
-  });
-  fs.writeFileSync(path.join(output, 'windows-widget.log'), log);
+  async function runInstalledSmoke(mode, timeoutMs) {
+    let log = '';
+    const screenshot = path.join(output, `windows-${mode}.png`);
+    try {
+      const code = await new Promise((resolve, reject) => {
+        const child = spawn(executable, [`--smoke-${mode}`, `--smoke-out=${screenshot}`,
+          `--user-data-dir=${path.join(temporary, `isolated-${mode}-profile`)}`],
+        { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false });
+        const timeout = setTimeout(() => {
+          if (Number.isInteger(child.pid)) {
+            try { execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'],
+              { stdio: 'ignore', windowsHide: true, timeout: 10000 }); } catch {}
+          }
+          reject(new Error(`installed app ${mode} smoke timeout`));
+        }, timeoutMs);
+        for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { log += chunk; process.stdout.write(chunk); });
+        child.once('error', error => { clearTimeout(timeout); reject(error); });
+        child.once('close', code => { clearTimeout(timeout); resolve(code); });
+      });
+      return { code, log, screenshot };
+    } finally {
+      fs.writeFileSync(path.join(output, `windows-${mode}.log`), log);
+    }
+  }
+  const pngEvidence = file => {
+    const png = fs.readFileSync(file);
+    assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', file);
+    const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+    assert.ok(width > 0 && height > 0, `empty PNG: ${file}`);
+    return { width, height, sha256: sha256(file) };
+  };
+  const { code, log, screenshot } = await runInstalledSmoke('widget', 130000);
   assert.equal(code, 0, 'installed application failed');
   for (const marker of ['smoke:widget-bridge', 'smoke:widget-login ok', 'smoke:widget-session-shared-and-resumed ok', 'smoke:widget ok']) {
     assert.ok(log.includes(marker), `missing installed-app proof: ${marker}`);
   }
   assert.ok(!log.includes('smoke:fail'), log);
-  const png = fs.readFileSync(screenshot);
-  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
   report.smoke = { installedAppStarted: true, isolatedLoopbackHub: true, sharedLoginTransition: true,
-    rendererBridge: true, separateProfile: true, screenshot: { width: png.readUInt32BE(16), height: png.readUInt32BE(20), sha256: sha256(screenshot) },
+    rendererBridge: true, separateProfile: true, screenshot: pngEvidence(screenshot),
     actualOperatorLogin: false, acrylicVisualQuality: 'not assessed by this widget smoke', windows11ConsumerInstall: false };
   save();
+  // The built-in pet smoke loads packaged local pages with an empty Hub URL.
+  // It creates no operator session, network request, or global shortcut.
+  report.petSmoke = { status: 'running', separateProfile: true, hubConfigured: false,
+    acrylicVisualQuality: 'not assessed; DWM HRESULTs do not establish consumer Windows 11 appearance',
+    windows11ConsumerInstall: false };
+  save();
+  try {
+    const pet = await runInstalledSmoke('pet', 180000);
+    report.petSmoke.exitCode = pet.code;
+    report.petSmoke.sessionLocked = pet.log.includes('smoke:warn session locked');
+    const dwm = pet.log.match(/^smoke:dwm (\{.*\})\r?$/m);
+    report.petSmoke.dwm = dwm ? JSON.parse(dwm[1]) : null;
+    save();
+    assert.equal(pet.code, 0, 'installed pet smoke failed; inspect windows-pet.log');
+    assert.ok(!pet.log.includes('smoke:fail'), pet.log);
+    assert.equal(report.petSmoke.dwm?.ok, true, 'Windows DWM attributes were not verified');
+    assert.equal(report.petSmoke.sessionLocked, false, 'locked runner cannot verify pet screen captures');
+    for (const marker of ['smoke:pet-bridge {', 'smoke:pet-drag ', 'smoke:focus-bounds ', 'smoke:pet-side ok', 'smoke:pet ok']) {
+      assert.ok(pet.log.includes(marker), `missing installed-pet proof: ${marker}`);
+    }
+    report.petSmoke.screenshots = ['', '-panel-page', '-widget', '-memo', '-bubble', '-focus', '-left-quick', '-left-widget']
+      .map(suffix => {
+        const name = `windows-pet${suffix}.png`;
+        return { name, ...pngEvidence(path.join(output, name)) };
+      });
+    report.petSmoke.multipleDisplays = pet.log.includes('smoke:side-display skipped') ? 'not run: one display' : 'verified';
+    report.petSmoke.status = 'passed';
+  } catch (error) {
+    report.petSmoke.status = 'failed';
+    report.petSmoke.error = error.message;
+    throw error;
+  } finally {
+    save();
+  }
   console.log('windows:verified ' + JSON.stringify(report));
 }
 
