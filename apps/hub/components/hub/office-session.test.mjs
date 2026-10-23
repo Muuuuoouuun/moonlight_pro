@@ -309,7 +309,7 @@ test('one leave-page guard covers Office drafts and unsent mentor follow-ups', (
 
 test('the Hub shell installs the shared guard with the mentor session store', async () => {
   const provider = fs.readFileSync(new URL('./office-session-provider.jsx', import.meta.url), 'utf8');
-  assert.match(provider, /officeUnloadGuard\(\[holder\.store, \.\.\.loadedOfficeUnloadStores\(\)\]\)/);
+  assert.match(provider, /officeUnloadGuard\(\[holder\.store, holder\.contentPlans, \.\.\.loadedOfficeUnloadStores\(\)\]\)/);
   assert.match(provider, /addEventListener\('beforeunload', guard\)/);
   assert.match(provider, /removeEventListener\('beforeunload', guard\)/);
   // The shell must not pull the Office stores into the first bundle — they register themselves on load.

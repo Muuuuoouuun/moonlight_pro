@@ -52,7 +52,9 @@ test('the actual login Card style retains exactly its baseline SSR chrome, witho
   const styles = cardStyles('../../app/login/page.jsx');
   assert.equal(styles.length, 1);
   const style = new Function(`return (${styles[0]});`)();
-  assert.equal(render({ style }), '<div style="background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:24px;width:min(380px, 100%);max-width:100%;min-width:0;box-sizing:border-box">합성 카드</div>');
+  assert.equal(render({ style }), '<div style="background:var(--surface);border:1px solid var(--panel-edge);border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:24px;width:min(380px, 100%);max-width:100%;min-width:0;box-sizing:border-box">합성 카드</div>');
+  // 로그인은 depth C 표지를 그리지 않으므로 기본 토큰 그대로 1px --line-soft 선이다.
+  assert.match(readFileSync(new URL('./hub-tokens.css', import.meta.url), 'utf8'), /--panel-edge: var\(--line-soft\);/);
   const login = readFileSync(new URL('../../app/login/page.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(login, /data-visual-system|hub-depth/);
 });

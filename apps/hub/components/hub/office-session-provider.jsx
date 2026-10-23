@@ -9,11 +9,12 @@ export const OfficeSessionContext = React.createContext(null);
 // bundle. Mentor consultations live in a module store that outlives page navigation and
 // registers itself when loaded, so one guard covers both kinds of unsent text.
 export function OfficeSessionProvider({ children }) {
-  const [holder] = React.useState(() => ({ store: null }));
+  const [holder] = React.useState(() => ({ store: null, active: false }));
   React.useEffect(() => {
-    const guard = event => officeUnloadGuard([holder.store, ...loadedOfficeUnloadStores()])(event);
+    holder.active = true;
+    const guard = event => officeUnloadGuard([holder.store, holder.contentPlans, ...loadedOfficeUnloadStores()])(event);
     window.addEventListener('beforeunload', guard);
-    return () => window.removeEventListener('beforeunload', guard);
+    return () => { holder.active = false; window.removeEventListener('beforeunload', guard); };
   }, [holder]);
   return <OfficeSessionContext.Provider value={holder}>{children}</OfficeSessionContext.Provider>;
 }

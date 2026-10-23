@@ -49,7 +49,7 @@ const CADENCE_PLOT_H = 38;
 function ContentCadencePanel({ cadence, syncState }) {
   if (!cadence) {
     return (
-      <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ border: '1px solid var(--panel-edge)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <SectionTitle style={{ marginBottom: 0 }}>발행 리듬</SectionTitle>
         {syncState === 'loading'
           ? <Skeleton lines={3} />
@@ -65,7 +65,7 @@ function ContentCadencePanel({ cadence, syncState }) {
   const goalY = CADENCE_BASELINE - ((cadence.goal || 0) / scaleMax) * CADENCE_PLOT_H;
 
   return (
-    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ border: '1px solid var(--panel-edge)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <SectionTitle style={{ marginBottom: 0 }}>발행 리듬</SectionTitle>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
         <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{cadence.published}</span>
@@ -100,7 +100,7 @@ function ContentTagTrendPanel({ tagTrends, syncState }) {
   const maxCount = Math.max(1, ...tagTrends.map((entry) => entry.count));
 
   return (
-    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 9 }}>
+    <div style={{ border: '1px solid var(--panel-edge)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', boxShadow: 'var(--shadow-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 9 }}>
       <SectionTitle style={{ marginBottom: 0 }}>최근 태그</SectionTitle>
       {loading && <Skeleton lines={4} />}
       {showEmptyNote && (

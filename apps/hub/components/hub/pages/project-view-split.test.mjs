@@ -165,7 +165,8 @@ test("extracted views obey the token, border, hover and motion contracts", () =>
       assert.match(value, /^1px solid /, `${name}: ${decl}`);
       assert.match(
         value,
-        /var\(--(line|line-soft|line-strong|danger-line)\)|\$\{lineToken\}/,
+        // --panel-edge: 판 테두리 토큰(depth C에서 투명, §15 2026-10-22)
+        /var\(--(line|line-soft|line-strong|danger-line|panel-edge)\)|\$\{lineToken\}/,
         `${name}: ${decl}`,
       );
     }
