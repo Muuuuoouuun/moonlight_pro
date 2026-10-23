@@ -26,7 +26,7 @@ import { WEEKLY_STAT_FIELDS, weeklySourceLabels, weeklyStatValue } from '@/lib/w
 import { goalHref } from '@/lib/goal-client';
 import { BurningStreakBadge, StreakMark, streakLevel } from "../burning-streak";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
-import { ContactRecordDrawer } from "../contact-record-form";
+import { ContactRecordDrawer } from "../deferred-contact-record-drawer";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
@@ -284,7 +284,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   };
 
   return (
-    <div aria-label="오늘 할 일">
+    <div role="group" aria-label="오늘 할 일">
       <SectionTitle right={(
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
           {showStreak && <BurningStreakBadge
@@ -1010,7 +1010,6 @@ function StatusLine({ state, onRetry }) {
       {sourceCount > 0 && (
         <button
           type="button"
-          aria-label={open ? '기록 상태 숨기기' : '기록 상태 펼치기'}
           aria-expanded={open}
           aria-controls="daily-brief-ledger-statuses"
           onClick={() => setOpen((o) => !o)}
@@ -1052,7 +1051,7 @@ function BriefNavigation({ taskToday, onNavigate }) {
   };
 
   return (
-    <Card pad={false} className="daily-brief__panel daily-brief__nav-card" aria-label="빠른 바로가기">
+    <Card pad={false} className="daily-brief__panel daily-brief__nav-card">
       <nav aria-label="Daily Brief 빠른 이동" className="daily-brief__nav">
         <div className="daily-brief__card-head" style={{ borderBottom: '1px solid var(--line-soft)' }}>
           <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1070,7 +1069,6 @@ function BriefNavigation({ taskToday, onNavigate }) {
                 key={item.key}
                 type="button"
                 className="daily-brief__jump"
-                aria-label={`${item.label}: ${detailByKey[item.key]}`}
                 onClick={() => onNavigate?.(item.target)}
               >
                 <span className="daily-brief__jump-icon"><Iconed name={item.icon} size={14} /></span>
@@ -1658,7 +1656,7 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
 
   return (
     <div className="hub-grid--two daily-brief__focus" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'stretch' }}>
-      <Card pad={false} className="daily-brief__panel" aria-label="긴급 KA와 집중 고객" style={{ display: 'flex', flexDirection: 'column' }}>
+      <Card pad={false} className="daily-brief__panel" role="group" aria-label="긴급 KA와 집중 고객" style={{ display: 'flex', flexDirection: 'column' }}>
         {/* 긴급 KA — §5.2 허용 red: urgent KA (최대 1건). live인데 후보가 없으면 침묵하지
             않고 부재와 지정 경로(Sales Ledger 시트의 companies.meta.ka)를 고지한다 —
             존재하지 않는 기능이 존재하는 척하지 않기(2026-08-05 re-audit #1). */}

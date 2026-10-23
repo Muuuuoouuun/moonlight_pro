@@ -546,10 +546,10 @@ export function FloatingMentorWidget({
       aria-label={`${widgetTitle} 코파일럿 팝업`}
       style={{
         position: "fixed",
-        bottom: 20,
-        right: 20,
-        width: 440,
-        maxHeight: "82vh",
+        bottom: "max(16px, env(safe-area-inset-bottom, 16px))",
+        right: "max(12px, env(safe-area-inset-right, 12px))",
+        width: "min(440px, calc(100vw - 24px))",
+        maxHeight: "min(82dvh, calc(100dvh - 32px))",
         display: "flex",
         flexDirection: "column",
         background: "var(--surface)",

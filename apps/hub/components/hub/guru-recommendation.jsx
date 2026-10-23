@@ -3,7 +3,7 @@
 import React from "react";
 import { GURU_CARDS } from "@com-moon/guru-guidance";
 import { TruthBadge } from "./hub-primitives";
-import { GuidanceSourceReader } from "./guidance-source-reader";
+import { GuidanceSourceReader } from "./deferred-guidance-source-reader";
 import "./guru-recommendation.css";
 
 // 기록 기반 추천 한 장 — 오늘·홈·고객 상세·거래 상세·Office 결과가 같은 모양을 쓴다

@@ -45,6 +45,17 @@ test("자체 인증을 가진 경로는 세션 없이 통과한다", () => {
   }
 });
 
+test('public entry points do not open similarly named routes or unlisted descendants', () => {
+  for (const base of ['/api/operator/session', '/api/health', '/login']) {
+    assert.equal(isOpenPath(base), true);
+    for (const suffix of ['-private', 'backup', '/private']) {
+      const path = `${base}${suffix}`;
+      assert.equal(isOpenPath(path), false, path);
+      assert.notEqual(deployed({ pathname: path }).action, 'allow', path);
+    }
+  }
+});
+
 test("로컬 스킬 Agent 경로는 기존 Agent 접두사 안에서 자체 토큰 인증을 쓴다", async () => {
   for (const path of [
     "/api/agent/v1/skill-requests/11111111-1111-4111-8111-111111111111",

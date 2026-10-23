@@ -6,7 +6,7 @@ import { Button, Skeleton, TruthBadge, EmptyState, Kbd, useToast } from "../hub-
 import { CalendarOutcome } from "../calendar-outcome";
 import { PublishDue } from "./publish-due";
 import { SIGNAL_TARGETS, withEntityRef } from '@/lib/signal-targets';
-import { ContactRecordDrawer } from '../contact-record-form';
+import { ContactRecordDrawer } from '../deferred-contact-record-drawer';
 import { CheckItemProgress, FinishedTodayList, FocusCard, RemainingList, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card';
 import { cancelScheduled, postReceipt, undoReceipt } from '../check-items/check-item-actions';
 import { ScheduledList } from '../check-items/schedule-band';
@@ -97,13 +97,13 @@ function TodaySchedule({ onNavigate, schedule, onReload }) {
         </button>
       </div>
 
-      {status === 'partial' && <div><TruthBadge state="partial" reason="일부 캘린더만 확인했습니다" /><Button onClick={onReload}>다시 불러오기</Button></div>}
+      {status === 'partial' && <div className="fx-read-state"><TruthBadge state="partial" reason="일부 캘린더만 확인했습니다" /><Button onClick={onReload}>다시 불러오기</Button></div>}
       {status === 'loading' ? (
         <Skeleton lines={4} />
       ) : status === 'unauthorized' ? (
         <LoginRequired />
       ) : status === 'error' || status === 'preview' ? (
-        <div><TruthBadge state={status} reason={status === 'error' ? '일정을 불러오지 못했습니다' : '캘린더 연결 필요'} /><Button onClick={onReload}>다시 불러오기</Button></div>
+        <div className="fx-read-state"><TruthBadge state={status} label={status === 'preview' ? 'Preview · 캘린더 연결 필요' : undefined} reason={status === 'error' ? '일정을 불러오지 못했습니다' : undefined} /><Button onClick={onReload}>다시 불러오기</Button></div>
       ) : !events.length ? (
         <EmptyState title={status === 'partial' ? "읽힌 일정이 없습니다. 오늘 일정이 없다고 확정할 수 없습니다." : "오늘 잡힌 일정이 없습니다"} />
       ) : (
@@ -136,7 +136,7 @@ function TodaySchedule({ onNavigate, schedule, onReload }) {
 export function Home({ onNavigate, onGuidanceAsk }) {
   const [reloadKey, reload] = React.useReducer(value => value + 1, 0);
   // keepPrevious: 끝낼 때마다 다시 읽는데, 그동안 카드가 로딩으로 깜빡이지 않게 지난 읽기를 둔다.
-  const brief = useDailyBriefSignals(reloadKey, { keepPrevious: true });
+  const brief = useDailyBriefSignals(reloadKey, { keepPrevious: true, homeRoute: true });
   const schedule = useTodaySchedule(reloadKey);
   const { status, signals } = brief;
   const checkItems = brief.checkItems;
@@ -302,7 +302,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       {/* 저녁·다음 날 아침의 하루 리뷰 한 줄 — 확인할 것 밖(2026-09-23 지속 루프 설계 §4.3). */}
       <DailyReviewCue className="daily-review-cue--home" />
 
-      {status === 'partial' && <div><TruthBadge state="partial" reason="일부 기록만 확인했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>}
+      {status === 'partial' && <div className="fx-read-state"><TruthBadge state="partial" reason="일부 기록만 확인했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>}
       {live && checkItems?.state === 'error' ? (
         <TruthBadge state="partial" reason="끝낸 기록을 읽지 못해 이미 끝낸 카드가 다시 보일 수 있습니다" />
       ) : null}
@@ -315,9 +315,9 @@ export function Home({ onNavigate, onGuidanceAsk }) {
           {status === 'loading' ? (
             <Skeleton lines={7} />
           ) : status === 'unauthorized' ? (<LoginRequired />) : status === 'error' ? (
-            <div><TruthBadge state="error" reason="첫 화면 신호를 불러오지 못했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>
+            <div className="fx-read-state"><TruthBadge state="error" reason="첫 화면 신호를 불러오지 못했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>
           ) : status === 'preview' ? (
-            <TruthBadge state="preview" reason="Supabase 연결 필요" />
+            <TruthBadge state="preview" label="Preview · Supabase 연결 필요" style={{ alignSelf: 'flex-start' }} />
           ) : (
             <>
               {active ? (

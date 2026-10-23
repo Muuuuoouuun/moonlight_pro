@@ -1056,3 +1056,120 @@ test('실제 http: 새 캡처 메모가 첫 저장에서 부딪히면 캡처 충
     double.server.close();
   }
 });
+
+
+function deferredValue() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function delayedConnectionStore(origin) {
+  const pending = deferredValue();
+  return { pending, store: { get: (key) => key === `petHub.pending.v1.${origin}` ? pending.promise : null, set: () => {} } };
+}
+
+test('connection change cancels a queued task before it can write to the previous Hub', async () => {
+  const origin = 'https://previous.example.test';
+  const { pending, store } = delayedConnectionStore(origin);
+  const calls = [];
+  const hub = createPetHub({ origin, store, fetch: async (url, init) => {
+    calls.push({ url, method: init.method });
+    const command = JSON.parse(init.body);
+    return new Response(JSON.stringify({ status: 'saved', task: { ...command, updated_at: new Date().toISOString() } }));
+  } });
+  const queued = hub.tasksAdd({ title: 'queued task' });
+  await hub.setOrigin('https://current.example.test');
+  pending.resolve(null);
+  const result = await queued;
+  hub.dispose();
+  assert.equal(result.error, 'stale-origin');
+  assert.deepEqual(calls, [], 'switching connection must prevent a request that has not started');
+});
+
+test('connection change cannot send a queued Office question to the newly selected Hub', async () => {
+  const origin = 'https://previous.example.test';
+  const { pending, store } = delayedConnectionStore(origin);
+  const calls = [];
+  const hub = createPetHub({ origin, store, fetch: async (url) => {
+    calls.push(url);
+    return new Response(JSON.stringify({ status: 'error' }), { status: 500 });
+  } });
+  const queued = hub.chatSend({ ownerId: 'eevee', scope: 'all', message: 'queued question' });
+  await hub.setOrigin('https://current.example.test');
+  pending.resolve(null);
+  const result = await queued;
+  hub.dispose();
+  assert.deepEqual(calls, [], 'the old question must never leave through the new connection');
+  assert.equal(result.error, 'stale-origin');
+});
+
+test('new Hub refresh starts while the previous Hub response is still pending', async () => {
+  const waiting = deferredValue();
+  const started = deferredValue();
+  const calls = [];
+  const hub = createPetHub({ origin: 'https://previous.example.test', fetch: async (url) => {
+    calls.push(url);
+    if (url.startsWith('https://previous.example.test')) { started.resolve(); await waiting.promise; }
+    return new Response(JSON.stringify(url.includes('/inquiries')
+      ? { status: 'live', rows: [], unreadCount: 0 }
+      : { status: 'live', events: [] }));
+  } });
+  const oldTick = hub.tick();
+  await started.promise;
+  const reconnect = hub.hubUrlChanged('https://current.example.test');
+  await new Promise((resolve) => setImmediate(resolve));
+  const refreshedBeforeOldResponse = calls.some((url) => url.startsWith('https://current.example.test'));
+  waiting.resolve();
+  await Promise.all([oldTick, reconnect]);
+  hub.dispose();
+  assert.equal(refreshedBeforeOldResponse, true, 'the old request must not stall refresh of the new Hub');
+});
+
+
+test('connection change aborts an unsent write while its session cookie is loading', async () => {
+  const cookie = deferredValue();
+  const readingCookie = deferredValue();
+  const calls = [];
+  const hub = createPetHub({ origin: 'https://previous.example.test',
+    cookieHeader: async () => { readingCookie.resolve(); return cookie.promise; },
+    fetch: async (url, init) => {
+      calls.push({ url, method: init.method });
+      const command = JSON.parse(init.body);
+      return new Response(JSON.stringify({ status: 'saved', task: { ...command, updated_at: new Date().toISOString() } }));
+    },
+  });
+  const queued = hub.tasksAdd({ title: 'queued task' });
+  await readingCookie.promise;
+  await hub.setOrigin('https://current.example.test');
+  cookie.resolve('com_moon_operator_session=unused');
+  const result = await queued;
+  hub.dispose();
+  assert.equal(result.error, 'stale-origin');
+  assert.deepEqual(calls, [], 'a request still awaiting credentials must not start after disconnection');
+});
+
+test('origin change cancels a request retained across same-origin session refresh', async (t) => {
+  const double = await startHubDouble();
+  t.after(() => double.server.close());
+  const began = deferredValue(), responseGate = deferredValue();
+  let requestSignal;
+  const { hub } = hubFor(double, { fetch: async (url, init) => {
+    const response = await fetch(url, init);
+    if (init.method === 'GET' && new URL(url).pathname === '/api/hub/tasks') {
+      requestSignal = init.signal;
+      began.resolve();
+      await responseGate.promise;
+    }
+    return response;
+  } });
+  t.after(() => { responseGate.resolve(); hub.dispose(); });
+  const oldRead = hub.tasksList();
+  await began.promise;
+  await hub.sessionChanged();
+  assert.equal(requestSignal.aborted, false, 'cookie rotation retains acknowledged request reconciliation');
+  await hub.setOrigin('https://replacement.example.test');
+  assert.equal(requestSignal.aborted, true, 'origin replacement also cancels requests from before cookie rotation');
+  responseGate.resolve();
+  assert.equal((await oldRead).error, 'stale-origin');
+});

@@ -17,12 +17,12 @@
   "dependencies": {
     "@com-moon/agent-contracts": "*",
     "@com-moon/content-manager": "*",
+    "@com-moon/genai-transport": "*",
     "@com-moon/guru-guidance": "*",
     "@com-moon/hub-gateway": "*",
     "@com-moon/supabase-rest": "*",
-    "next": "^16.3.8",
+    "next": "16.4.2",
     "react": "^18",
-    "react-dom": "^18",
-    "@com-moon/genai-transport": "*"
+    "react-dom": "^18"
   }
 }

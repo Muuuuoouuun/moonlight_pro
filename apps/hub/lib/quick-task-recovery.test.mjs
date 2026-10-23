@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { createMyWorkQuickTask } from './my-work-quick-task.js';
+import { createMyWorkQuickTask, QUICK_TASK_UNKNOWN } from './my-work-quick-task.js';
 import { QUICK_TASK_RECOVERY_KEY, QUICK_TASK_RECOVERY_TTL, checkpointQuickTask, isQuickTaskContext, readQuickTaskRecovery, resetQuickTasks, validQuickTaskPayload } from './quick-task-recovery.js';
 import { executePmsCommand } from '../../engine/lib/pms-command-service.ts';
 import { clearSubmittedQuickTaskDraft } from './quick-task-capture.js';
@@ -57,6 +57,69 @@ for(const failure of ['set','readback','get']) test(`${failure} storage failure 
   if(failure==='readback'){const get=storage.getItem;storage.getItem=key=>{const text=get(key);return text===null?null:'wrong';};}
   let calls=0;const value=writer(storage),result=await value.submit(DRAFT,{fetchImpl:async()=>{calls++;}});
   assert.equal(calls,0);assert.equal(result.status,'error');assert.match(result.message,/전송하지 않았/);
+  assert.match(result.message,/저장 공간/);
+});
+
+test('verified initialization still identifies an actual sessionStorage access failure',async()=>{
+  const value=writer(()=>{throw new DOMException('blocked','SecurityError');});
+  await value.initialize();assert.equal(value.snapshot().status,'blocked');
+  assert.match(value.snapshot().message,/브라우저 복구 기록.*저장 공간/);
+});
+
+for(const failure of ['network','response','json','owner','workspace']) test(`${failure} session lookup failure is not reported as a storage fault and never reads recovery or posts`,async()=>{
+  const storage=memory();let storageReads=0,posts=0;
+  storage.getItem=()=>{storageReads++;throw Error('must not read unverified recovery');};
+  const value=writer(storage,{getContext:undefined});
+  const fetchImpl=async(url)=>{
+    if(url!=='/api/operator/session'){posts++;throw Error('unexpected POST');}
+    if(failure==='network')throw new TypeError('synthetic offline');
+    if(failure==='response')return Response.json({status:'error'},{status:503});
+    if(failure==='json')return new Response('invalid json');
+    return Response.json({status:'authenticated',recovery:failure==='owner'?null:{...CONTEXT,workspaceId:null}});
+  };
+  await value.initialize(fetchImpl);
+  assert.equal(value.snapshot().status,'blocked');
+  assert.match(value.snapshot().message,/로그인.*작업 범위/);
+  assert.doesNotMatch(value.snapshot().message,/브라우저 복구 기록|저장 공간/);
+  const draft={...DRAFT},result=await value.submit(draft,{fetchImpl});
+  assert.equal(result.status,'error');assert.equal(value.snapshot().status,'blocked');
+  assert.match(result.message,/로그인.*작업 범위/);assert.doesNotMatch(result.message,/저장 공간/);
+  assert.deepEqual(draft,DRAFT);assert.equal(value.getPending(),null);
+  assert.equal(storageReads,0);assert.equal(posts,0);
+});
+
+test('a failed owner lookup preserves unverified persisted recovery until the owner can be checked',async()=>{
+  const storage=memory(),original=writer(storage);await original.submit(DRAFT,{fetchImpl:lost});original.deactivate();
+  const checkpoint=storage.getItem(QUICK_TASK_RECOVERY_KEY);let unavailable=true;
+  const restored=writer(storage,{getContext:async()=>{if(unavailable)throw new TypeError('synthetic offline');return CONTEXT;}});
+  await restored.initialize();assert.equal(restored.snapshot().status,'blocked');
+  assert.match(restored.snapshot().message,/로그인.*작업 범위/);
+  assert.equal(restored.getPending(),null);assert.equal(storage.getItem(QUICK_TASK_RECOVERY_KEY),checkpoint);
+  unavailable=false;await restored.initialize();assert.equal(restored.snapshot().status,'ready');assert.equal(restored.getPending().id,ID);
+});
+
+test('owner lookup failure after an uncertain POST keeps its message, payload and ID through verification and retry',async()=>{
+  const storage=memory();let unavailable=false,ids=0,posts=0;
+  const value=writer(storage,{createId:()=>{ids++;return ID;},getContext:async()=>{if(unavailable)throw Error('synthetic lookup failure');return CONTEXT;}});
+  await value.submit(DRAFT,{details:true,fetchImpl:lost});
+  const checkpoint=storage.getItem(QUICK_TASK_RECOVERY_KEY);unavailable=true;
+  await value.initialize();assert.equal(value.snapshot().status,'blocked');assert.equal(value.snapshot().message,QUICK_TASK_UNKNOWN);
+  const next={...DRAFT,title:'합성 다음 입력'};
+  const blocked=await value.submit(next,{fetchImpl:async()=>{posts++;}});
+  assert.equal(blocked.status,'error');assert.equal(blocked.message,QUICK_TASK_UNKNOWN);
+  assert.equal(posts,0);assert.equal(value.getPending().id,ID);assert.equal(storage.getItem(QUICK_TASK_RECOVERY_KEY),checkpoint);
+  unavailable=false;
+  const result=await value.submit(next,{fetchImpl:async(_url,{body})=>{posts++;assert.deepEqual(JSON.parse(body),JSON.parse(checkpoint).payload);return saved(JSON.parse(body));}});
+  assert.equal(result.status,'saved');assert.equal(ids,1);assert.equal(posts,1);assert.deepEqual(result.submittedDraft,DRAFT);
+  assert.equal(clearSubmittedQuickTaskDraft(next,result.submittedDraft),next);
+});
+
+test('failed owner recheck after a saved response remains uncertain and retains the checkpoint',async()=>{
+  const storage=memory();let checks=0;
+  const value=writer(storage,{getContext:async()=>{if(++checks===2)throw Error('synthetic lookup failure');return CONTEXT;}});
+  const result=await value.submit(DRAFT,{fetchImpl:async(_url,{body})=>saved(JSON.parse(body))});
+  assert.equal(result.status,'error');assert.equal(result.message,QUICK_TASK_UNKNOWN);
+  assert.equal(value.getPending().id,ID);assert.equal(stored(storage).attempted,true);
 });
 
 test('storage read failure after unknown keeps the original in-memory dedup ID',async()=>{

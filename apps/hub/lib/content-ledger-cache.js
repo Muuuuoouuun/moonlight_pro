@@ -42,6 +42,10 @@ export function createContentLedgerCache(fetcher = (...args) => fetch(...args), 
         if (current !== generation) return snapshot;
         deadline = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
         const response = await fetcher(catalogOnly ? "/api/hub/content/catalog" : "/api/hub/content", { cache: "no-store", signal: controller.signal });
+        if (response.status === 401 || response.status === 403) {
+          throw Object.assign(new Error("Content access denied"), { accessDenied: true });
+        }
+        if (!response.ok) throw new Error("Content read failed");
         const data = await response.json();
         if (controller.signal.aborted || !response.ok || !readableEnvelope(data, catalogOnly)) throw new Error("Content read failed");
         if (current !== generation) return snapshot;
@@ -57,8 +61,8 @@ export function createContentLedgerCache(fetcher = (...args) => fetch(...args), 
           refreshedAt = Date.now();
           publish(next);
         }
-      } catch {
-        if (current === generation) publish(hasRecentLive()
+      } catch (error) {
+        if (current === generation) publish(!error?.accessDenied && hasRecentLive()
           ? { ...snapshot, syncState: "partial" }
           : { ...EMPTY_CONTENT_LEDGER, syncState: "error" });
       } finally {

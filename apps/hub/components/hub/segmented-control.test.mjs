@@ -26,7 +26,7 @@ test("SegmentedControl buttons carry the CSS class and keep no resting chrome in
 test("hub-tokens.css owns rest / active / hover for .hub-seg__btn with the hover token (DESIGN.md 8.1, 9)", () => {
   const rule = (sel) => { const m = css.match(new RegExp(`\\n\\.hub-app ${sel.replace(/[.[\]"=:()]/g, "\\$&")} \\{([^}]*)\\}`)); assert.ok(m, `missing rule: .hub-app ${sel}`); return m[1]; };
   const rest = rule(".hub-seg__btn");
-  assert.match(rest, /color:\s*var\(--fg-faint\)/);
+  assert.match(rest, /color:\s*var\(--fg-dim\)/);
   assert.match(rest, /background:\s*transparent/);
   assert.match(rest, /transition:[^;]*var\(--dur-hover\)/);
   assert.doesNotMatch(rest, /\d+ms/);

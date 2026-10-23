@@ -6,6 +6,33 @@ const tick = () => new Promise(setImmediate);
 const ledger = (values = {}) => ({ source: 'supabase', status: 'live', leads: [], deals: [], ...values });
 const response = (data, ok = true) => ({ ok, json: async () => data });
 
+for (const status of [401, 403]) {
+  test(`HTTP ${status} clears recent revenue records immediately without retrying`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let denied = false, calls = 0, bodyReads = 0;
+    const cache = revenueCache.createRevenueLedgerCache({ fetcher: async () => {
+      calls++;
+      return denied ? { ok: false, status, json: async () => { bodyReads++; return {}; } }
+        : response(ledger({ leads: [{ id: 'private' }] }));
+    } });
+    await cache.refresh();
+    denied = true;
+    const reading = cache.refresh();
+    await tick();
+    const immediate = cache.getSnapshot();
+    t.mock.timers.tick(1200);
+    await reading;
+    assert.equal(immediate.syncState, 'error');
+    assert.deepEqual(immediate.ledger.leads, []);
+    assert.equal(cache.getServableSnapshot(), null);
+    assert.equal(calls, 2);
+    assert.equal(bodyReads, 0);
+    denied = false;
+    await cache.refresh();
+    assert.equal(cache.getSnapshot().syncState, 'live');
+  });
+}
+
 function harness(options = {}) {
   assert.equal(typeof revenueCache.createRevenueLedgerCache, 'function', 'revenue reads need one shared request owner');
   const requests = [];

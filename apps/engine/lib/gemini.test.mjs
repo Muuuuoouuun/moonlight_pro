@@ -1,6 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { generateGeminiText, getGeminiResponseDiagnostics } from './gemini.ts';
+import { generateGeminiText, getGeminiIntegrationStatus, getGeminiResponseDiagnostics } from './gemini.ts';
+
+test('Engine defaults to 3.6 Flash and preserves both environment overrides', () => {
+  const before = { GEMINI_MODEL: process.env.GEMINI_MODEL, AI_DEFAULT_MODEL: process.env.AI_DEFAULT_MODEL };
+  try {
+    delete process.env.GEMINI_MODEL; delete process.env.AI_DEFAULT_MODEL;
+    assert.equal(getGeminiIntegrationStatus().model, 'gemini-3.6-flash');
+    process.env.AI_DEFAULT_MODEL = ' fallback-model ';
+    assert.equal(getGeminiIntegrationStatus().model, 'fallback-model');
+    process.env.GEMINI_MODEL = ' selected-model ';
+    assert.equal(getGeminiIntegrationStatus().model, 'selected-model');
+  } finally {
+    for (const [name, value] of Object.entries(before)) value === undefined ? delete process.env[name] : process.env[name] = value;
+  }
+});
 
 async function withLocalProvider(fetch, check) {
   const before = { fetch: globalThis.fetch, key: process.env.GEMINI_API_KEY };

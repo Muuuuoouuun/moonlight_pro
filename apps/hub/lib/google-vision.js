@@ -4,7 +4,7 @@ import { recordAiUsage } from "./ai-usage-log.js";
 import { getGenaiStatus, prepareGenaiRequest, resolveGenaiApiKey } from '@com-moon/genai-transport';
 
 function resolveModel() {
-  return process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  return process.env.GEMINI_MODEL || "gemini-3.6-flash";
 }
 
 const PROMPT = `이 명함 이미지에서 아래 필드를 추출해 JSON만 출력해. 불확실한 값은 추측하지 말고 null로 둬.

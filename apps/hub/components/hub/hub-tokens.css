@@ -329,10 +329,20 @@
   .hub-app .hub-card-link { transition: none; transform: none !important; }
 }
 
-/* Checkbox tap halo — visual box stays 14px, touch target grows to ≥32px on coarse
-   pointers only (§11 touch-target floor without inflating desktop density). */
+/* Bare checkbox tap halo — keep the 14px face and desktop density, but center a
+   44px target on coarse pointers (§11). CheckboxRow already owns its full-row target. */
 @media (pointer: coarse) {
-  .hub-app .hub-checkbox::before { content: ''; position: absolute; inset: -9px; }
+  .hub-app button.hub-checkbox::before {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: max(100%, 44px); height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+  /* My Work clips rows to rounded cards. Reserve a 44px checkbox column: the
+     14px face clears the card radius on the left, while space on the right keeps
+     title taps separate from its halo. Row height and fine-pointer density stay put. */
+  .hub-app .hub-mywork-grid .hub-row > button.hub-checkbox { margin-left: var(--r-lg); margin-right: 16px; }
+  /* Let the existing ellipsis yield space to a status badge and the date at 320px. */
+  .hub-app .hub-mywork-grid .hub-row > button.hub-checkbox + span { min-width: 0 !important; }
 }
 
 /* Kanban card hover (rests at --surface-2, one step lighter than .hub-row's --surface/--bg
@@ -881,7 +891,7 @@
 }
 .hub-app .hub-seg::-webkit-scrollbar { display: none; }
 .hub-app .hub-seg__btn {
-  color: var(--fg-faint);
+  color: var(--fg-dim);
   background: transparent;
   border: 1px solid transparent;
   touch-action: manipulation;
@@ -1725,8 +1735,7 @@
   }
 
   /* Checkboxes keep their 14px face — the blanket 44px floors turned them into tall
-     pills on phones. Their rows carry the touch height; a padded hit-area wrapper is
-     the eventual fix if bare-checkbox taps prove fiddly. */
+     pills on phones. The centered ::before halo above owns the coarse-pointer target. */
   .hub-app button[role="checkbox"] {
     min-width: 0;
     min-height: 0 !important;
@@ -1915,6 +1924,12 @@
   .hub-topbar__tabs {
     min-height: 45px;
     padding: 0 12px;
+    scroll-padding: 0 12px;
+  }
+
+  .hub-topbar__tabs button[aria-current="page"]::after {
+    height: 2px;
+    background: var(--moon-200);
   }
 
   .hub-topbar__primary-action {
@@ -2291,6 +2306,14 @@
     line-height: 1.35;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Keep the final My Work row above the fixed 48px memo launcher at maximum
+     scroll: its safe-area-aware bottom offset plus 16px of clear space. */
+  .hub-app .hub-mywork-page {
+    padding-bottom: calc(48px + max(16px, env(safe-area-inset-bottom)) + 16px) !important;
   }
 }
 

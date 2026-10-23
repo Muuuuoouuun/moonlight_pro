@@ -151,7 +151,7 @@ function createPetHub(input = {}) {
   let bannerGate = typeof options.canPresentBanner === 'function' ? options.canPresentBanner : () => true;
   let chatVisible = typeof options.isChatVisible === 'function' ? options.isChatVisible : () => true;
 
-  let conn = null; // { origin, client, api, pending, ready }
+  let conn = null; // { origin, client, api, pending, pendingReady, ready, controller }
   let hubStatus = 'unknown';
   let lastBadge = 0;
   let stopPollingFn = null;
@@ -204,6 +204,7 @@ function createPetHub(input = {}) {
     const origin = canonicalOrigin(originInput);
     if (conn && origin === conn.origin && !force) return conn.ready;
     const previous = conn;
+    if (previous && previous.origin !== origin) previous.controller.abort();
     conn = null;
     pollInFlight = null;
     chatRequest = null;
@@ -214,8 +215,12 @@ function createPetHub(input = {}) {
       return ready.then(() => undefined);
     }
     let next;
+    // Cookie rotation changes connection identity, but an already acknowledged
+    // write must finish reconciliation. Origin changes/disposal cancel all of
+    // that origin's requests, including ones begun before cookie rotation.
+    const controller = previous?.origin === origin ? previous.controller : new AbortController();
     const client = createHubClient({
-      origin, fetch: options.fetch, cookieHeader: options.cookieHeader, storeCookies: options.storeCookies,
+      signal: controller.signal, origin, fetch: options.fetch, cookieHeader: options.cookieHeader, storeCookies: options.storeCookies,
       setTimeout: options.setTimeout, clearTimeout: options.clearTimeout,
       isCurrent: () => conn === next,
     });
@@ -225,7 +230,7 @@ function createPetHub(input = {}) {
     // Preserve initialization and any in-flight write state across cookie changes.
     // Reloading a snapshot here can resurrect an already acknowledged command.
     const pendingReady = previous?.origin === origin ? previous.pendingReady : pending.load();
-    next = { origin, client, api, office: createOfficeApi(client), pending, pendingReady, ready: null };
+    next = { origin, client, api, office: createOfficeApi(client), pending, pendingReady, ready: null, controller };
     chat.configure({ service: api, origin });
     next.ready = Promise.all([pendingReady, activity.configure({ service: api, origin })]).then(() => undefined);
     conn = next;
@@ -359,6 +364,7 @@ function createPetHub(input = {}) {
       const current = conn;
       if (!current) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
       await current.ready;
+      if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
       if (!activity.isLoaded() || PROBE_ONLY_STATUSES.includes(hubStatus)) await hub.tick();
       if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
       const list = activity.list();
@@ -572,6 +578,7 @@ function createPetHub(input = {}) {
     dispose() {
       hub.stopPolling();
       chatRequest = null;
+      conn?.controller.abort();
       chat.configure({ service: null, origin: null });
       activity.configure({ service: null, origin: null }).catch(() => {});
       conn = null;

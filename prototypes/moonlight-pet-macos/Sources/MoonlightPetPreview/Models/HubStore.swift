@@ -47,6 +47,7 @@ final class HubStore: ObservableObject {
     private let makeAPI: (URL) throws -> any HubServing
     private var api: (any HubServing)?
     private var connectedOrigin: String?
+    private var consumersConnected = false
     @Published private(set) var connectionGeneration = 0
     private var authenticationVersion = 0
     private var taskVersion = 0
@@ -85,7 +86,7 @@ final class HubStore: ObservableObject {
             return connectedOrigin
         }
         connectionGeneration += 1
-        onConnectionChanged?(nil, nil)
+        publishConnection(nil, origin: nil)
         let ticket = connectionGeneration
         isEnabled = true; defaults.set(true, forKey: "petHub.enabled")
         let previousService = api
@@ -104,7 +105,7 @@ final class HubStore: ObservableObject {
             api = service
             let origin = normalizedURL.absoluteString
             connectedOrigin = origin
-            onConnectionChanged?(service, origin)
+            publishConnection(service, origin: origin)
             storageKey = "petHub.pending.v1." + origin
             if let data = defaults.data(forKey: storageKey!), let restored = try? JSONDecoder().decode(HubPendingState.self, from: data) { pending = restored }
             defaults.set(origin, forKey: "petPreview.hubURL")
@@ -124,7 +125,7 @@ final class HubStore: ObservableObject {
     func useLocalStorage() {
         let previousService = api
         Task { await previousService?.disconnect() }
-        onConnectionChanged?(nil, nil)
+        publishConnection(nil, origin: nil)
         connectionGeneration += 1; api = nil; connectedOrigin = nil; isEnabled = false; refreshRequested = false
         defaults.set(false, forKey: "petHub.enabled")
         isConnecting = false; isRefreshing = false; isCreatingTask = false; savingTaskIDs = []; deletingTaskIDs = []; reconcileTasksAfterWrites = false; isSavingMemo = false
@@ -139,9 +140,9 @@ final class HubStore: ObservableObject {
         let ticket = connectionGeneration
         isConnecting = true
         defer { if ticket == connectionGeneration { isConnecting = false } }
-        onConnectionChanged?(nil, nil)
+        publishConnection(nil, origin: nil)
         isRefreshing = false; refreshRequested = false; isCreatingTask = false; savingTaskIDs = []; deletingTaskIDs = []; reconcileTasksAfterWrites = false; isSavingMemo = false
-        taskReady = false; calendarReady = false; needsLogin = true; memoReceipt = nil
+        taskReady = false; calendarReady = false; needsLogin = true; memoReceipt = nil; taskReceipt = nil
         taskMessage = "Hub 로그인이 필요해요. 입력한 할 일은 그대로 보관합니다."
         calendarMessage = "Hub 로그인이 필요해요."
         do {
@@ -217,6 +218,11 @@ final class HubStore: ObservableObject {
             if authentication == authenticationVersion, tasksSucceeded, calendarSucceeded {
                 needsLogin = false
                 if wasNeedingLogin { errorMessage = nil }
+                // A shell login can reuse this transport after sign-out. Reattach
+                // downstream consumers once while preserving ordinary conversations.
+                if !consumersConnected, let origin = connectedOrigin {
+                    publishConnection(service, origin: origin)
+                }
             }
         }
     }
@@ -425,6 +431,11 @@ final class HubStore: ObservableObject {
               pending.savedMemo?.revision == saved.revision else { return }
         pending.savedMemo = nil
         persistPending()
+    }
+
+    private func publishConnection(_ service: (any HubServing)?, origin: String?) {
+        consumersConnected = service != nil
+        onConnectionChanged?(service, origin)
     }
 
     private func upsert(_ task: HubTask) {

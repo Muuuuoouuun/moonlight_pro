@@ -15,6 +15,7 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
   const [recordState, setRecordState] = React.useState({ items: [], sources: { revenue: 'loading', tasks: 'loading' } });
   const [reload, setReload] = React.useState(0);
   const inputRef = React.useRef(null);
+  const panelRef = React.useRef(null);
 
   // 열릴 때 레코드 인덱스를 예열(캐시 60s) — 검색어를 치는 시점엔 이미 로컬 필터만 남는다.
   React.useEffect(() => {
@@ -72,9 +73,13 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
 
   React.useEffect(() => {
     if (!open) return undefined;
+    const previouslyFocused = document.activeElement;
     setQ(''); setSelectedKey(null);
     const timer = setTimeout(() => inputRef.current?.focus(), 30);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus?.();
+    };
   }, [open]);
 
   // Global ESC — close even when focus has left the search input (list hover, etc.).
@@ -85,7 +90,11 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
   React.useEffect(() => {
     if (!open) return;
     const layer = pushEscLayer();
-    const onKey = (e) => { if (e.key === 'Escape' && isTopEscLayer(layer)) onCloseRef.current?.(); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isTopEscLayer(layer)) return;
+      e.preventDefault();
+      onCloseRef.current?.();
+    };
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); popEscLayer(layer); };
   }, [open]);
@@ -94,13 +103,28 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
 
   const handleKey = (e) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-    if (e.key === 'Escape') { onClose(); return; }
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedKey(paletteItemKey(filtered[Math.min(filtered.length - 1, idx + 1)])); }
     if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedKey(paletteItemKey(filtered[Math.max(0, idx - 1)])); }
     if (e.key === 'Enter') {
       const it = filtered[idx];
       e.preventDefault();
       activate(it);
+    }
+  };
+
+  const handlePanelKey = (e) => {
+    if (e.key !== 'Tab') return;
+    const nodes = Array.from(panelRef.current?.querySelectorAll('input, button, a[href], [tabindex]') || [])
+      .filter(el => el.tabIndex >= 0 && !el.matches(':disabled') && !el.closest('[inert]') && el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden');
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (!first) return;
+    if (nodes.length === 1 || (e.shiftKey && document.activeElement === first)) {
+      e.preventDefault();
+      (e.shiftKey ? last : first).focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
     }
   };
 
@@ -121,7 +145,7 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
       animation: 'hubFadeIn var(--dur-overlay) ease-out',
     }}>
       {/* 오버레이는 페이드만, 패널이 §9 다이얼로그 윈도(160–200ms)로 상승 */}
-      <div onClick={e => e.stopPropagation()} style={{
+      <div ref={panelRef} onKeyDown={handlePanelKey} onClick={e => e.stopPropagation()} style={{
         width: 580, maxWidth: '90vw', maxHeight: '70vh',
         background: 'var(--surface-2)',
         border: '1px solid var(--line)',
@@ -134,9 +158,10 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
           <Iconed name="search" size={15} style={{ color: 'var(--fg-faint)' }} />
           <input ref={inputRef} value={q} onChange={e => { setQ(e.target.value); setSelectedKey(null); }} onKeyDown={handleKey}
             role="combobox" aria-expanded="true" aria-controls="hub-palette-results" aria-autocomplete="list"
+            aria-label="페이지·액션·고객·딜·할 일 검색"
             aria-activedescendant={filtered[idx] ? `hub-palette-option-${idx}` : undefined}
             placeholder="페이지·액션·고객·딜·할 일 검색…"
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 14 }} />
+            style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'var(--fg)', fontSize: 14 }} />
           <Kbd>esc</Kbd>
         </div>
         <div ref={listRef} id="hub-palette-results" role="listbox" aria-label="검색 결과" className="scroll-y" style={{ flex: 1, padding: 6 }}>

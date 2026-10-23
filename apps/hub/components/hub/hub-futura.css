@@ -263,6 +263,15 @@
 }
 
 /* ── 오늘의 시간표 ────────────────────────────────────────────── */
+.hub-app .fx-read-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hub-app .fx-read-state > .hub-btn { flex-shrink: 0; margin-left: auto; }
+
 .hub-app .fx-section-head {
   display: flex;
   align-items: baseline;
@@ -423,6 +432,8 @@
   font-size: 12.5px;
   color: var(--fg-muted);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     background-color var(--dur-hover) var(--ease-hub),
     box-shadow var(--dur-hover) var(--ease-hub),
@@ -533,7 +544,17 @@
 @media (max-width: 900px) {
   .hub-app .fx-timeline-rail { padding-left: 24px; }
   .hub-app .fx-tl-dot { left: -24px; }
-  .hub-app .fx-tabs { margin-top: 20px; }
+  .hub-app .fx-tabs {
+    margin-top: 20px;
+    gap: 6px;
+  }
+  .hub-app .fx-tab {
+    padding: 8px 14px;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 /* ═══ 셸 질감 (사이드바 · 검색 · 사용자 카드) ═══════════════════

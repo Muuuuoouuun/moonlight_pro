@@ -17,6 +17,7 @@ import { SidebarResizer } from "./sidebar-resizer";
 import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
+import { releaseHomeDailyBriefRead, startHomeDailyBriefRead } from './daily-brief-signals';
 import { QuickMemo } from "./quick-memo";
 import { savedSharedCaptureTarget, snapshotSharedCaptureQuery } from "@/lib/shared-capture-navigation";
 import { OfficeSessionProvider } from "./office-session-provider";
@@ -98,7 +99,10 @@ function useShellOverlaysReady() {
   return ready;
 }
 
-const Home = lazyPage(() => import("./pages/home").then(m => m.Home));
+const Home = lazyPage(() => {
+  startHomeDailyBriefRead();
+  return import("./pages/home").then(m => m.Home);
+});
 const DailyBrief = lazyPage(() => import("./pages/daily-brief").then(m => m.DailyBrief));
 const Overview = lazyPage(() => import("./pages/overview").then(m => m.Overview));
 const Calendar = lazyPage(() => import("./pages/work").then(m => m.Calendar));
@@ -191,7 +195,9 @@ function useMobileViewport() {
 
 function useIdlePagePrefetch() {
   React.useEffect(() => {
-    if (prefersOnDemandLoading()) return undefined;
+    // CPU idle does not mean the current page's network requests have finished.
+    // Touch devices load destinations on demand, like the shell overlays above.
+    if (window.matchMedia?.("(hover: none) and (pointer: coarse)").matches || prefersOnDemandLoading()) return undefined;
     let cancelled = false;
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
     const cancelIdle = window.cancelIdleCallback || clearTimeout;
@@ -339,6 +345,10 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const stripped = pathname.replace(/^\/+/, '').replace(/\/$/, '');
   let path = stripped || 'dashboard';
   if (PARENT_JUMP[path]) path = PARENT_JUMP[path];
+
+  React.useEffect(() => {
+    if (path !== 'dashboard/home') releaseHomeDailyBriefRead();
+  }, [path]);
 
   // The Projects surface is shared by two sidebar anchors (할 일 · 프로젝트·기획);
   // `view` is what tells them apart, so the shell has to hand it to the sidebar.

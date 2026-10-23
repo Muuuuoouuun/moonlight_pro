@@ -27,6 +27,7 @@ let pendingBrief = null; // { fetchImpl, generation, promise }
 let readGeneration = 0;
 let lastSettled = null; // 최신 세대의 결과(실패도 포함) — 늦은 이전 읽기가 이를 가리지 않는다.
 let authVersion = 0;
+let homeRouteRead = null; // selected Home route only; consumed by its first mount
 
 export function getDailyBriefAuthVersion() { return authVersion; }
 
@@ -40,6 +41,11 @@ export function invalidateDailyBriefAuth(read = {
   readGeneration += 1;
   pendingBrief = null;
   lastSettled = { generation: readGeneration, read };
+  if (homeRouteRead) {
+    // A prepared first paint must never retain private data after any reader sees 401.
+    homeRouteRead.generation = readGeneration;
+    homeRouteRead.promise = Promise.resolve(read);
+  }
 }
 
 function latestRead() {
@@ -92,6 +98,60 @@ export function readDailyBrief({ signal, fetchImpl = globalThis.fetch, force = f
   return untilAborted(pendingBrief.promise, signal);
 }
 
+function settledBriefSignals() {
+  if (lastSettled?.generation !== readGeneration) return null;
+  return signalsFromRead('error' in lastSettled
+    ? { ok: false, httpStatus: 0, data: { status: 'error' } }
+    : lastSettled.read);
+}
+
+async function publishCurrentBrief(promise, publish) {
+  for (;;) {
+    await promise.catch(() => {});
+    const settled = settledBriefSignals();
+    // Validate and publish synchronously. Another auth/force generation can have
+    // replaced a completed promise while its awaiting consumer was queued.
+    if (settled) { publish(settled); return; }
+    promise = latestRead();
+  }
+}
+
+// Start with the selected Home code chunk, never from idle prediction. A settled
+// result (including error/401) belongs to the selected Home route exactly once.
+// Leaving releases the handoff; freshness is an upper bound, and new reads supersede it.
+export function startHomeDailyBriefRead({ fetchImpl = globalThis.fetch } = {}) {
+  if (homeRouteRead?.current(fetchImpl)) return homeRouteRead.promise;
+  const promise = readDailyBrief({ fetchImpl });
+  const entry = {
+    generation: readGeneration, at: Date.now(), promise,
+    current: (currentFetch = globalThis.fetch) => entry.generation === readGeneration
+      && fetchImpl === currentFetch && Date.now() - entry.at < DAILY_BRIEF_FRESH_MS,
+    snapshot: () => entry.current() ? settledBriefSignals() : null,
+    publish: (onSettled) => publishCurrentBrief(entry.promise, onSettled),
+  };
+  homeRouteRead = entry;
+  // A failed code chunk may never mount Home. Observe failure now; Home still
+  // receives the rejected promise/error truth when it consumes this request.
+  promise.catch(() => {});
+  return promise;
+}
+
+export function peekHomeDailyBriefRead() {
+  return homeRouteRead?.current() ? homeRouteRead : null;
+}
+
+export function takeHomeDailyBriefRead() {
+  const entry = peekHomeDailyBriefRead();
+  homeRouteRead = null;
+  return entry;
+}
+
+// Leaving the selected route invalidates only its one-shot handoff. Shared
+// requests/cache remain available, and returning uses the normal revalidation.
+export function releaseHomeDailyBriefRead() {
+  homeRouteRead = null;
+}
+
 // 5분 안의 마지막 성공 응답 — 없으면 null. 화면의 첫 그림 전용이다.
 export function peekDailyBrief(now = Date.now()) {
   return lastBrief && now - lastBrief.at < DAILY_BRIEF_FRESH_MS ? lastBrief : null;
@@ -125,12 +185,15 @@ const LOADING = { status: 'loading', signals: [], dailyFocus: null, taskToday: n
 // 그리고 조용히 다시 읽는다. keepPrevious: 이미 읽은 신호(live·partial)가 있으면 다시 읽는 동안
 // 그대로 두고 로딩으로 되돌리지 않는다(위젯이 창 포커스마다 다시 읽을 때 행이 깜빡이지 않게).
 // 실패·preview에서 다시 읽을 때는 로딩을 보여 재시도가 눌렸음을 알린다.
-export function useDailyBriefSignals(reloadKey, { keepPrevious = false } = {}) {
+export function useDailyBriefSignals(reloadKey, { keepPrevious = false, homeRoute = false } = {}) {
   const [state, setState] = React.useState(() => {
+    const prepared = homeRoute ? peekHomeDailyBriefRead()?.snapshot() : null;
+    if (prepared) return prepared;
     const cached = peekDailyBrief();
     return cached ? signalsFromRead(cached) : LOADING;
   });
   const firstRun = React.useRef(true);
+  const initialRouteRead = React.useRef(null);
   const lastReloadKey = React.useRef(reloadKey);
 
   React.useEffect(() => {
@@ -139,18 +202,26 @@ export function useDailyBriefSignals(reloadKey, { keepPrevious = false } = {}) {
     const force = !Object.is(lastReloadKey.current, reloadKey);
     lastReloadKey.current = reloadKey;
     const keep = keepPrevious || firstRun.current;
+    if (firstRun.current && homeRoute) initialRouteRead.current = takeHomeDailyBriefRead();
+    if (force) initialRouteRead.current = null;
     firstRun.current = false;
-    setState((prev) => (keep && (prev.status === 'live' || prev.status === 'partial') ? prev : LOADING));
+    const prepared = initialRouteRead.current;
+    const settled = prepared?.current() ? prepared.snapshot() : null;
+    setState((prev) => settled || (keep && (prev.status === 'live' || prev.status === 'partial') ? prev : LOADING));
     (async () => {
       try {
-        const next = await fetchDailyBriefSignals({ signal: controller.signal, force });
-        if (active) setState(next);
+        if (prepared?.current()) {
+          await prepared.publish((next) => { if (active) setState(next); });
+        } else {
+          const next = await fetchDailyBriefSignals({ signal: controller.signal, force });
+          if (active) setState(next);
+        }
       } catch {
         if (active) setState({ status: 'error', signals: [], dailyFocus: null, taskToday: null, checkItems: null });
       }
     })();
     return () => { active = false; controller.abort(); };
-  }, [reloadKey, keepPrevious]);
+  }, [reloadKey, keepPrevious, homeRoute]);
 
   return state;
 }

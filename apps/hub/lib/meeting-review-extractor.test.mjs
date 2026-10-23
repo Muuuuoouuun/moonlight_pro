@@ -4,12 +4,26 @@ import { extractMeetingReviewText, MAX_MEETING_REVIEW_TEXT_LENGTH } from "./meet
 
 async function withGeminiKey(run) {
   const previous = process.env.GEMINI_API_KEY;
+  const previousModel = process.env.GEMINI_MODEL;
   process.env.GEMINI_API_KEY = "test-key";
+  delete process.env.GEMINI_MODEL;
   try { return await run(); } finally {
     if (previous === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = previous;
+    if (previousModel === undefined) delete process.env.GEMINI_MODEL;
+    else process.env.GEMINI_MODEL = previousModel;
   }
 }
+
+test("meeting review preserves an explicit model override", async () => withGeminiKey(async () => {
+  process.env.GEMINI_MODEL = "configured-model";
+  const result = await extractMeetingReviewText({ text: "회의 기록", fetchImpl: async url => {
+    assert.match(url, /\/models\/configured-model:generateContent$/);
+    return providerReply({ summary: "회의 기록", proposals: [] });
+  } });
+  assert.equal(result.ok, true);
+  assert.equal(result.model, "configured-model");
+}));
 
 function providerReply(data, usageMetadata) {
   return new Response(JSON.stringify({
@@ -25,7 +39,7 @@ test("meeting review anchors exact UTF-16 source spans and preserves provider us
   const result = await extractMeetingReviewText({
     text: source,
     fetchImpl: async (url, options) => {
-      assert.match(url, /\/models\/gemini-3\.5-flash:generateContent$/);
+      assert.match(url, /\/models\/gemini-3\.6-flash:generateContent$/);
       assert.equal(options.method, "POST");
       assert.equal(options.headers["x-goog-api-key"], "test-key");
       assert.ok(options.signal instanceof AbortSignal);
@@ -44,7 +58,7 @@ test("meeting review anchors exact UTF-16 source spans and preserves provider us
     },
   });
   assert.equal(result.ok, true);
-  assert.equal(result.model, "gemini-3.5-flash");
+  assert.equal(result.model, "gemini-3.6-flash");
   assert.deepEqual(result.usage, { promptTokens: 100, candidatesTokens: 40, totalTokens: 140 });
   assert.equal(result.data.proposals.length, 2);
   for (const proposal of result.data.proposals) {

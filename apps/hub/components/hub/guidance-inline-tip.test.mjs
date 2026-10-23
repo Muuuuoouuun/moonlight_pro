@@ -84,7 +84,7 @@ test('the inline tip renders as one source-backed accessible button without requ
   try {
     const model = guidanceInlineTipModel('today', now);
     const html = renderToStaticMarkup(React.createElement(GuidanceInlineTip, { variant: 'today', now, onNavigate: () => {} }));
-    assert.match(html, /<button[^>]*type="button"[^>]*aria-label="[^"]*상세 보기"/);
+    assert.match(html, /<button[^>]*type="button"[^>]*title="상세 보기"/);
     assert.match(html, new RegExp(model.card.text));
     assert.match(html, new RegExp(model.card.person.split(' · ')[0]));
     assert.match(html, /자료 요약/);

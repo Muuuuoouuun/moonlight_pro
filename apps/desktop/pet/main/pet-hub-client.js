@@ -116,6 +116,7 @@ function headerSafe(value) {
 //   origin       허브 주소(정규화 규칙 위) — 틀리면 HubError('error','rejected-url')
 //   fetch        WHATWG fetch 호환(기본 globalThis.fetch). redirect:'manual' 을 지켜야 한다.
 //   cookieHeader async (url) → 'name=value; …' | '' — Electron 에서는 session.defaultSession 쿠키
+//   signal       connection lifetime signal; each request may also carry its own signal
 //   storeCookies async (setCookieHeaders[], url) → void — 성공 응답의 Set-Cookie 를 세션에 되돌린다(선택)
 //   isCurrent    () → boolean — 폐기된 연결은 쿠키 조회·후속 요청을 시작하지 않는다
 //   setTimeout/clearTimeout 주입(테스트용)
@@ -163,10 +164,10 @@ function createHubClient(options = {}) {
       reason = why;
       controller.abort();
     };
-    const external = init.signal;
-    if (external && external.aborted) throw fail('error', 'cancelled');
+    const externalSignals = [...new Set([options.signal, init.signal].filter(Boolean))];
+    if (externalSignals.some((signal) => signal.aborted)) throw fail('error', 'cancelled');
     const onExternalAbort = () => abort('cancelled');
-    if (external) external.addEventListener('abort', onExternalAbort, { once: true });
+    for (const signal of externalSignals) signal.addEventListener('abort', onExternalAbort, { once: true });
     const totalTimer = startTimer(() => abort('timeout'), budget.total);
     let requestTimer = startTimer(() => abort('timeout'), budget.request);
     const transportFailure = () => fail('error', reason === 'timeout' ? 'timeout' : reason === 'cancelled' ? 'cancelled' : 'offline');
@@ -236,7 +237,7 @@ function createHubClient(options = {}) {
     } finally {
       stopTimer(totalTimer);
       if (requestTimer) stopTimer(requestTimer);
-      if (external) external.removeEventListener('abort', onExternalAbort);
+      for (const signal of externalSignals) signal.removeEventListener('abort', onExternalAbort);
     }
   }
 

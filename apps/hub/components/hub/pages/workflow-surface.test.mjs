@@ -6,11 +6,12 @@ import { goalCheckRows } from '../../../lib/goal-input-ux.js';
 import { goalSectionState, measurementLabel } from '../../../lib/goal-client.js';
 import { recordFirstRows } from './workflow-reading.js';
 
-function compileFunction(file, name) {
+function compileDeclaration(file, name) {
   const source = readFileSync(new URL(file, import.meta.url), 'utf8');
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
-  const node = ast.statements.find(item => ts.isFunctionDeclaration(item) && item.name?.text === name);
-  assert.ok(node, `${name} is a production function`);
+  const node = ast.statements.find(item => (ts.isFunctionDeclaration(item) && item.name?.text === name)
+    || (ts.isVariableStatement(item) && item.declarationList.declarations.some(declaration => declaration.name.getText(ast) === name)));
+  assert.ok(node, `${name} is a production declaration`);
   return ts.transpileModule(node.getText(ast), { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText;
 }
 const React = { createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity) } }) };
@@ -19,7 +20,7 @@ const find = (node, predicate) => Array.isArray(node) ? node.flatMap(item => fin
 test('secondary disclosure preserves the same child after collapse, including an unsaved draft', () => {
   const values = []; let cursor = 0;
   const runtime = { ...React, useState(initial) { const key = cursor++; if (!(key in values)) values[key] = initial; return [values[key], value => { values[key] = typeof value === 'function' ? value(values[key]) : value; }]; } };
-  const Component = new Function('React', 'Iconed', `${compileFunction('./daily-brief.jsx', 'MoreDetail')}; return MoreDetail;`)(runtime, 'Iconed');
+  const Component = new Function('React', 'Iconed', `${compileDeclaration('./daily-brief.jsx', 'MoreDetail')}; return MoreDetail;`)(runtime, 'Iconed');
   const child = { type: 'input', props: { value: '작성 중인 합성 초안' } };
   const render = () => { cursor = 0; return Component({ title: '더보기', children: child }); };
   let tree = render();
@@ -44,7 +45,8 @@ function glance(model, onRecord) {
     OUTSIDE_RAIL_BUDGET: 3,
   };
   for (const name of ['Link', 'Button', 'TruthBadge', 'GlanceAttention', 'KpiStrip', 'GoalObjectiveCard', 'WeeklyMemo']) deps[name] = name;
-  const Component = new Function(...Object.keys(deps), `${compileFunction('./goals.jsx', 'GlanceView')}; return GlanceView;`)(...Object.values(deps));
+  const Component = new Function(...Object.keys(deps), `${compileDeclaration('./goals.jsx', 'elapsedPercent')}
+${compileDeclaration('./goals.jsx', 'GlanceView')}; return GlanceView;`)(...Object.values(deps));
   return Component({ model, objectives: model.objectives, hrefFor: objective => `/goal/${objective.id}`, checkHref: '/check?scope=personal', kpiHref: '/kpi', onRecord });
 }
 

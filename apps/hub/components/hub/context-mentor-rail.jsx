@@ -96,7 +96,7 @@ export function ContextMentorRail({ domain = 'sales', contextKey, onGuidanceAsk,
       type="button"
       className="context-mentor-rail__trigger"
       onClick={openRail}
-      aria-label={`${contextLabel || domainLabel} 멘토 관점 열기`}
+      title={`${contextLabel || domainLabel} 멘토 관점 열기`}
       aria-haspopup="dialog"
       aria-expanded={open}
     >

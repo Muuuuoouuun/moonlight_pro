@@ -19,8 +19,8 @@
 - [x] Add failing API tests for DELETE identity, acknowledgements, preview/error/offline failure; state tests for delayed success, failed deletion, stale reads and connection changes.
 - [x] Implement the service, state, model and confirmation UI.
 - [x] Run the focused tests, native build and packaged self-check without build-tree resources.
-- [ ] Install the verified native app and inspect the real context menu/confirmation without deleting an operator record.
-- [ ] Integrate only the task changes, preserve the preceding resource fix, and remove the dedicated worktree after integration.
+- [x] Install the verified native app and inspect the real context menu/confirmation without deleting an operator record.
+- [x] Integrate only the task changes, preserve the preceding resource fix, and remove the dedicated worktree after integration.
 
 ## Verification record
 
@@ -30,4 +30,6 @@ Final automated checks: API contracts increased to 16; deletion state tests cove
 
 `apps/desktop/pet-runtime.test.js`: 6 passing checks, including automatic native launch and reuse. The native build and strict bundle signature passed. Packaged `--self-check` passed with the build-tree resource bundle temporarily hidden, including real AppModel Hub/local deletion routing and local persistence.
 
-Installed the verified bundle at `~/Applications/MoonlightPetPreview.app`. The real pet and task panel render. After the new ad-hoc signature, automatic login is waiting with a macOS SecurityAgent process active; computer use refuses access to that security app. The operator was asked to handle any keychain prompt directly. Real-record deletion is not part of verification; menu/alert/cancel inspection is pending authentication.
+Installed the verified bundle at `~/Applications/MoonlightPetPreview.app`. After the new ad-hoc signature, the operator handled the macOS keychain prompt directly. The authenticated pet shows its live task list; the real context menu includes `삭제…`, the native confirmation sheet names the selected task and explains Hub deletion, and Cancel preserves both the task and the current input. Real-record deletion is not part of verification.
+
+Integrated as `d459264c` on the existing local branch. Focused domain/API checks and the six launcher tests pass again in the integrated checkout. Installed-build production sources match the integrated files, including the preceding resource repair. The dedicated worktree was archived and removed; earlier unrelated working changes were preserved.

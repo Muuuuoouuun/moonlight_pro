@@ -184,7 +184,8 @@ test("the newest row is the receipt — 기록 중 → 저장 중 → 저장됨 
   assert.equal(text(pending), "기록 중 · 아직 보내지 않았어요");
   // 저장 중은 TruthBadge의 syncing 그대로 — 새 알약을 만들지 않는다.
   const sending = mark({ pending: true, receipt: "sending" });
-  assert.match(sending, /^<span data-truth="syncing" aria-label="데이터 상태: 저장 중"/);
+  assert.match(sending, /^<span data-truth="syncing" /);
+  assert.doesNotMatch(sending, /aria-label=/, 'the generic badge exposes its visible text without an unsupported name');
   assert.equal(text(sending), "저장 중");
   // 저장됨은 서버가 답한 뒤에만 — 시각은 mono, 초록 없음.
   const saved = mark({ receipt: "saved", savedAt: "2026-09-30T01:42:00Z" });

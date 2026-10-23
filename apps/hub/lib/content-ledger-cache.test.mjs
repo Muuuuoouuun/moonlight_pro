@@ -6,6 +6,24 @@ const tick = () => new Promise(setImmediate);
 const dataResponse = (data) => ({ ok: true, json: async () => data });
 const live = (items = []) => ({ ...EMPTY_CONTENT_LEDGER, source: 'supabase', status: 'live', items });
 
+for (const status of [401, 403]) {
+  test(`HTTP ${status} clears recent content records before reading the response body`, async () => {
+    let denied = false, bodyReads = 0;
+    const cache = createContentLedgerCache(async () => denied
+      ? { ok: false, status, json: async () => { bodyReads++; return {}; } }
+      : dataResponse(live([{ id: 'private' }])));
+    await cache.refresh();
+    denied = true;
+    await cache.refresh();
+    assert.equal(cache.getSnapshot().syncState, 'error');
+    assert.deepEqual(cache.getSnapshot().items, []);
+    assert.equal(bodyReads, 0);
+    denied = false;
+    await cache.refresh();
+    assert.equal(cache.getSnapshot().syncState, 'live');
+  });
+}
+
 function deferredReads() {
   const requests = [];
   const cache = createContentLedgerCache((url, options) => new Promise((resolve, reject) => {

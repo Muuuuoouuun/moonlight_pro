@@ -30,7 +30,7 @@ test("summaries split months, group by model and leave unknown prices out of the
   assert.equal(current.totalTokens, 1_200_065);
   assert.equal(current.unpricedCalls, 1);
   assert.equal(current.estimatedUsd, 1.5 + 0.2 * 9);
-  assert.equal(current.estimatedKrw, Math.round((1.5 + 0.2 * 9) * 1360));
+  assert.equal(current.estimatedKrw, Math.round((1.5 + 0.2 * 9) * 1334.03));
   assert.deepEqual(current.models.map((m) => [m.model, m.calls, m.priced]), [["gemini-3.5-flash", 2, true], ["mystery-model", 1, false]]);
   assert.equal(current.models[1].estimatedUsd, null);
   assert.equal(previous.calls, 1);
@@ -38,6 +38,17 @@ test("summaries split months, group by model and leave unknown prices out of the
   const empty = summarizeAiUsage([], windows).current;
   assert.equal(empty.calls, 0);
   assert.deepEqual(empty.models, []);
+});
+
+test("3.6 ledger costs use each recorded instant across the price boundary", () => {
+  const rows = [
+    { occurred_at: "2026-12-31T23:59:59Z", model: "gemini-3.6-flash", prompt_tokens: 1_000_000 },
+    { occurred_at: "2027-01-01T00:00:00Z", model: "gemini-3.6-flash", prompt_tokens: 1_000_000 },
+  ];
+  const { current } = summarizeAiUsage(rows, kstMonthWindows(new Date("2027-01-10T00:00:00Z")));
+  assert.equal(current.calls, 2, "both records belong to KST January");
+  assert.equal(current.unpricedCalls, 0);
+  assert.equal(current.estimatedUsd, 2.25, "the promotion boundary is UTC, independently of KST grouping");
 });
 
 test("reads the two-month window for the workspace with numeric columns only", async () => {
@@ -51,6 +62,13 @@ test("reads the two-month window for the workspace with numeric columns only", a
   assert.equal(live.scope, "moonlight-calls");
   assert.equal(live.current.calls, 1);
   assert.match(live.pricing.url, /ai\.google\.dev/);
+  assert.equal(live.pricing.checkedAt, "2026-09-26");
+  assert.equal(live.pricing.modelCheckedAt["gemini-3.6-flash"], "2026-10-23");
+  assert.equal(live.pricing.usdKrw, 1334.03);
+  assert.equal(live.pricing.usdKrwObservedAt, "2026-10-16");
+  assert.equal(live.pricing.usdKrwReleasedAt, "2026-10-19");
+  assert.equal(live.pricing.usdKrwCheckedAt, "2026-10-23");
+  assert.equal(live.pricing.usdKrwSource, "https://www.federalreserve.gov/releases/h10/current/");
   assert.equal(seen.length, 1);
   assert.equal(seen[0].table, "ai_usage_log");
   assert.deepEqual(seen[0].options.filters, [

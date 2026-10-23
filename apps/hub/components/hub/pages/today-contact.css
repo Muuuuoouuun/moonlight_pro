@@ -113,6 +113,14 @@
 }
 .hub-app .today-contact__late,
 .hub-app .today-contact__channel { display: inline-flex; align-items: center; gap: 4px; }
+.hub-app a.today-contact__tel {
+  color: var(--fg-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 2px;
+  transition: color var(--dur-hover) var(--ease-hub);
+}
+.hub-app a.today-contact__tel:hover { color: var(--fg); }
 .hub-app .today-contact__late { color: var(--fg-muted); }
 .hub-app .today-contact__late[data-urgent="true"] { color: var(--danger); font-weight: 500; }
 .hub-app .today-contact__acts { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }

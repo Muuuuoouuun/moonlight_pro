@@ -36,7 +36,7 @@ export function TodayTimeFlow({ agenda = {}, onNavigate }) {
   // conflicts and acknowledgements, including when the clock moves the window.
   const shown = visited ? rows : rows.filter(row => seenKeys.includes(keyOf(row)) || collapsedKeys.includes(keyOf(row)));
   const openCalendar = () => onNavigate?.('dashboard/work/calendar');
-  return <Card pad={false} className="daily-brief__panel workflow-agenda" aria-label="오늘 일정">
+  return <Card pad={false} className="daily-brief__panel workflow-agenda" role="group" aria-label="오늘 일정">
     <div className="daily-brief__card-head workflow-agenda__head">
       <span>오늘 일정 · 시간 흐름</span>
       {state !== 'live' && <TruthBadge state={state} />}

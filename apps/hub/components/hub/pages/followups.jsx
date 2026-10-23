@@ -202,6 +202,8 @@ function ContactRow({ item, variant, rail = false, leaving = false, selected = f
   const lateDays = variant === "missed" && promiseKey ? diffKstDays(promiseKey, todayKey) : null;
   const amount = item.kind === "deal" ? formatWon(item.amount) : null;
   const rescheduling = reschedule?.key === rowKey(item);
+  const cleanPhone = item.phone ? String(item.phone).replace(/[^+\d]/g, "") : "";
+  const telHref = cleanPhone ? `tel:${cleanPhone}` : null;
 
   let promise;
   let why = null;
@@ -269,10 +271,33 @@ function ContactRow({ item, variant, rail = false, leaving = false, selected = f
               )}
               {(variant === "missed" || variant === "dormant" || variant === "open") && <span>{lastContactLine(item)}</span>}
               {(variant === "today" || variant === "upcoming") && item.channel && (
-                <span className="today-contact__channel">
-                  <Iconed name={CHANNEL_ICON[item.channel] || "chat"} size={11} />
-                  {item.channel}
-                </span>
+                telHref ? (
+                  <a
+                    href={telHref}
+                    className="today-contact__channel today-contact__tel"
+                    aria-label={`${item.name} 전화 걸기 (${item.phone})`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Iconed name={CHANNEL_ICON[item.channel] || "chat"} size={11} />
+                    {item.channel}
+                  </a>
+                ) : (
+                  <span className="today-contact__channel">
+                    <Iconed name={CHANNEL_ICON[item.channel] || "chat"} size={11} />
+                    {item.channel}
+                  </span>
+                )
+              )}
+              {(variant === "missed" || variant === "dormant" || variant === "open") && telHref && (
+                <a
+                  href={telHref}
+                  className="today-contact__channel today-contact__tel mono"
+                  aria-label={`${item.name} 전화 걸기 (${item.phone})`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Iconed name="signal" size={11} />
+                  {item.phone}
+                </a>
               )}
               {(variant === "today" || variant === "upcoming") && (stage || KIND_TAG[item.kind]) && (
                 <span>{KIND_TAG[item.kind]}{stage ? ` · ${stage}` : ""}{amount ? <> · <span className="mono">{amount}</span></> : null}</span>

@@ -40,8 +40,10 @@ test("multimodal returns a JSON error envelope for malformed inputs", async () =
   }));
   assert.equal(malformed.status, 400);
   assert.equal((await malformed.json()).status, "error");
-  const aborted = requestFor({ text: "메모" });
-  aborted.text = async () => { throw new Error("stream aborted"); };
+  const aborted = new Request("http://localhost:3000/api/hub/intake/multimodal", {
+    method: "POST", headers: { origin: "http://localhost:3000" }, duplex: "half",
+    body: new ReadableStream({ start(controller) { controller.error(new Error("stream aborted")); } }),
+  });
   const readFailure = await POST(aborted);
   assert.equal(readFailure.status, 400);
   assert.equal((await readFailure.json()).status, "error");

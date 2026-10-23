@@ -294,7 +294,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
           <img src="/icon-192.png" width="28" height="28" alt="" aria-hidden="true" style={{ flexShrink: 0, borderRadius: 7 }} />
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>Moonlight</div>
-            <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>
+            <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-dim)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -310,11 +310,11 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
       </div>
 
       <div className="hub-sidebar-search" style={{ padding: '4px 12px 8px' }}>
-        <button onClick={openPalette} className="fx-shell-card" title="검색 · ⌘K" aria-label="검색 · ⌘K" style={{
+        <button onClick={openPalette} className="fx-shell-card" title="검색 · ⌘K" aria-label="검색 · 바로 이동 · ⌘K" style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           height: 34, padding: '0 12px',
           border: 0,
-          color: 'var(--fg-faint)', fontSize: 12,
+          color: 'var(--fg-dim)', fontSize: 12,
         }}>
           <Iconed name="search" size={13} />
           <span className="hub-sidebar-label" style={{ flex: 1, textAlign: 'left' }}>검색 · 바로 이동</span>
@@ -356,7 +356,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
         <span className="hub-sidebar-label"><Avatar name="문준혁" size={26} /></span>
         <div className="hub-sidebar-label" style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>문준혁</div>
-          <div style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Founder · Pro</div>
+          <div style={{ fontSize: 10.5, color: 'var(--fg-dim)' }}>Founder · Pro</div>
         </div>
         <InquiryBell className="hub-sidebar-inquiry" size={collapsed ? 36 : 24} state={inquiryNotifications} onNavigate={onNavigate} />
       </div>

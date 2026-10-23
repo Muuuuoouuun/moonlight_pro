@@ -8,6 +8,7 @@ const componentsSource = readFileSync(new URL('../goal-components.jsx', import.m
 const scorecardSource = readFileSync(new URL('../goal-scorecard.jsx', import.meta.url), 'utf8');
 const scorecardSaveSource = readFileSync(new URL('../../../lib/scorecard-save.js', import.meta.url), 'utf8');
 const glanceSource = readFileSync(new URL('../goal-glance.jsx', import.meta.url), 'utf8');
+const goalLinksSource = readFileSync(new URL('../goal-links.jsx', import.meta.url), 'utf8');
 const weeklyMemoSource = readFileSync(new URL('../../../lib/weekly-memo-save.js', import.meta.url), 'utf8');
 const tokensSource = readFileSync(new URL('../hub-tokens.css', import.meta.url), 'utf8');
 
@@ -30,18 +31,43 @@ test('record-first view retains KPI, objectives, attention and the weekly memo',
   assert.match(goalsSource, /objectiveScore\(keyResults\)/);
   assert.match(goalsSource, /objectivePaceState\(score, period\)/);
   assert.match(goalsSource, /<KpiStrip rows=\{kpiRows\}/);
-  assert.match(goalsSource, /<GlanceAttention items=\{attentionItems\(readings, kpiRows\)\}/);
+  assert.match(goalsSource, /<GlanceAttention\b[^>]*items=\{attentionItems\(readings, kpiRows, \{ hrefFor, checkHref \}\)\}/);
   assert.match(goalsSource, /<WeeklyMemo /);
   assert.match(goalsSource, /KPI 자세히 →|kpiHref=\{kpiHref\}/);
   assert.match(glanceSource, /KPI 자세히 →/);
   assert.match(goalsSource, /data-record-metric=\{metric\.id\}/);
   assert.match(goalsSource, /data-goal-id=\{objective\.id\}/);
+  assert.match(goalsSource, /className="goal-kr-list"/);
+  assert.match(goalsSource, /function compactTargetLabel/);
+  assert.match(cssSource, /\.goal-kr-list\s*\{/);
   assert.match(cssSource, /\.goal-kr-row\s*\{/);
   assert.match(cssSource, /\.goal-glance\s*\{/);
   // 이번 주 메모는 learning 메모 + 개인 목표 연결. 마이그레이션 없음.
   assert.match(weeklyMemoSource, /noteMeta: \{ kind: 'learning'/);
   assert.match(weeklyMemoSource, /action: 'link_entity'/);
   assert.match(weeklyMemoSource, /entityId: state\.requests\.journal\.entryId/);
+});
+
+test('cross-tab and intra-tab connections: attention items, KPI tiles, weekly memo, and GoalLinks route cleanly', () => {
+  // 이번 주 챙길 것: 마일스톤은 연결된 할 일/업무 탭으로, 기록 공백은 체크인 뷰로, KPI·KR은 목표 상세로 연결.
+  assert.match(goalsSource, /const entityHref = goalLinkedEntityHref\(next\)/);
+  assert.match(goalsSource, /checkHref=\{goalHref\(null, scope, \{ check: true, base: routeBase \}\)\}/);
+  assert.match(glanceSource, /className="hub-row goal-attention__link"/);
+  assert.match(glanceSource, /className="(?:hub-row goal-kpi-tile__name|goal-kpi-tile__name hub-row)"/);
+  assert.match(glanceSource, /href="\/dashboard\/work\/memos"/);
+  // 다른 탭(할 일·프로젝트·메모·영업·브랜드·콘텐츠)의 연결된 목표 패널은 내 작업 › OKR·KPI 본체 탭으로 열린다.
+  assert.match(goalLinksSource, /goalHref\(objective\.id, objective\.scope, \{ base: GOAL_WORK_BASE \}\)/);
+  assert.match(goalLinksSource, /goalHref\(null, model\.entityScope, \{ create: true, base: GOAL_WORK_BASE \}\)/);
+});
+
+test('animations use DESIGN.md §9 tokens (stagger-up cascade + goalGaugeRise with --dur-gauge / --ease-gauge)', () => {
+  assert.match(glanceSource, /goal-kpi-tiles stagger-up/);
+  assert.match(glanceSource, /goal-attention__list stagger-up/);
+  assert.match(goalsSource, /goal-list stagger-up/);
+  assert.match(goalsSource, /goal-kpi-list stagger-up/);
+  assert.match(goalsSource, /goal-check-list stagger-up/);
+  assert.match(cssSource, /@keyframes goalGaugeRise/);
+  assert.match(cssSource, /animation:goalGaugeRise var\(--dur-gauge\) var\(--ease-gauge\) both/);
 });
 
 test('glance gauges: progress-to-floor bar, elapsed marker, pace tone always with glyph + label', () => {
@@ -99,7 +125,7 @@ test('keyboard shortcut N creates objective and dialog presence suppresses it', 
 
 test('check-in view keeps one-click record for both KRs and KPIs', () => {
   assert.match(goalsSource, /function GoalCheckList/);
-  assert.match(goalsSource, /<ul className="goal-check-list"/);
+  assert.match(goalsSource, /<ul className="goal-check-list\b/);
   assert.match(goalsSource, /isHealthIndicator\(metric\)/);
   assert.match(cssSource, /\.goal-check-row\s*\{/);
 });

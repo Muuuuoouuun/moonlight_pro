@@ -952,6 +952,11 @@ export function MyWork({ onNavigate }) {
   // fires when a timer runs out, so "되돌리기" is a real cancel, not a re-create.
   const [completingIds, setCompletingIds] = React.useState(() => new Set());
   const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
+  const completionVisualTimers = React.useRef(new Map());
+  React.useEffect(() => () => {
+    completionVisualTimers.current.forEach(clearTimeout);
+    completionVisualTimers.current.clear();
+  }, []);
   // 낙관적 기한 변경 오버레이 — PATCH 응답을 기다리지 않고 카드가 즉시 버킷을 옮긴다.
   // 배경 reload가 서버 진실로 덮으면 해당 패치를 걷어낸다.
   const [itemPatches, setItemPatches] = React.useState({});
@@ -1070,7 +1075,15 @@ export function MyWork({ onNavigate }) {
           tone: 'ok',
           label,
           action: created
-            ? { label: '보기', onClick: () => { setJustAddedId(created.id); scrollToRow(created.id); } }
+            ? { label: '보기', onClick: () => {
+              // Q120의 무기한 분리를 지키면서 하이라이트가 끝나도 저장한 행에 머문다.
+              setLens('list');
+              setLane('task');
+              setBucketFilter(normalizeBucket(created) === 'later' ? 'later' : 'all');
+              setSearch('');
+              setJustAddedId(created.id);
+              scrollToRow(created.id);
+            } }
             : undefined,
         });
         toast.success(label);
@@ -1134,10 +1147,14 @@ export function MyWork({ onNavigate }) {
       }
     }
     setCompletingIds((s) => new Set(s).add(id));
-    setTimeout(() => {
+    clearTimeout(completionVisualTimers.current.get(id));
+    const visualTimer = setTimeout(() => {
+      if (completionVisualTimers.current.get(id) !== visualTimer) return;
+      completionVisualTimers.current.delete(id);
       setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
       setHiddenIds((s) => new Set(s).add(id));
     }, STRIKE_MS);
+    completionVisualTimers.current.set(id, visualTimer);
 
     // 이 완료로 남은 할 일이 없어지면 저장 확인 뒤 축하한다(persistComplete).
     const remainingTasks = visible.filter((i) => i.lane === 'task' && !hiddenIds.has(i.id) && !completingIds.has(i.id) && i.id !== id);
@@ -1157,6 +1174,9 @@ export function MyWork({ onNavigate }) {
   const undoComplete = (item) => {
     const id = item.id;
     if (!cancelUndoable(id)) return; // 창이 이미 닫혔으면 PATCH가 나갔다 — 되돌릴 수 없음
+    // 즉시 Undo 때도 뒤늦은 취소선 타이머가 복구한 행을 다시 숨기지 않는다.
+    clearTimeout(completionVisualTimers.current.get(id));
+    completionVisualTimers.current.delete(id);
     setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setHiddenIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setNotice({ tone: 'ok', label: '완료 취소됨' });
@@ -1740,7 +1760,7 @@ export function MyWork({ onNavigate }) {
   const headTime = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
 
   return (
-    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', maxWidth: 1080, margin: '0 auto', width: '100%' }}>
+    <div className="hub-page hub-mywork-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', maxWidth: 1080, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
         <div>
           <div className="mwork-head__eyebrow">{headDate} · 지금 <span className="mono">{headTime}</span></div>
@@ -1854,16 +1874,17 @@ export function MyWork({ onNavigate }) {
         <span
           role={notice.tone === 'err' ? 'alert' : 'status'}
           aria-live="polite"
-          style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%', overflowWrap: 'anywhere', gap: 8 }}
+          style={{ fontSize: 12, lineHeight: 1.6, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%', overflowWrap: 'anywhere', gap: 8 }}
         >
-          {notice.label}
+          <span style={{ maxWidth: '80ch' }}>{notice.label}</span>
           {notice.action && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={notice.action.onClick}
-              style={{ fontSize: 11.5, color: 'var(--moon-200)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
             >
               {notice.action.label}
-            </button>
+            </Button>
           )}
         </span>
       )}
