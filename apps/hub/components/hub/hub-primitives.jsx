@@ -1268,7 +1268,11 @@ const FIELD_PANEL_KEY = '__fields__';
 // 않으면 기존 call site와 픽셀 단위로 같은 단일 폼이 그려진다(계약 변경 없음). 탭이 있을
 // 때만 열림 포커스를 첫 필드로 고정한다: 그러지 않으면 Drawer의 "본문 첫 focusable"
 // 규칙이 탭 버튼을 집어 이름 입력이 포커스를 잃는다.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', onContinue, optionalLabel = '설명·다음 행동', panels, infoLabel = '정보', children }) {
+//
+// `layout="sheet"`는 속성 시트 배치다(2026-10-23 운영자 B안 — 프로젝트 편집). 필드에
+// `variant: 'title'`(맨 위 큰 이름 칸, 라벨은 접근 가능한 이름만)과 `type: 'segmented'`
+// (SegmentedControl 한 번 누르기)를 쓸 수 있고, 푸터에 ⌘↵ 힌트와 취소가 붙는다. 기본 `stack`은 그대로다.
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', onContinue, optionalLabel = '설명·다음 행동', layout = 'stack', panels, infoLabel = '정보', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
   // 파괴 확인은 브라우저 confirm()이 아니라 푸터 인라인 2단계다 — OS 다이얼로그는 디자인
@@ -1392,12 +1396,122 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   if (!record) return null;
 
   const hasPanels = Array.isArray(panels) && panels.length > 0;
-  const renderFieldRows = (list, primary = true) => groupFieldRows(list).map((group, i) => (
+  const sheet = layout === 'sheet';
+  // 입력 컨트롤 한 개 — 쌓기(stack)·시트(sheet) 두 배치가 같이 쓴다.
+  const renderControl = (f, focusRef) => {
+    const isSpaciousTextarea = f.type === 'textarea' && (f.spacious || (f.rows && f.rows >= 4) || ['notes', 'description', 'memo', 'content', 'body'].includes(f.key));
+    // 시트의 이름 칸: 한 줄 의미의 큰 글자 — 줄바꿈 대신 내용만큼 자라고, Enter는 줄을 만들지 않는다.
+    if (f.variant === 'title') return (
+      <textarea
+        ref={el => {
+          if (focusRef) focusRef.current = el;
+          if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
+        }}
+        className="hub-drawer-input hub-edit-title"
+        aria-label={f.label}
+        rows={1}
+        disabled={saveState === 'saving'}
+        value={record[f.key] ?? ''}
+        placeholder={f.placeholder || ''}
+        maxLength={f.maxLength}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.nativeEvent?.isComposing) e.preventDefault(); }}
+        onChange={e => onChange(f.key, e.target.value.replace(/\n/g, ' '))}
+      />
+    );
+    if (f.type === 'segmented') return (
+      <SegmentedControl
+        label={f.label}
+        size="md"
+        fill
+        options={f.options.map(o => ({ key: o.value, label: o.label }))}
+        value={record[f.key] ?? ''}
+        onChange={value => { if (saveState !== 'saving') onChange(f.key, value); }}
+      />
+    );
+    return f.type === 'select' ? (
+      <span className="hub-select">
+        <select
+          ref={focusRef}
+          disabled={saveState === 'saving'}
+          value={record[f.key] ?? ''}
+          onChange={e => onChange(f.key, e.target.value)}
+          className="hub-drawer-input"
+        >
+          {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <Iconed name="chevronD" size={13} aria-hidden="true" />
+      </span>
+    ) : f.type === 'chips' ? (
+      <div role="group" aria-label={f.label} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0' }}>
+        {f.options.map(o => {
+          const current = Array.isArray(record[f.key]) ? record[f.key] : [];
+          const selected = current.includes(o.value);
+          return (
+            <ChipToggle
+              key={o.value}
+              label={o.label}
+              selected={selected}
+              onChange={() => onChange(f.key, selected ? current.filter(v => v !== o.value) : [...current, o.value])}
+            />
+          );
+        })}
+      </div>
+    ) : f.type === 'textarea' ? (
+      <textarea
+        ref={focusRef}
+        // hub-drawer-input: 드로어 공용 휴지·hover·focus chrome만 / hub-edit-textarea(+--spacious):
+        // 크기·여백·행간·글자 크기의 단독 소유자(hub-edit-drawer.css, DESIGN.md §15 2026-09-21).
+        className={`hub-drawer-input hub-edit-textarea${isSpaciousTextarea ? ' hub-edit-textarea--spacious' : ''}`}
+        disabled={saveState === 'saving'}
+        value={record[f.key] ?? ''}
+        placeholder={f.placeholder || ''}
+        rows={f.rows || 5}
+        maxLength={f.maxLength}
+        onChange={e => {
+          onChange(f.key, e.target.value);
+          if (f.autoResize) {
+            e.target.style.height = 'auto';
+            e.target.style.height = `${e.target.scrollHeight}px`;
+          }
+        }}
+        style={{ minHeight: f.rows ? undefined : 112, ...(f.rows && !f.autoResize ? { height: 'auto' } : null) }}
+      />
+    ) : (
+      <input
+        ref={focusRef}
+        disabled={saveState === 'saving'}
+        type={f.inputType || 'text'}
+        // <input type="date"> requires an exact YYYY-MM-DD value — a full ISO
+        // timestamp ("2026-07-20T00:00:00+00:00", what every dueAt/closeAt read
+        // path returns) fails the native format check and the browser silently
+        // renders it blank instead of erroring, so this slice is load-bearing.
+        value={f.inputType === 'date' ? String(record[f.key] ?? '').slice(0, 10) : (record[f.key] ?? '')}
+        placeholder={f.placeholder || ''}
+        maxLength={f.maxLength}
+        onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+        className="hub-drawer-input"
+      />
+    );
+  };
+  // 시트 배치(2026-10-23, 운영자 B안): 이름은 맨 위 큰 칸, 속성은 왼쪽 라벨 열 + 오른쪽 컨트롤,
+  // 여러 줄 글쓰기 칸만 라벨 위·전체 폭. `row` 묶음은 쓰지 않는다 — 한 줄에 속성 하나.
+  const renderSheetField = (f, focusRef) => {
+    if (f.variant === 'title') return <React.Fragment key={f.key}>{renderControl(f, focusRef)}</React.Fragment>;
+    const Wrapper = f.type === 'segmented' || f.type === 'chips' ? 'div' : 'label';
+    return (
+      <Wrapper key={f.key} className={`hub-edit-prop${f.type === 'textarea' ? ' hub-edit-prop--block' : ''}`}>
+        <span className="hub-edit-prop__label">{f.label}{f.labelBadge || null}</span>
+        {renderControl(f, focusRef)}
+      </Wrapper>
+    );
+  };
+  const renderFieldRows = (list, primary = true) => sheet
+    ? list.map((f, i) => renderSheetField(f, primary && hasPanels && i === 0 ? firstFieldRef : undefined))
+    : groupFieldRows(list).map((group, i) => (
         <div key={group.row || `solo-${i}`} className={group.fields.length > 1 ? "hub-edit-field-row" : undefined} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
           {group.fields.map((f, j) => {
             // 탭 모드에서만 쓰이는 열림 포커스 앵커 — 탭이 없으면 Drawer 기본 규칙 그대로다.
             const focusRef = primary && hasPanels && i === 0 && j === 0 ? firstFieldRef : undefined;
-            const isSpaciousTextarea = f.type === 'textarea' && (f.spacious || (f.rows && f.rows >= 4) || ['notes', 'description', 'memo', 'content', 'body'].includes(f.key));
             const currentLen = typeof record[f.key] === 'string' ? record[f.key].length : 0;
             return (
             <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: f.flex ?? 1, minWidth: 0 } : null) }}>
@@ -1409,70 +1523,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
                   </span>
                 ) : null}
               </span>
-              {f.type === 'select' ? (
-                <span className="hub-select">
-                  <select
-                    ref={focusRef}
-                    disabled={saveState === 'saving'}
-                    value={record[f.key] ?? ''}
-                    onChange={e => onChange(f.key, e.target.value)}
-                    className="hub-drawer-input"
-                  >
-                    {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                  <Iconed name="chevronD" size={13} aria-hidden="true" />
-                </span>
-              ) : f.type === 'chips' ? (
-                <div role="group" aria-label={f.label} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0' }}>
-                  {f.options.map(o => {
-                    const current = Array.isArray(record[f.key]) ? record[f.key] : [];
-                    const selected = current.includes(o.value);
-                    return (
-                      <ChipToggle
-                        key={o.value}
-                        label={o.label}
-                        selected={selected}
-                        onChange={() => onChange(f.key, selected ? current.filter(v => v !== o.value) : [...current, o.value])}
-                      />
-                    );
-                  })}
-                </div>
-              ) : f.type === 'textarea' ? (
-                <textarea
-                  ref={focusRef}
-                  // hub-drawer-input: 드로어 공용 휴지·hover·focus chrome만 / hub-edit-textarea(+--spacious):
-                  // 크기·여백·행간·글자 크기의 단독 소유자(hub-edit-drawer.css, DESIGN.md §15 2026-09-21).
-                  className={`hub-drawer-input hub-edit-textarea${isSpaciousTextarea ? ' hub-edit-textarea--spacious' : ''}`}
-                  disabled={saveState === 'saving'}
-                  value={record[f.key] ?? ''}
-                  placeholder={f.placeholder || ''}
-                  rows={f.rows || 5}
-                  maxLength={f.maxLength}
-                  onChange={e => {
-                    onChange(f.key, e.target.value);
-                    if (f.autoResize) {
-                      e.target.style.height = 'auto';
-                      e.target.style.height = `${e.target.scrollHeight}px`;
-                    }
-                  }}
-                  style={{ minHeight: f.rows ? undefined : 112, ...(f.rows && !f.autoResize ? { height: 'auto' } : null) }}
-                />
-              ) : (
-                <input
-                  ref={focusRef}
-                  disabled={saveState === 'saving'}
-                  type={f.inputType || 'text'}
-                  // <input type="date"> requires an exact YYYY-MM-DD value — a full ISO
-                  // timestamp ("2026-07-20T00:00:00+00:00", what every dueAt/closeAt read
-                  // path returns) fails the native format check and the browser silently
-                  // renders it blank instead of erroring, so this slice is load-bearing.
-                  value={f.inputType === 'date' ? String(record[f.key] ?? '').slice(0, 10) : (record[f.key] ?? '')}
-                  placeholder={f.placeholder || ''}
-                  maxLength={f.maxLength}
-                  onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
-                  className="hub-drawer-input"
-                />
-              )}
+              {renderControl(f, focusRef)}
             </label>
             );
           })}
@@ -1523,6 +1574,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
           {onDelete && (
             <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
           )}
+          {sheet && saveState === 'idle' && <span className="hub-edit-hint"><Kbd>⌘↵</Kbd> 저장</span>}
           <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
             {saveState === 'preview' && (
               <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
@@ -1534,9 +1586,9 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               <span style={{ color: 'var(--danger)' }}>{saveFeedback || '저장에 실패했습니다. 다시 시도하세요.'}</span>
             )}
           </div>
-          {(saveState === 'preview' || saveState === 'conflict' || saveState === 'error') && (
+          {(saveState === 'preview' || saveState === 'conflict' || saveState === 'error') ? (
             <Button variant="ghost" size="sm" onClick={requestClose}>닫기</Button>
-          )}
+          ) : sheet && <Button variant="ghost" size="sm" onClick={requestClose} disabled={saveState === 'saving'}>취소</Button>}
           {onContinue && <Button variant="outline" size="sm" onClick={() => handleDone(true)} disabled={saveState === 'saving'}>저장 후 계속</Button>}
           <Button variant="primary" size="sm" onClick={() => handleDone()} disabled={saveState === 'saving'}>
             {saveState === 'saving' ? '저장 중…' : saveLabel}

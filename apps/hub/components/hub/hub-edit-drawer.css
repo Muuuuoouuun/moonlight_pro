@@ -23,3 +23,39 @@
 @media (max-width: 600px) {
   .hub-app textarea.hub-edit-textarea { font-size: 16px; }
 }
+
+/* 시트 배치(EditDrawer layout="sheet", 2026-10-23 운영자 B안) — 이름이 맨 위 큰 칸, 속성은
+   왼쪽 라벨 열 + 오른쪽 컨트롤. 한글 라벨에 대문자 변환·넓은 자간을 쓰지 않는다. */
+.hub-app textarea.hub-edit-title {
+  display: block;
+  flex-shrink: 0; /* 드로어 본문(세로 flex)이 넘칠 때 overflow:hidden 칸이 한 줄 아래로 눌리지 않게 */
+  height: auto;
+  min-height: 0;
+  padding: 10px 14px;
+  font-size: 24px;
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+  resize: none;
+  overflow: hidden;
+}
+.hub-edit-prop {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.hub-edit-prop--block { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.hub-edit-prop__label { font-size: 13px; font-weight: 500; color: var(--fg-dim); }
+.hub-app .hub-edit-prop .hub-drawer-input:not(textarea) { height: 38px; padding-left: 12px; font-size: 14px; font-weight: 500; }
+.hub-app .hub-edit-prop .hub-seg__btn[aria-pressed="true"] { font-weight: 650; }
+.hub-app .hub-edit-prop textarea.hub-edit-textarea { font-size: 14.5px; line-height: 1.75; }
+.hub-edit-hint { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-faint); }
+@media (hover: none) and (pointer: coarse) { .hub-edit-hint { display: none; } }
+@media (max-width: 600px) {
+  .hub-edit-prop { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+}
+/* 휴대폰 입력 16px 플로어(hub-tokens.css, !important)가 큰 이름을 16px로 줄이지 않게 — 한 단계만 줄인다. */
+@media (pointer: coarse), (max-width: 720px) {
+  .hub-app textarea.hub-edit-title { font-size: 20px !important; }
+}

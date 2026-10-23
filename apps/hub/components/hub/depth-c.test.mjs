@@ -91,6 +91,9 @@ test('inputs and tracks are wells that keep the 3:1 control edge and the focus r
   for (const sel of ['.hub-input', '.hub-field', '.hub-seg']) assert.equal(rule(`${marker} ${sel}`)['box-shadow'], 'var(--shadow-inset)', sel);
   assert.equal(rule(`${marker} .hub-input`)['border-color'], undefined); // --line-control 경계는 기본 규칙 그대로
   assert.match(rule(`${marker} .hub-field:focus-within`)['box-shadow'], /0 0 0 1px var\(--moon-300\)/);
+  // 편집 팝업 입력은 음영이 경계를 맡고 선은 아주 옅게(2026-10-23 운영자) — 포커스 링만 또렷하다.
+  assert.match(rule(`${marker} .hub-drawer-input`)['border-color'], /^color-mix\(in srgb, var\(--line-control\) \d+%, transparent\)$/);
+  assert.match(rule(`${marker} .hub-drawer-input:focus`)['box-shadow'], /0 0 0 1px var\(--moon-300\)/);
   assert.doesNotMatch(strip(depth), /(?<![\w-])outline\s*:|!important|font-size\s*:|font-weight\s*:/);
 });
 

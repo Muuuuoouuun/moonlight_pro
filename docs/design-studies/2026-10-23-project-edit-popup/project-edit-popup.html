@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>프로젝트 편집 시안</title>
+<style>
+@font-face { font-family: 'SUIT Variable'; src: url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../../apps/hub/public/fonts/JetBrainsMono-Variable.woff2') format('woff2'); font-weight: 100 800; font-display: swap; }
+
+/* depth C 토큰 (apps/hub/components/hub/hub-depth.css 값 그대로) */
+:root, [data-theme="light"] {
+  --bg: oklch(0.94 0.007 255);
+  --bg-glow: radial-gradient(110% 70% at 88% -12%, oklch(0.91 0.03 250) 0%, oklch(0.945 0.008 255) 48%, var(--bg) 100%);
+  --surface: oklch(0.978 0.004 255);
+  --well: color-mix(in srgb, var(--surface) 55%, var(--bg));
+  --fg: oklch(0.20 0.008 250);
+  --fg-muted: oklch(0.42 0.008 250);
+  --fg-dim: oklch(0.46 0.008 250);
+  --fg-faint: oklch(0.505 0.007 250);
+  --line-soft: oklch(0.80 0.008 250 / .45);
+  --line-control: oklch(0.66 0.007 250);
+  --moon-300: oklch(0.50 0.06 252);
+  --scrim: oklch(0.35 0.02 250 / .16);
+  --shadow-panel: -7px -7px 18px oklch(1 0 0 / .96), 10px 13px 30px -8px oklch(0.45 0.03 250 / .30), inset 0 1px 0 oklch(1 0 0 / .9);
+  --shadow-pop: 0 40px 80px -24px oklch(0.30 0.03 250 / .38), 0 12px 24px -12px oklch(0.30 0.03 250 / .22), inset 0 1px 0 oklch(1 0 0 / .9);
+  --raise-face: var(--surface);
+  --shadow-raise: -3px -3px 8px oklch(1 0 0 / .96), 4px 4px 10px -1px oklch(0.5 0.02 250 / .24), inset 0 1px 0 oklch(1 0 0 / .9);
+  --shadow-inset: inset 2px 2px 6px oklch(0.5 0.02 250 / .24), inset -2px -2px 6px oklch(1 0 0 / .96);
+  --ink-face: linear-gradient(180deg, oklch(0.31 0.012 250), oklch(0.20 0.008 250));
+  --ink-fg: oklch(0.985 0.003 250);
+  --shadow-ink: -2px -2px 6px oklch(1 0 0 / .8), 4px 6px 12px -3px oklch(0.25 0.05 250 / .5), inset 0 1px 0 oklch(1 0 0 / .18);
+}
+[data-theme="dark"] {
+  --bg: oklch(0.165 0.008 252);
+  --bg-glow: radial-gradient(110% 70% at 88% -12%, oklch(0.26 0.035 255) 0%, oklch(0.19 0.012 252) 46%, var(--bg) 100%);
+  --surface: oklch(0.24 0.011 252);
+  --fg: oklch(0.92 0.005 250);
+  --fg-muted: oklch(0.76 0.008 250);
+  --fg-dim: oklch(0.69 0.009 250);
+  --fg-faint: oklch(0.645 0.009 250);
+  --line-soft: oklch(0.30 0.008 250 / .4);
+  --line-control: oklch(0.50 0.008 250);
+  --moon-300: oklch(0.78 0.03 252);
+  --scrim: oklch(0 0 0 / .45);
+  --shadow-panel: -7px -7px 18px oklch(1 0 0 / .045), 10px 13px 30px -8px oklch(0 0 0 / .62), inset 0 1px 0 oklch(1 0 0 / .08);
+  --shadow-pop: 0 40px 80px -24px oklch(0 0 0 / .8), 0 12px 24px -12px oklch(0 0 0 / .5), inset 0 1px 0 oklch(1 0 0 / .08);
+  --raise-face: linear-gradient(180deg, oklch(0.315 0.013 252), oklch(0.28 0.012 252));
+  --shadow-raise: 0 12px 26px -10px oklch(0 0 0 / .85), 0 3px 6px oklch(0 0 0 / .4), inset 0 1px 0 oklch(1 0 0 / .15), inset 0 0 0 1px oklch(1 0 0 / .04);
+  --shadow-inset: inset 2px 2px 6px oklch(0 0 0 / .5), inset -2px -2px 6px oklch(1 0 0 / .045);
+  --ink-face: linear-gradient(180deg, oklch(0.96 0.004 250), oklch(0.85 0.006 250));
+  --ink-fg: oklch(0.18 0.008 250);
+  --shadow-ink: 0 0 0 1px oklch(1 0 0 / .1), 0 6px 18px -6px oklch(0.85 0.03 250 / .35), inset 0 1px 0 oklch(1 0 0 / .6);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh;
+  font-family: 'SUIT Variable', system-ui, sans-serif; color: var(--fg);
+  background: var(--bg-glow), var(--bg);
+  -webkit-font-smoothing: antialiased; word-break: keep-all;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+.mono { font-family: 'JetBrains Mono', 'SUIT Variable', monospace; }
+
+/* ── 페이지 ─────────────────────────────────────────── */
+.page-head { max-width: 1440px; margin: 0 auto; padding: 40px 32px 28px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 32px; }
+.page-head h1 { margin: 0; font-size: 34px; font-weight: 200; letter-spacing: -0.03em; line-height: 1.15; }
+.page-head p { margin: 8px 0 0; font-size: 13.5px; color: var(--fg-muted); max-width: 640px; line-height: 1.6; }
+.page-head > div:first-child { flex: 1; min-width: 280px; }
+.theme { display: flex; padding: 4px; border-radius: 999px; background: var(--well); box-shadow: var(--shadow-inset); }
+.theme button { height: 34px; padding: 0 16px; border: 0; border-radius: 999px; background: none; font-size: 13px; font-weight: 550; color: var(--fg-muted); cursor: pointer; }
+.theme button[aria-pressed="true"] { background: var(--ink-face); color: var(--ink-fg); box-shadow: var(--shadow-ink); }
+
+.studies { max-width: 1440px; margin: 0 auto; padding: 0 32px 72px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+@media (max-width: 1180px) { .studies { grid-template-columns: 1fr; } }
+.study__head { display: flex; align-items: baseline; gap: 12px; margin: 0 4px 12px; }
+.tag { flex: none; display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 8px; border-radius: 999px; background: var(--raise-face); box-shadow: var(--shadow-raise); font-size: 13px; font-weight: 700; }
+.study--base .tag { background: var(--well); box-shadow: var(--shadow-inset); color: var(--fg-dim); }
+.study__head h2 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -0.015em; }
+.study__head p { margin: 0; font-size: 13px; color: var(--fg-muted); }
+
+/* 보드 = 흐려진 허브 위 팝업 */
+.board { position: relative; overflow: hidden; border-radius: 24px; padding: 48px 24px; display: grid; place-items: center; background: var(--bg-glow), var(--bg); box-shadow: var(--shadow-panel); min-height: 860px; }
+.ghost i { position: absolute; display: block; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-panel); }
+.ghost .g1 { left: 16px; top: 16px; bottom: 16px; width: 112px; }
+.ghost .g2 { left: 144px; right: 16px; top: 16px; height: 180px; }
+.ghost .g3 { left: 144px; right: 16px; top: 212px; bottom: 16px; }
+.board::after { content: ""; position: absolute; inset: 0; background: var(--scrim); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.pop { position: relative; z-index: 1; width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line-soft); border-radius: 24px; box-shadow: var(--shadow-pop); }
+
+.spec { margin: 14px 4px 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 12.5px; }
+.spec dt { color: var(--fg-dim); }
+.spec dd { margin: 0; color: var(--fg); }
+.spec dd .mono { font-size: 12px; color: var(--fg-muted); }
+.notes { margin: 10px 4px 0; padding-left: 18px; font-size: 12.5px; line-height: 1.65; color: var(--fg-muted); }
+
+/* ── 공용 조각 ─────────────────────────────────────── */
+.well { width: 100%; background: var(--well); box-shadow: var(--shadow-inset); border: 1px solid var(--line-control); border-radius: 6px; outline: none; transition: border-color 120ms, box-shadow 120ms; }
+.well:focus { border-color: var(--moon-300); box-shadow: 0 0 0 1px var(--moon-300), var(--shadow-inset); }
+select.well { appearance: none; -webkit-appearance: none; cursor: pointer; }
+textarea.well { resize: none; display: block; }
+.sel { position: relative; display: block; min-width: 0; }
+.sel > svg { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--fg-faint); }
+.row { display: flex; gap: 12px; }
+.row > * { flex: 1; min-width: 0; }
+.x { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 999px; background: var(--raise-face); box-shadow: var(--shadow-raise); color: var(--fg-muted); cursor: pointer; }
+.x:active { box-shadow: var(--shadow-inset); }
+.foot { display: flex; align-items: center; gap: 10px; margin-top: 24px; padding: 16px 24px 20px; border-top: 1px solid var(--line-soft); }
+.hint { flex: 1; min-width: 0; font-size: 11.5px; color: var(--fg-faint); }
+.hint kbd { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 6px; border-radius: 5px; background: var(--well); box-shadow: var(--shadow-inset); color: var(--fg-muted); margin-right: 4px; }
+.btn-ghost { height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; font-size: 13.5px; font-weight: 550; color: var(--fg-muted); cursor: pointer; }
+.btn-ink { height: 40px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--ink-face); color: var(--ink-fg); box-shadow: var(--shadow-ink); font-size: 13.5px; font-weight: 650; letter-spacing: -0.005em; cursor: pointer; }
+.more > summary { list-style: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary svg { transition: transform 160ms; }
+.more[open] > summary svg { transform: rotate(90deg); }
+
+/* ── 현재 (지금 코드) ─────────────────────────────── */
+.v0 header { display: flex; align-items: center; gap: 8px; padding: 24px 24px 20px; }
+.v0 header > div { flex: 1; }
+.v0 h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.v0 .sub { font-size: 11px; color: var(--fg-faint); margin-top: 2px; }
+.v0 .body { padding: 0 24px; display: flex; flex-direction: column; gap: 14px; }
+.v0 label { display: flex; flex-direction: column; gap: 5px; }
+.v0 .lab { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-dim); }
+.v0 .well { height: 32px; padding: 0 10px; font-size: 13px; }
+.v0 select.well { padding-right: 28px; }
+.v0 textarea.well { height: auto; padding: 12px 14px; font-size: 14px; line-height: 1.7; }
+.v0 .row { gap: 10px; }
+.v0 .more > summary { font-size: 12px; color: var(--fg-muted); padding: 8px 0 0; }
+.v0 .more > summary span { color: var(--fg-dim); font-size: 10.5px; }
+.v0 .x { background: none; box-shadow: none; }
+.v0 .foot { margin-top: 24px; justify-content: flex-end; padding: 16px 24px; }
+.v0 .btn-ink { height: 30px; padding: 0 12px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+
+/* ── A 정돈 · 위 라벨 ──────────────────────────────── */
+.va header { display: flex; align-items: flex-start; gap: 12px; padding: 26px 24px 22px 28px; }
+.va header > div { flex: 1; }
+.va h3 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.3; }
+.va .sub { margin-top: 4px; font-size: 12.5px; color: var(--fg-faint); }
+.va .body { padding: 0 28px; display: flex; flex-direction: column; gap: 18px; }
+.va .lab { display: block; margin-bottom: 7px; font-size: 12.5px; font-weight: 600; color: var(--fg-muted); letter-spacing: -0.005em; }
+.va .well { height: 40px; padding: 0 14px; font-size: 14.5px; font-weight: 450; }
+.va select.well { padding-right: 34px; }
+.va .name { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+.va textarea.well { height: auto; padding: 12px 14px; font-size: 14px; line-height: 1.65; }
+.va .more > summary { font-size: 13px; font-weight: 550; color: var(--fg-muted); }
+.va .more > summary span { font-size: 11.5px; font-weight: 500; color: var(--fg-faint); }
+.va .more__body { display: flex; flex-direction: column; gap: 18px; padding-top: 16px; }
+.va .foot { padding-inline: 28px; }
+
+/* ── B 이름이 주인 · 행 라벨 ───────────────────────── */
+.vb header { display: flex; align-items: center; padding: 18px 18px 0 24px; }
+.vb .eyebrow { flex: 1; font-size: 12px; font-weight: 600; color: var(--fg-dim); letter-spacing: 0.02em; }
+.vb textarea.well.title-in { display: block; margin: 12px 24px 0; width: calc(100% - 48px); height: auto; padding: 12px 14px; font-size: 24px; font-weight: 300; letter-spacing: -0.025em; line-height: 1.3; }
+.vb .props { margin: 18px 24px 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px 12px; align-items: center; }
+.vb .props > .k { font-size: 13px; font-weight: 500; color: var(--fg-dim); }
+.vb .well { height: 38px; padding: 0 12px; font-size: 14px; font-weight: 500; }
+.vb select.well { padding-right: 34px; }
+.vb .seg { display: flex; height: 38px; padding: 3px; border-radius: 8px; background: var(--well); box-shadow: var(--shadow-inset); }
+.vb .seg button { flex: 1; min-width: 0; border: 0; border-radius: 6px; background: none; font-size: 13px; font-weight: 500; color: var(--fg-muted); cursor: pointer; white-space: nowrap; }
+.vb .seg button[aria-pressed="true"] { background: var(--ink-face); color: var(--ink-fg); box-shadow: var(--shadow-ink); font-weight: 650; }
+.vb .goal { display: block; margin: 20px 24px 0; }
+.vb .goal .k { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--fg-dim); }
+.vb textarea.well { height: auto; padding: 12px 14px; font-size: 14.5px; font-weight: 400; line-height: 1.75; }
+.vb .more { margin: 16px 24px 0; }
+.vb .more > summary { font-size: 13px; font-weight: 550; color: var(--fg-muted); }
+.vb .more > summary span { font-size: 11.5px; font-weight: 500; color: var(--fg-faint); }
+.vb .more__body { margin-top: 12px; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px 12px; align-items: center; }
+.vb .more__body .k { font-size: 13px; font-weight: 500; color: var(--fg-dim); }
+
+/* ── C 칸 안 라벨 · 타일 ───────────────────────────── */
+.vc header { display: flex; align-items: flex-start; gap: 12px; padding: 24px 22px 18px 24px; }
+.vc header > div { flex: 1; }
+.vc h3 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.015em; }
+.vc .sub { margin-top: 4px; font-size: 12.5px; color: var(--fg-faint); }
+.vc .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 24px; }
+.vc .span { grid-column: 1 / -1; }
+.vc .tile { position: relative; display: block; padding: 9px 14px 11px; border-radius: 10px; background: var(--well); box-shadow: var(--shadow-inset); border: 1px solid var(--line-control); transition: border-color 120ms, box-shadow 120ms; }
+.vc .tile[hidden] { display: none; }
+.vc .tile:focus-within { border-color: var(--moon-300); box-shadow: 0 0 0 1px var(--moon-300), var(--shadow-inset); }
+.vc .tile .k { display: block; font-size: 11.5px; font-weight: 550; color: var(--fg-dim); }
+.vc .tile input, .vc .tile select, .vc .tile textarea { display: block; width: 100%; margin: 3px 0 0; padding: 0; border: 0; background: transparent; outline: none; appearance: none; -webkit-appearance: none; font-size: 15px; font-weight: 550; color: var(--fg); }
+.vc .tile select { cursor: pointer; padding-right: 22px; }
+.vc .tile textarea { resize: none; font-size: 14px; font-weight: 450; line-height: 1.65; }
+.vc .tile--name input { font-size: 17px; font-weight: 650; letter-spacing: -0.012em; }
+.vc .tile > svg { position: absolute; right: 14px; bottom: 15px; pointer-events: none; color: var(--fg-faint); }
+.vc .add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 24px 0; }
+.vc .add .lead { font-size: 12px; color: var(--fg-faint); margin-right: 2px; }
+.vc .chip { height: 32px; padding: 0 13px; border: 0; border-radius: 999px; background: var(--raise-face); box-shadow: var(--shadow-raise); font-size: 12.5px; font-weight: 550; color: var(--fg-muted); cursor: pointer; }
+.vc .chip:active { box-shadow: var(--shadow-inset); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="chevr" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+</svg>
+
+<header class="page-head">
+  <div>
+    <h1>프로젝트 편집 — 입력창·글꼴 시안</h1>
+    <p>같은 데이터·같은 depth C 토큰으로 지금 화면과 세 안을 나란히 놓았습니다. 입력칸은 실제로 눌러 보고 고칠 수 있습니다. 글꼴은 SUIT Variable 하나, 단축키만 JetBrains Mono입니다.</p>
+  </div>
+  <div class="theme" role="group" aria-label="테마">
+    <button type="button" data-theme-set="light" aria-pressed="true">라이트</button>
+    <button type="button" data-theme-set="dark" aria-pressed="false">다크</button>
+  </div>
+</header>
+
+<main class="studies">
+
+  <!-- 현재 -->
+  <section class="study study--base">
+    <div class="study__head"><span class="tag">0</span><h2>지금</h2><p>오늘 반영한 팝업 — 비교 기준</p></div>
+    <div class="board">
+      <div class="ghost" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i></div>
+      <div class="pop v0" role="dialog" aria-label="프로젝트 편집 (지금)">
+        <header>
+          <div><h3>프로젝트 편집</h3><div class="sub">일정은 계획·검증에서 관리합니다.</div></div>
+          <button class="x" type="button" aria-label="닫기"><svg width="13" height="13"><use href="#x"/></svg></button>
+        </header>
+        <div class="body">
+          <label><span class="lab">프로젝트명</span><input class="well" value="22세기 유목민 · 우선 3편 대본 검토"></label>
+          <div class="row">
+            <label><span class="lab">업무 분류</span><span class="sel"><select class="well"><option>콘텐츠</option></select><svg width="13" height="13"><use href="#chev"/></svg></span></label>
+            <label><span class="lab">브랜드·컨테이너</span><span class="sel"><select class="well"><option>22th.Nomad</option></select><svg width="13" height="13"><use href="#chev"/></svg></span></label>
+          </div>
+          <label><span class="lab">목표 결과</span><textarea class="well" rows="5">[2026-10-17 KST 확인] 기존 22th.Nomad 브랜드 연결, 분야: 영상·대본 기획. 모션그래픽 버전은 보류. 우선 3편 D01·G4·M1의 채널 말투 반영 2차 수정 대본 검토 대기. 촬영·썸네일 승인·발행 완료 미확인.</textarea></label>
+          <div class="row">
+            <label><span class="lab">상태</span><span class="sel"><select class="well"><option>계획</option><option>진행 중</option><option>막힘</option><option>보관</option></select><svg width="13" height="13"><use href="#chev"/></svg></span></label>
+            <label><span class="lab">우선순위</span><span class="sel"><select class="well"><option>보통</option><option>낮음</option><option>높음</option><option>긴급</option></select><svg width="13" height="13"><use href="#chev"/></svg></span></label>
+          </div>
+          <label><span class="lab">다음 행동</span><input class="well" value="22세기 D01 · 완료 체크와 최신 목차를 대조해 촬영 준비"></label>
+          <details class="more"><summary>▸ 고객·장르·GitHub <span>선택</span></summary></details>
+        </div>
+        <div class="foot"><button class="btn-ink" type="button">변경사항 저장</button></div>
+      </div>
+    </div>
+    <dl class="spec">
+      <dt>제목</dt><dd>14 / 500</dd>
+      <dt>라벨</dt><dd>10.5 / 400 · 대문자 · 자간 0.08em</dd>
+      <dt>값</dt><dd>13 / 400 · 칸 높이 32</dd>
+      <dt>본문</dt><dd>14 / 400 · 행간 1.7</dd>
+    </dl>
+    <ul class="notes">
+      <li>한글 라벨에 자간 0.08em·대문자 변환이 걸려 글자가 흩어지고 위계가 약합니다(“GITHUB 저장소”).</li>
+      <li>제목과 값의 크기 차이가 1px뿐이라 어디부터 읽을지 안 보입니다.</li>
+    </ul>
+  </section>
+
+  <!-- A -->
+  <section class="study">
+    <div class="study__head"><span class="tag">A</span><h2>정돈 · 위 라벨</h2><p>구조는 그대로, 글꼴 위계와 칸 크기만</p></div>
+    <div class="board">
+      <div class="ghost" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i></div>
+      <div class="pop va" role="dialog" aria-label="프로젝트 편집 (A)">
+        <header>
+          <div><h3>프로젝트 편집</h3><div class="sub">일정은 계획·검증에서 관리합니다</div></div>
+          <button class="x" type="button" aria-label="닫기"><svg width="12" height="12"><use href="#x"/></svg></button>
+        </header>
+        <div class="body">
+          <label><span class="lab">프로젝트명</span><input class="well name" value="22세기 유목민 · 우선 3편 대본 검토"></label>
+          <div class="row">
+            <label><span class="lab">업무 분류</span><span class="sel"><select class="well"><option>콘텐츠</option></select><svg width="14" height="14"><use href="#chev"/></svg></span></label>
+            <label><span class="lab">브랜드·컨테이너</span><span class="sel"><select class="well"><option>22th.Nomad</option></select><svg width="14" height="14"><use href="#chev"/></svg></span></label>
+          </div>
+          <label><span class="lab">목표 결과</span><textarea class="well" rows="4">[2026-10-17 KST 확인] 기존 22th.Nomad 브랜드 연결, 분야: 영상·대본 기획. 모션그래픽 버전은 보류. 우선 3편 D01·G4·M1의 채널 말투 반영 2차 수정 대본 검토 대기. 촬영·썸네일 승인·발행 완료 미확인.</textarea></label>
+          <div class="row">
+            <label><span class="lab">상태</span><span class="sel"><select class="well"><option>계획</option><option>진행 중</option><option>막힘</option><option>보관</option></select><svg width="14" height="14"><use href="#chev"/></svg></span></label>
+            <label><span class="lab">우선순위</span><span class="sel"><select class="well"><option>보통</option><option>낮음</option><option>높음</option><option>긴급</option></select><svg width="14" height="14"><use href="#chev"/></svg></span></label>
+          </div>
+          <label><span class="lab">다음 행동</span><input class="well" value="22세기 D01 · 완료 체크와 최신 목차를 대조해 촬영 준비"></label>
+          <details class="more">
+            <summary><svg width="14" height="14"><use href="#chevr"/></svg>고객·장르·GitHub <span>선택</span></summary>
+            <div class="more__body">
+              <label><span class="lab">관련 리드·고객</span><span class="sel"><select class="well"><option>연결 없음</option></select><svg width="14" height="14"><use href="#chev"/></svg></span></label>
+              <div class="row">
+                <label><span class="lab">장르</span><span class="sel"><select class="well"><option>장르 없음</option></select><svg width="14" height="14"><use href="#chev"/></svg></span></label>
+                <label><span class="lab">GitHub 저장소</span><input class="well" placeholder="owner/repo"></label>
+              </div>
+            </div>
+          </details>
+        </div>
+        <div class="foot">
+          <span class="hint"><kbd>⌘↵</kbd>저장</span>
+          <button class="btn-ghost" type="button">취소</button>
+          <button class="btn-ink" type="button">변경사항 저장</button>
+        </div>
+      </div>
+    </div>
+    <dl class="spec">
+      <dt>제목</dt><dd>18 / 650 · 자간 −0.015em</dd>
+      <dt>라벨</dt><dd>12.5 / 600 · 대문자·자간 없음 · <span class="mono">--fg-muted</span></dd>
+      <dt>값</dt><dd>14.5 / 450 · 칸 높이 40 · 프로젝트명만 15.5 / 600</dd>
+      <dt>본문</dt><dd>14 / 400 · 행간 1.65 · 4줄</dd>
+      <dt>보조</dt><dd>12.5 부제 · 11.5 단축키(Mono)</dd>
+    </dl>
+    <ul class="notes">
+      <li>지금과 같은 구조라 바꿀 곳이 가장 적습니다 — 모든 편집 팝업에 공통으로 적용 가능.</li>
+      <li>푸터에 취소와 <span class="mono">⌘↵</span> 힌트를 더해 저장 방법이 보입니다.</li>
+    </ul>
+  </section>
+
+  <!-- B -->
+  <section class="study">
+    <div class="study__head"><span class="tag">B</span><h2>이름이 주인 · 행 라벨</h2><p>속성 시트처럼 — 상태·우선순위는 한 번 누르기</p></div>
+    <div class="board">
+      <div class="ghost" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i></div>
+      <div class="pop vb" role="dialog" aria-label="프로젝트 편집 (B)">
+        <header>
+          <span class="eyebrow">프로젝트 편집</span>
+          <button class="x" type="button" aria-label="닫기"><svg width="12" height="12"><use href="#x"/></svg></button>
+        </header>
+        <textarea class="well title-in" rows="1" data-grow aria-label="프로젝트명">22세기 유목민 · 우선 3편 대본 검토</textarea>
+        <div class="props">
+          <span class="k">업무 분류</span><span class="sel"><select class="well" aria-label="업무 분류"><option>콘텐츠</option></select><svg width="14" height="14"><use href="#chev"/></svg></span>
+          <span class="k">브랜드</span><span class="sel"><select class="well" aria-label="브랜드·컨테이너"><option>22th.Nomad</option></select><svg width="14" height="14"><use href="#chev"/></svg></span>
+          <span class="k">상태</span>
+          <div class="seg" role="group" aria-label="상태"><button type="button" aria-pressed="true">계획</button><button type="button" aria-pressed="false">진행 중</button><button type="button" aria-pressed="false">막힘</button><button type="button" aria-pressed="false">보관</button></div>
+          <span class="k">우선순위</span>
+          <div class="seg" role="group" aria-label="우선순위"><button type="button" aria-pressed="false">낮음</button><button type="button" aria-pressed="true">보통</button><button type="button" aria-pressed="false">높음</button><button type="button" aria-pressed="false">긴급</button></div>
+          <span class="k">다음 행동</span><input class="well" aria-label="다음 행동" value="22세기 D01 · 완료 체크와 최신 목차를 대조해 촬영 준비">
+        </div>
+        <label class="goal"><span class="k">목표 결과</span><textarea class="well" rows="4">[2026-10-17 KST 확인] 기존 22th.Nomad 브랜드 연결, 분야: 영상·대본 기획. 모션그래픽 버전은 보류. 우선 3편 D01·G4·M1의 채널 말투 반영 2차 수정 대본 검토 대기. 촬영·썸네일 승인·발행 완료 미확인.</textarea></label>
+        <details class="more">
+          <summary><svg width="14" height="14"><use href="#chevr"/></svg>고객·장르·GitHub <span>선택</span></summary>
+          <div class="more__body">
+            <span class="k">관련 고객</span><span class="sel"><select class="well"><option>연결 없음</option></select><svg width="14" height="14"><use href="#chev"/></svg></span>
+            <span class="k">장르</span><span class="sel"><select class="well"><option>장르 없음</option></select><svg width="14" height="14"><use href="#chev"/></svg></span>
+            <span class="k">GitHub</span><input class="well" placeholder="owner/repo">
+          </div>
+        </details>
+        <div class="foot">
+          <span class="hint"><kbd>⌘↵</kbd>저장</span>
+          <button class="btn-ghost" type="button">취소</button>
+          <button class="btn-ink" type="button">변경사항 저장</button>
+        </div>
+      </div>
+    </div>
+    <dl class="spec">
+      <dt>이름</dt><dd>24 / 300 · 자간 −0.025em · 두 줄까지 (제목 자리를 이름이 맡음)</dd>
+      <dt>머리</dt><dd>12 / 600 · <span class="mono">--fg-dim</span></dd>
+      <dt>라벨</dt><dd>13 / 500 · 왼쪽 96px 열</dd>
+      <dt>값</dt><dd>14 / 500 · 칸 높이 38 · 세그먼트 13 / 500, 선택 650 잉크</dd>
+      <dt>본문</dt><dd>14.5 / 400 · 행간 1.75</dd>
+    </dl>
+    <ul class="notes">
+      <li>상태·우선순위가 select 대신 세그먼트라 한 번에 바뀝니다(SegmentedControl 프리미티브).</li>
+      <li>이 팝업 전용 배치라 다른 편집 팝업과 모양이 달라집니다. 이름 24/300은 Futura 디스플레이 계열.</li>
+    </ul>
+  </section>
+
+  <!-- C -->
+  <section class="study">
+    <div class="study__head"><span class="tag">C</span><h2>칸 안 라벨 · 타일</h2><p>라벨을 홈 안에 — 가장 촘촘하고 단순하게</p></div>
+    <div class="board">
+      <div class="ghost" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i></div>
+      <div class="pop vc" role="dialog" aria-label="프로젝트 편집 (C)">
+        <header>
+          <div><h3>프로젝트 편집</h3><div class="sub">일정은 계획·검증에서 관리합니다</div></div>
+          <button class="x" type="button" aria-label="닫기"><svg width="12" height="12"><use href="#x"/></svg></button>
+        </header>
+        <div class="grid">
+          <label class="tile tile--name span"><span class="k">프로젝트명</span><input value="22세기 유목민 · 우선 3편 대본 검토"></label>
+          <label class="tile"><span class="k">업무 분류</span><select><option>콘텐츠</option></select><svg width="14" height="14"><use href="#chev"/></svg></label>
+          <label class="tile"><span class="k">브랜드·컨테이너</span><select><option>22th.Nomad</option></select><svg width="14" height="14"><use href="#chev"/></svg></label>
+          <label class="tile"><span class="k">상태</span><select><option>계획</option><option>진행 중</option><option>막힘</option><option>보관</option></select><svg width="14" height="14"><use href="#chev"/></svg></label>
+          <label class="tile"><span class="k">우선순위</span><select><option>보통</option><option>낮음</option><option>높음</option><option>긴급</option></select><svg width="14" height="14"><use href="#chev"/></svg></label>
+          <label class="tile span"><span class="k">목표 결과</span><textarea rows="4">[2026-10-17 KST 확인] 기존 22th.Nomad 브랜드 연결, 분야: 영상·대본 기획. 모션그래픽 버전은 보류. 우선 3편 D01·G4·M1의 채널 말투 반영 2차 수정 대본 검토 대기. 촬영·썸네일 승인·발행 완료 미확인.</textarea></label>
+          <label class="tile span"><span class="k">다음 행동</span><input value="22세기 D01 · 완료 체크와 최신 목차를 대조해 촬영 준비"></label>
+          <label class="tile span" id="c-entity" hidden><span class="k">관련 리드·고객</span><select><option>연결 없음</option></select><svg width="14" height="14"><use href="#chev"/></svg></label>
+          <label class="tile" id="c-genre" hidden><span class="k">장르</span><select><option>장르 없음</option></select><svg width="14" height="14"><use href="#chev"/></svg></label>
+          <label class="tile" id="c-github" hidden><span class="k">GitHub 저장소</span><input placeholder="owner/repo"></label>
+        </div>
+        <div class="add">
+          <span class="lead">더하기</span>
+          <button class="chip" type="button" data-reveal="c-entity">＋ 관련 고객</button>
+          <button class="chip" type="button" data-reveal="c-genre">＋ 장르</button>
+          <button class="chip" type="button" data-reveal="c-github">＋ GitHub</button>
+        </div>
+        <div class="foot">
+          <span class="hint"><kbd>⌘↵</kbd>저장</span>
+          <button class="btn-ghost" type="button">취소</button>
+          <button class="btn-ink" type="button">변경사항 저장</button>
+        </div>
+      </div>
+    </div>
+    <dl class="spec">
+      <dt>제목</dt><dd>17 / 650</dd>
+      <dt>라벨</dt><dd>11.5 / 550 · 칸 안 위쪽 · <span class="mono">--fg-dim</span></dd>
+      <dt>값</dt><dd>15 / 550 · 칸 높이 약 56 · 프로젝트명 17 / 650</dd>
+      <dt>본문</dt><dd>14 / 450 · 행간 1.65</dd>
+      <dt>더하기</dt><dd>12.5 / 550 솟은 칩 — 누르면 그 칸만 열림</dd>
+    </dl>
+    <ul class="notes">
+      <li>라벨과 값이 한 홈에 있어 세로 길이가 가장 짧습니다. 빈 연결 필드는 칩으로만 보입니다.</li>
+      <li>칸 모서리 10px는 글쓰기 칸 6px 규칙(§7, 2026-09-21)의 예외가 필요합니다.</li>
+    </ul>
+  </section>
+
+</main>
+
+<script>
+document.querySelectorAll('[data-theme-set]').forEach(btn => btn.addEventListener('click', () => {
+  document.documentElement.dataset.theme = btn.dataset.themeSet;
+  document.querySelectorAll('[data-theme-set]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+}));
+document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (btn) seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+}));
+document.querySelectorAll('[data-grow]').forEach(el => {
+  const grow = () => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight + 2}px`; };
+  el.addEventListener('input', grow);
+  document.fonts.ready.then(grow);
+});
+document.querySelectorAll('[data-reveal]').forEach(chip => chip.addEventListener('click', () => {
+  const tile = document.getElementById(chip.dataset.reveal);
+  tile.hidden = false;
+  chip.remove();
+  tile.querySelector('input, select')?.focus();
+}));
+</script>
+</body>
+</html>
