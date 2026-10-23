@@ -28,6 +28,37 @@ for (const [table, build] of cases) {
     assert.equal((await persistRevenueCreate(command)).status,'unknown');
     assert.equal((await persistRevenueCreate(command)).status,'saved'); assert.equal(io.rows.size,1);
   });
+  for (const [label, body, reason] of [
+    ['empty body', '', 'invalid-rows'],
+    ['empty representation', '[]', 'no-matching-row'],
+    ['invalid row representation', '[null]', 'invalid-rows'],
+  ]) test(`Revenue create ${table}: committed ${label} needs explicit same-command reconciliation`, async t => {
+    const io = fixture(t, table);
+    const restFetch = globalThis.fetch;
+    let first = true;
+    globalThis.fetch = async (url, options) => {
+      const response = await restFetch(url, options);
+      if (first && options.method === 'POST') {
+        first = false;
+        return new Response(body, { status: 201 });
+      }
+      return response;
+    };
+    const result = await persistRevenueCreate(command);
+    assert.equal(result.status, 'unknown');
+    assert.equal(result.reason, reason);
+    assert.equal(result.record, undefined, 'an invalid acknowledgement cannot prove persistence');
+    assert.equal(io.rows.size, 1, 'the original write committed despite the invalid acknowledgement');
+    assert.deepEqual(io.calls.map(call => call.method), ['POST'], 'no automatic retry or reconciliation');
+    const original = structuredClone(io.rows.get(createId));
+    const replay = await persistRevenueCreate(command);
+    assert.equal(replay.status, 'saved');
+    assert.equal(replay.replayed, true);
+    assert.equal(replay.id, createId);
+    assert.deepEqual(io.calls.map(call => call.method), ['POST', 'POST', 'GET']);
+    assert.equal(io.rows.size, 1);
+    assert.deepEqual(io.rows.get(createId), original);
+  });
   test(`Revenue create ${table}: mutable row edits do not erase original receipt or turn a new payload into a replay`, async t => {
     const io = fixture(t, table); await persistRevenueCreate(command);
     const row = io.rows.get(createId); row.meta=mergeRecordMeta({table,existingMeta:row.meta,metaPatch:{note:'later edit'}});
@@ -79,6 +110,14 @@ test('Revenue create different-payload race winner never acknowledges the losing
 });
 test('Revenue create HTTP 5xx is unknown, not a definitive failure or automatic write retry',async t=>{
   const io=fixture(t,'leads',{rejectFirst:503});assert.equal((await persistRevenueCreate({table:'leads',payload:{createId,name:'Original'},build:buildLeadWrite})).status,'unknown');assert.equal(io.calls.length,1);
+});
+for (const status of [400, 403]) test(`Revenue create HTTP ${status} remains a definitive rejection`, async t => {
+  const io = fixture(t, 'leads', { rejectFirst: status });
+  const result = await persistRevenueCreate({ table: 'leads', payload: { createId, name: 'Original' }, build: buildLeadWrite });
+  assert.equal(result.status, 'failed');
+  assert.equal(result.reason, `http-${status}`);
+  assert.equal(io.rows.size, 0);
+  assert.deepEqual(io.calls.map(call => call.method), ['POST']);
 });
 test('bounded receipt contract: hard deletion removes replay history (not a durable tombstone)',async t=>{
   const io=fixture(t,'leads');const command={table:'leads',payload:{createId,name:'Original'},build:buildLeadWrite};

@@ -159,7 +159,7 @@ export function TodaySlots({ taskToday, onChanged }) {
   const carry = (task) => run(task, { dueAt: tomorrowKey }, `내일로 넘김 · ${task.title} — 내일 오늘 할 일에 올라옵니다`);
 
   return (
-    <div className="today-slots" aria-label="오늘 3개">
+    <div className="today-slots" role="group" aria-label="오늘 3개">
       {slots.map((slot, index) => {
         const n = <span className="today-slot__n mono">{index + 1}</span>;
         if (!slot) {

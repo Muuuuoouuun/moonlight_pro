@@ -32,6 +32,8 @@ export async function insertRevenueCreate({ table, workspaceId, payload, columns
     ? { status: 'saved', id, record: result.record } : unknown('create-acknowledgement-invalid');
   if (result.reason === 'duplicate') return confirmRevenueCreate({ table, workspaceId, payload });
   if (result.reason === 'missing-config') return { status: 'preview', reason: result.reason };
-  if (['timeout', 'request-failed'].includes(result.reason) || /^http-5/.test(result.reason)) return unknown(result.reason);
+  // A malformed or empty 2xx representation cannot prove whether the INSERT
+  // committed. Keep its createId for explicit retry and receipt reconciliation.
+  if (['timeout', 'request-failed', 'invalid-rows', 'no-matching-row'].includes(result.reason) || /^http-5/.test(result.reason)) return unknown(result.reason);
   return { status: 'failed', reason: result.reason, detail: result.detail };
 }
