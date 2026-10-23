@@ -140,37 +140,6 @@ export function BurningStreakBadge({
   const labels = week ? streakWeekLabels(now) : [];
   const doneDays = week ? week.filter(Boolean).length : 0;
 
-  if (compact) {
-    return (
-      <div
-        className={isPopping ? "hub-streak-pop" : ""}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "3px 8px 3px 6px",
-          borderRadius: "var(--r-sm)",
-          background: "var(--surface-2)",
-          border: `1px solid ${sustained ? "var(--line)" : "var(--line-soft)"}`,
-          fontSize: 11.5,
-          fontWeight: 500,
-          color: sustained ? "var(--fg)" : "var(--fg-muted)",
-          transition: "border-color var(--dur-hover) var(--ease-hub)",
-          ...style,
-        }}
-        title={`${title}: ${activeStreak}일 연속${todayCompleted > 0 ? ` (오늘 ${todayCompleted}건 완료)` : ""}`}
-      >
-        <StreakMark size={14} level={level} />
-        <span className="mono" style={{ fontWeight: 600, color: sustained ? "var(--fg)" : "var(--fg-dim)" }}>
-          {activeStreak}일
-        </span>
-        <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>
-          {activeStreak > 0 ? "연속" : "대기"}
-        </span>
-      </div>
-    );
-  }
-
   return (
     <div
       className={["hub-streak-band", isPopping ? "hub-streak-pop" : ""].filter(Boolean).join(" ")}
