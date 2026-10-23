@@ -295,9 +295,21 @@ npm run app:win:build    # NSIS 설치 파일 + 포터블 exe (x64)
 
 결과물은 `apps/desktop/dist/`(커밋하지 않음):
 
-- `Moonlight-Setup-0.1.0.exe` — 설치 파일(설치 위치 선택 가능, 바탕화면 바로가기 생성)
-- `Moonlight-Portable-0.1.0.exe` — 설치 없이 실행
+- `Moonlight-Setup-0.2.0.exe` — 설치 파일(설치 위치 선택 가능, 바탕화면 바로가기 생성)
+- `Moonlight-Portable-0.2.0.exe` — 설치 없이 실행
 - `win-unpacked/` — 압축을 푼 앱 폴더
+
+### Windows CI 설치 검수
+
+공개 저장소의 `codex/desktop-release-*` 브랜치를 push하면 Windows Server 2025 runner에서 데스크톱 시험·빌드·설치 검수를 실행한다. CI 워크플로가 기본 브랜치에 등록된 뒤에는 **Actions → CI → Run workflow → windows_desktop**를 켜거나 다음 명령으로 대상 브랜치를 지정할 수 있다:
+
+```bash
+gh workflow run ci.yml --ref <검수할-브랜치> -f windows_desktop=true
+```
+
+설치 검수는 `node apps/desktop/scripts/verify-windows-package.cjs`로도 실행한다(Windows x64 빌드 후). NSIS를 일회용 runner의 현재 사용자에게 설치하고, 설치본·asar 해시와 소스 revision을 대조한다. 위젯의 크기·IPC·ESC·격리 loopback 로그인 전환을 확인한 다음, 별도 임시 프로필로 펫의 패널·끌기·집중 화면·ESC·양쪽 가장자리·DWM 속성을 검사한다. 운영 Hub·개인 프로필은 연결하지 않는다. DWM 실패·잠긴 화면·누락된 PNG는 통과로 처리하지 않는다.
+
+설치·포터블 exe와 `verification/`의 JSON·로그·PNG·SHA256SUMS는 해당 실행의 `windows-desktop-<commit SHA>` 아티팩트에 7일간 보관된다. 포터블은 파일 구조·버전·해시를 확인하며 실제 실행 스모크는 NSIS 설치본에 수행한다. 단일 디스플레이 runner에서는 여러 모니터 이동 검사가 실행되지 않는다. 이 결과는 소비자 Windows 11의 SmartScreen·Acrylic 시각 품질·실제 운영자 로그인·절전 복귀 실기 검수를 대신하지 않는다.
 
 앱 폴더 안에서만 쓰는 명령:
 
