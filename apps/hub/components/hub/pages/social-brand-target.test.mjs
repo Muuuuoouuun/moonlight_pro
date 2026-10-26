@@ -25,12 +25,22 @@ test("social status and connect URLs bind the same brand key and handle", () => 
   assert.equal(socialBrandUrl("connect", "unknown", "classmoon"), null);
 });
 
-test('Go;Re has an explicit Threads target and never builds another provider or brand URL', () => {
-  assert.ok(SOCIAL_BRAND_OPTIONS.some(option => option.value === 'gore' && option.label.includes('@go_re_startagain')));
-  for (const action of ['status', 'connect']) {
-    const url = new URL(socialBrandUrl(action, 'meta_threads', 'gore'), 'https://hub.example.com');
-    assert.equal(url.searchParams.get('brandKey'), 'gore');
-    assert.equal(url.searchParams.get('brand'), 'go_re_startagain');
-    assert.equal(socialBrandUrl(action, 'instagram_api', 'gore'), null);
+test('approved brand URLs preserve exact handles and provider boundaries', () => {
+  for (const [brandKey, handle, providers] of [
+    ['gore', 'go_re_startagain', ['instagram_api', 'meta_threads']],
+    ['22nomad', '22th.nomad', ['instagram_api', 'meta_threads']],
+    ['holyfuncollector', 'holyfuncollect0r', ['instagram_api']],
+    ['sinabro', 'dazz.ling_u', ['meta_threads']],
+  ]) {
+    assert.ok(SOCIAL_BRAND_OPTIONS.some(option => option.value === brandKey && option.label.includes(`@${handle}`)));
+    for (const action of ['status', 'connect']) {
+      for (const provider of ['instagram_api', 'meta_threads']) {
+        const target = socialBrandUrl(action, provider, brandKey);
+        if (!providers.includes(provider)) { assert.equal(target, null); continue; }
+        const url = new URL(target, 'https://hub.example.com');
+        assert.equal(url.searchParams.get('brandKey'), brandKey);
+        assert.equal(url.searchParams.get('brand'), handle);
+      }
+    }
   }
 });
