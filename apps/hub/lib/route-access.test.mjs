@@ -162,6 +162,8 @@ test("dev 서버가 loopback 에만 바인딩된다", async () => {
   // Host: localhost 를 위조하면 loopback 분기가 열려 기록이 통째로 나갔다(2026-09-20 실측: 183KB).
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.match(pkg.scripts.dev, /-H 127\.0\.0\.1/, "dev 서버가 LAN 에 노출된다");
+  const root = JSON.parse(await readFile(new URL("../../../package.json", import.meta.url), "utf8"));
+  assert.match(root.scripts['dev:sandbox'], /-H 127\.0\.0\.1/, "sandbox dev 서버가 LAN 에 노출된다");
 });
 
 test("배포 도메인이 loopback 으로 오인되지 않는다", () => {

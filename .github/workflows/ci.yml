@@ -65,6 +65,7 @@ jobs:
 
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,6 +81,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Source syntax guard
+        run: npm run lint
 
       - name: Contract checks
         run: npm run check:contracts

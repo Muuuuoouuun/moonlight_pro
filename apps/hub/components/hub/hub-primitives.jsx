@@ -386,6 +386,7 @@ export function Divider({ style }) {
 
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
   const activeRef = React.useRef(null);
+  const activeIndex = tabs.findIndex(tab => tab.key === active);
   React.useEffect(() => {
     if (activeRef.current) {
       const prefersReduced = typeof window !== 'undefined'
@@ -414,7 +415,7 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
         ...style,
       }}
     >
-      {tabs.map(t => {
+      {tabs.map((t, index) => {
         const isActive = t.key === active;
         return (
           <button
@@ -423,7 +424,21 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
             type="button"
             role="tab"
             aria-selected={isActive}
+            tabIndex={index === Math.max(activeIndex, 0) ? 0 : -1}
             onClick={() => onChange?.(t.key)}
+            onKeyDown={event => {
+              if (event.defaultPrevented || event.isComposing || event.keyCode === 229
+                || event.nativeEvent?.isComposing || event.ctrlKey || event.metaKey
+                || event.altKey || event.shiftKey) return;
+              const nextIndex = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+                : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
+                  : event.key === 'Home' ? 0
+                    : event.key === 'End' ? tabs.length - 1 : null;
+              if (nextIndex === null) return;
+              event.preventDefault();
+              event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[nextIndex]?.focus();
+              onChange?.(tabs[nextIndex].key);
+            }}
             style={{
               padding: '8px 12px',
               fontSize: 12.5,

@@ -531,7 +531,7 @@ export function Runs({ onNavigate } = {}) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Run log</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>Real-time automation execution log</span>
             <SyncBadge state={syncState} />
             {autoRefresh && (
@@ -541,7 +541,7 @@ export function Runs({ onNavigate } = {}) {
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Button
             variant={autoRefresh ? 'secondary' : 'ghost'}
             size="sm"
@@ -675,7 +675,7 @@ export function Runs({ onNavigate } = {}) {
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
-        <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
+        <div className="mono" style={{ padding: '12px 14px', fontSize: 12, minWidth: displayRows.length === 0 ? 0 : undefined }}>
           {displayRows.length === 0 && syncState === 'loading' && <Skeleton lines={3} label="실행 로그 읽는 중" />}
           {displayRows.length === 0 && syncState !== 'loading' && (
             <EmptyState

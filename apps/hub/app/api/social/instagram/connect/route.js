@@ -10,6 +10,7 @@ import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { resolveExpectedSocialAccountId, resolveSocialBrandKey } from "@/lib/social-account-connections";
 import { registerSocialOAuthFlow } from "@/lib/social-oauth-flow";
 import { resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 export const runtime = "nodejs";
 
@@ -18,10 +19,7 @@ export async function GET(req) {
   const workspaceId = resolveDefaultWorkspaceId();
   const config = resolveInstagramApiConfig();
   const brandHandle = searchParams.get("brand") || config.brandHandle;
-  const requestedReturnPath = searchParams.get("returnPath") || "";
-  const returnPath = requestedReturnPath.startsWith("/") &&
-    !requestedReturnPath.startsWith("//") && !requestedReturnPath.includes("\\")
-    ? requestedReturnPath : "/dashboard/settings";
+  const returnPath = sanitizeReturnPath(searchParams.get("returnPath"), "/dashboard/settings");
   let brandKey;
   try {
     brandKey = await resolveSocialBrandKey(workspaceId, searchParams.get("brandKey"));

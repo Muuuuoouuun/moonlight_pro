@@ -29,7 +29,7 @@
     "db:check": "node ./scripts/check-database-readiness.mjs",
     "db:usage": "node ./scripts/db-usage-report.mjs",
     "db:move-region": "node ./scripts/migrate-supabase-region.mjs",
-    "dev:sandbox": "cd apps/hub && set -a && . ./.env.sandbox.local && set +a && NEXT_DIST_DIR=.next.sandbox npx next dev -p 3020",
+    "dev:sandbox": "cd apps/hub && set -a && . ./.env.sandbox.local && set +a && NEXT_DIST_DIR=.next.sandbox npx next dev -p 3020 -H 127.0.0.1",
     "db:seed-dev": "set -a && . ./.env.migration.local && set +a && psql --dbname \"$MOONLIGHT_DEV_DB_URL\" -X -q --set ON_ERROR_STOP=1 -f supabase/seed.dev.sql",
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
@@ -40,7 +40,7 @@
     "app:mac:build": "npm --workspace @com-moon/desktop run build:mac",
     "app:mac:install": "npm --workspace @com-moon/desktop run install:mac --",
     "inventory:project-connections": "node ./scripts/inventory-project-connections.mjs",
-    "test": "node --import ./scripts/register-hub-alias.mjs --test --test-concurrency=2 scripts/*.test.mjs apps/hub/lib/*.test.mjs apps/hub/lib/**/*.test.mjs \"apps/hub/app/**/*.test.mjs\" \"apps/hub/components/**/*.test.mjs\" \"apps/engine/**/*.test.mjs\" \"packages/**/*.test.mjs\"",
+    "test": "node --import ./scripts/register-hub-alias.mjs --test --test-concurrency=2 \"scripts/*.test.mjs\" \"apps/hub/lib/**/*.test.mjs\" \"apps/hub/app/**/*.test.mjs\" \"apps/hub/components/**/*.test.mjs\" \"apps/engine/**/*.test.mjs\" \"packages/**/*.test.mjs\"",
     "lint": "node ./scripts/lint-source.mjs",
     "typecheck": "turbo run typecheck",
     "mcp:doctor": "node --env-file-if-exists=apps/hub/.env.local packages/mcp-server/src/doctor.js",
@@ -51,7 +51,13 @@
     "app:android:sync": "npm --workspace @com-moon/android run config:sync --",
     "app:android:build": "npm --workspace @com-moon/android run apk --"
   },
+  "overrides": {
+    "@vercel/cli-config": {
+      "zod": "4.6.7"
+    }
+  },
   "devDependencies": {
+    "@vercel/cli-config": "0.3.3",
     "@types/node": "^24.5.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",

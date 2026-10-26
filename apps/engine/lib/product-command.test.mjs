@@ -16,13 +16,17 @@ const NOW = "2026-09-25T01:00:00.000Z";
 const ctx = { workspaceId: WS, now: NOW };
 
 function fakeDeps(tables = {}) {
-  const calls = { insert: [], update: [], remove: [] };
+  const calls = { insert: [], upsert: [], update: [], remove: [] };
   return {
     calls,
     deps: {
       insert: async (table, record) => {
         calls.insert.push({ table, record });
         return tables.insertResult?.(table, record) ?? { persisted: true, reason: "ok", record };
+      },
+      upsert: async (table, record, options) => {
+        calls.upsert.push({ table, record, options });
+        return tables.upsertResult?.(table, record, options) ?? { persisted: true, reason: "ok", records: [record] };
       },
       update: async (table, filters, patch) => {
         calls.update.push({ table, filters, patch });
@@ -181,8 +185,13 @@ test("an inquiry links to one product; relinking moves it and unlinking is idemp
   });
   const moved = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT }, ctx, deps);
   assert.equal(moved.status, "saved");
-  assert.deepEqual(calls.remove[0].filters, [["workspace_id", `eq.${WS}`], ["inquiry_id", `eq.${INQUIRY}`]]);
-  assert.deepEqual(calls.insert[0].record, { workspace_id: WS, inquiry_id: INQUIRY, product_id: PRODUCT, project_id: null, linked_at: NOW });
+  assert.equal(calls.remove.length, 0);
+  assert.equal(calls.insert.length, 0);
+  assert.deepEqual(calls.upsert[0], {
+    table: "product_inquiry_links",
+    record: { workspace_id: WS, inquiry_id: INQUIRY, product_id: PRODUCT, project_id: null, linked_at: NOW },
+    options: { onConflict: "workspace_id,inquiry_id" },
+  });
 
   const same = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: OTHER }, ctx, deps);
   assert.equal(same.status, "duplicate");
@@ -195,6 +204,88 @@ test("an inquiry links to one product; relinking moves it and unlinking is idemp
     fakeDeps({ removeResult: () => ({ persisted: false, reason: "no-matching-row", records: [] }) }).deps);
   assert.equal(unlinked.status, "saved");
   assert.deepEqual(normalizeProductCommand({ action: "link_inquiry", inquiryId: "x", productId: PRODUCT }, ctx), { ok: false, reason: "invalid-inquiry-id" });
+});
+
+test("a failed inquiry relink preserves the previous product connection", async () => {
+  const inquiryId = "88888888-8888-4888-8888-888888888888";
+  const original = { workspace_id: WS, inquiry_id: inquiryId, product_id: REPO, project_id: null };
+  let stored = original;
+  const { deps, calls } = fakeDeps({
+    products: () => [{ id: PRODUCT }],
+    inquiries: () => [{ id: inquiryId }],
+    product_inquiry_links: () => stored ? [stored] : [],
+    removeResult: () => { stored = null; return { persisted: true, reason: "ok" }; },
+    insertResult: () => ({ persisted: false, reason: "http-503" }),
+    upsertResult: () => ({ persisted: false, reason: "http-503" }),
+  });
+  const result = await executeProductCommand({ action: "link_inquiry", inquiryId, productId: PRODUCT }, ctx, deps);
+  assert.equal(result.status, "error");
+  assert.equal(result.error, "http-503");
+  assert.deepEqual(stored, original, "a rejected replacement must leave the existing connection intact");
+  assert.equal(calls.remove.length, 0);
+});
+
+test("link_inquiry requires a returned row before confirming the connection", async () => {
+  const inquiryId = "88888888-8888-4888-8888-888888888888";
+  const { deps } = fakeDeps({
+    products: () => [{ id: PRODUCT }],
+    inquiries: () => [{ id: inquiryId }],
+    insertResult: () => ({ persisted: true, reason: "ok", record: null }),
+    upsertResult: () => ({ persisted: true, reason: "ok", records: [], record: null }),
+  });
+  const result = await executeProductCommand({ action: "link_inquiry", inquiryId, productId: PRODUCT }, ctx, deps);
+  assert.equal(result.status, "error");
+  assert.equal(result.error, "no-matching-row");
+});
+
+test("product command route replaces inquiry connections with one represented upsert", async (t) => {
+  const { POST } = await import("../app/api/products/command/route.ts");
+  const env = {
+    SUPABASE_URL: "https://product-command.test",
+    SUPABASE_SERVICE_ROLE_KEY: "product-command-test-key",
+    COM_MOON_SHARED_WEBHOOK_SECRET: "product-command-test-secret",
+  };
+  const before = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, env);
+  t.after(() => {
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const inquiryId = "88888888-8888-4888-8888-888888888888";
+  let stored = { workspace_id: WS, inquiry_id: inquiryId, product_id: REPO, project_id: null };
+  const mutations = [];
+  t.mock.method(globalThis, "fetch", async (input, options) => {
+    const url = new URL(input);
+    assert.equal(url.origin, env.SUPABASE_URL);
+    const table = url.pathname.split("/").at(-1);
+    if (options.method === "GET") {
+      const rows = table === "products" ? [{ id: PRODUCT }]
+        : table === "inquiries" ? [{ id: inquiryId }] : [stored];
+      return Response.json(rows);
+    }
+    mutations.push(options.method);
+    assert.equal(options.method, "POST");
+    assert.equal(table, "product_inquiry_links");
+    assert.equal(url.searchParams.get("on_conflict"), "workspace_id,inquiry_id");
+    assert.equal(options.headers.prefer, "resolution=merge-duplicates,return=representation");
+    [stored] = JSON.parse(options.body);
+    return Response.json([stored]);
+  });
+  const request = () => new Request("http://localhost/api/products/command", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-com-moon-shared-secret": env.COM_MOON_SHARED_WEBHOOK_SECRET },
+    body: JSON.stringify({ action: "link_inquiry", workspaceId: WS, inquiryId, productId: PRODUCT }),
+  });
+  const response = await POST(request());
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).entity, { inquiryId, productId: PRODUCT, projectId: null });
+  assert.equal(stored.product_id, PRODUCT);
+  assert.deepEqual(mutations, ["POST"]);
+  const replay = await POST(request());
+  assert.equal((await replay.json()).status, "duplicate");
+  assert.deepEqual(mutations, ["POST"], "a confirmed retry does not rewrite the connection");
 });
 
 
@@ -229,6 +320,28 @@ test("record_month upserts only the numbers given; null means unknown", async ()
   }
 });
 
+test("record_month never reports saved without a confirmed update or insert row", async () => {
+  const input = { action: "record_month", productId: PRODUCT, month: "2026-10", revenue: 30 };
+  for (const result of [
+    { persisted: false, reason: "no-matching-row", records: [] },
+    { persisted: true, reason: "ok", records: [] },
+    { persisted: true, reason: "ok", record: null },
+  ]) {
+    for (const existing of [true, false]) {
+      const { deps } = fakeDeps({
+        products: () => [{ id: PRODUCT }],
+        product_monthly_metrics: () => existing ? [{ product_id: PRODUCT, month: input.month, revenue: 12 }] : [],
+        updateResult: () => result,
+        insertResult: () => result,
+      });
+      const saved = await executeProductCommand(input, ctx, deps);
+      assert.equal(saved.status, "error", `existing=${existing}, result=${JSON.stringify(result)}`);
+      assert.equal(saved.error, "no-matching-row");
+      assert.equal(saved.entity, undefined, "do not synthesize a successful record from the requested values");
+    }
+  }
+});
+
 test("an inquiry can attach to one of the product's projects, never another product's", async () => {
   const INQUIRY = "88888888-8888-4888-8888-888888888888";
   const PROJECT = "99999999-9999-4999-8999-999999999999";
@@ -241,7 +354,7 @@ test("an inquiry can attach to one of the product's projects, never another prod
   const ok = deps(PRODUCT);
   const saved = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT, projectId: PROJECT }, ctx, ok.deps);
   assert.equal(saved.status, "saved");
-  assert.equal(ok.calls.insert[0].record.project_id, PROJECT);
+  assert.equal(ok.calls.upsert[0].record.project_id, PROJECT);
   const other = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT, projectId: PROJECT }, ctx, deps("33333333-3333-4333-8333-333333333399").deps);
   assert.equal(other.error, "project-product-mismatch");
 });

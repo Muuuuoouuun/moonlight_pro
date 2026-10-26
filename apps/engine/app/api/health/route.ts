@@ -3,17 +3,30 @@ import { NextResponse } from "next/server";
 import { getGeminiIntegrationStatus } from "../../../lib/gemini";
 import { getGitHubIntegrationStatus } from "../../../lib/github-sync";
 import { checkSupabaseRest } from "../../../lib/supabase-rest";
-import { listSharedProjectWebhookRoutes } from "../../../lib/shared-webhook";
+import { listSharedProjectWebhookRoutes, validateSharedWebhookRequest } from "../../../lib/shared-webhook";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const authorization = validateSharedWebhookRequest(req);
+  const includeDiagnostics = authorization.ok && authorization.mode !== "open";
+  const supabase = await checkSupabaseRest();
+  const isHealthy = supabase.reachable;
+  const responseOptions = { status: isHealthy ? 200 : 503, headers: { "Cache-Control": "private, no-store" } };
+
+  // Local open-webhook mode is not a verified server credential.
+  if (!includeDiagnostics) {
+    return NextResponse.json({
+      status: isHealthy ? "ok" : "degraded",
+      database: { supabase: { reachable: isHealthy } },
+    }, responseOptions);
+  }
+
   const sharedRoutes = listSharedProjectWebhookRoutes().map((path) => ({
     method: "POST",
     path,
   }));
-  const supabase = await checkSupabaseRest();
-  const isHealthy = supabase.reachable;
   const body = {
     service: "com-moon-engine",
     status: isHealthy ? "ok" : "degraded",
@@ -39,5 +52,5 @@ export async function GET() {
     ],
   };
 
-  return NextResponse.json(body, { status: isHealthy ? 200 : 503 });
+  return NextResponse.json(body, responseOptions);
 }

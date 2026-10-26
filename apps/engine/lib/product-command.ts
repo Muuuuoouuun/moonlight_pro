@@ -23,6 +23,7 @@ type PersistenceResult = {
 
 export type ProductDependencies = {
   insert: (table: string, record: Row) => Promise<PersistenceResult>;
+  upsert: (table: string, record: Row, options: { onConflict: string }) => Promise<PersistenceResult>;
   update: (table: string, filters: Array<[string, string]>, patch: Row) => Promise<PersistenceResult>;
   remove: (table: string, filters: Array<[string, string]>) => Promise<PersistenceResult>;
   fetchRows: (table: string, options?: Row) => Promise<Row[] | null>;
@@ -642,7 +643,7 @@ export async function executeProductCommand(input: Row, context: Context, deps: 
   };
 }
 
-// 문의 ↔ 제품 연결. 문의 하나에 제품 하나 — 이미 붙어 있으면 새 제품으로 옮긴다(지우고 넣는다).
+// 문의 ↔ 제품 연결. 기존 연결의 교체도 PK를 기준으로 한 번에 저장한다.
 async function executeInquiryLink(
   command: Extract<Normalized, { ok: true }>,
   workspaceId: string,
@@ -679,17 +680,15 @@ async function executeInquiryLink(
   if (current[0]?.product_id === record.product_id && (current[0]?.project_id ?? null) === record.project_id) {
     return { status: "duplicate", action: command.action, entity: { inquiryId: record.inquiry_id, productId: record.product_id, projectId: record.project_id } };
   }
-  if (current[0]) {
-    const removed = await deps.remove("product_inquiry_links", filters);
-    if (!removed.persisted && removed.reason !== "no-matching-row") return { status: "error", error: removed.reason };
-  }
-  const inserted = await deps.insert("product_inquiry_links", record);
-  if (!inserted.persisted) {
-    return inserted.reason === "duplicate"
+  const saved = await deps.upsert("product_inquiry_links", record, { onConflict: "workspace_id,inquiry_id" });
+  if (!saved.persisted) {
+    return saved.reason === "duplicate"
       ? { status: "conflict", action: command.action, error: "inquiry-link-changed", retryable: true }
-      : { status: "error", error: inserted.reason, detail: inserted.detail || null };
+      : { status: "error", error: saved.reason, detail: saved.detail || null };
   }
-  return { status: "saved", action: command.action, entity: { inquiryId: record.inquiry_id, productId: record.product_id, projectId: record.project_id } };
+  const entity = saved.records?.[0] || saved.record;
+  if (!entity) return { status: "error", error: "no-matching-row" };
+  return { status: "saved", action: command.action, entity: { inquiryId: entity.inquiry_id, productId: entity.product_id, projectId: entity.project_id } };
 }
 
 // 월 숫자 — 있으면 들어온 칸만 고치고, 없으면 새 행. 제품은 같은 워크스페이스여야 한다.
@@ -712,8 +711,10 @@ async function executeRecordMonth(
   if (current[0]) {
     const { workspace_id: _w, product_id: _p, month: _m, ...patch } = record;
     const updated = await deps.update("product_monthly_metrics", filters, patch);
-    if (!updated.persisted && updated.reason !== "no-matching-row") return { status: "error", error: updated.reason };
-    return { status: "saved", action: command.action, entity: updated.records?.[0] || { ...current[0], ...patch } };
+    if (!updated.persisted) return { status: "error", error: updated.reason };
+    const entity = updated.records?.[0] || updated.record;
+    if (!entity) return { status: "error", error: "no-matching-row" };
+    return { status: "saved", action: command.action, entity };
   }
   const inserted = await deps.insert("product_monthly_metrics", record);
   if (!inserted.persisted) {
@@ -721,5 +722,7 @@ async function executeRecordMonth(
       ? { status: "conflict", action: command.action, error: "month-changed", retryable: true }
       : { status: "error", error: inserted.reason, detail: inserted.detail || null };
   }
-  return { status: "saved", action: command.action, entity: inserted.record || record };
+  const entity = inserted.record || inserted.records?.[0];
+  if (!entity) return { status: "error", error: "no-matching-row" };
+  return { status: "saved", action: command.action, entity };
 }

@@ -16,6 +16,13 @@ registerHooks({
 });
 const { GET } = await import('../app/api/health/route.js');
 
+function diagnosticRequest(t) {
+  const previous = process.env.COM_MOON_HUB_WRITE_SECRET;
+  process.env.COM_MOON_HUB_WRITE_SECRET = 'health-diagnostic-test-secret';
+  t.after(() => { if (previous === undefined) delete process.env.COM_MOON_HUB_WRITE_SECRET; else process.env.COM_MOON_HUB_WRITE_SECRET = previous; });
+  return new Request('https://health.example/api/health', { headers: { 'x-com-moon-hub-write-secret': 'health-diagnostic-test-secret' } });
+}
+
 test('health recognizes Vertex ADC configuration without an API key', async t => {
   const values = { GEMINI_BACKEND: 'vertex', GOOGLE_CLOUD_PROJECT: 'moonlight-test', GOOGLE_CLOUD_LOCATION: 'global', GCP_AUTH_MODE: 'adc', VERCEL: '', GEMINI_API_KEY: '', GOOGLE_GENERATIVE_AI_API_KEY: '' };
   for (const [key, value] of Object.entries(values)) {
@@ -24,7 +31,7 @@ test('health recognizes Vertex ADC configuration without an API key', async t =>
     t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
   }
   t.mock.method(globalThis, 'fetch', async () => new Response('{}'));
-  const body = await (await GET()).json();
+  const body = await (await GET(diagnosticRequest(t))).json();
   assert.equal(body.config.geminiConfigured, true);
 });
 
@@ -47,7 +54,7 @@ test('health probe uses a deadline and reports timeout as degraded', async t => 
     assert.ok(signal instanceof AbortSignal);
     signal.throwIfAborted();
   });
-  const response = await GET();
+  const response = await GET(diagnosticRequest(t));
   assert.equal(response.status, 503);
   const body = await response.json();
   assert.equal(body.status, 'degraded');
