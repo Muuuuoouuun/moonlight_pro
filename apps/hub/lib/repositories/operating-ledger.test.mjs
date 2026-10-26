@@ -177,6 +177,28 @@ test("reads the deal backlink create_project wrote into project meta", () => {
   assert.equal(unlinked.originDealId, null);
 });
 
+test("capped task reads fill open tasks before done history in both ledgers", async () => {
+  // 완료한 순간 updated_at이 갱신돼 done이 160칸 앞쪽을 차지하면, 오래 손대지 않은(대개 기한 지난) 열린 할 일이
+  // 오늘·내 작업·⌘K에서 빠졌다. 열린 할 일은 completed_at이 null이라 이 정렬에서 먼저 채워진다.
+  const state = globalThis.__operatingLedgerTestState;
+  state.counts = { tasks: 1 };
+  state.rows = { brands: [], projects: [], tasks: [] };
+  const taskOrders = [];
+  for (const read of [operatingLedger.getTaskLedger, operatingLedger.getProjectLedger]) {
+    state.calls = [];
+    await read();
+    taskOrders.push(state.calls.find((call) => call.kind === "fetch" && call.table === "tasks").options.order);
+  }
+  assert.equal(taskOrders[0], "completed_at.desc.nullsfirst,updated_at.desc");
+  assert.equal(taskOrders[1], taskOrders[0], "identical URLs let the shared client dedupe the two reads");
+
+  state.calls = [];
+  await operatingLedger.getProjectLedger({ projectId: "66666666-6666-4666-8666-666666666666" });
+  const selectedOrders = state.calls.filter((call) => call.kind === "fetch" && call.table === "tasks")
+    .map((call) => call.options.order);
+  assert.deepEqual(selectedOrders, [taskOrders[0], taskOrders[0]], "a selected project's capped read keeps the same order");
+});
+
 test("marks project progress partial when the capped task read is smaller than the exact aggregate", async () => {
   const state = globalThis.__operatingLedgerTestState;
   state.calls = [];

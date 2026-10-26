@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 
 import { getOverviewLedger } from "@/lib/repositories/overview-ledger";
 import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
+import { kstDayKey, kstDayKeyAfter } from "@/lib/kst-day";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ACTIVITY_DAYS = 30;
-const DAY_MS = 86400000;
 
 function ledgerState(result, key) {
   if (result.status === "rejected") return "error";
@@ -26,22 +26,14 @@ function readLedger(result, fallback = {}) {
   return result.status === "fulfilled" ? result.value : fallback;
 }
 
+// 날짜 칸은 서버 시계(Vercel은 UTC)가 아니라 KST 달력으로 나눈다.
 function dayKey(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
-}
-
-function startOfDaysAgo(days) {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return new Date(date.getTime() - days * DAY_MS);
+  return kstDayKey(value) || null;
 }
 
 function withinDays(value, days) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  return date.getTime() >= startOfDaysAgo(days - 1).getTime();
+  const key = dayKey(value);
+  return Boolean(key) && key >= kstDayKeyAfter(-(days - 1));
 }
 
 // Daily histogram of real event timestamps — project_updates (work),
@@ -53,10 +45,10 @@ function buildActivitySeries(
   publishLogs,
   { updatesAvailable = true, decisionsAvailable = true, contentAvailable = true } = {},
 ) {
-  const since = startOfDaysAgo(ACTIVITY_DAYS - 1);
+  const now = Date.now();
   const buckets = new Map();
-  for (let i = 0; i < ACTIVITY_DAYS; i += 1) {
-    const key = dayKey(new Date(since.getTime() + i * DAY_MS));
+  for (let i = ACTIVITY_DAYS - 1; i >= 0; i -= 1) {
+    const key = kstDayKeyAfter(-i, now);
     buckets.set(key, {
       date: key,
       work: updatesAvailable ? 0 : null,

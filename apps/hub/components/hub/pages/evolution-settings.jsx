@@ -429,7 +429,7 @@ function KeyRow({ item, last, kind }) {
         ? `Fingerprint ${item.fingerprint} · full key hidden after creation`
         : maskFingerprint(item.fingerprint);
     }
-    if (kind === 'webhook') return `${SAFE_INCOMING_BASE_URL}/${item.slug}`;
+    if (kind === 'webhook') return `/${item.slug}`;
     if (kind === 'outgoing') return `${item.source} endpoint · ${maskFingerprint(item.fingerprint)}`;
     return '';
   })();
