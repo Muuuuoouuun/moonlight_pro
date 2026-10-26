@@ -55,14 +55,6 @@ function statusPillStyle(status) {
   return { background: "var(--surface)", border: "1px solid var(--line)", color: "var(--fg-dim)" };
 }
 
-function chipStyle(selected) {
-  return {
-    background: selected ? "var(--moon-200)" : "var(--surface)",
-    color: selected ? "var(--bg)" : "var(--fg)",
-    border: `1px solid ${selected ? "transparent" : "var(--line)"}`,
-  };
-}
-
 function sortButtonStyle(selected) {
   return {
     background: "none",
@@ -182,7 +174,6 @@ export function BrandContentLog({ onNavigate }) {
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 8,
                   borderRadius: 999, padding: "7px 14px", fontSize: 12, fontWeight: 600,
-                  ...chipStyle(selected),
                 }}
               >
                 <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
@@ -213,7 +204,6 @@ export function BrandContentLog({ onNavigate }) {
               onClick={() => setChannelFilter(selected ? null : c)}
               style={{
                 fontSize: 11.5, fontWeight: 600, padding: "6px 12px", borderRadius: "var(--r-sm)",
-                ...chipStyle(selected),
               }}
             >
               {c}
@@ -285,7 +275,7 @@ export function BrandContentLog({ onNavigate }) {
           style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 16, alignItems: "start" }}
         >
           {columns.map((col) => (
-            <div key={col.key} style={{ background: "var(--surface)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-lg)", padding: 16 }}>
+            <div key={col.key} style={{ background: "var(--well, var(--surface))", border: "1px solid var(--panel-edge)", borderRadius: "var(--r-lg)", boxShadow: "var(--shadow-inset, none)", padding: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: "var(--fg)" }}>{col.label}</span>
                 <span className="num" style={{ fontSize: 12, color: "var(--fg-dim)" }}>{col.items.length}</span>
@@ -308,8 +298,8 @@ export function BrandContentLog({ onNavigate }) {
                       }
                     }}
                     style={{
-                      background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r)",
-                      padding: "14px 16px", boxShadow: `inset 3px 0 0 ${e.color}`, cursor: "pointer",
+                      background: "var(--raise-face, var(--surface-2))", border: "1px solid var(--panel-edge)", borderRadius: "var(--r)",
+                      padding: "14px 16px", boxShadow: `inset 3px 0 0 ${e.color}, var(--shadow-raise, none)`, cursor: "pointer",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>

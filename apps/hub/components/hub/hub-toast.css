@@ -24,7 +24,7 @@
   padding: 8px 14px;
   background: var(--elevated);
   color: var(--fg);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r);
   box-shadow: var(--shadow-pop);
   font-size: 13px;

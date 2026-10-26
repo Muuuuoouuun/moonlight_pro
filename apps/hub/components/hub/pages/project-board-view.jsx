@@ -32,8 +32,8 @@ export function ProjectBoardView({
           onDrop={() => drag && onMoveCard(drag, col.key)}
           style={{
             width: 280, flexShrink: 0,
-            background: 'var(--surface)', border: '1px solid var(--line-soft)',
-            borderRadius: 'var(--r-lg)',
+            background: 'var(--well, var(--surface))', border: '1px solid var(--panel-edge)',
+            borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-inset, none)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
           <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line-soft)' }}>

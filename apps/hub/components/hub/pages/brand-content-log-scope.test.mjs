@@ -219,7 +219,7 @@ test('fallback identity palette and 3px rail remain identical across scope chang
       const item = data.items.find(item => item?.id === card.key);
       const color = colors.get(item.brandKey) || 'var(--fg-faint)';
       assert.equal(card.props.style.boxShadow, all.get(card.key));
-      assert.equal(card.props.style.boxShadow, 'inset 3px 0 0 ' + color);
+      assert.equal(card.props.style.boxShadow, 'inset 3px 0 0 ' + color + ', var(--shadow-raise, none)');
     }
   }
 });

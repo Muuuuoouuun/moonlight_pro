@@ -14,7 +14,7 @@ export function BulkBar({ count, onClear, children }) {
     <div data-hub-bottom-actions="true" style={{
       position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 50,
       display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
-      background: "var(--surface-3)", border: "1px solid var(--line)",
+      background: "var(--surface-3)", border: "1px solid var(--panel-edge)",
       borderRadius: 999, boxShadow: "var(--shadow-pop)",
     }}>
       <Badge tone="moon" size="sm">{count} 선택</Badge>

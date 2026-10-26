@@ -7,7 +7,7 @@ import ts from 'typescript';
 import { brandInWorkspace } from './workspace-map.js';
 import { collapsedTodayAgendaRows, todayAgendaRows } from './pages/workflow-reading.js';
 import { buildTodayDeck } from './pages/today-deck-model.js';
-import { dateKeyInZone } from '../../lib/task-today.js';
+import { dateKeyInZone, groupTaskRows } from '../../lib/task-today.js';
 import { shiftDateKey } from '../../lib/rhythm-calendar.js';
 import { REACTION_LABEL } from '../../lib/sales-os/followup-scoring.js';
 
@@ -37,7 +37,7 @@ const code = ts.transpileModule([
 const own = new Set(['Card', 'Button', 'SectionTitle', 'TruthBadge', 'TaskToday', 'BriefNavigation', 'FocusSlots', 'TodayTimeFlow', 'TodaySlots', 'EmptyState']);
 const deps = { React, brandInWorkspace, collapsedTodayAgendaRows, todayAgendaRows, FOCUS_REACTION_LABEL: REACTION_LABEL,
   MAX_FOCUS_PER_DAY: 3, REVIEW_EVENING_HOUR: 18, useUndoableAction: () => ({}),
-  buildTodayDeck, dateKeyInZone, shiftDateKey, useToast: () => ({}),
+  buildTodayDeck, dateKeyInZone, groupTaskRows, shiftDateKey, useToast: () => ({}),
   useMinuteClock: () => new Date(2026, 9, 21, 13) };
 for (const name of new Set([...code.matchAll(/React\.createElement\(([A-Z]\w*)/g)].map(match => match[1]))) {
   if (name !== 'React' && !own.has(name)) deps[name] = () => null;
