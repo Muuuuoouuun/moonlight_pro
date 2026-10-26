@@ -91,6 +91,15 @@ test('an existing session never leaves the hub through a dot-segment or absolute
   assert.deepEqual(form.visits, ['/dashboard/settings?tab=integrations#google']);
 });
 
+test('password login with a crafted next lands on the dashboard', async () => {
+  for (const next of ['/.//evil.example', '//evil.example', 'https://evil.example/']) {
+    const form = mount(() => body({ status: 'authenticated' }), `next=${encodeURIComponent(next)}`);
+    await form.submit();
+    assert.equal(form.calls.length, 1, JSON.stringify(next));
+    assert.deepEqual(form.visits, ['/dashboard'], JSON.stringify(next));
+  }
+});
+
 test('anonymous or unconfigured sessions keep the login form and do not retry credentials', async () => {
   for (const data of [{ status: 'anonymous', configured: true }, { status: 'authenticated', configured: false }]) {
     const form = mount(() => assert.fail('No automatic password request'), '', () => body(data));

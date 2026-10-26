@@ -6,6 +6,7 @@ import {
 import { fetchSupabaseRowsDetailed } from "@com-moon/supabase-rest";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { fetchSocialToken } from "./social-token-health.js";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 import { configuredMetaOAuthApps, isValidMetaOAuthAppIdentity, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
@@ -228,16 +229,6 @@ export function parseMetaThreadsSignedRequest(value) {
       payload: null,
     };
   }
-}
-
-function sanitizeReturnPath(value, fallback) {
-  const path = typeof value === "string" ? value.trim() : "";
-
-  if (!path || !path.startsWith("/") || path.startsWith("//")) {
-    return fallback;
-  }
-
-  return path;
 }
 
 function resolveBaseUrl(origin) {
