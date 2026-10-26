@@ -54,6 +54,18 @@ for (const [provider, connect, decode] of [
     assert.equal(createdFlow.app_id, state.appId);
   });
 
+  test(`${provider} connect keeps unsafe return paths on the Hub for immediate error redirects`, async () => {
+    globalThis.fetch = async () => { throw new Error("an invalid brand key must fail before any request"); };
+    for (const returnPath of ["/\t/outside.example", "//outside.example", "/\\outside.example", "https://outside.example"]) {
+      const url = new URL("http://localhost:3000/api/social/connect?brandKey=Bad%20Key!");
+      url.searchParams.set("returnPath", returnPath);
+      const location = new URL((await connect(new NextRequest(url))).headers.get("location"));
+      assert.equal(location.origin, "http://localhost:3000", returnPath);
+      assert.equal(location.pathname, "/dashboard/settings", returnPath);
+      assert.equal(location.searchParams.get(provider === "instagram_api" ? "instagram" : "metaThreads"), "invalid-brand");
+    }
+  });
+
   test(`${provider} Class.Moon starts a fresh app-scoped authorization beside a historical Moonlight ID`, async () => {
     process.env.SUPABASE_URL = "https://db.example.com";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";

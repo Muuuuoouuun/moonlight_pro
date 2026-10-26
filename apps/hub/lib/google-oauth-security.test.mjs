@@ -149,6 +149,18 @@ test("Gmail retains its existing shared-secret fallback for freshly signed state
   assert.deepEqual(decodeGoogleSheetsState(value), { invalid: true });
 });
 
+test("YouTube callback keeps unsafe return paths within the Hub", async () => {
+  const { GET } = await import("../app/api/social/youtube/callback/route.js");
+  for (const returnPath of unsafePaths) {
+    const request = new URL("/api/social/youtube/callback?error=access_denied", ORIGIN);
+    request.searchParams.set("state", signedState({ iat: Date.now(), workspaceId: "workspace-one", returnPath }));
+    const target = new URL((await GET(new NextRequest(request))).headers.get("location"));
+    assert.equal(target.origin, ORIGIN, JSON.stringify(returnPath));
+    assert.equal(target.pathname, "/dashboard/settings", JSON.stringify(returnPath));
+    assert.equal(target.searchParams.get("youtube"), "oauth-denied");
+  }
+});
+
 test("Google return paths accept local navigation and reject unsafe URL forms", () => {
   const fallback = "/dashboard/settings";
   for (const path of unsafePaths) assert.equal(sanitizeReturnPath(path, fallback), fallback);
