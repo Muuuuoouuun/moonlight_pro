@@ -40,6 +40,22 @@ test('complete task sends stable command and exact database version, with no ret
   assert.equal(tool.definition.annotations.idempotentHint,true);
 });
 
+test('Agent ID fields accept any 8-4-4-4-12 hex ID, not only RFC version/variant UUIDs',()=>{
+  // zod 4's z.uuid() rejects IDs whose version/variant bits are not RFC 9562 (e.g. seeded 1111…-1111 rows).
+  const tools=registry();
+  const schemas=[
+    tools.get('create_task').definition.inputSchema.commandId,
+    tools.get('get_task').definition.inputSchema.id,
+    tools.get('request_ai_assist').definition.inputSchema.commandId,
+    tools.get('request_ai_assist').definition.inputSchema.entityId,
+  ];
+  for(const schema of schemas){
+    assert.equal(schema.safeParse('11111111-1111-1111-1111-111111111111').success,true);
+    assert.equal(schema.safeParse(commandId).success,true);
+    for(const bad of ['not-a-uuid','11111111-1111-1111-1111-11111111111','11111111111111111111111111111111'])assert.equal(schema.safeParse(bad).success,false,bad);
+  }
+});
+
 test('Agent task creation requires caller commandId and sends the same ID on a retry',async t=>{
   const sent=[];
   setup(t,async(url,init)=>{sent.push(JSON.parse(init.body));return response({status:'saved',persisted:true,commandId,entity:{id:commandId}});});
