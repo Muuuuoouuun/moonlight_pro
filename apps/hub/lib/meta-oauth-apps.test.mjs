@@ -67,6 +67,41 @@ test("an unknown brand or a mismatched handle cannot fall through to another app
   assert.equal(resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "classmoon", brandHandle: "ml_bridgemaker" }), null);
 });
 
+test("new brand apps require dedicated credentials and reject cross-brand callback state", () => {
+  process.env.COM_MOON_INSTAGRAM_APP_ID = 'synthetic-legacy-ig';
+  process.env.COM_MOON_INSTAGRAM_APP_SECRET = 'synthetic-legacy-secret';
+  process.env.COM_MOON_META_THREADS_APP_ID = 'synthetic-legacy-threads';
+  process.env.COM_MOON_META_THREADS_APP_SECRET = 'synthetic-legacy-secret';
+  for (const [brandKey, brandHandle, suffix, providers] of [
+    ['gore', 'go_re_startagain', 'GORE', ['instagram_api', 'meta_threads']],
+    ['22nomad', '22th.nomad', 'NOMAD_22', ['instagram_api', 'meta_threads']],
+    ['holyfuncollector', 'holyfuncollect0r', 'HOLYFUN_COLLECTOR', ['instagram_api']],
+    ['sinabro', 'dazz.ling_u', 'SINABRO', ['meta_threads']],
+  ]) {
+    for (const [provider, prefix, scopes] of [
+      ['instagram_api', 'COM_MOON_INSTAGRAM', ['instagram_business_basic', 'instagram_business_content_publish']],
+      ['meta_threads', 'COM_MOON_META_THREADS', ['threads_basic', 'threads_content_publish']],
+    ]) {
+      const target = { provider, brandKey, brandHandle };
+      delete process.env[`${prefix}_${suffix}_APP_ID`];
+      delete process.env[`${prefix}_${suffix}_APP_SECRET`];
+      if (!providers.includes(provider)) { assert.equal(resolveMetaOAuthApp(target), null); continue; }
+      assert.equal(resolveMetaOAuthApp(target).configured, false);
+      process.env[`${prefix}_${suffix}_APP_ID`] = `synthetic-${provider}-${brandKey}`;
+      process.env[`${prefix}_${suffix}_APP_SECRET`] = 'synthetic-dedicated-secret';
+      const app = resolveMetaOAuthApp(target);
+      assert.equal(app.configured, true);
+      assert.equal(app.appKey, brandKey);
+      assert.deepEqual(app.scopes, scopes);
+      assert.equal(resolveMetaOAuthApp({ ...target, brandHandle: 'ml_bridgemaker' }), null);
+      assert.equal(resolveMetaOAuthAppFromState({ ...target, appKey: app.appKey, appId: app.appId }).appId, app.appId);
+      assert.equal(resolveMetaOAuthAppFromState({ ...target, appKey: 'moonlight', appId: app.appId }), null);
+      process.env[`${prefix}_${suffix}_APP_ID`] = process.env[`${prefix}_APP_ID`];
+      assert.equal(resolveMetaOAuthApp(target).configured, false);
+    }
+  }
+});
+
 test("callback rejects an app ID changed after authorization started", () => {
   process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_ID = "current-id";
   process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_SECRET = "current-secret";
