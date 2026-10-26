@@ -183,20 +183,20 @@ test("capped task reads fill open tasks before done history in both ledgers", as
   const state = globalThis.__operatingLedgerTestState;
   state.counts = { tasks: 1 };
   state.rows = { brands: [], projects: [], tasks: [] };
-  const taskOrders = [];
+  const taskReads = [];
   for (const read of [operatingLedger.getTaskLedger, operatingLedger.getProjectLedger]) {
     state.calls = [];
     await read();
-    taskOrders.push(state.calls.find((call) => call.kind === "fetch" && call.table === "tasks").options.order);
+    taskReads.push(state.calls.find((call) => call.kind === "fetch" && call.table === "tasks").options);
   }
-  assert.equal(taskOrders[0], "completed_at.desc.nullsfirst,updated_at.desc");
-  assert.equal(taskOrders[1], taskOrders[0], "identical URLs let the shared client dedupe the two reads");
+  assert.equal(taskReads[0].order, "completed_at.desc.nullsfirst,updated_at.desc,id.desc");
+  assert.deepEqual(taskReads[1], taskReads[0], "identical reads let the shared client dedupe the two ledgers");
 
   state.calls = [];
   await operatingLedger.getProjectLedger({ projectId: "66666666-6666-4666-8666-666666666666" });
   const selectedOrders = state.calls.filter((call) => call.kind === "fetch" && call.table === "tasks")
     .map((call) => call.options.order);
-  assert.deepEqual(selectedOrders, [taskOrders[0], taskOrders[0]], "a selected project's capped read keeps the same order");
+  assert.deepEqual(selectedOrders, [taskReads[0].order, taskReads[0].order], "a selected project's capped read keeps the same order");
 });
 
 test("marks project progress partial when the capped task read is smaller than the exact aggregate", async () => {

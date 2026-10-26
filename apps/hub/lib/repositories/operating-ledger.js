@@ -25,8 +25,9 @@ const PROJECT_READ_LIMIT = 80;
 const TASK_READ_LIMIT = 160;
 // 열린 할 일(completed_at null)이 160칸을 먼저 채운다. updated_at만으로 자르면 방금 끝낸 done이 앞칸을
 // 차지해 오래 손대지 않은(대개 기한 지난) 열린 할 일이 빠졌다. getTaskLedger·getProjectLedger가 같은
-// 문자열을 써야 동시에 돌 때 공용 클라이언트가 두 읽기를 하나로 합친다.
-const TASK_READ_ORDER = "completed_at.desc.nullsfirst,updated_at.desc";
+// 문자열을 써야 동시에 돌 때 공용 클라이언트가 두 읽기를 하나로 합친다. 같은 시각에 바뀐 행이 160칸 경계에서
+// 읽을 때마다 번갈아 들고 나지 않게 id로 마지막 순서를 정한다.
+const TASK_READ_ORDER = "completed_at.desc.nullsfirst,updated_at.desc,id.desc";
 const PROJECT_UPDATE_READ_LIMIT = 120;
 const OPTIONAL_READ_LIMIT = 80;
 
