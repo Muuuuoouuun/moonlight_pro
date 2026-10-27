@@ -489,3 +489,18 @@
   background: var(--ink-face);
   box-shadow: var(--shadow-ink);
 }
+
+/* 고대비 모드는 그림자를 지운다. 현재 위치·선택은 시스템 색 윤곽으로도 읽혀야 한다. */
+@media (forced-colors: active) {
+  .hub-app[data-visual-system="depth-c"] .hub-nav-item[aria-current="page"],
+  .hub-app[data-visual-system="depth-c"] .hub-seg__btn[aria-pressed="true"],
+  .hub-app[data-visual-system="depth-c"] .hub-tabs__tab[aria-selected="true"],
+  .hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button[aria-current="page"],
+  .hub-app[data-visual-system="depth-c"] .hub-chip[aria-pressed="true"],
+  .hub-app[data-visual-system="depth-c"] .brand-log-chip[aria-pressed="true"] {
+    outline: 1px solid Highlight;
+    outline-offset: -2px;
+    color: HighlightText;
+    background: Highlight;
+  }
+}

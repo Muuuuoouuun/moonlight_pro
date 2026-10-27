@@ -11,7 +11,6 @@ import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { resolveExpectedSocialAccountId, resolveSocialBrandKey } from "@/lib/social-account-connections";
 import { registerSocialOAuthFlow } from "@/lib/social-oauth-flow";
 import { resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
-import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 export const runtime = "nodejs";
 

@@ -85,6 +85,12 @@ test('막대 게이지는 chrome을 CSS에 맡기고, 바깥이 이미 말하면
   const quiet = renderToStaticMarkup(React.createElement(Progress, { value: 42, decorative: true }));
   assert.doesNotMatch(quiet, /role=/);
   assert.match(quiet, /aria-hidden="true"/);
+  const over = renderToStaticMarkup(React.createElement(Progress, { value: 125 }));
+  assert.match(over, /aria-label="진행률"/);
+  assert.match(over, /aria-valuenow="100"/);
+  assert.match(over, /aria-valuetext="125%"/);
+  const negative = renderToStaticMarkup(React.createElement(Progress, { value: -5 }));
+  assert.match(negative, /aria-valuenow="0"/);
   const css = readFileSync(new URL('../hub-tokens.css', import.meta.url), 'utf8');
   assert.match(css, /\.hub-app \.hub-progress-track \{[^}]*background: var\(--well, var\(--surface-3\)\);/);
   assert.match(css, /\.hub-app \.hub-progress-bar \{[^}]*transition: width var\(--dur-enter\) var\(--ease-hub\);/);

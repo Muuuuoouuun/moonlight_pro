@@ -216,7 +216,7 @@ export function Avatar({ name, size = 24, tone = 'moon' }) {
 // 막대 게이지 — 트랙(눌린 홈)·채움·모서리·전이는 hub-tokens.css의 .hub-progress-*가 소유한다(2026-10-22).
 // 인라인에는 높이·채움 폭·tone 색만 둔다(인라인 chrome은 depth C의 홈 규칙을 이긴다, §8.1).
 // `label`은 접근 가능한 이름, 바깥에서 이미 progressbar/status를 말하면 `decorative`로 숨긴다(중첩 progressbar 금지).
-export function Progress({ value = 0, tone = 'moon', height = 6, label, decorative = false, className = '', style, title }) {
+export function Progress({ value = 0, tone = 'moon', height = 6, label = '진행률', decorative = false, className = '', style, title }) {
   const map = { moon: 'var(--moon-300)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
   const numValue = Number.isFinite(value) ? value : 0;
   const isCompleted = numValue >= 100;
@@ -233,7 +233,7 @@ export function Progress({ value = 0, tone = 'moon', height = 6, label, decorati
   const computedTitle = title !== undefined ? title : defaultTitle;
   const a11y = decorative
     ? { 'aria-hidden': true }
-    : { role: 'progressbar', 'aria-label': label, 'aria-valuenow': Math.round(numValue), 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuetext': `${Math.round(numValue)}%` };
+    : { role: 'progressbar', 'aria-label': label, 'aria-valuenow': Math.round(widthPercent), 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuetext': `${Math.round(numValue)}%` };
 
   return (
     <div
