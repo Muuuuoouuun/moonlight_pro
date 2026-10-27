@@ -3,6 +3,7 @@ import {
   resolveDefaultWorkspaceId,
 } from "@/lib/server-write";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 import { isValidMetaOAuthAppIdentity, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 import { fetchSocialToken } from "./social-token-health.js";
@@ -153,16 +154,6 @@ export function decodeInstagramApiState(value) {
   } catch {
     return { invalid: true };
   }
-}
-
-function sanitizeReturnPath(value, fallback) {
-  const path = typeof value === "string" ? value.trim() : "";
-
-  if (!path || !path.startsWith("/") || path.startsWith("//")) {
-    return fallback;
-  }
-
-  return path;
 }
 
 function resolveBaseUrl(origin) {

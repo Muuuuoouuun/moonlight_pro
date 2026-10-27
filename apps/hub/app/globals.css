@@ -548,7 +548,7 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   min-height: 82px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   background: rgba(255, 255, 255, 0.045);
   box-shadow: var(--shadow-card);
@@ -1870,7 +1870,7 @@ button {
   grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.9fr);
   grid-template-rows: minmax(160px, auto) auto;
   overflow: hidden;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   background: rgba(255, 255, 255, 0.045);
   box-shadow: var(--shadow-card);
@@ -2090,7 +2090,7 @@ button {
 
 .hub-app .hub-project-portfolio-accordions {
   overflow: hidden;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   background: rgba(255, 255, 255, 0.04);
   box-shadow: var(--shadow-card);
@@ -2393,7 +2393,7 @@ button {
   .hub-app .hub-project-portfolio-mobile-manage { position: relative; margin-left: auto; }
   .hub-app .hub-project-portfolio-mobile-manage > summary { display: inline-flex; min-height: 44px; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); list-style: none; color: var(--fg-muted); font-size: 11px; cursor: pointer; }
   .hub-app .hub-project-portfolio-mobile-manage > summary::-webkit-details-marker { display: none; }
-  .hub-app .hub-project-portfolio-mobile-manage > div { position: absolute; z-index: 5; top: 100%; right: 0; display: grid; width: 170px; padding: 4px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card); }
+  .hub-app .hub-project-portfolio-mobile-manage > div { position: absolute; z-index: 5; top: 100%; right: 0; display: grid; width: 170px; padding: 4px; border: 1px solid var(--panel-edge); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card); }
   .hub-app .hub-project-portfolio-mobile-manage > div > button { min-height: 40px; padding: 0 10px; border-radius: var(--r-sm); text-align: left; color: var(--fg); font-size: 11.5px; }
   .hub-app .hub-project-portfolio-mobile-manage > div > button:hover { background: var(--surface-2); }
   .hub-app .hub-project-portfolio-index__header .hub-project-portfolio-index__close { display: inline-flex; margin-left: auto; color: var(--fg-muted); font-size: 11px; }

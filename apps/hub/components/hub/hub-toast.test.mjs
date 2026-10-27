@@ -22,7 +22,7 @@ test("toast conforms to accessibility and DESIGN.md tokens", () => {
   assert.match(toastSource, /role=\{isDanger \? "alert" : "status"\}/);
   // Design tokens
   assert.match(toastCss, /var\(--elevated\)/);
-  assert.match(toastCss, /var\(--line-strong\)/);
+  assert.match(toastCss, /border: 1px solid var\(--panel-edge\)/);
   assert.match(toastCss, /var\(--shadow-pop\)/);
   assert.match(toastCss, /var\(--dur-panel\)/);
   assert.match(toastCss, /var\(--ease-hub\)/);

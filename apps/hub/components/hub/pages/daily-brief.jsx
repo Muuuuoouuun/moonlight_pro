@@ -4,11 +4,12 @@ import React from "react";
 import { TodayTimeFlow } from "./today-time-flow";
 import { DayStrip, TodayHeadline, TodayModePanel, TodaySlots } from "./today-deck";
 import "./workflow-pages.css";
+import "./today-tasks.css";
 import { ReviewWaitingList } from "../review-waiting";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, TruthBadge, EmptyState, Kbd, Skeleton, CertaintyBadge, useToast } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, TruthBadge, EmptyState, Kbd, Skeleton, CertaintyBadge, useToast } from "../hub-primitives";
 import { REACTION_LABEL as FOCUS_REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { GuruRecommendationList } from "../guru-recommendation";
@@ -29,7 +30,7 @@ import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { ContactRecordDrawer } from "../deferred-contact-record-drawer";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
-import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
+import { buildTaskToday, focusLimitMessage, groupTaskRows, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY, taskDueLabel, taskPriorityLabel } from "@/lib/task-today";
 import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
 import { formatWonShort } from "@/lib/won-format";
 import { briefEnvelope, getDailyBriefAuthVersion, invalidateDailyBriefAuth, peekDailyBrief, readDailyBrief } from "../daily-brief-signals";
@@ -273,27 +274,14 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   const listItems = [...items.filter((task) => !task.focusToday), ...later];
   const moreCount = (Number(taskToday?.hiddenCount) || 0) + Math.max(0, (Number(taskToday?.laterCount) || 0) - later.length);
 
-  // §5.2: missed is the only immediate-loss lane; today/inbox are ordinary stages → neutral.
-  // focus = 운영자가 고른 "현재" 선택 → Moonstone(§5.2 selected 의미), 라벨 "오늘 3개"와 함께.
-  const laneTone = {
-    focus: 'moon',
-    missed: 'danger',
-    today: 'neutral',
-    waiting: 'neutral',
-    inbox: 'neutral',
-  };
+  // §5.2: missed(놓침)만 즉시 손실 레인 — 빨강은 놓침 묶음 머리와 그 행의 지난 기한 글자에만.
+  // 같은 레인끼리 묶어 레인 이름은 묶음 머리에 한 번만 말한다 — 행마다 "나중" 배지를 되풀이하지 않는다.
+  const taskGroups = groupTaskRows(listItems);
 
   return (
     <div role="group" aria-label="오늘 할 일">
       <SectionTitle right={(
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-          {showStreak && <BurningStreakBadge
-            compact
-            streak={currentStreak}
-            todayCompleted={currentTodayDone}
-            isBurning={isBurning}
-            isPopping={isPopping}
-          />}
           {(taskState !== 'live' || taskToday?.stale) && <TruthBadge state={taskToday?.stale ? 'partial' : taskState} label={taskToday?.stale ? '이전 값 · 다시 확인 필요' : taskState === 'partial' ? '일부 확인' : undefined} />}
           <Badge tone="moon" size="xs" variant="outline">오늘 3개 {count(taskToday?.focus?.done)}/{count(taskToday?.focus?.picked)}</Badge>
           <Badge tone={observed && counts.missed > 0 ? 'danger' : 'neutral'} size="xs">놓침 {count(counts.missed)}</Badge>
@@ -302,7 +290,8 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
         </div>
       )}>오늘 할 일</SectionTitle>
       <Card pad={false} className="daily-brief__panel">
-        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
+        {/* 연속 띠는 패널 머리 한 곳 — 머리말의 작은 연속 칩은 같은 값을 두 번 말해 뺐다(2026-10-22). */}
+        <div className="today-task-streak">
           {showStreak ? <BurningStreakBadge
             streak={currentStreak}
             todayCompleted={currentTodayDone}
@@ -312,10 +301,10 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             title="오늘 할 일 연속 완주"
           /> : ['loading', 'syncing'].includes(taskState) ? <Skeleton lines={1} label="할 일 집계 확인 중" /> : <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>연속 기록 확인 필요</span>}
         </div>
-        {count(taskToday?.focus?.picked) === 0 && items.length > 0 && (
-          <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Iconed name="star" size={12} style={{ color: 'var(--moon-300)' }} />
-            <span>오늘 반드시 끝낼 핵심 3개 항목의 별표(★)를 눌러 집중 모드로 지정해 보세요.</span>
+        {count(taskToday?.focus?.picked) === 0 && listItems.length > 0 && (
+          <div className="today-task-hint">
+            <Iconed name="star" size={12} />
+            <span>오늘 끝낼 셋을 ★로 고르면 위 세 자리에 올라갑니다.</span>
           </div>
         )}
         {['loading', 'syncing'].includes(taskState) ? <Skeleton lines={3} label="오늘 할 일 확인 중" style={{ padding: 14 }} /> : items.length || listItems.length ? (
@@ -323,61 +312,58 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             {listItems.length === 0 && (
               <div style={{ padding: '14px 16px', fontSize: 12.5, color: 'var(--fg-muted)' }}>남은 할 일은 모두 위 세 자리에 있습니다.</div>
             )}
-            {listItems.map((task, index) => (
-              <div
-                key={task.id}
-                className="hub-row hub-stackable-row"
-                style={{
-                  minHeight: 'calc(var(--row-h) + 20px)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '11px 16px',
-                  borderBottom: index < listItems.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                }}
-              >
-                <Badge tone={laneTone[task.lane] || 'neutral'} size="xs">{task.laneLabel}</Badge>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
-                  <div className="mono" style={{ marginTop: 2, fontSize: 11, color: 'var(--fg-faint)' }}>
-                    {task.due && task.due !== '미정' ? (
-                      <span style={{ color: task.lane === 'missed' ? 'var(--danger)' : 'inherit', fontWeight: task.lane === 'missed' ? 600 : 400 }}>
-                        {`due ${task.due}`} ·{' '}
-                      </span>
-                    ) : ''}{task.priority || 'med'}
-                  </div>
+            {taskGroups.map((group, groupIndex) => (
+              <div key={`${group.lane}-${groupIndex}`} role="group" aria-label={`${group.label} ${group.items.length}건`} className="today-task-group" data-lane={group.lane}>
+                <div className="today-task-group__head">
+                  {group.lane === 'missed' && <Iconed name="alert" size={12} />}
+                  <span className="today-task-group__label">{group.label}</span>
+                  <span className="num today-task-group__count">{group.items.length}</span>
+                  {group.hint && <span className="today-task-group__hint">{group.hint}</span>}
                 </div>
-                <IconButton
-                  icon="star"
-                  size={32}
-                  iconSize={15}
-                  tooltip={task.focusToday ? '오늘 3개에서 빼기' : focusFull ? `오늘 3개가 찼습니다 (${focusSummary.limit}/${focusSummary.limit})` : '오늘 3개에 넣기'}
-                  aria-pressed={task.focusToday ? 'true' : 'false'}
-                  disabled={focusBusyId === task.id || (!task.focusToday && focusFull)}
-                  onClick={() => toggleFocus(task)}
-                  className={task.focusToday ? 'hub-iconbtn--star-active' : ''}
-                  style={{ flexShrink: 0 }}
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon="check"
-                  aria-label={`완료: ${task.title}`}
-                  onClick={() => complete(task)}
-                  style={{ minHeight: 44, padding: '0 14px', flexShrink: 0 }}
-                >
-                  완료
-                </Button>
+                {group.items.map((task) => {
+                  const due = taskDueLabel(task);
+                  const priority = taskPriorityLabel(task.priority);
+                  return (
+                    <div key={task.id} className="hub-row hub-stackable-row today-task-row">
+                      <div className="today-task-row__body">
+                        <div className="today-task-row__title">{task.title}</div>
+                        <div className="today-task-row__meta">
+                          {due ? <span data-overdue={due.overdue || undefined}>{due.text}</span> : group.lane === 'later' ? <span>기한 없음</span> : null}
+                          {priority && <span data-priority={String(task.priority).toLowerCase()}>{priority}</span>}
+                        </div>
+                      </div>
+                      <IconButton
+                        icon="star"
+                        size={32}
+                        iconSize={15}
+                        tooltip={task.focusToday ? '오늘 3개에서 빼기' : focusFull ? `오늘 3개가 찼습니다 (${focusSummary.limit}/${focusSummary.limit})` : '오늘 3개에 넣기'}
+                        aria-pressed={task.focusToday ? 'true' : 'false'}
+                        disabled={focusBusyId === task.id || (!task.focusToday && focusFull)}
+                        onClick={() => toggleFocus(task)}
+                        className={task.focusToday ? 'hub-iconbtn--star-active' : ''}
+                        style={{ flexShrink: 0 }}
+                      />
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon="check"
+                        aria-label={`완료: ${task.title}`}
+                        onClick={() => complete(task)}
+                        style={{ minHeight: 44, padding: '0 14px', flexShrink: 0 }}
+                      >
+                        완료
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             ))}
             {moreCount > 0 && (
-              <button
-                type="button"
-                onClick={() => onNavigate?.('dashboard/work/my')}
-                style={{ width: '100%', border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5, padding: '9px 14px', cursor: 'pointer', textAlign: 'center' }}
-              >
-                할 일 {moreCount}건 더 보기
-              </button>
+              <div className="today-task-more">
+                <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>
+                  할 일 {moreCount}건 더 · 내 작업에서 보기
+                </Button>
+              </div>
             )}
           </div>
         ) : taskToday?.state === 'error' ? (
@@ -1100,7 +1086,7 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
     <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
       position: 'relative', overflow: 'hidden',
       background: 'var(--surface)',
-      border: '1px solid var(--line-soft)',
+      border: '1px solid var(--panel-edge)',
       borderRadius: 'var(--r-lg)',
       padding: '18px 20px',
     }}>
@@ -1176,7 +1162,7 @@ function CommandClear({ signalCount, state }) {
     : '목록이 비어 보여도 실제로 확인할 일이 있을 수 있습니다.';
   return (
     <div className="daily-brief__panel" style={{
-      background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)',
+      background: 'var(--surface)', border: '1px solid var(--panel-edge)', borderRadius: 'var(--r-lg)',
       padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14,
     }}>
       {/* all-clear도 중립 체크 — 녹색 완료 상태 금지(§5.3 done = neutral, not green). */}
@@ -1212,7 +1198,7 @@ function MoreDetail({ title, summary, children }) {
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           padding: '11px 14px',
           background: 'var(--surface)',
-          border: '1px solid var(--line-soft)',
+          border: '1px solid var(--panel-edge)',
           borderRadius: 'var(--r-lg)',
           color: 'var(--fg-muted)', fontSize: 12.5, textAlign: 'left',
         }}
@@ -1238,26 +1224,39 @@ function MoreDetail({ title, summary, children }) {
 // behavior never drifts from the canonical Rhythm page). Own fetch to /api/hub/work.
 function RhythmPanel({ onNavigate }) {
   const [ledger, setLedger] = React.useState({ rituals: [], summary: null });
-  const [syncState, setSyncState] = React.useState('preview');
+  const [syncState, setSyncState] = React.useState('loading');
   const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
   const [weeklyReviewOpen, setWeeklyReviewOpen] = React.useState(false);
   const attemptSequenceRef = React.useRef(0);
   const latestAttemptRef = React.useRef(new Map());
 
   const load = React.useCallback(async () => {
-    setSyncState((prev) => (prev === 'preview' ? 'loading' : prev));
+    setSyncState((prev) => (prev === 'preview' || prev === 'error' ? 'loading' : prev));
     try {
       const response = await fetch('/api/hub/work', { cache: 'no-store' });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.status === 'error') {
+      if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
+        setSyncState('error');
+        return false;
+      }
+      if (data.status === 'preview' || data.source === 'preview') {
+        setLedger({ rituals: [], summary: null });
+        setSyncState('preview');
+        return false;
+      }
+      // Work 전체의 partial은 결정·로드맵 실패일 수도 있다. 이 패널의 진실성은
+      // 루틴 원천 봉투로 판단해야 읽기 실패를 '등록된 루틴 없음'으로 숨기지 않는다.
+      const rhythm = data.rhythm;
+      if (data.source !== 'supabase' || !Array.isArray(data.rituals)
+        || !['live', 'live-empty', 'partial'].includes(rhythm?.state)) {
         setSyncState('error');
         return false;
       }
       setLedger({
-        rituals: Array.isArray(data.rituals) ? data.rituals : [],
+        rituals: data.rituals,
         summary: data.summary || null,
       });
-      setSyncState(data.source === 'supabase' ? 'live' : 'preview');
+      setSyncState(rhythm.state === 'partial' || rhythm.partial ? 'partial' : 'live');
       return true;
     } catch {
       setSyncState('error');
@@ -1302,29 +1301,40 @@ function RhythmPanel({ onNavigate }) {
   const completed = summary.ritualsCompletedThisWeek;
   const total = summary.ritualsTotalThisWeek;
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const rhythmProgressProps = getRhythmProgressProps({ completed, total });
+  const rhythmProgressProps = getRhythmProgressProps({ partial: syncState === 'partial', completed, total });
+  const readable = syncState === 'live' || syncState === 'partial';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <SectionTitle right={<TruthBadge state={syncState} />}>리듬</SectionTitle>
+      <SectionTitle right={(
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+          <TruthBadge state={syncState} />
+          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/rhythm')}>리듬 기록</Button>
+        </div>
+      )}>리듬</SectionTitle>
       <Card>
-        {total > 0 ? (
+        {syncState === 'loading' ? <Skeleton lines={4} label="루틴 불러오는 중" /> : readable && total > 0 ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span className="stat" style={{ fontSize: 22, fontWeight: 600 }}>{completed}/{total}</span>
                 <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
               </div>
+              {/* 원형 게이지는 아래 막대와 같은 값을 두 번 그려 뺐다 — 퍼센트는 글자로 한 번만(2026-10-22). */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {percent >= 100 && (
+                {syncState === 'live' && percent >= 100 && (
                   <span className="hub-celebration-badge hub-celebration-badge--sparkle">
                     ✦ 완벽 달성
                   </span>
                 )}
-                <ProgressRing value={percent} size={28} strokeWidth={3} showLabel />
+                <span className="num" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{percent}%</span>
               </div>
             </div>
-            <div {...rhythmProgressProps} style={{ marginTop: 10 }}><Progress value={percent} /></div>
+            <div {...rhythmProgressProps} style={{ marginTop: 10 }}>
+              {syncState === 'partial'
+                ? <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>일부 기록만 확인했습니다. 확인된 루틴의 진행 상황입니다.</span>
+                : <Progress value={percent} decorative />}
+            </div>
             {summary.longestStreak > 0 && (
               <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 11, color: 'var(--fg-muted)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1349,10 +1359,6 @@ function RhythmPanel({ onNavigate }) {
                 </span>
               </div>
             )}
-            <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10.5 }}>
-              <span style={{ color: 'var(--fg-muted)' }}>이번 주 업로드 <strong>5/7</strong> · 일평균 몰입 <strong>3.2h</strong></span>
-              <span style={{ color: 'var(--moon-300)', cursor: 'pointer' }} onClick={() => onNavigate?.('dashboard/work/rhythm')}>분석 ↗</span>
-            </div>
             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {sortedRituals.map((r, i) => {
                 const pending = Boolean(mutationState.pendingByRitual?.[r.id]);
@@ -1365,7 +1371,7 @@ function RhythmPanel({ onNavigate }) {
                       {r.isTimeRecommended && (
                         <Badge tone="moon" size="xs">지금 시간대</Badge>
                       )}
-                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.streak || 0}d</span>
+                      <span className="num" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.streak || 0}일</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                       <div role="img" aria-label={`최근 7일 체크 기록: ${weeks.join(', ')}`} style={{ display: 'flex', gap: 3 }}>
@@ -1397,8 +1403,9 @@ function RhythmPanel({ onNavigate }) {
         ) : (
           <EmptyState
             icon="rhythm"
-            title={syncState === 'live' ? '등록된 루틴 없음' : '루틴 확인 대기'}
-            description={syncState === 'live' ? 'Rhythm에서 루틴을 만들면 여기 표시됩니다.' : '기록이 연결되면 이번 주 리듬을 표시합니다.'}
+            title={syncState === 'error' ? '루틴을 읽지 못했습니다' : syncState === 'partial' ? '루틴을 모두 확인하지 못했습니다' : syncState === 'live' ? '등록된 루틴 없음' : '루틴 확인 대기'}
+            description={syncState === 'error' || syncState === 'partial' ? '현재 루틴 상태를 확인할 수 없습니다. 다시 읽어 주세요.' : syncState === 'live' ? 'Rhythm에서 루틴을 만들면 여기 표시됩니다.' : '기록이 연결되면 이번 주 리듬을 표시합니다.'}
+            action={(syncState === 'error' || syncState === 'partial') ? <Button variant="outline" size="xs" onClick={load}>다시 읽기</Button> : undefined}
             style={{ minHeight: 140 }}
           />
         )}
@@ -1407,6 +1414,7 @@ function RhythmPanel({ onNavigate }) {
             variant="outline"
             size="xs"
             icon="sparkle"
+            disabled={!readable}
             onClick={() => setWeeklyReviewOpen(true)}
             style={{ flex: 1.2, justifyContent: 'center' }}
           >
@@ -1424,7 +1432,7 @@ function RhythmPanel({ onNavigate }) {
         </div>
       </Card>
 
-      {weeklyReviewOpen && (
+      {weeklyReviewOpen && readable && (
         <FloatingMentorWidget
           isOpen={weeklyReviewOpen}
           onClose={() => setWeeklyReviewOpen(false)}
@@ -1432,7 +1440,7 @@ function RhythmPanel({ onNavigate }) {
           contextType="weekly"
           contextTitle="이번 주 운영 기록 회고"
           contextData={{
-            summary: `이번 주 루틴 달성: ${completed}/${total} (${percent}%) · 연속 달성: ${summary.longestStreak}일`,
+            summary: `${syncState === 'partial' ? '일부 기록만 확인됨. ' : ''}이번 주 루틴 달성: ${completed}/${total} (${percent}%) · 연속 달성: ${summary.longestStreak}일`,
           }}
         />
       )}

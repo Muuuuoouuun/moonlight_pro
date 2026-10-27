@@ -63,6 +63,19 @@
   --r-lg: 18px;
   --r-xl: 24px;
 
+  /* 테두리 대신 음영(2026-10-22) — 판의 경계는 그림자가 맡는다. 아래 "한 기준" 절 참고. */
+  --panel-edge: transparent;
+  --seg-radius: var(--fx-pill);
+  --seg-btn-radius: var(--fx-pill);
+  /* 겹쳐 뜨는 창(사이드 창·가운데 창·메뉴·토스트): 판보다 한 단계 더 뜬다. 링(0 0 0 1px) 없음. */
+  --shadow-window:
+    0 32px 72px -24px oklch(0 0 0 / .85),
+    0 10px 22px -10px oklch(0 0 0 / .55),
+    inset 0 1px 0 oklch(1 0 0 / .1);
+  --shadow-pop: var(--shadow-window);
+  /* 입력 홈: 빛 반대편(위·왼쪽) 안쪽 모서리 1px이 3:1 경계(--line-control)를 맡는다. */
+  --shadow-inset-edge: inset 1px 1px 0 var(--line-control), var(--shadow-inset);
+
   /* JetBrains has no Hangul: use the bundled UI face before OS fallbacks. */
   --font-mono: 'JetBrains Mono', 'SUIT Variable', 'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace;
 }
@@ -104,6 +117,10 @@
   --shadow-card-legacy:
     0 1px 0 0 oklch(1 0 0 / .8) inset,
     0 8px 24px -14px oklch(.3 .01 250 / .1);
+  --shadow-window:
+    -10px -10px 28px oklch(1 0 0 / .9),
+    18px 24px 56px -14px oklch(0.4 0.03 250 / .34),
+    inset 0 1px 0 oklch(1 0 0 / .95);
 }
 
 /* ── 바탕: 셸이 빛 번짐을 칠하고 본문·탑바는 비켜선다 ─────────────── */
@@ -280,24 +297,40 @@
   max-width: 100%;
 }
 .hub-app[data-visual-system="depth-c"] .hub-seg[data-invalid] { box-shadow: inset 0 0 0 1px var(--danger), var(--shadow-inset); }
+/* 트랙은 칸만큼만 — 빈 홈이 줄 끝까지 늘어나지 않는다(칸을 나눠 채우는 fill은 그대로) */
+.hub-app[data-visual-system="depth-c"] .hub-seg:not([data-fill]) { width: fit-content; max-width: 100%; }
 
 /* ── 입력 · 트랙: 눌린 홈. 1px 경계(3:1, §5.1 --line-control)는 지킨다 ── */
 .hub-app[data-visual-system="depth-c"] .hub-input,
-.hub-app[data-visual-system="depth-c"] .hub-field {
+.hub-app[data-visual-system="depth-c"] .hub-field,
+.hub-app[data-visual-system="depth-c"] .hub-quick-capture__field,
+.hub-app[data-visual-system="depth-c"] .customers-search {
   background: var(--well);
-  box-shadow: var(--shadow-inset);
+  border-color: transparent;
+  box-shadow: var(--shadow-inset-edge);
 }
-.hub-app[data-visual-system="depth-c"] .hub-input:focus { background: var(--well); }
-.hub-app[data-visual-system="depth-c"] .hub-field:focus-within {
+.hub-app[data-visual-system="depth-c"] .hub-input:hover:not(:disabled),
+.hub-app[data-visual-system="depth-c"] .hub-field:hover:not(:focus-within),
+.hub-app[data-visual-system="depth-c"] .hub-quick-capture__field:hover:not(:focus-within),
+.hub-app[data-visual-system="depth-c"] .customers-search:hover:not(:focus-within) { border-color: transparent; }
+.hub-app[data-visual-system="depth-c"] .hub-input:focus,
+.hub-app[data-visual-system="depth-c"] .hub-field:focus-within,
+.hub-app[data-visual-system="depth-c"] .hub-quick-capture__field:focus-within,
+.hub-app[data-visual-system="depth-c"] .customers-search:focus-within {
   background: var(--well);
-  box-shadow: 0 0 0 1px var(--moon-300), var(--shadow-inset);
+  border-color: transparent;
+  box-shadow: 0 0 0 1px var(--moon-300), var(--shadow-inset-edge);
 }
+/* 오류는 색 선을 지킨다(폼 메시지와 함께, §5.3) */
+.hub-app[data-visual-system="depth-c"] .hub-input[aria-invalid="true"] { border-color: var(--danger); }
+.hub-app[data-visual-system="depth-c"] .hub-quick-capture__field[data-invalid="true"] { border-color: var(--danger-line); }
 .hub-app[data-visual-system="depth-c"] .hub-progress-track { box-shadow: var(--shadow-inset); }
 
 /* ── 오늘: 패널은 공통 깊이, 바로가기는 솟은 컨트롤 ───────────── */
 .hub-app[data-visual-system="depth-c"] .daily-brief {
   --brief-panel-shadow: var(--shadow-panel);
   --brief-panel-shadow-hover: var(--shadow-panel);
+  --brief-panel-line: transparent;
 }
 /* 패딩 없는 패널의 맨 위·맨 아래 띠(긴급 KA 줄, 할 일 머리)가 제 배경을 네모로 칠해 둥근 모서리를
  * 덮었다 — 상자와 바탕의 대비가 커지면서 위쪽이 잘린 판처럼 보였다(운영자 피드백 2026-10-21). */
@@ -336,6 +369,136 @@
 .hub-app[data-visual-system="depth-c"] .finance-entries,
 .hub-app[data-visual-system="depth-c"] .finance-subscriptions,
 .hub-app[data-visual-system="depth-c"] .finance-table-scroll {
-  border-color: var(--line-soft);
+  border-color: var(--panel-edge);
   box-shadow: var(--shadow-panel);
+}
+
+/* ── 테두리 대신 음영 — 판·탭·창·입력의 한 기준 (2026-10-22 운영자 "컴포넌트·창·탭 기준이 제각각,
+ * 테두리보다 음영 입체감") ──────────────────────────────────────────────────
+ *   판(Card·패널·표)      솟은 면 + --shadow-panel, 테두리는 --panel-edge(투명)
+ *   판 안의 칸·칸반 칼럼   눌린 홈(--well + --shadow-inset)
+ *   누르는 카드           낮게 솟은 면(--shadow-raise), 누르면 눌린 홈
+ *   탭 묶음               세그먼트·탭·탑바 탭 모두 눌린 pill 트랙 + 잉크 현재 칸(사이드바와 같은 잉크)
+ *   창                    사이드 창은 화면 끝에서 12px 떨어져 뜬 판, 가운데 창·메뉴·토스트는 --shadow-window
+ *   입력                  눌린 홈, 3:1 경계는 위·왼쪽 안쪽 모서리(--shadow-inset-edge)
+ * 색 의미의 선(위급 레일·오류·위험 버튼·점선 확실성)은 그대로 둔다. */
+
+/* 누르는 카드 */
+.hub-app[data-visual-system="depth-c"] .hub-card-link {
+  border-color: transparent;
+  background: var(--raise-face);
+  box-shadow: var(--shadow-raise);
+}
+.hub-app[data-visual-system="depth-c"] .hub-card-link:hover {
+  border-color: transparent;
+  background: var(--raise-face-hover);
+  box-shadow: var(--shadow-raise-hover);
+}
+.hub-app[data-visual-system="depth-c"] .hub-card-link:active {
+  background: var(--well);
+  box-shadow: var(--shadow-inset);
+}
+.hub-app[data-visual-system="depth-c"] .hub-metric-card[role="button"]:hover,
+.hub-app[data-visual-system="depth-c"] .daily-brief__jump:hover { border-color: transparent; }
+
+/* 판 안의 칸 = 눌린 홈 */
+.hub-app[data-visual-system="depth-c"] .hub-rh__stat,
+.hub-app[data-visual-system="depth-c"] .finance-gauge-panel {
+  border-color: transparent;
+  background: var(--well);
+  box-shadow: var(--shadow-inset);
+}
+/* 테두리만 있던 판 */
+.hub-app[data-visual-system="depth-c"] .daily-review-heat,
+.hub-app[data-visual-system="depth-c"] .daily-review-calendar {
+  border-color: transparent;
+  box-shadow: var(--shadow-panel);
+}
+/* 판 안에서 고르는 카드 = 낮게 솟은 면 */
+.hub-app[data-visual-system="depth-c"] .mentor-shelf__person-choice--card,
+.hub-app[data-visual-system="depth-c"] .mentor-shelf__reading {
+  border-color: transparent;
+  box-shadow: var(--shadow-raise);
+}
+
+/* 탭 묶음: 눌린 pill 트랙 + 잉크 현재 칸 */
+.hub-app[data-visual-system="depth-c"] .hub-tabs,
+.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs {
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--fx-pill);
+  background: var(--well);
+  box-shadow: var(--shadow-inset);
+}
+.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs {
+  align-items: center;
+  min-height: 0;
+  margin: 2px 16px 10px;
+  scroll-padding: 0 4px;
+}
+.hub-app[data-visual-system="depth-c"] .hub-tabs__tab,
+.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button {
+  min-height: 32px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--fx-pill);
+}
+.hub-app[data-visual-system="depth-c"] .hub-tabs__tab:hover:not([aria-selected="true"]),
+.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button:hover:not([aria-current="page"]) {
+  color: var(--fg);
+  background: transparent;
+}
+.hub-app[data-visual-system="depth-c"] .hub-tabs__tab[aria-selected="true"],
+.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button[aria-current="page"] {
+  color: var(--ink-fg);
+  background: var(--ink-face);
+  box-shadow: var(--shadow-ink);
+}
+.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button[aria-current="page"]::after { display: none; }
+
+/* 창: 사이드 창은 사이드바처럼 화면 끝에서 떨어져 뜬다(좁은 화면은 끝에 붙은 그대로) */
+@media (min-width: 601px) {
+  .hub-app[data-visual-system="depth-c"] {
+    --drawer-gap: 12px;
+    --drawer-radius: var(--r-xl);
+    --drawer-edge: transparent;
+    --drawer-shadow: var(--shadow-window);
+  }
+}
+
+/* 칩(필터 토글): 솟은 칩, 고르면 잉크 */
+.hub-app[data-visual-system="depth-c"] .hub-chip,
+.hub-app[data-visual-system="depth-c"] .brand-log-chip {
+  border-color: transparent;
+  background: var(--raise-face);
+  box-shadow: var(--shadow-raise);
+}
+.hub-app[data-visual-system="depth-c"] .hub-chip:hover,
+.hub-app[data-visual-system="depth-c"] .brand-log-chip:hover {
+  border-color: transparent;
+  background: var(--raise-face-hover);
+  box-shadow: var(--shadow-raise-hover);
+}
+.hub-app[data-visual-system="depth-c"] .hub-chip[aria-pressed="true"],
+.hub-app[data-visual-system="depth-c"] .brand-log-chip[aria-pressed="true"] {
+  color: var(--ink-fg);
+  background: var(--ink-face);
+  box-shadow: var(--shadow-ink);
+}
+
+/* 고대비 모드는 그림자를 지운다. 현재 위치·선택은 시스템 색 윤곽으로도 읽혀야 한다. */
+@media (forced-colors: active) {
+  .hub-app[data-visual-system="depth-c"] .hub-nav-item[aria-current="page"],
+  .hub-app[data-visual-system="depth-c"] .hub-seg__btn[aria-pressed="true"],
+  .hub-app[data-visual-system="depth-c"] .hub-tabs__tab[aria-selected="true"],
+  .hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button[aria-current="page"],
+  .hub-app[data-visual-system="depth-c"] .hub-chip[aria-pressed="true"],
+  .hub-app[data-visual-system="depth-c"] .brand-log-chip[aria-pressed="true"] {
+    outline: 1px solid Highlight;
+    outline-offset: -2px;
+  }
 }

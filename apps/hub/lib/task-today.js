@@ -233,3 +233,45 @@ export function buildTaskToday(
 export function isDurableTaskUpdateResult(result) {
   return result?.status === "saved";
 }
+
+// ── 오늘 할 일 목록의 표시 규칙(2026-10-22) ─────────────────────────────
+// 행마다 같은 레인 배지("나중"·"나중"·"나중"…)를 되풀이하던 것을 묶음 머리 한 번으로 옮기고,
+// 행 메타는 영문 원값(med·low) 대신 운영자가 읽는 말로 쓴다. 보통 우선순위는 말하지 않는다.
+const TASK_GROUP = {
+  missed: { label: "놓침", hint: "기한 지남" },
+  today: { label: "오늘", hint: "오늘 기한 · 진행 중" },
+  waiting: { label: "대기", hint: "막힌 일" },
+  inbox: { label: "정리 전", hint: "기한을 정하지 않은 새 일" },
+  later: { label: "나중", hint: "★로 오늘 3개에 올릴 후보" },
+};
+
+const PRIORITY_LABEL = { critical: "긴급", high: "높음", low: "낮음" };
+
+export function taskPriorityLabel(priority) {
+  return PRIORITY_LABEL[String(priority || "").toLowerCase()] || "";
+}
+
+// 표시 순서를 지킨 채 이어진 같은 레인끼리 묶는다(정렬은 buildTaskToday가 이미 했다).
+export function groupTaskRows(rows = []) {
+  const groups = [];
+  for (const task of Array.isArray(rows) ? rows : []) {
+    const lane = task?.lane || "later";
+    const last = groups[groups.length - 1];
+    if (last && last.lane === lane) last.items.push(task);
+    else groups.push({ lane, ...(TASK_GROUP[lane] || { label: task?.laneLabel || lane, hint: "" }), items: [task] });
+  }
+  return groups;
+}
+
+// 기한 → 짧은 상대 표기. 지난 기한만 overdue(빨강은 놓침 한 곳, §5.2). 읽을 수 없으면 null.
+export function taskDueLabel(task, { now = new Date(), timeZone = TASK_TIME_ZONE } = {}) {
+  const dueKey = dateKeyInZone(task?.dueAt, timeZone);
+  const todayKey = dateKeyInZone(now, timeZone);
+  if (!dueKey || !todayKey) return null;
+  const diff = Math.round((Date.parse(`${dueKey}T00:00:00Z`) - Date.parse(`${todayKey}T00:00:00Z`)) / 86400000);
+  if (diff < 0) return { text: `${-diff}일 지남`, overdue: true };
+  if (diff === 0) return { text: "오늘까지", overdue: false };
+  if (diff === 1) return { text: "내일까지", overdue: false };
+  if (diff <= 7) return { text: `D-${diff}`, overdue: false };
+  return { text: `${Number(dueKey.slice(5, 7))}/${Number(dueKey.slice(8, 10))}까지`, overdue: false };
+}

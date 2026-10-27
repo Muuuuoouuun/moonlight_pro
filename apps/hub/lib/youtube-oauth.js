@@ -4,6 +4,7 @@ import {
   resolveDefaultWorkspaceId,
   updateSupabaseRecord,
 } from "@com-moon/supabase-rest";
+import { sanitizeReturnPath } from "./google-oauth.js";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "./social-account-connections.js";
 import { fetchSocialToken, isRefreshGrantExpiringSoon } from "./social-token-health.js";
 
@@ -18,13 +19,6 @@ const SCOPES = [
   "https://www.googleapis.com/auth/youtube.readonly",
   "https://www.googleapis.com/auth/youtube.upload",
 ];
-
-function safeReturnPath(path) {
-  return typeof path === "string" && path.startsWith("/") &&
-    !path.startsWith("//") && !path.includes("\\")
-    ? path
-    : "/dashboard/settings";
-}
 
 export function resolveYouTubeOAuthConfig() {
   const clientId = process.env.COM_MOON_YOUTUBE_CLIENT_ID?.trim() || "";
@@ -72,7 +66,7 @@ export function buildYouTubeAuthUrl({
     workspaceId,
     expectedChannelId: String(expectedChannelId || "").trim(),
     brandKey,
-    returnPath: safeReturnPath(returnPath),
+    returnPath: sanitizeReturnPath(returnPath, "/dashboard/settings"),
     iat: Date.now(),
   })).toString("base64url");
   const state = `${payload}.${signState(payload)}`;

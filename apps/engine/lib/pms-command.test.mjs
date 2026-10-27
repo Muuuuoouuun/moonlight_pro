@@ -500,6 +500,24 @@ test("project reopening clears the completion date while completion records its 
   }
 });
 
+test("task reopening clears completed_at so capped Hub task reads keep it among open rows", () => {
+  // Hub의 할 일 read는 completed_at이 빈 행(열린 할 일)을 160칸에 먼저 채운다 — 다시 연 할 일이 값을 남기면 밀려난다.
+  const now = "2026-10-22T01:00:00.000Z";
+  for (const status of ["inbox", "todo", "doing", "blocked", "done"]) {
+    const result = pmsCommand.normalizePmsCommand({
+      action: "update_task",
+      id: "55555555-5555-4555-8555-555555555555",
+      status,
+    }, {
+      workspaceId: "33333333-3333-4333-8333-333333333333",
+      now,
+    });
+
+    assert.equal(result.ok, true, status);
+    assert.equal(result.patch.completed_at, status === "done" ? now : null, status);
+  }
+});
+
 test("keeps Postgres microsecond precision in the optimistic-lock filter", () => {
   // Regression: dateTime()'s toISOString() truncated …52.676457+00:00 to
   // …52.676Z, so the eq.updated_at filter never matched microsecond rows and

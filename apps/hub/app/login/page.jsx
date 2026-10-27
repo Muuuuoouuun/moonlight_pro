@@ -77,7 +77,8 @@ function LoginForm() {
       return;
     }
     const target = new URL(next, window.location.origin);
-    router.replace(councilTarget || (target.origin === window.location.origin
+    // Dot segments can normalize a same-origin URL to a '//host' pathname, which the router reads as protocol-relative.
+    router.replace(councilTarget || (target.origin === window.location.origin && !target.pathname.startsWith('//')
       ? `${target.pathname}${target.search}${target.hash}` : '/dashboard'));
   }, [next, router, updateHandoff]);
 

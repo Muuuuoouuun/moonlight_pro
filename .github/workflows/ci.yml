@@ -65,6 +65,7 @@ jobs:
 
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,11 +82,26 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Source syntax guard
+        run: npm run lint
+
       - name: Contract checks
         run: npm run check:contracts
 
       - name: ClassIn sales checks
         run: npm run check:classin
+
+      - name: Make isolated PostgreSQL contract tests available
+        run: |
+          pg_bin=$(find /usr/lib/postgresql -path '*/bin/pg_ctl' -type f -printf '%h\n' | sort -V | tail -1)
+          if [ -z "$pg_bin" ]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql
+            pg_bin=$(find /usr/lib/postgresql -path '*/bin/pg_ctl' -type f -printf '%h\n' | sort -V | tail -1)
+          fi
+          test -n "$pg_bin"
+          echo "$pg_bin" >> "$GITHUB_PATH"
+          "$pg_bin/pg_ctl" --version
 
       - name: Tests
         run: npm test

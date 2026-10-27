@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGenaiStatus } from "@com-moon/genai-transport";
+import { hasHubServerCredential } from "@/lib/hub-write-guard";
 
 import {
   resolveControlPlaneReadiness,
@@ -46,14 +47,26 @@ async function checkSupabaseRest() {
   }
 }
 
-export async function GET() {
+export async function GET(req) {
+  const includeDiagnostics = Boolean(req && hasHubServerCredential(req));
   const [supabase, controlPlane] = await Promise.all([
     checkSupabaseRest(),
-    resolveControlPlaneReadiness(),
+    includeDiagnostics ? resolveControlPlaneReadiness() : null,
   ]);
+  const isHealthy = supabase.ok;
+  const responseOptions = { status: isHealthy ? 200 : 503, headers: { "Cache-Control": "private, no-store" } };
+
+  // Public probes retain the readiness fields used by deployment checks.
+  // Configuration and upstream errors require the existing server credential.
+  if (!includeDiagnostics) {
+    return NextResponse.json({
+      status: isHealthy ? "ok" : "degraded",
+      database: { supabase: { ok: isHealthy } },
+    }, responseOptions);
+  }
+
   const googleOAuth = resolveGoogleOAuthProviderReadiness();
   const secrets = resolveSecretReadiness();
-  const isHealthy = supabase.ok;
 
   return NextResponse.json({
     service: "moonlight-hub",
@@ -94,5 +107,5 @@ export async function GET() {
       { method: "POST", path: "/api/webhooks/project-test" },
       { method: "GET", path: "/dashboard" },
     ],
-  }, { status: isHealthy ? 200 : 503 });
+  }, responseOptions);
 }

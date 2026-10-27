@@ -148,8 +148,8 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
       <div ref={panelRef} onKeyDown={handlePanelKey} onClick={e => e.stopPropagation()} style={{
         width: 580, maxWidth: '90vw', maxHeight: '70vh',
         background: 'var(--surface-2)',
-        border: '1px solid var(--line)',
-        borderRadius: 'var(--r-lg)',
+        border: '1px solid var(--panel-edge)',
+        borderRadius: 'var(--r-xl)',
         boxShadow: 'var(--shadow-pop)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         animation: 'mlFadeUp var(--dur-panel) var(--ease-hub)',

@@ -77,6 +77,29 @@ test('a configured existing session continues to the widget without posting cred
   assert.equal(form.sessionCalls.length, 1);
 });
 
+test('an existing session never leaves the hub through a dot-segment or absolute next', async () => {
+  // new URL('/.//evil', origin) passes an origin check, but its pathname '//evil' is protocol-relative to the router.
+  for (const next of ['/.//evil.example', '/..//evil.example', '/%2e//evil.example', '/x/..//evil.example', '//evil.example', 'https://evil.example/', '/\t/evil.example']) {
+    const form = mount(() => assert.fail('Existing sessions must not submit a password'), `next=${encodeURIComponent(next)}`,
+      () => body({ status: 'authenticated', configured: true }));
+    await form.runEffects();
+    assert.deepEqual(form.visits, ['/dashboard'], JSON.stringify(next));
+  }
+  const form = mount(() => assert.fail('Existing sessions must not submit a password'),
+    `next=${encodeURIComponent('/dashboard/settings?tab=integrations#google')}`, () => body({ status: 'authenticated', configured: true }));
+  await form.runEffects();
+  assert.deepEqual(form.visits, ['/dashboard/settings?tab=integrations#google']);
+});
+
+test('password login with a crafted next lands on the dashboard', async () => {
+  for (const next of ['/.//evil.example', '//evil.example', 'https://evil.example/']) {
+    const form = mount(() => body({ status: 'authenticated' }), `next=${encodeURIComponent(next)}`);
+    await form.submit();
+    assert.equal(form.calls.length, 1, JSON.stringify(next));
+    assert.deepEqual(form.visits, ['/dashboard'], JSON.stringify(next));
+  }
+});
+
 test('anonymous or unconfigured sessions keep the login form and do not retry credentials', async () => {
   for (const data of [{ status: 'anonymous', configured: true }, { status: 'authenticated', configured: false }]) {
     const form = mount(() => assert.fail('No automatic password request'), '', () => body(data));

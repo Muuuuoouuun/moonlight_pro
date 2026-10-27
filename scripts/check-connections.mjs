@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { summarizeGoogleOAuthProviders } from "./connection-status.mjs";
+import { healthRequestOptions, healthSupabaseOk, summarizeGoogleOAuthProviders } from "./connection-status.mjs";
 
 const root = process.cwd();
 
@@ -80,24 +80,6 @@ function printSection(title) {
 
 function printResult(level, label, detail) {
   console.log(`[${level}] ${label}: ${detail}`);
-}
-
-function healthSupabaseOk(data) {
-  const supabase = data?.database?.supabase;
-
-  if (!supabase || typeof supabase !== "object") {
-    return false;
-  }
-
-  if ("reachable" in supabase) {
-    return Boolean(supabase.reachable);
-  }
-
-  if ("ok" in supabase) {
-    return Boolean(supabase.ok);
-  }
-
-  return false;
 }
 
 async function fetchJson(url, options = {}) {
@@ -289,11 +271,11 @@ async function checkEngine(label, env, failures) {
     return;
   }
 
-  const result = await fetchJson(`${engineUrl}/api/health`);
+  const result = await fetchJson(`${engineUrl}/api/health`, healthRequestOptions("engine", env));
 
   if (result.ok && result.data?.status === "ok" && healthSupabaseOk(result.data)) {
-    const routes = Array.isArray(result.data?.routes) ? result.data.routes.length : 0;
-    printResult("PASS", `${label} Engine`, `/api/health reachable with ${routes} routes`);
+    const detail = Array.isArray(result.data?.routes) ? `with ${result.data.routes.length} routes` : "(public readiness only)";
+    printResult("PASS", `${label} Engine`, `/api/health reachable ${detail}`);
   } else {
     const reason = result.data?.database?.supabase?.reason || result.data?.status || result.data;
     printResult("FAIL", `${label} Engine`, `health check failed (${result.status || "no-status"}; ${JSON.stringify(reason)})`);
@@ -310,12 +292,13 @@ async function checkHubHealth(label, env, failures) {
     return;
   }
 
-  const result = await fetchJson(`${hubUrl}/api/health`);
+  const result = await fetchJson(`${hubUrl}/api/health`, healthRequestOptions("hub", env));
 
   if (result.ok && result.data?.status === "ok" && healthSupabaseOk(result.data)) {
-    const routes = Array.isArray(result.data?.routes) ? result.data.routes.length : 0;
-    const oauthState = result.data?.config?.oauthStateSecretConfigured ? "configured" : "missing";
-    printResult("PASS", `${label} Hub`, `/api/health reachable with ${routes} routes; OAuth state secret ${oauthState}`);
+    const detail = Array.isArray(result.data?.routes) ? `with ${result.data.routes.length} routes` : "(public readiness only)";
+    const configured = result.data?.config?.oauthStateSecretConfigured;
+    const oauthState = typeof configured === "boolean" ? (configured ? "configured" : "missing") : "not checked (server credential required)";
+    printResult("PASS", `${label} Hub`, `/api/health reachable ${detail}; OAuth state secret ${oauthState}`);
     for (const provider of summarizeGoogleOAuthProviders(result.data)) {
       printResult(provider.level, `${label} Google OAuth ${provider.provider}`, provider.detail);
     }

@@ -6,6 +6,7 @@ import {
   hasMetaThreadsOAuthStateSecret,
   resolveMetaThreadsConfig,
 } from "@/lib/meta-threads";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { resolveExpectedSocialAccountId, resolveSocialBrandKey } from "@/lib/social-account-connections";
 import { registerSocialOAuthFlow } from "@/lib/social-oauth-flow";
@@ -18,10 +19,7 @@ export async function GET(req) {
   const workspaceId = resolveDefaultWorkspaceId();
   const config = resolveMetaThreadsConfig();
   const brandHandle = searchParams.get("brand") || config.brandHandle;
-  const requestedReturnPath = searchParams.get("returnPath") || "";
-  const returnPath = requestedReturnPath.startsWith("/") &&
-    !requestedReturnPath.startsWith("//") && !requestedReturnPath.includes("\\")
-    ? requestedReturnPath : "/dashboard/settings";
+  const returnPath = sanitizeReturnPath(searchParams.get("returnPath"), "/dashboard/settings");
   let brandKey;
   try {
     brandKey = await resolveSocialBrandKey(workspaceId, searchParams.get("brandKey"));

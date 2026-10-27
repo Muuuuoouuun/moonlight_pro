@@ -216,6 +216,10 @@ const AUDITED_RAW_BUTTON_CONTAINERS = [
   '.hub-topbar__tabs button[aria-current="page"]',
   '.hub-topbar__tabs button[aria-current="page"]::after',
   '.hub-app .hub-topbar__tabs button[aria-selected="true"]',
+  // hub-depth.css(2026-10-22) — 같은 탑바 탭 raw <button>을 눌린 트랙 + 잉크 현재 칸으로
+  '.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button',
+  '.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button:hover:not([aria-current="page"])',
+  '.hub-app[data-visual-system="depth-c"] .hub-topbar__tabs button[aria-current="page"]',
   // daily-review.jsx / discovery.jsx — 둘 다 <button className="hub-row">
   ".hub-app .daily-review-history li button",
   '.daily-review-history li button[aria-current="date"]',

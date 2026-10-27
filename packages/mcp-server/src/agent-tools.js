@@ -1,7 +1,8 @@
 import {z} from 'zod';
 import {AGENT_RESOURCES} from '@com-moon/agent-contracts';
 import {agentRequest,agentToolResult} from './agent-client.js';
-const uuid=()=>z.string().uuid();
+// zod 4's z.uuid() enforces RFC 9562 version/variant bits; guid() keeps the 8-4-4-4-12 check IDs were validated with.
+const uuid=()=>z.guid();
 const text=(max)=>z.string().max(max);
 const utf8Text=(maxBytes)=>z.string().max(maxBytes).refine(value=>Buffer.byteLength(value,'utf8')<=maxBytes,`Must fit ${maxBytes} UTF-8 bytes`).describe(`Maximum ${maxBytes} UTF-8 bytes.`);
 const listSchema={detail:z.enum(['summary','rows','full']).optional(),limit:z.number().int().min(1).max(100).optional(),cursor:text(4096).optional(),fields:z.array(text(80)).max(30).optional(),fresh:z.boolean().optional()};

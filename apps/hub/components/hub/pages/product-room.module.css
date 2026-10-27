@@ -238,7 +238,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px 14px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -506,7 +506,7 @@
   flex-direction: column;
   gap: 2px;
   padding: 14px 16px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-xl);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -851,7 +851,7 @@
 }
 
 .panel {
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -961,7 +961,7 @@
 .strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -993,7 +993,7 @@
 }
 
 .devList {
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -1091,7 +1091,7 @@
 .split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--shadow-card);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { agentRequest, agentToolResult } from './agent-client.js';
-const uuid = () => z.string().uuid();
+// Same permissive ID check as agent-tools (zod 4's z.uuid() would reject non-RFC version/variant IDs).
+const uuid = () => z.guid();
 const source = { entityType: z.enum(['tasks', 'projects', 'content_items']), entityId: uuid(), scope: z.enum(['personal', 'company']) };
 const assistance = { commandId: uuid(), ...source, expectedSourceUpdatedAt: z.string().max(60), operation: z.enum(['draft', 'rewrite', 'critique', 'analyze']), instruction: z.string().max(4000).optional() };
 function register(server, name, description, inputSchema, handler, write = false) {

@@ -86,7 +86,9 @@ export function sanitizeReturnPath(value, fallback) {
 
   try {
     const base = new URL("https://oauth-return.invalid");
-    return new URL(path, base).origin === base.origin ? path : fallback;
+    const resolved = new URL(path, base);
+    // "/.//evil" stays same-origin here but normalizes to a "//evil" pathname, which a relative redirect reads as a host.
+    return resolved.origin === base.origin && !resolved.pathname.startsWith("//") ? path : fallback;
   } catch {
     return fallback;
   }

@@ -1,0 +1,28 @@
+/* 오늘 할 일 목록(2026-10-22) — 레인 이름은 묶음 머리에 한 번, 행은 제목 + 기한·우선순위 한 줄.
+ * 빨강은 놓침 묶음 머리와 지난 기한 글자에만(§5.2). */
+.hub-app .today-task-streak { padding: 12px 16px; border-bottom: 1px solid var(--line-soft); background: var(--surface-2); }
+.hub-app .today-task-hint { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--line-soft); font-size: 11.5px; color: var(--fg-muted); }
+.hub-app .today-task-hint svg { color: var(--moon-300); flex-shrink: 0; }
+.hub-app .today-task-group + .today-task-group { border-top: 1px solid var(--line-soft); }
+.hub-app .today-task-group__head { display: flex; align-items: baseline; gap: 6px; padding: 12px 16px 4px; font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .today-task-group__head svg { align-self: center; flex-shrink: 0; }
+.hub-app .today-task-group__label { font-weight: 600; color: var(--fg-muted); }
+.hub-app .today-task-group__count { color: var(--fg-dim); }
+.hub-app .today-task-group__hint { margin-left: auto; color: var(--fg-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hub-app .today-task-group[data-lane="missed"] .today-task-group__head svg,
+.hub-app .today-task-group[data-lane="missed"] .today-task-group__label { color: var(--danger); }
+.hub-app .today-task-row { display: flex; align-items: center; gap: 12px; min-height: calc(var(--row-h) + 16px); padding: 8px 16px; }
+.hub-app .today-task-row + .today-task-row { border-top: 1px solid var(--line-soft); }
+.hub-app .today-task-row__body { flex: 1; min-width: 0; }
+.hub-app .today-task-row__title { font-size: 13.5px; font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .today-task-row__meta { display: flex; flex-wrap: wrap; gap: 0 6px; margin-top: 2px; font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .today-task-row__meta:empty { display: none; }
+.hub-app .today-task-row__meta > span + span::before { content: "·"; margin-right: 6px; color: var(--fg-faint); }
+.hub-app .today-task-row__meta [data-overdue] { color: var(--danger); font-weight: 600; }
+.hub-app .today-task-row__meta [data-priority="high"],
+.hub-app .today-task-row__meta [data-priority="critical"] { color: var(--fg); font-weight: 500; }
+.hub-app .today-task-more { display: flex; justify-content: center; padding: 6px 16px; border-top: 1px solid var(--line-soft); }
+
+@media (max-width: 600px) {
+  .hub-app .today-task-group__hint { display: none; }
+}

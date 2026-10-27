@@ -9,6 +9,7 @@ import {
   saveYouTubeConnection,
 } from "@/lib/youtube-oauth";
 import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 export const runtime = "nodejs";
 
@@ -21,12 +22,7 @@ export async function GET(req) {
     return NextResponse.redirect(fallback);
   }
 
-  const returnPath = typeof state.returnPath === "string" &&
-    state.returnPath.startsWith("/") && !state.returnPath.startsWith("//") &&
-    !state.returnPath.includes("\\")
-    ? state.returnPath
-    : "/dashboard/settings";
-  const target = new URL(returnPath, origin);
+  const target = new URL(sanitizeReturnPath(state.returnPath, "/dashboard/settings"), origin);
   if (searchParams.has("error")) {
     target.searchParams.set("youtube", "oauth-denied");
     return NextResponse.redirect(target);

@@ -97,7 +97,13 @@ registerHooks({
       "@/lib/repositories/content-ledger": repositoryStub("content", "getContentLedger"),
       "@/lib/repositories/revenue-ledger": repositoryStub("revenue", "getRevenueLedger"),
       "@/lib/repositories/automations-ledger": repositoryStub("automations", "getAutomationsLedger"),
-      "@/lib/repositories/work-ledger": repositoryStub("work", "getWorkLedger"),
+      "@/lib/repositories/work-ledger": `
+export async function getWorkLedger() {
+  const state = globalThis.__projectAggregateRouteState;
+  state.workReads += 1;
+  return state.work;
+}
+`,
       // daily-brief의 A-1 어댑터 정본 — 실모듈을 로드하면 상대 import 체인이
       // (operating·revenue·google-calendar) 스텁을 우회해 실 read를 시도한다.
       // 계약: attention.raw가 lean 태스크 기록·revenue 기록·calendar를 동반한다.
@@ -191,6 +197,7 @@ function resetState() {
   state.revenue = { source: "supabase", deals: [], leads: [], stages: [], summary: {} };
   state.automations = { source: "supabase", runs: [], automations: [], summary: {} };
   state.work = { source: "supabase", decisions: [], rituals: [], summary: {} };
+  state.workReads = 0;
   state.orders = { source: "supabase", orders: [] };
   state.orderCounts = { source: 'supabase', counts: { proposed: 0, approved: 0, executing: 0, executed: 0, dismissed: 0 } };
   state.brief = { source: "supabase", brief: null };
@@ -423,6 +430,33 @@ test("overview withholds project KPIs and update history when bounded slices are
   assert.equal(body.brandActivity, null);
 });
 
+test("overview buckets activity by Seoul calendar day on any server clock", async (t) => {
+  // 운영 서버(Vercel)는 UTC, 운영자 Mac은 KST로 돈다. 어느 시간대에서든 KST 10-22 00:30에 연 현황은 10분 전 기록을
+  // 10-22 막대에 붙이고, 이번 주(10-16~10-22) 첫날 00:00 기록은 세며 그 직전 10-15 23:50 기록은 세지 않는다.
+  const savedTz = process.env.TZ;
+  t.after(() => { if (savedTz === undefined) delete process.env.TZ; else process.env.TZ = savedTz; });
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-21T15:30:00Z") });
+  for (const tz of ["UTC", "Asia/Seoul", "America/Los_Angeles"]) {
+    process.env.TZ = tz;
+    state.projects = liveProjectLedger({
+      updates: [
+        { id: "update-today", projectId: "project-1", happenedAt: "2026-10-21T15:10:00Z" },
+        { id: "update-week-start", projectId: "project-1", happenedAt: "2026-10-15T15:00:00Z" },
+        { id: "update-edge", projectId: "project-1", happenedAt: "2026-10-15T14:50:00Z" },
+      ],
+    });
+
+    const body = await (await overviewRoute.GET()).json();
+
+    assert.equal(body.activitySeries.length, 30, tz);
+    assert.equal(body.activitySeries[0].date, "2026-09-23", tz);
+    assert.deepEqual(body.activitySeries.at(-1), { date: "2026-10-22", work: 1, decisions: 0, content: 0 }, tz);
+    assert.equal(body.activitySeries.find((bucket) => bucket.date === "2026-10-16")?.work, 1, tz);
+    assert.equal(body.activitySeries.find((bucket) => bucket.date === "2026-10-15")?.work, 1, tz);
+    assert.equal(body.kpis.updatesThisWeek, 2, tz);
+  }
+});
+
 test("overview withholds published count when only publish logs failed", async () => {
   state.content = {
     source: "supabase",
@@ -551,7 +585,7 @@ test("daily brief marks only task Today partial for an incomplete task aggregati
   assert.equal(body.taskToday.counts.total, 1);
 });
 
-test("daily brief does not infer a missing decision from a failed decisions ledger", async () => {
+test("daily brief does not read unused decisions or inherit their partial state", async () => {
   state.work = {
     source: "supabase",
     partial: true,
@@ -573,10 +607,26 @@ test("daily brief does not infer a missing decision from a failed decisions ledg
   const body = await (await dailyBriefRoute.GET()).json();
   const workSource = body.sources.find((source) => source.key === "work");
 
-  assert.equal(body.status, "partial");
-  assert.equal(workSource.state, "partial");
-  assert.deepEqual(workSource.failedSources, ["decisions"]);
+  assert.equal(state.workReads, 0);
+  assert.equal(body.status, "live");
+  assert.equal(workSource, undefined);
+  assert.deepEqual(body.failedSources, []);
   assert.equal(body.signals.some((signal) => signal.id === "work-decision-missing"), false);
+});
+
+test("daily brief finishes without waiting for the unused full work ledger", async () => {
+  let release;
+  state.work = new Promise((resolve) => { release = resolve; });
+  let finished = false;
+  const pending = dailyBriefRoute.GET().then((response) => { finished = true; return response; });
+  try {
+    await new Promise(setImmediate);
+    assert.equal(finished, true, "an unrelated decisions/rhythm read must not hold the brief open");
+    assert.equal(state.workReads, 0);
+  } finally {
+    release({ source: "supabase", decisions: [], rituals: [], summary: {} });
+    await pending;
+  }
 });
 
 test("overview and daily brief never call a partial-only aggregate preview", async () => {

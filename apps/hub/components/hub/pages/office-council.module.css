@@ -61,7 +61,7 @@
 .userMessage button { justify-self:start; }
 
 /* 결론 카드: 왼쪽 결론·이견·동작, 오른쪽 다음 행동·영수증 */
-.summary { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(0,1fr); border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface); box-shadow:var(--shadow-card); overflow:hidden; overflow-wrap:anywhere; }
+.summary { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(0,1fr); border: 1px solid var(--panel-edge); border-radius:var(--r-lg); background:var(--surface); box-shadow:var(--shadow-card); overflow:hidden; overflow-wrap:anywhere; }
 .verdictMain { padding:16px 18px; min-width:0; }
 .verdictSide { padding:16px 18px; min-width:0; display:grid; align-content:start; gap:12px; background:var(--surface-2); border-left:1px solid var(--line-soft); }
 .answerHeader { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--fg-muted); margin-bottom:12px; }

@@ -67,6 +67,16 @@ test("YouTube OAuth uses its dedicated client, exact callback, offline grant and
   });
 });
 
+test("YouTube OAuth state keeps only same-origin return paths", () => {
+  const stateFor = (returnPath) => decodeYouTubeState(new URL(buildYouTubeAuthUrl({
+    origin: "http://localhost:3000", workspaceId: "workspace-1", returnPath,
+  })).searchParams.get("state")).returnPath;
+  for (const returnPath of ["/\t/outside.example", "/\n/outside.example", "//outside.example", "/\\outside.example", "https://outside.example", "/.//outside.example"]) {
+    assert.equal(stateFor(returnPath), "/dashboard/settings", JSON.stringify(returnPath));
+  }
+  assert.equal(stateFor("/dashboard/settings?tab=integrations#youtube"), "/dashboard/settings?tab=integrations#youtube");
+});
+
 test("YouTube OAuth does not fall back to Calendar/Gmail credentials", () => {
   delete process.env.COM_MOON_YOUTUBE_CLIENT_ID;
   process.env.GOOGLE_CLIENT_ID = "unrelated-client";
