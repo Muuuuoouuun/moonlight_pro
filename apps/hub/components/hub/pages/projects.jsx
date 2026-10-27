@@ -2011,7 +2011,7 @@ export function Projects({ workspace }) {
       </Drawer>
       )}
 
-      <div className="hub-projects-workspace-main" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="hub-projects-workspace-main" data-creating={projectDraft?.isNew && view === 'tree' ? 'true' : undefined} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className={`hub-page-header hub-project-page-header${openDetail ? ' hub-project-page-header--detail' : ''}`} style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div className="hub-project-header-context">
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
@@ -2072,7 +2072,7 @@ export function Projects({ workspace }) {
             <Button className="hub-project-task-create" variant="primary" size="sm" icon="plus" disabled={!canWriteTasks || pendingTaskIds.size > 0} onClick={() => createTodo(null, view === 'backlog' ? 'inbox' : 'todo')}>작업 추가 <Kbd>N</Kbd></Button>
           )}
           <Button className="hub-project-primary-control" variant={taskView || view === 'tree' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
-            Project {!taskView && <Kbd>N</Kbd>}
+            새 프로젝트 {!taskView && <Kbd>N</Kbd>}
           </Button>
         </div>
 

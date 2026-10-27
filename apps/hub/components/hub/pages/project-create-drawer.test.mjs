@@ -279,3 +279,12 @@ test("project create surface protects a changed draft without another popup", ()
   assert.match(createDrawerSource, /onClose=\{requestClose\}/);
   assert.match(createDrawerSource, /onClick=\{requestClose\}/);
 });
+
+ test("mobile inline create reserves the memo launcher clearance without hiding normal project navigation", async () => {
+  const memoCss = await readFile(new URL('../quick-memo.module.css', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../../../app/globals.css', import.meta.url), 'utf8');
+  assert.match(createDrawerSource, /<footer className="project-create-actions" data-hub-bottom-actions="true">/);
+  assert.match(memoCss, /data-hub-bottom-actions="true"[\s\S]*?--memo-footer-offset: 80px/);
+  assert.match(projectsSource, /data-creating=\{projectDraft\?\.isNew && view === 'tree' \? 'true' : undefined\}/);
+  assert.match(css, /@media \(max-width: 600px\) \{[\s\S]*?data-creating="true"/);
+});

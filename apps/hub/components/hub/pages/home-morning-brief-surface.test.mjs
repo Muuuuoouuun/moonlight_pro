@@ -10,11 +10,11 @@ import { SIGNAL_TARGETS, withEntityRef } from '../../../lib/signal-targets.js';
 const source = readFileSync(new URL('./home.jsx', import.meta.url), 'utf8');
 const live = { status: 'live', taskToday: { state: 'live', focus: { picked: 2, done: 1 }, queueCount: 4 } };
 
-test('Home keeps its decision card first, then compact execution routes and collapsed supporting context', () => {
-  assert.match(source, /<FocusCard\b[\s\S]*?<HomeMorningBrief\b[\s\S]*?<TodaySchedule\b[\s\S]*?<footer\b/);
+test('Home starts with execution routes, then source records and collapsed supporting context', () => {
+  assert.match(source, /<HomeMorningBrief\b[\s\S]*?<FocusCard\b[\s\S]*?<TodaySchedule\b[\s\S]*?<footer\b/);
   assert.equal((source.match(/<HomeMorningBrief\b/g) || []).length, 1);
   assert.match(source, /홈 · \{formatEyebrowDate/);
-  assert.match(source, /한 장씩 확인하고 다음 행동을 정하세요/);
+  assert.match(source, /할 일은 오늘에서, 프로젝트는 해당 화면에서 이어가세요/);
   const schedule = source.slice(source.indexOf('function TodaySchedule('), source.indexOf('export function Home('));
   assert.match(schedule, /<details className="home-support-disclosure">/);
   assert.doesNotMatch(schedule, /<details[^>]*\bopen[= >]/);
@@ -26,7 +26,7 @@ test('compact Home handoff repeats one factual task line, keeps goal assumptions
   const html = renderToStaticMarkup(React.createElement(HomeMorningBrief, { brief: live, onNavigate() {} }));
   assert.match(html, /실행과 흐름 이어가기/);
   assert.match(html, /집중 2개 중 1개 완료 · 대기 4개/);
-  assert.match(html, /오늘에서 할 일 이어가기/);
+  assert.match(html, /오늘 열기/);
   assert.match(html, /현황에서 흐름 보기/);
   assert.doesNotMatch(html, /아침 브리핑|다음 일정|먼저 확인|오늘의 시작|이번 달 목표|<dl\b/);
 });
@@ -36,8 +36,8 @@ test('Home handoff buttons navigate only after activation and preserve their des
   const tree = HomeMorningBrief({ brief: live, onNavigate: href => visits.push(href) });
   const buttons = React.Children.toArray(tree.props.children)[1].props.children;
   assert.deepEqual(visits, []);
-  buttons[0].props.onClick(); buttons[1].props.onClick();
-  assert.deepEqual(visits, ['dashboard/daily-brief', 'dashboard/overview?view=summary']);
+  buttons[0].props.onClick(); buttons[1].props.onClick(); buttons[2].props.onClick();
+  assert.deepEqual(visits, ['dashboard/daily-brief', 'dashboard/work/projects', 'dashboard/overview?view=summary']);
 });
 
 test('handoff loading, failure, preview and partial are distinct from verified empty', () => {

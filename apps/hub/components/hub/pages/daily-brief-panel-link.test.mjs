@@ -48,7 +48,7 @@ test('Home AI briefing button opens its explicit panel while the ordinary Today 
   const deps = { React: runtime.React, Button: 'Button', Skeleton: 'Skeleton', TruthBadge: 'TruthBadge', buildHomeMorningBrief: () => ({ state: 'live', progress: '확인된 할 일' }) };
   const HomeMorningBrief = new Function(...Object.keys(deps), `${homeCode}; return HomeMorningBrief;`)(...Object.values(deps));
   const tree = runtime.render(() => HomeMorningBrief({ onNavigate: target => navigation.push(target) }));
-  find(tree, node => node.type === 'Button' && text(node) === '오늘에서 할 일 이어가기')[0].props.onClick();
+  find(tree, node => node.type === 'Button' && text(node) === '오늘 열기')[0].props.onClick();
   // The optional AI entry now lives in Home's supporting disclosure. Execute
   // its actual callback so moving the entry cannot silently break the link.
   const source = readFileSync(new URL('./home.jsx', import.meta.url), 'utf8');

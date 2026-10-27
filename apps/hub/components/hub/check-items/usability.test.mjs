@@ -135,7 +135,7 @@ test('홈: 남은 목록에서 고르면 맨 앞으로, D로 결정, ?check= 딥
   const home = read('../pages/home.jsx');
   const deckSource = read('./focus-card.jsx');
   assert.match(deckSource, /const focus = React\.useCallback\(\(key\) => \{\s*if \(!key\) return;\s*setPinned\(key\);/);
-  assert.match(home, /<RemainingList deck=\{deck\} currentKey=\{activeKey\} onFocus=\{focus\} layout="side" \/>/);
+  assert.match(home, /<RemainingList deck=\{deck\} currentKey=\{activeKey\} onFocus=\{focus\} layout="side" mobileCollapsed \/>/);
   assert.match(home, /e\.key === 'd' \|\| e\.key === 'D'/);
   assert.match(home, /params\.get\('check'\)/);
   assert.match(home, /window\.history\.replaceState/);

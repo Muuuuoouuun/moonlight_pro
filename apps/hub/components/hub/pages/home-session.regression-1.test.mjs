@@ -41,14 +41,14 @@ test('a real unauthorized read renders login recovery instead of empty signals a
   const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
   assert.match(html, /로그인이 필요합니다/);
   assert.match(html, /다시 로그인/);
-  assert.doesNotMatch(html, /지금 확인할 항목이 없습니다|확인할 것을 다 봤습니다|오늘 잡힌 일정이 없습니다|실행은 오늘에서/);
+  assert.doesNotMatch(html, /지금 확인할 항목이 없습니다|확인할 것을 다 봤습니다|오늘 잡힌 일정이 없습니다|오늘의 할 일/);
 });
 
 test('unauthorized calendar alone suppresses stale events and morning interpretation', () => {
   const { Home } = surface({status:'live',signals:[]}, {status:'unauthorized',events:[{title:'stale',start:'2026-10-02T00:00:00Z'}]});
   const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
   assert.match(html, /로그인이 필요합니다/);
-  assert.doesNotMatch(html, /stale|오늘 잡힌 일정이 없습니다|실행은 오늘에서/);
+  assert.doesNotMatch(html, /stale|오늘 잡힌 일정이 없습니다|오늘의 할 일/);
 });
 
 test('confirmed empty reads retain their real empty state', () => {
@@ -57,7 +57,7 @@ test('confirmed empty reads retain their real empty state', () => {
   assert.match(html, /지금 확인할 항목이 없습니다/);
   assert.match(html, /새로 확인할 것이 생기면/);
   assert.match(html, /오늘 잡힌 일정이 없습니다/);
-  assert.match(html, /실행은 오늘에서/);
+  assert.match(html, /오늘의 할 일/);
   assert.doesNotMatch(html, /로그인이 필요합니다/);
 });
 

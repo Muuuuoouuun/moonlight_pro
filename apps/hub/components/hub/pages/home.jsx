@@ -7,7 +7,7 @@ import { CalendarOutcome } from "../calendar-outcome";
 import { PublishDue } from "./publish-due";
 import { SIGNAL_TARGETS, withEntityRef } from '@/lib/signal-targets';
 import { ContactRecordDrawer } from '../deferred-contact-record-drawer';
-import { CheckItemProgress, FinishedTodayList, FocusCard, RemainingList, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card';
+import { FinishedTodayList, FocusCard, RemainingList, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card';
 import { cancelScheduled, postReceipt, undoReceipt } from '../check-items/check-item-actions';
 import { ScheduledList } from '../check-items/schedule-band';
 import { formatSlot, nextWorkdayKey } from '@/lib/check-items/slots';
@@ -41,6 +41,33 @@ function homeOutcomeTarget(item, outcome) {
     return `${target}${target.includes('?') ? '&' : '?'}project=${encodeURIComponent(item.subject.id)}`;
   }
   return withEntityRef(target, item.source);
+}
+
+// Home presents persisted states and actionable records, not a synthetic decision queue.
+// Cross-pillar risk cards join names heuristically; keep those in the existing analysis
+// surfaces instead of promoting them to work that the operator must "finish" here.
+function homeSourceItems(signals) {
+  const reasons = {
+    project: '프로젝트에 막힘 상태가 저장되어 있습니다.',
+    automation: '최근 자동화 실행에 미해결 실패 기록이 있습니다.',
+    content: '작성·검토 또는 발행 기록에서 이어갈 항목입니다.',
+    'lead-group': '신규로 저장된 리드가 있어 분류할 수 있습니다.',
+    deal: '연락 이력 기준의 재확인 항목입니다. 거래에서 최근 활동과 다음 연락일을 확인하세요.',
+  };
+  return (Array.isArray(signals) ? signals : []).filter(item => {
+    const type = item?.subject?.type;
+    return reasons[type] && item.signalKey && Array.isArray(item.outcomes) && item.outcomes.length;
+  }).map(item => ({
+    ...item,
+    homeReason: reasons[item.subject.type],
+    tone: 'neutral',
+    // A stale date is a reminder to inspect the source, not proof of urgency or failure.
+    ...(item.subject.type === 'deal' ? {
+      tone: 'neutral', title: item.subject.name || '거래 활동 확인',
+      summary: '최근 연락 기록과 다음 연락일은 거래 화면에서 확인할 수 있습니다.',
+      meta: '연락 이력 확인',
+    } : {}),
+  }));
 }
 
 // 허브 read 봉투 해석과 daily-brief 신호 읽기는 데스크톱 위젯과 공유한다(daily-brief-signals.js).
@@ -169,7 +196,8 @@ export function Home({ onNavigate, onGuidanceAsk }) {
     [finishedToday],
   );
   // 확인할 것 — 한 장씩(2026-09-30 스펙 §7.1). 건너뛰기는 이번 차례 끝으로, 이전은 마지막 건너뛴 카드를 앞으로.
-  const { deck, current: active, next, skip, previous, focus, markPending, clearPending } = useCheckItemDeck(signals, { finishedKeys });
+  const homeItems = React.useMemo(() => homeSourceItems(signals), [signals]);
+  const { deck, current: active, next, skip, previous, focus, markPending, clearPending } = useCheckItemDeck(homeItems, { finishedKeys });
   const [panel, setPanel] = React.useState(null);
   const [recordTarget, setRecordTarget] = React.useState(null);
   const recordItemRef = React.useRef(null);
@@ -320,17 +348,18 @@ export function Home({ onNavigate, onGuidanceAsk }) {
   const recommendation = active?.subject?.id ? recommendationForSubject(guruRecommendations, active.subject.id) : null;
 
   return (
-    <div className="hub-futura fade-up">
+    <div className="hub-futura home-start-page fade-up">
       <header className="fx-head">
         <div>
           <div className="fx-eyebrow">
             홈 · {formatEyebrowDate(new Date())}
           </div>
           <h2 className="fx-hero">
-            {status === 'loading' ? '불러오는 중' : status === 'unauthorized' ? '로그인이 필요합니다' : status === 'error' ? '확인할 것을 읽지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : deck.length ? `지금 확인할 것 ${deck.length}건` : status === 'partial' ? '일부 기록 확인 필요' : '지금 확인할 항목이 없습니다'}
+            {status === 'loading' ? '불러오는 중' : status === 'unauthorized' ? '로그인이 필요합니다' : status === 'error' ? '확인할 것을 읽지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : '작업 이어가기'}
           </h2>
-          <p className="home-purpose">한 장씩 확인하고 다음 행동을 정하세요.</p>
+          <p className="home-purpose">할 일은 오늘에서, 프로젝트는 해당 화면에서 이어가세요.</p>
         </div>
+        {status !== 'unauthorized' && schedule.status !== 'unauthorized' ? <HomeMorningBrief brief={brief} onNavigate={navigateFromHome} /> : null}
       </header>
 
       {/* 저녁·다음 날 아침의 하루 리뷰 한 줄 — 확인할 것 밖(2026-09-23 지속 루프 설계 §4.3). */}
@@ -341,10 +370,13 @@ export function Home({ onNavigate, onGuidanceAsk }) {
         <TruthBadge state="partial" reason="끝낸 기록을 읽지 못해 이미 끝낸 카드가 다시 보일 수 있습니다" />
       ) : null}
 
-      {/* 7g(2026-10-19 운영자 선택): 남은 목록 | 결정 카드 → 멘토 한 줄 → 오늘의 시간표 → 잡아 둔 일·끝낸 것. */}
-      {live ? <CheckItemProgress finished={finishedToday} remaining={deck.length} scheduled={waitingCount} date={formatEyebrowDate(new Date())} /> : null}
+      <section className="home-records" aria-label="기록에서 확인할 항목">
+      {live && deck.length ? <div className="home-records-heading">
+        <h3>기록에서 확인할 항목 <span className="num">{deck.length}</span></h3>
+        <p>저장된 상태와 실행 이력에서 표시합니다.</p>
+      </div> : null}
       <div className="home-triage" data-split={live && deck.length >= 2 ? 'true' : undefined}>
-        {live ? <RemainingList deck={deck} currentKey={activeKey} onFocus={focus} layout="side" /> : null}
+        {live ? <RemainingList deck={deck} currentKey={activeKey} onFocus={focus} layout="side" mobileCollapsed /> : null}
         <div className="ci-column">
           {status === 'loading' ? (
             <Skeleton lines={7} />
@@ -357,6 +389,8 @@ export function Home({ onNavigate, onGuidanceAsk }) {
               {active ? (
                 <FocusCard
                   item={active}
+                  actionHeading="이 항목에서 할 수 있는 일"
+                  navigationNote="연결된 화면을 엽니다 · 이동만으로 완료 처리하지 않습니다"
                   nextItem={next}
                   panel={panel}
                   onPanel={setPanel}
@@ -389,7 +423,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
         </div>
       </div>
 
-      {status !== 'unauthorized' && schedule.status !== 'unauthorized' ? <HomeMorningBrief brief={brief} onNavigate={navigateFromHome} /> : null}
+      </section>
 
       <TodaySchedule onNavigate={navigateFromHome} schedule={schedule} onReload={reload} />
 
@@ -412,7 +446,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       <footer className="fx-eyebrow" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>T</Kbd> 시간 잡기</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>D</Kbd> 결정</span>
+        {active?.links?.some(link => link.action === 'decision') ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>D</Kbd> 결정 기록</span> : null}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>J</Kbd> 건너뛰기</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>K</Kbd> 이전</span>
       </footer>
