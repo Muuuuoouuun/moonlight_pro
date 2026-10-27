@@ -45,10 +45,25 @@ function mountedDisclosure(query = '') {
 
 test('Home AI briefing button opens its explicit panel while the ordinary Today link stays unchanged', () => {
   const navigation = [], runtime = hooks();
-  const deps = { React: runtime.React, Button: 'Button', Skeleton: 'Skeleton', TruthBadge: 'TruthBadge', buildHomeMorningBrief: () => ({ state: 'live', rows: [] }) };
+  const deps = { React: runtime.React, Button: 'Button', Skeleton: 'Skeleton', TruthBadge: 'TruthBadge', buildHomeMorningBrief: () => ({ state: 'live', progress: '확인된 할 일' }) };
   const HomeMorningBrief = new Function(...Object.keys(deps), `${homeCode}; return HomeMorningBrief;`)(...Object.values(deps));
   const tree = runtime.render(() => HomeMorningBrief({ onNavigate: target => navigation.push(target) }));
-  for (const label of ['오늘 열기', '30초 AI 브리핑 열기']) find(tree, node => node.type === 'Button' && text(node) === label)[0].props.onClick();
+  find(tree, node => node.type === 'Button' && text(node) === '오늘에서 할 일 이어가기')[0].props.onClick();
+  // The optional AI entry now lives in Home's supporting disclosure. Execute
+  // its actual callback so moving the entry cannot silently break the link.
+  const source = readFileSync(new URL('./home.jsx', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('home.jsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+  let callback;
+  function visit(node) {
+    if (ts.isJsxElement(node) && node.openingElement.tagName.getText(ast) === 'Button'
+      && node.children.some(child => ts.isJsxText(child) && child.text.trim() === '30초 AI 브리핑 열기')) {
+      callback = node.openingElement.attributes.properties.find(attr => attr.name?.text === 'onClick')?.initializer?.expression;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast); assert.ok(callback, 'Home keeps the explicit AI entry');
+  const openBriefing = new Function('navigateFromHome', `return ${callback.getText(ast)};`)(target => navigation.push(target));
+  openBriefing();
   assert.deepEqual(navigation, ['dashboard/daily-brief', 'dashboard/daily-brief?panel=briefing']);
   const disclosure = mountedDisclosure(new URL(navigation[1], 'http://local.test').search);
   assert.equal(disclosure.expanded(), true); disclosure.flush();

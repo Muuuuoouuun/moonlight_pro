@@ -34,6 +34,15 @@ function formatEyebrowDate(date) {
   }).format(date);
 }
 
+function homeOutcomeTarget(item, outcome) {
+  const target = SIGNAL_TARGETS[outcome.action];
+  if (!target) return null;
+  if (outcome.action === 'projects' && item.subject?.type === 'project' && item.subject.id) {
+    return `${target}${target.includes('?') ? '&' : '?'}project=${encodeURIComponent(item.subject.id)}`;
+  }
+  return withEntityRef(target, item.source);
+}
+
 // 허브 read 봉투 해석과 daily-brief 신호 읽기는 데스크톱 위젯과 공유한다(daily-brief-signals.js).
 
 function LoginRequired() {
@@ -83,9 +92,19 @@ function useTodaySchedule(reloadKey) {
 function TodaySchedule({ onNavigate, schedule, onReload }) {
   const { status, events } = schedule;
   const now = Date.now();
+  const next = events.find(event => Number.isFinite(Date.parse(event.end || event.start)) && Date.parse(event.end || event.start) > now);
+  const context = status === 'loading' ? '일정 확인 중'
+    : status === 'unauthorized' ? '일정 로그인 확인 필요'
+      : status === 'error' ? '일정을 읽지 못했습니다'
+        : status === 'preview' ? '캘린더 연결 필요'
+          : next ? `${formatHomeClock(next.start)} ${next.title}${status === 'partial' ? ' · 일부 일정만 확인' : ''}`
+            : status === 'partial' ? '확인된 남은 일정 없음 · 일부 미확인' : '남은 일정 없음';
 
   return (
-    <section>
+    <section className="home-schedule" aria-label="시간 잡기 참고">
+      <details className="home-support-disclosure">
+        <summary><span>시간 잡기 전 일정</span><span className="home-support-disclosure__context">{context}</span><Iconed name="chevronD" size={14} /></summary>
+        <div className="home-support-disclosure__body">
       <div className="fx-section-head">
         <span className="fx-eyebrow">오늘의 시간표</span>
         <button
@@ -129,6 +148,8 @@ function TodaySchedule({ onNavigate, schedule, onReload }) {
           })}
         </div>
       )}
+        </div>
+      </details>
     </section>
   );
 }
@@ -153,6 +174,18 @@ export function Home({ onNavigate, onGuidanceAsk }) {
   const [recordTarget, setRecordTarget] = React.useState(null);
   const recordItemRef = React.useRef(null);
   const activeKey = active?.signalKey || active?.id || null;
+  // Reuse Home's existing check deep link for browser Back. Returning restores
+  // the viewed card without replaying an outcome or creating another record.
+  const navigateFromHome = React.useCallback((target) => {
+    if (activeKey && typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        params.set('check', activeKey); params.delete('do');
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}?${params}${window.location.hash}`);
+      } catch { /* A blocked history API must not block the requested navigation. */ }
+    }
+    onNavigate?.(target);
+  }, [activeKey, onNavigate]);
 
   const scheduledBlocks = React.useMemo(() => (Array.isArray(checkItems?.scheduledBlocks) ? checkItems.scheduledBlocks : []), [checkItems]);
   const waitingCount = scheduledBlocks.filter((block) => block.state === 'waiting' && !block.done).length;
@@ -187,8 +220,8 @@ export function Home({ onNavigate, onGuidanceAsk }) {
     const outcome = active?.outcomes?.[index];
     if (!outcome) return;
     if (outcome.kind === 'navigate') {
-      const target = SIGNAL_TARGETS[outcome.action];
-      if (target) onNavigate(withEntityRef(target, active.source));
+      const target = homeOutcomeTarget(active, outcome);
+      if (target) navigateFromHome(target);
       return;
     }
     if (outcome.key === 'contact') {
@@ -197,7 +230,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       return;
     }
     if (outcomeIsPanel(outcome)) setPanel((open) => (open === outcome.key ? null : outcome.key));
-  }, [active, onNavigate]);
+  }, [active, navigateFromHome]);
   const activateRef = React.useRef(activate);
   activateRef.current = activate;
 
@@ -291,11 +324,12 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       <header className="fx-head">
         <div>
           <div className="fx-eyebrow">
-            Daily Brief · {formatEyebrowDate(new Date())}
+            홈 · {formatEyebrowDate(new Date())}
           </div>
           <h2 className="fx-hero">
-            {status === 'loading' ? '불러오는 중' : status === 'unauthorized' ? '로그인이 필요합니다' : status === 'error' ? '확인할 것을 읽지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : deck.length ? `확인할 것 ${deck.length}건` : status === 'partial' ? '일부 기록 확인 필요' : '확인할 것을 다 봤습니다'}
+            {status === 'loading' ? '불러오는 중' : status === 'unauthorized' ? '로그인이 필요합니다' : status === 'error' ? '확인할 것을 읽지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : deck.length ? `지금 확인할 것 ${deck.length}건` : status === 'partial' ? '일부 기록 확인 필요' : '지금 확인할 항목이 없습니다'}
           </h2>
+          <p className="home-purpose">한 장씩 확인하고 다음 행동을 정하세요.</p>
         </div>
       </header>
 
@@ -332,10 +366,10 @@ export function Home({ onNavigate, onGuidanceAsk }) {
                   blocks={scheduledBlocks}
                   onFinished={(result) => finished(active, result)}
                   onSkip={skip}
-                  onNavigate={onNavigate}
+                  onNavigate={navigateFromHome}
                   recommendation={recommendation ? (
                     <div style={{ marginTop: 16 }}>
-                      <GuruRecommendation recommendation={recommendation} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />
+                      <GuruRecommendation recommendation={recommendation} onAsk={onGuidanceAsk} onNavigate={navigateFromHome} compact />
                     </div>
                   ) : null}
                 />
@@ -343,10 +377,10 @@ export function Home({ onNavigate, onGuidanceAsk }) {
                 <div className="fx-card">
                   <EmptyState
                     icon={status === 'partial' ? "signal" : "check"}
-                    title={status === 'partial' ? "확인할 것을 모두 읽지 못했습니다" : "오늘 확인할 것을 다 봤습니다"}
+                    title={status === 'partial' ? "확인할 것을 모두 읽지 못했습니다" : "지금 확인할 항목이 없습니다"}
                     description={status === 'partial' ? '읽힌 항목이 없어도 실제로 확인할 일이 있을 수 있습니다. 위에서 다시 불러와 주세요.' : finishedToday.length || waitingCount
                       ? `끝낸 것 ${finishedToday.filter((r) => r.outcome !== 'snoozed').length}건 · 잡아 둔 것 ${waitingCount}건 · 보류 ${finishedToday.filter((r) => r.outcome === 'snoozed').length}건 — 잡아 둔 일은 그 시간에, 보류한 것은 그날 다시 맨 앞으로 옵니다.`
-                      : '새로 확인할 것이 생기면 여기 가장 먼저 올라옵니다.'}
+                      : '새로 확인할 것이 생기면 여기에 올라옵니다. 할 일은 오늘에서 이어가세요.'}
                   />
                 </div>
               )}
@@ -355,26 +389,25 @@ export function Home({ onNavigate, onGuidanceAsk }) {
         </div>
       </div>
 
-      {/* 멘토 한 줄 — 지금 보는 카드가 고객·거래·콘텐츠면 그 분야의 Guru 카드를 고른다. 기록을 읽고 만든 조언은 아니다. */}
-      <GuidanceInlineTip
-        variant="home"
-        context={active?.subject?.type ? { type: active.subject.type, label: active.kindLabel } : null}
-        onNavigate={onNavigate}
-      />
+      {status !== 'unauthorized' && schedule.status !== 'unauthorized' ? <HomeMorningBrief brief={brief} onNavigate={navigateFromHome} /> : null}
 
-      <TodaySchedule onNavigate={onNavigate} schedule={schedule} onReload={reload} />
+      <TodaySchedule onNavigate={navigateFromHome} schedule={schedule} onReload={reload} />
 
       <div className="home-after" aria-label="잡아 둔 일과 끝낸 것">
         <ScheduledList blocks={scheduledBlocks} calendar={calendar} onChanged={scheduleChanged} onError={(message) => toast.error(message)} />
         <FinishedTodayList receipts={finishedToday} state={checkItems?.state} onUndo={undo} />
       </div>
 
-      <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={onNavigate} onRetry={guruRecommendations.reload} />
       <PublishDue />
 
-      <div className="home-morning-stack">
-        {status !== 'unauthorized' && schedule.status !== 'unauthorized' ? <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} /> : null}
-      </div>
+      <details className="home-support-disclosure">
+        <summary>참고 관점과 보조 브리핑<Iconed name="chevronD" size={14} /></summary>
+        <div className="home-support-disclosure__body">
+          <GuidanceInlineTip variant="home" context={active?.subject?.type ? { type: active.subject.type, label: active.kindLabel } : null} onNavigate={navigateFromHome} />
+          <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={navigateFromHome} onRetry={guruRecommendations.reload} />
+          <Button variant="ghost" size="sm" onClick={() => navigateFromHome('dashboard/daily-brief?panel=briefing')}>30초 AI 브리핑 열기</Button>
+        </div>
+      </details>
 
       <footer className="fx-eyebrow" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기</span>
