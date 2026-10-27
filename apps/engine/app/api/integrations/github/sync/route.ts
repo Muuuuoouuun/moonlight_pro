@@ -9,12 +9,18 @@ import { validateSharedWebhookRequest } from "../../../../../lib/shared-webhook"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = validateSharedWebhookRequest(req);
+  const headers = { "Cache-Control": "private, no-store" };
+  if (!auth.ok || auth.mode === "open") {
+    return NextResponse.json({ status: "unauthorized" }, { status: 401, headers });
+  }
+
   return NextResponse.json({
     service: "com-moon-engine",
     integration: "github",
     status: await getGitHubIntegrationStatusDetailed(),
-  });
+  }, { headers });
 }
 
 export async function POST(req: Request) {

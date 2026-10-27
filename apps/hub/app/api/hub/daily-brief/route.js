@@ -4,7 +4,6 @@ import { getAttentionLedger } from "@/lib/repositories/attention-ledger";
 import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
 import { getMorningBrief } from "@/lib/repositories/brief-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
-import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { formatWonShort } from "@/lib/won-format";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
 import { getWorkOrderCounts } from "@/lib/sales-os/work-order-counts";
@@ -313,7 +312,6 @@ function buildMetrics(revenue, content, automations, projects) {
 function buildSources(results) {
   return [
     ["projects", "Projects"],
-    ["work", "Work"],
     ["content", "Content"],
     ["revenue", "Revenue"],
     ["automations", "Automations"],
@@ -339,9 +337,10 @@ export async function GET() {
   // 어댑터로 한 번만 읽는다. 예전엔 이 라우트가 같은 세 기록을 attention과 별개로 다시 읽어
   // "지금 중요한 것" 판정이 첫 화면과 내 작업에서 두 벌로 갈라졌다(정체성 캡의 원인).
   // §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 attention.raw 원본 위의 프로젝션.
-  const [attentionResult, workResult, contentResult, automationsResult, ordersResult, countsResult, briefResult] = await Promise.allSettled([
+  // 결정·루틴·로드맵은 이 응답에서 쓰지 않는다. 접힌 루틴 패널은 열 때 /api/hub/work를
+  // 따로 읽으므로, 전체 Work 원장의 지연·실패를 오늘의 데이터 상태에 섞지 않는다.
+  const [attentionResult, contentResult, automationsResult, ordersResult, countsResult, briefResult] = await Promise.allSettled([
     getAttentionLedger({ includeRaw: true }),
-    getWorkLedger(),
     getContentLedger(),
     getAutomationsLedger(),
     getWorkOrders({ status: "proposed", scope: 'proposals', limit: 12 }),
@@ -367,7 +366,6 @@ export async function GET() {
 
   const results = {
     projects: projectsResult,
-    work: workResult,
     content: contentResult,
     revenue: revenueResult,
     automations: automationsResult,

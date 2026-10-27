@@ -6,6 +6,7 @@ import {
   deleteSupabaseRecord,
   fetchSupabaseRows,
   insertSupabaseRecord,
+  upsertSupabaseRecords,
   updateSupabaseRecord,
 } from "../../../../lib/supabase-rest.ts";
 
@@ -42,6 +43,7 @@ export async function POST(req: Request) {
 
   const result = await executeProductCommand(body, { workspaceId }, {
     insert: (table, record) => insertSupabaseRecord(table, record, { returnRepresentation: true }),
+    upsert: (table, record, options) => upsertSupabaseRecords(table, record, { ...options, returnRepresentation: true }),
     update: (table, filters, patch) => updateSupabaseRecord(table, filters, patch, { returnRepresentation: true }),
     remove: (table, filters) => deleteSupabaseRecord(table, filters),
     fetchRows: (table, options = {}) => fetchSupabaseRows(table, options as Parameters<typeof fetchSupabaseRows>[1]),

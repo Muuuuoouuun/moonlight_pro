@@ -305,7 +305,28 @@ export function CelebrationCanvas() {
   const particlesRef = React.useRef([]);
   const rocketsRef = React.useRef([]);
   const animFrameRef = React.useRef(null);
+  const launchTimersRef = React.useRef(new Set());
+  const mountedRef = React.useRef(false);
+  const reducedMotionRef = React.useRef(false);
+  const generationRef = React.useRef(0);
   const [liveAnnouncement, setLiveAnnouncement] = React.useState("");
+
+  const stopAnimation = React.useCallback(() => {
+    // Invalidate callbacks already queued before cancellation, including after resume.
+    generationRef.current += 1;
+    launchTimersRef.current.forEach(timer => clearTimeout(timer));
+    launchTimersRef.current.clear();
+    if (animFrameRef.current !== null) cancelAnimationFrame(animFrameRef.current);
+    animFrameRef.current = null;
+    particlesRef.current.forEach(p => {
+      if (p instanceof ConfettiParticle) releaseConfetti(p);
+      else if (p instanceof SparkleParticle) releaseSparkle(p);
+    });
+    particlesRef.current = [];
+    rocketsRef.current = [];
+    const canvas = canvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  }, []);
 
   const addParticle = React.useCallback((p) => {
     if (particlesRef.current.length >= MAX_PARTICLES) {
@@ -317,9 +338,11 @@ export function CelebrationCanvas() {
   }, []);
 
   const startLoop = React.useCallback(() => {
-    if (animFrameRef.current) return;
+    if (!mountedRef.current || reducedMotionRef.current || animFrameRef.current !== null) return;
+    const generation = generationRef.current;
 
     const tick = () => {
+      if (!mountedRef.current || reducedMotionRef.current || generation !== generationRef.current) return;
       const canvas = canvasRef.current;
       if (!canvas) {
         animFrameRef.current = null;
@@ -432,23 +455,37 @@ export function CelebrationCanvas() {
     const w = typeof window !== "undefined" ? window.innerWidth : 1200;
     const h = typeof window !== "undefined" ? window.innerHeight : 800;
     const numRockets = Math.min(6, Math.max(3, count));
+    const generation = generationRef.current;
 
     for (let i = 0; i < numRockets; i += 1) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        if (!mountedRef.current || reducedMotionRef.current || generation !== generationRef.current) return;
+        launchTimersRef.current.delete(timer);
         const startX = w * (0.2 + 0.6 * Math.random());
         const targetY = h * (0.2 + 0.35 * Math.random());
         const color = CELEBRATION_COLORS[Math.floor(Math.random() * CELEBRATION_COLORS.length)];
         rocketsRef.current.push(new FireworkRocket(startX, targetY, color));
         startLoop();
       }, i * 220);
+      launchTimersRef.current.add(timer);
     }
   }, [startLoop]);
 
   // Handle incoming celebration events
   React.useEffect(() => {
+    mountedRef.current = true;
+    const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    reducedMotionRef.current = Boolean(motionQuery?.matches);
+    const handleMotionChange = (event) => {
+      reducedMotionRef.current = event.matches;
+      if (event.matches) {
+        stopAnimation();
+        setLiveAnnouncement("");
+      }
+    };
     const handleCelebrate = (event) => {
       const { mode, origin, count, reduced } = event.detail || {};
-      if (reduced) return; // Respect prefers-reduced-motion
+      if (!mountedRef.current || reducedMotionRef.current || reduced) return;
 
       if (mode === "sparkle") {
         spawnSparkles(origin, count || 18);
@@ -462,18 +499,22 @@ export function CelebrationCanvas() {
       }
     };
 
+    motionQuery?.addEventListener?.("change", handleMotionChange);
     window.addEventListener("hub-celebrate", handleCelebrate);
     return () => {
+      mountedRef.current = false;
+      motionQuery?.removeEventListener?.("change", handleMotionChange);
       window.removeEventListener("hub-celebrate", handleCelebrate);
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      stopAnimation();
     };
-  }, [spawnConfetti, spawnSparkles, spawnFireworks]);
+  }, [spawnConfetti, spawnSparkles, spawnFireworks, stopAnimation]);
 
   // Clear live announcement after 3 seconds
   React.useEffect(() => {
     if (!liveAnnouncement) return;
+    const generation = generationRef.current;
     const timer = setTimeout(() => {
-      setLiveAnnouncement("");
+      if (mountedRef.current && generation === generationRef.current) setLiveAnnouncement("");
     }, 3000);
     return () => clearTimeout(timer);
   }, [liveAnnouncement]);

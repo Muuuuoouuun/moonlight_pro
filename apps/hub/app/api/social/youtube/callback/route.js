@@ -8,8 +8,8 @@ import {
   resolveYouTubeRedirectUri,
   saveYouTubeConnection,
 } from "@/lib/youtube-oauth";
-import { sanitizeReturnPath } from "@/lib/google-oauth";
 import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 export const runtime = "nodejs";
 

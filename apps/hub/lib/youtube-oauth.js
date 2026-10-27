@@ -7,6 +7,7 @@ import {
 import { sanitizeReturnPath } from "./google-oauth.js";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "./social-account-connections.js";
 import { fetchSocialToken, isRefreshGrantExpiringSoon } from "./social-token-health.js";
+import { sanitizeReturnPath } from "./google-oauth.js";
 
 const PROVIDER = "youtube";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

@@ -1224,26 +1224,39 @@ function MoreDetail({ title, summary, children }) {
 // behavior never drifts from the canonical Rhythm page). Own fetch to /api/hub/work.
 function RhythmPanel({ onNavigate }) {
   const [ledger, setLedger] = React.useState({ rituals: [], summary: null });
-  const [syncState, setSyncState] = React.useState('preview');
+  const [syncState, setSyncState] = React.useState('loading');
   const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
   const [weeklyReviewOpen, setWeeklyReviewOpen] = React.useState(false);
   const attemptSequenceRef = React.useRef(0);
   const latestAttemptRef = React.useRef(new Map());
 
   const load = React.useCallback(async () => {
-    setSyncState((prev) => (prev === 'preview' ? 'loading' : prev));
+    setSyncState((prev) => (prev === 'preview' || prev === 'error' ? 'loading' : prev));
     try {
       const response = await fetch('/api/hub/work', { cache: 'no-store' });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data || data.status === 'error') {
+      if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
+        setSyncState('error');
+        return false;
+      }
+      if (data.status === 'preview' || data.source === 'preview') {
+        setLedger({ rituals: [], summary: null });
+        setSyncState('preview');
+        return false;
+      }
+      // Work 전체의 partial은 결정·로드맵 실패일 수도 있다. 이 패널의 진실성은
+      // 루틴 원천 봉투로 판단해야 읽기 실패를 '등록된 루틴 없음'으로 숨기지 않는다.
+      const rhythm = data.rhythm;
+      if (data.source !== 'supabase' || !Array.isArray(data.rituals)
+        || !['live', 'live-empty', 'partial'].includes(rhythm?.state)) {
         setSyncState('error');
         return false;
       }
       setLedger({
-        rituals: Array.isArray(data.rituals) ? data.rituals : [],
+        rituals: data.rituals,
         summary: data.summary || null,
       });
-      setSyncState(data.source === 'supabase' ? 'live' : 'preview');
+      setSyncState(rhythm.state === 'partial' || rhythm.partial ? 'partial' : 'live');
       return true;
     } catch {
       setSyncState('error');
@@ -1288,7 +1301,8 @@ function RhythmPanel({ onNavigate }) {
   const completed = summary.ritualsCompletedThisWeek;
   const total = summary.ritualsTotalThisWeek;
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const rhythmProgressProps = getRhythmProgressProps({ completed, total });
+  const rhythmProgressProps = getRhythmProgressProps({ partial: syncState === 'partial', completed, total });
+  const readable = syncState === 'live' || syncState === 'partial';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -1299,7 +1313,7 @@ function RhythmPanel({ onNavigate }) {
         </div>
       )}>리듬</SectionTitle>
       <Card>
-        {total > 0 ? (
+        {syncState === 'loading' ? <Skeleton lines={4} label="루틴 불러오는 중" /> : readable && total > 0 ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -1308,7 +1322,7 @@ function RhythmPanel({ onNavigate }) {
               </div>
               {/* 원형 게이지는 아래 막대와 같은 값을 두 번 그려 뺐다 — 퍼센트는 글자로 한 번만(2026-10-22). */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {percent >= 100 && (
+                {syncState === 'live' && percent >= 100 && (
                   <span className="hub-celebration-badge hub-celebration-badge--sparkle">
                     ✦ 완벽 달성
                   </span>
@@ -1316,7 +1330,11 @@ function RhythmPanel({ onNavigate }) {
                 <span className="num" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{percent}%</span>
               </div>
             </div>
-            <div {...rhythmProgressProps} style={{ marginTop: 10 }}><Progress value={percent} decorative /></div>
+            <div {...rhythmProgressProps} style={{ marginTop: 10 }}>
+              {syncState === 'partial'
+                ? <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>일부 기록만 확인했습니다. 확인된 루틴의 진행 상황입니다.</span>
+                : <Progress value={percent} decorative />}
+            </div>
             {summary.longestStreak > 0 && (
               <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 11, color: 'var(--fg-muted)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1385,8 +1403,9 @@ function RhythmPanel({ onNavigate }) {
         ) : (
           <EmptyState
             icon="rhythm"
-            title={syncState === 'live' ? '등록된 루틴 없음' : '루틴 확인 대기'}
-            description={syncState === 'live' ? 'Rhythm에서 루틴을 만들면 여기 표시됩니다.' : '기록이 연결되면 이번 주 리듬을 표시합니다.'}
+            title={syncState === 'error' ? '루틴을 읽지 못했습니다' : syncState === 'partial' ? '루틴을 모두 확인하지 못했습니다' : syncState === 'live' ? '등록된 루틴 없음' : '루틴 확인 대기'}
+            description={syncState === 'error' || syncState === 'partial' ? '현재 루틴 상태를 확인할 수 없습니다. 다시 읽어 주세요.' : syncState === 'live' ? 'Rhythm에서 루틴을 만들면 여기 표시됩니다.' : '기록이 연결되면 이번 주 리듬을 표시합니다.'}
+            action={(syncState === 'error' || syncState === 'partial') ? <Button variant="outline" size="xs" onClick={load}>다시 읽기</Button> : undefined}
             style={{ minHeight: 140 }}
           />
         )}
@@ -1395,6 +1414,7 @@ function RhythmPanel({ onNavigate }) {
             variant="outline"
             size="xs"
             icon="sparkle"
+            disabled={!readable}
             onClick={() => setWeeklyReviewOpen(true)}
             style={{ flex: 1.2, justifyContent: 'center' }}
           >
@@ -1412,7 +1432,7 @@ function RhythmPanel({ onNavigate }) {
         </div>
       </Card>
 
-      {weeklyReviewOpen && (
+      {weeklyReviewOpen && readable && (
         <FloatingMentorWidget
           isOpen={weeklyReviewOpen}
           onClose={() => setWeeklyReviewOpen(false)}
@@ -1420,7 +1440,7 @@ function RhythmPanel({ onNavigate }) {
           contextType="weekly"
           contextTitle="이번 주 운영 기록 회고"
           contextData={{
-            summary: `이번 주 루틴 달성: ${completed}/${total} (${percent}%) · 연속 달성: ${summary.longestStreak}일`,
+            summary: `${syncState === 'partial' ? '일부 기록만 확인됨. ' : ''}이번 주 루틴 달성: ${completed}/${total} (${percent}%) · 연속 달성: ${summary.longestStreak}일`,
           }}
         />
       )}

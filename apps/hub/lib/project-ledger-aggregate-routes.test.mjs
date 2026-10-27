@@ -97,7 +97,13 @@ registerHooks({
       "@/lib/repositories/content-ledger": repositoryStub("content", "getContentLedger"),
       "@/lib/repositories/revenue-ledger": repositoryStub("revenue", "getRevenueLedger"),
       "@/lib/repositories/automations-ledger": repositoryStub("automations", "getAutomationsLedger"),
-      "@/lib/repositories/work-ledger": repositoryStub("work", "getWorkLedger"),
+      "@/lib/repositories/work-ledger": `
+export async function getWorkLedger() {
+  const state = globalThis.__projectAggregateRouteState;
+  state.workReads += 1;
+  return state.work;
+}
+`,
       // daily-brief의 A-1 어댑터 정본 — 실모듈을 로드하면 상대 import 체인이
       // (operating·revenue·google-calendar) 스텁을 우회해 실 read를 시도한다.
       // 계약: attention.raw가 lean 태스크 기록·revenue 기록·calendar를 동반한다.
@@ -191,6 +197,7 @@ function resetState() {
   state.revenue = { source: "supabase", deals: [], leads: [], stages: [], summary: {} };
   state.automations = { source: "supabase", runs: [], automations: [], summary: {} };
   state.work = { source: "supabase", decisions: [], rituals: [], summary: {} };
+  state.workReads = 0;
   state.orders = { source: "supabase", orders: [] };
   state.orderCounts = { source: 'supabase', counts: { proposed: 0, approved: 0, executing: 0, executed: 0, dismissed: 0 } };
   state.brief = { source: "supabase", brief: null };
@@ -578,7 +585,7 @@ test("daily brief marks only task Today partial for an incomplete task aggregati
   assert.equal(body.taskToday.counts.total, 1);
 });
 
-test("daily brief does not infer a missing decision from a failed decisions ledger", async () => {
+test("daily brief does not read unused decisions or inherit their partial state", async () => {
   state.work = {
     source: "supabase",
     partial: true,
@@ -600,10 +607,26 @@ test("daily brief does not infer a missing decision from a failed decisions ledg
   const body = await (await dailyBriefRoute.GET()).json();
   const workSource = body.sources.find((source) => source.key === "work");
 
-  assert.equal(body.status, "partial");
-  assert.equal(workSource.state, "partial");
-  assert.deepEqual(workSource.failedSources, ["decisions"]);
+  assert.equal(state.workReads, 0);
+  assert.equal(body.status, "live");
+  assert.equal(workSource, undefined);
+  assert.deepEqual(body.failedSources, []);
   assert.equal(body.signals.some((signal) => signal.id === "work-decision-missing"), false);
+});
+
+test("daily brief finishes without waiting for the unused full work ledger", async () => {
+  let release;
+  state.work = new Promise((resolve) => { release = resolve; });
+  let finished = false;
+  const pending = dailyBriefRoute.GET().then((response) => { finished = true; return response; });
+  try {
+    await new Promise(setImmediate);
+    assert.equal(finished, true, "an unrelated decisions/rhythm read must not hold the brief open");
+    assert.equal(state.workReads, 0);
+  } finally {
+    release({ source: "supabase", decisions: [], rituals: [], summary: {} });
+    await pending;
+  }
 });
 
 test("overview and daily brief never call a partial-only aggregate preview", async () => {
