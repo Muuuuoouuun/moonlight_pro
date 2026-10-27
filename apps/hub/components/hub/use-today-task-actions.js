@@ -7,5 +7,5 @@ export function useTodayTaskActions(taskToday, onChanged) {
   const [client] = React.useState(() => createTodayTaskActions({ onChanged: () => refresh.current?.() }));
   const projected = client.observe(taskToday);
   const state = React.useSyncExternalStore(client.subscribe, client.snapshot, client.snapshot);
-  return { ...state, taskToday: projected, run: client.run };
+  return { ...state, taskToday: projected, run: client.run, remove: client.remove };
 }

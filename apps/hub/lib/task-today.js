@@ -102,28 +102,34 @@ export function summarizeFocusDay(todos = [], { now = new Date(), timeZone = TAS
 }
 
 export function computeTaskStreak(todos = [], { now = new Date(), timeZone = TASK_TIME_ZONE } = {}) {
+  const dayCounts = completionDayCounts(todos, timeZone);
+  const todayKey = dateKeyInZone(now, timeZone);
+  const todayDoneIds = (Array.isArray(todos) ? todos : []).filter(task => isDoneTask(task)
+    && completionDay(task, timeZone) === todayKey && task.id).map(task => task.id);
+  return streakFromDays(dayCounts, todayDoneIds, { now, timeZone });
+}
+
+function completionDay(task, timeZone = TASK_TIME_ZONE) {
+  return isDoneTask(task) ? dateKeyInZone(task?.completedAt || task?.updatedAt || task?.createdAt, timeZone) : '';
+}
+
+function completionDayCounts(todos, timeZone) {
+  const counts = {};
+  for (const task of Array.isArray(todos) ? todos : []) {
+    const day = completionDay(task, timeZone);
+    if (day) counts[day] = (counts[day] || 0) + 1;
+  }
+  return counts;
+}
+
+function streakFromDays(dayCounts, todayDoneIds, { now, timeZone = TASK_TIME_ZONE }) {
   const todayKey = dateKeyInZone(now, timeZone);
   if (!todayKey) {
     return { streak: 0, todayDoneCount: 0, todayDoneIds: [], isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
   }
 
-  const doneDateKeys = new Set();
-  let todayDoneCount = 0;
-  const todayDoneIds = [];
-
-  (Array.isArray(todos) ? todos : []).forEach((task) => {
-    if (!isDoneTask(task)) return;
-
-    const completionTimestamp = task?.completedAt || task?.updatedAt || task?.createdAt;
-    const taskDateKey = dateKeyInZone(completionTimestamp, timeZone);
-    if (taskDateKey) {
-      doneDateKeys.add(taskDateKey);
-      if (taskDateKey === todayKey) {
-        todayDoneCount += 1;
-        if (task.id) todayDoneIds.push(task.id);
-      }
-    }
-  });
+  const doneDateKeys = new Set(Object.keys(dayCounts).filter(day => dayCounts[day] > 0));
+  const todayDoneCount = dayCounts[todayKey] || 0;
 
   let streak = 0;
   let cursor = todayKey;
@@ -228,14 +234,34 @@ export function buildTaskToday(
     focus,
     later: later.slice(0, Math.max(0, limit)),
     laterCount: later.length,
+    // Full unfinished backlog, independent of the compact five-row lane previews.
+    queueItems: [...rest, ...later],
+    queueCount: rest.length + later.length,
+    completionDayCounts: completionDayCounts(todos, timeZone),
   };
 }
 
-// Apply an acknowledged row to the currently visible slice. Hidden task counts
-// and historical streak evidence remain owned by the read, not this projection.
+// Older cached models only have the compact previews. Deduplicate them as a
+// fallback; a current read always supplies the entire non-focus queue.
+export function todayTaskRows(model) {
+  return [...new Map([...(model?.queueItems || []), ...(model?.items || []), ...(model?.later || []),
+    ...(model?.focusItems || []), ...(model?.focusCompletedItems || []), ...(model?.acknowledgedTaskRows || [])].map(task => [task.id, task])).values()];
+}
+
 export function applyTodayTaskRow(previous, row, { now = new Date() } = {}) {
-  const known = [...(previous?.items || []), ...(previous?.later || []), ...(previous?.focusItems || []), ...(previous?.focusCompletedItems || [])];
-  const byId = new Map(known.map(task => [task.id, task]));
+  return projectTodayTask(previous, row, false, now);
+}
+
+// The DELETE route acknowledges only `saved`, so the requested identity is the
+// tombstone. Never remove a row before that durable acknowledgement.
+export function applyTodayTaskDeletion(previous, row, { now = new Date() } = {}) {
+  return projectTodayTask(previous, row, true, now);
+}
+
+function projectTodayTask(previous, row, deleted, now) {
+  if (deleted && previous.deletedTaskIds?.includes(row.id)) return previous;
+  const byId = new Map(todayTaskRows(previous).map(task => [task.id, task]));
+  if (deleted && !byId.has(row.id)) byId.set(row.id, row);
   const priorKnown = buildTaskToday([...byId.values()], { now });
   const before = byId.get(row.id);
   const task = {
@@ -243,30 +269,49 @@ export function applyTodayTaskRow(previous, row, { now = new Date() } = {}) {
     dueAt: row.due_at !== undefined ? row.due_at : row.dueAt !== undefined ? row.dueAt : before?.dueAt,
     completedAt: row.completed_at !== undefined ? row.completed_at : row.completedAt !== undefined ? row.completedAt : before?.completedAt,
     updatedAt: row.updated_at !== undefined ? row.updated_at : row.updatedAt !== undefined ? row.updatedAt : before?.updatedAt,
+    nextAction: row.next_action !== undefined ? row.next_action : row.nextAction !== undefined ? row.nextAction : before?.nextAction,
+    priorityRaw: row.priorityRaw ?? (row.priority === 'med' ? 'medium' : row.priority) ?? before?.priorityRaw,
     focusDates: Array.isArray(row.meta?.focus_dates) ? row.meta.focus_dates : row.focusDates || before?.focusDates || [],
-    done: row.status === 'done',
+    done: row.status !== undefined ? row.status === 'done' : before?.done === true,
   };
-  byId.set(task.id, task);
+  if (deleted) byId.delete(task.id);
+  else byId.set(task.id, task);
   const rebuilt = buildTaskToday([...byId.values()], { now });
   const date = dateKeyInZone(now);
-  const delta = Number(isFocusedOn(task, date)) - Number(isFocusedOn(before, date));
+  const delta = Number(!deleted && isFocusedOn(task, date)) - Number(isFocusedOn(before, date));
   const completed = item => isFocusedOn(item, date) && isDoneTask(item) && dateKeyInZone(item.completedAt) === date;
-  const doneDelta = Number(completed(task)) - Number(completed(before));
+  const doneDelta = Number(!deleted && completed(task)) - Number(completed(before));
   const picked = Math.max(0, (previous.focus?.picked || 0) + delta);
   const done = Math.max(0, (previous.focus?.done || 0) + doneDelta);
   const counts = { ...rebuilt.counts };
   for (const key of ['total', 'focus', 'missed', 'today', 'waiting', 'inbox']) {
-    if (Number.isInteger(previous.counts?.[key])) counts[key] = previous.counts[key] + rebuilt.counts[key] - priorKnown.counts[key];
+    if (Number.isInteger(previous.counts?.[key])) counts[key] = Math.max(0, previous.counts[key] + rebuilt.counts[key] - priorKnown.counts[key]);
     else delete counts[key];
   }
+  const days = previous.completionDayCounts ? { ...previous.completionDayCounts } : null;
+  if (days) {
+    const oldDay = completionDay(before), newDay = deleted ? '' : completionDay(task);
+    if (oldDay) days[oldDay] = Math.max(0, (days[oldDay] || 0) - 1);
+    if (newDay) days[newDay] = (days[newDay] || 0) + 1;
+  }
+  const todayDoneIds = new Set(previous.streak?.todayDoneIds || []);
+  todayDoneIds.delete(task.id);
+  if (!deleted && completionDay(task) === date) todayDoneIds.add(task.id);
   return {
     ...previous, ...rebuilt,
     counts,
     state: previous.state, stale: previous.stale, observedState: previous.observedState,
     hiddenCount: Number.isInteger(counts.total) ? Math.max(0, counts.total - counts.shown) : previous.hiddenCount || 0,
-    laterCount: rebuilt.laterCount + Math.max(0, (previous.laterCount || 0) - (previous.later?.length || 0)),
+    laterCount: rebuilt.laterCount + Math.max(0, (previous.laterCount || 0) - priorKnown.laterCount),
+    queueCount: rebuilt.queueCount + Math.max(0, (previous.queueCount ?? ((previous.counts?.total || 0) - (previous.counts?.focus || 0) + (previous.laterCount || 0))) - priorKnown.queueCount),
     focus: { date, picked, done, limit: MAX_FOCUS_PER_DAY, remaining: Math.max(0, MAX_FOCUS_PER_DAY - picked) },
-    streak: previous.streak,
+    completionDayCounts: days || undefined,
+    deletedTaskIds: deleted ? [...(previous.deletedTaskIds || []), row.id] : (previous.deletedTaskIds || []).filter(id => id !== row.id),
+    // Completed, released rows no longer belong in either visible list. Keep
+    // their ACK evidence so a cached projection and a following delete remain idempotent.
+    acknowledgedTaskRows: [...new Map([...(previous.acknowledgedTaskRows || []), task]
+      .filter(item => !deleted || item.id !== task.id).map(item => [item.id, item])).values()],
+    streak: days ? streakFromDays(days, [...todayDoneIds], { now }) : previous.streak,
   };
 }
 

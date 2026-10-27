@@ -7,7 +7,7 @@ import ts from 'typescript';
 import { brandInWorkspace } from './workspace-map.js';
 import { collapsedTodayAgendaRows, todayAgendaRows } from './pages/workflow-reading.js';
 import { buildTodayDeck } from './pages/today-deck-model.js';
-import { dateKeyInZone, groupTaskRows } from '../../lib/task-today.js';
+import { buildTaskToday, dateKeyInZone, groupTaskRows, taskDueLabel, taskPriorityLabel } from '../../lib/task-today.js';
 import { shiftDateKey } from '../../lib/rhythm-calendar.js';
 import { REACTION_LABEL } from '../../lib/sales-os/followup-scoring.js';
 
@@ -37,7 +37,7 @@ const code = ts.transpileModule([
 const own = new Set(['Card', 'Button', 'SectionTitle', 'TruthBadge', 'TaskToday', 'BriefNavigation', 'FocusSlots', 'TodayTimeFlow', 'TodaySlots', 'EmptyState']);
 const deps = { React, brandInWorkspace, collapsedTodayAgendaRows, todayAgendaRows, FOCUS_REACTION_LABEL: REACTION_LABEL,
   MAX_FOCUS_PER_DAY: 3, REVIEW_EVENING_HOUR: 18, useUndoableAction: () => ({}),
-  buildTodayDeck, dateKeyInZone, groupTaskRows, shiftDateKey, useToast: () => ({}),
+  buildTodayDeck, dateKeyInZone, groupTaskRows, taskDueLabel, taskPriorityLabel, shiftDateKey, useToast: () => ({}),
   useMinuteClock: () => new Date(2026, 9, 21, 13) };
 for (const name of new Set([...code.matchAll(/React\.createElement\(([A-Z]\w*)/g)].map(match => match[1]))) {
   if (name !== 'React' && !own.has(name)) deps[name] = () => null;
@@ -67,7 +67,7 @@ test('TruthBadge retains state and reason as text without naming generic spans o
 test('Daily Brief retains its heading, named navigation and focus group without redundant generic names', () => {
   const tasks = render(TaskToday, { taskToday: { state: 'preview', items: [] } });
   assertNoNamedGeneric(tasks);
-  assert.match(tasks, /<h3\b[^>]*>오늘 할 일<\/h3>/);
+  assert.match(tasks, /<h3\b[^>]*>대기 할 일\s*<\/h3>/);
   assert.equal((tasks.match(/aria-live=/g) || []).length, 1, 'only the existing save feedback is live');
   const nav = render(BriefNavigation, {});
   assertNoNamedGeneric(nav);
@@ -108,4 +108,17 @@ test('TodaySlots names the readable task group without adding announcements or c
       assert.match(html, new RegExp(`data-truth="${state}"`));
     }
   }
+});
+
+
+test('Today renders all six waiting tasks beside three chosen tasks with explicit edit entry points', () => {
+  const now = new Date('2026-10-21T04:00:00Z'), date = dateKeyInZone(now);
+  const tasks = Array.from({ length: 9 }, (_, index) => ({ id: `queue-${index}`, title: `검수 항목 ${index}`, status: 'todo', focusDates: index < 3 ? [date] : [] }));
+  const model = { ...buildTaskToday(tasks, { now }), state: 'live' };
+  const html = render(TaskToday, { taskToday: model, actions: { pendingIds: [] }, onEdit() {} });
+  assert.match(html, /role="group" aria-label="대기 할 일"/);
+  assert.equal((html.match(/class="today-task-row__title"/g) || []).length, 6);
+  for (const task of tasks.slice(0, 3)) assert.equal(html.includes(task.title), false, '집중 항목을 대기 큐에 중복 렌더하지 않는다');
+  for (const task of tasks.slice(3)) assert.ok(html.includes(`aria-label="편집·삭제: ${task.title}"`));
+  assert.doesNotMatch(html, /건 더 · 내 작업에서 보기/, '읽힌 전체 큐를 다섯 개로 잘라 다른 탭으로 밀지 않는다');
 });

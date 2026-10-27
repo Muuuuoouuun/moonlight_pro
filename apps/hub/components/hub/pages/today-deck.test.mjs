@@ -66,7 +66,8 @@ test('오늘 화면은 세 자리를 할 일 목록보다 먼저 그리고, 같�
   const source = readFileSync(new URL('./daily-brief.jsx', import.meta.url), 'utf8').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
   const at = marker => { const i = source.indexOf(marker); assert.ok(i > 0, marker); return i; };
   assert.ok(at('<TodayTaskCapture') < at('<TodaySlots') && at('<TodaySlots') < at('<TaskToday'));
-  assert.match(source, /const listItems = \[\.\.\.items\.filter\(\(task\) => !task\.focusToday\), \.\.\.later\]/);
+  assert.match(source, /taskToday\.queueItems\.filter\(task => !hiddenIds\.has\(task\.id\)\)/);
+  assert.match(source, /items\.filter\(\(task\) => !task\.focusToday\)/, '이전 모델의 fallback도 집중을 중복 표시하지 않는다');
   assert.doesNotMatch(source, /15분 집중/, '15분 집중은 세 자리가 맡는다');
 });
 

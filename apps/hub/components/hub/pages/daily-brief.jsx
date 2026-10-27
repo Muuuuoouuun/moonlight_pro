@@ -31,6 +31,7 @@ import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { ContactRecordDrawer } from "../deferred-contact-record-drawer";
 import { createClientId } from "@/lib/pms-ui";
 import { TodayTaskCapture } from './today-task-capture';
+import { TodayTaskEditor, todayTaskDraft } from './today-task-editor';
 import { useTodayTaskActions } from '../use-today-task-actions';
 import { buildTaskToday, focusLimitMessage, groupTaskRows, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY, taskDueLabel, taskPriorityLabel } from "@/lib/task-today";
 import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
@@ -117,7 +118,7 @@ function sourceLabel(state) {
   return '연결 필요';
 }
 
-function TaskToday({ taskToday, onNavigate, onChanged, actions }) {
+function TaskToday({ taskToday, onNavigate, onChanged, actions, onEdit }) {
   const allItems = Array.isArray(taskToday?.items) ? taskToday.items : [];
   const counts = taskToday?.counts || {};
   const [feedback, setFeedback] = React.useState({ status: 'idle', message: '', action: null });
@@ -290,15 +291,18 @@ function TaskToday({ taskToday, onNavigate, onChanged, actions }) {
   // 오늘 3개는 위 세 자리(TodaySlots)가 그린다 — 목록에는 나머지만 둔다(같은 할 일을 두 번 그리지 않는다).
   // 레인 밖(기한 없음·나중 기한)의 열린 할 일은 그 뒤에 "나중"으로 이어 붙여 ★로 오늘 3개에 넣게 한다.
   const later = (Array.isArray(taskToday?.later) ? taskToday.later : []).filter((task) => !hiddenIds.has(task.id));
-  const listItems = [...items.filter((task) => !task.focusToday), ...later];
-  const moreCount = (Number(taskToday?.hiddenCount) || 0) + Math.max(0, (Number(taskToday?.laterCount) || 0) - later.length);
+  const listItems = Array.isArray(taskToday?.queueItems)
+    ? taskToday.queueItems.filter(task => !hiddenIds.has(task.id))
+    : [...items.filter((task) => !task.focusToday), ...later];
+  const moreCount = Array.isArray(taskToday?.queueItems) ? 0
+    : (Number(taskToday?.hiddenCount) || 0) + Math.max(0, (Number(taskToday?.laterCount) || 0) - later.length);
 
   // §5.2: missed(놓침)만 즉시 손실 레인 — 빨강은 놓침 묶음 머리와 그 행의 지난 기한 글자에만.
   // 같은 레인끼리 묶어 레인 이름은 묶음 머리에 한 번만 말한다 — 행마다 "나중" 배지를 되풀이하지 않는다.
   const taskGroups = groupTaskRows(listItems);
 
   return (
-    <div role="group" aria-label="오늘 할 일" id="daily-brief-task-candidates" tabIndex={-1}>
+    <div role="group" aria-label="대기 할 일" id="daily-brief-task-candidates" tabIndex={-1}>
       <SectionTitle right={(
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
           {(taskState !== 'live' || taskToday?.stale) && <TruthBadge state={taskToday?.stale ? 'partial' : taskState} label={taskToday?.stale ? '이전 값 · 다시 확인 필요' : taskState === 'partial' ? '일부 확인' : undefined} />}
@@ -307,8 +311,9 @@ function TaskToday({ taskToday, onNavigate, onChanged, actions }) {
           <Badge tone="neutral" size="xs">오늘 {count(counts.today)}</Badge>
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>모두 보기</Button>
         </div>
-      )}>오늘 할 일</SectionTitle>
+      )}>대기 할 일 {taskState === 'live' && !taskToday?.stale && <span className="num">{listItems.length}</span>}</SectionTitle>
       <Card pad={false} className="daily-brief__panel">
+        <p className="today-task-queue-note">집중 3개와 별도로 계속 쌓입니다. 편집에서 수정·삭제할 수 있습니다.</p>
         {/* 연속 띠는 패널 머리 한 곳 — 머리말의 작은 연속 칩은 같은 값을 두 번 말해 뺐다(2026-10-22). */}
         <div className="today-task-streak">
           {showStreak ? <BurningStreakBadge
@@ -351,6 +356,9 @@ function TaskToday({ taskToday, onNavigate, onChanged, actions }) {
                           {priority && <span data-priority={String(task.priority).toLowerCase()}>{priority}</span>}
                         </div>
                       </div>
+                      <div className="today-task-row__actions">
+                      <Button variant="ghost" size="sm" aria-label={`편집·삭제: ${task.title}`}
+                        disabled={Boolean(actions?.pendingIds.length)} onClick={() => onEdit?.(task)}>편집</Button>
                       <IconButton
                         icon="star"
                         size={32}
@@ -373,6 +381,7 @@ function TaskToday({ taskToday, onNavigate, onChanged, actions }) {
                       >
                         완료
                       </Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -2072,6 +2081,10 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
   const [advisorSignal, setAdvisorSignal] = React.useState(null);
   const readLedger = useDailyBriefLedger(refreshKey);
   const taskActions = useTodayTaskActions(readLedger.taskToday, readLedger.refreshTasks);
+  const [taskDraft, setTaskDraft] = React.useState(null);
+  const [pendingDeleteIds, setPendingDeleteIds] = React.useState([]);
+  const visibleTaskActions = { ...taskActions, pendingIds: [...new Set([...taskActions.pendingIds, ...pendingDeleteIds])] };
+  const editTask = task => { if (!visibleTaskActions.pendingIds.length) setTaskDraft(todayTaskDraft(task)); };
   const ledger = { ...readLedger, taskToday: taskActions.taskToday };
   const guruRecommendations = useGuruRecommendations();
   // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
@@ -2121,19 +2134,21 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
           보이지 않는다. docs/README.md 의 운영자 확정 "첫 화면은 **할 일**, 매출, 메시지, 기획,
           콘텐츠 순서의 판단을 돕는다"(2026-09-20 재확정). 긴급 KA·집중 고객 ≤5 제한은 그대로다. */}
       <div className="today-deck__bar">
-        <TodayTaskCapture taskToday={ledger.taskToday} actions={taskActions} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
+        <TodayTaskCapture taskToday={ledger.taskToday} actions={visibleTaskActions} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
         <DayStrip agenda={ledger.dailyFocus?.todayAgenda} />
       </div>
 
       <section className="today-selection" aria-label="오늘 먼저 끝낼 일">
         <div className="today-selection__head"><h3>오늘 먼저 끝낼 일</h3><span>최대 3개 · 완료한 일도 포함</span><a href="#daily-brief-task-candidates">목록에서 고르기 ↓</a></div>
-        <TodaySlots taskToday={ledger.taskToday} onChanged={ledger.refreshTasks} actions={taskActions} />
+        <TodaySlots taskToday={ledger.taskToday} onChanged={ledger.refreshTasks} actions={visibleTaskActions} onEdit={editTask} />
       </section>
 
       <div className="today-deck__below">
         <TodayModePanel taskToday={ledger.taskToday} agenda={ledger.dailyFocus?.todayAgenda} onNavigate={onNavigate} />
-        <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} actions={taskActions} />
+        <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} actions={visibleTaskActions} onEdit={editTask} />
       </div>
+      <TodayTaskEditor draft={taskDraft} actions={taskActions} onPendingChange={setPendingDeleteIds}
+        onChange={(key, value) => setTaskDraft(draft => draft ? { ...draft, [key]: value } : draft)} onClose={() => setTaskDraft(null)} />
       <GuidanceInlineTip variant="today" onNavigate={onNavigate} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>

@@ -76,7 +76,7 @@ async function patchTask(body) {
 
 const fmtLeft = (sec) => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 
-export function TodaySlots({ taskToday, onChanged, actions }) {
+export function TodaySlots({ taskToday, onChanged, actions, onEdit }) {
   const now = useMinuteClock();
   const toast = useToast();
   const { schedule, cancel } = useUndoableAction();
@@ -231,7 +231,7 @@ export function TodaySlots({ taskToday, onChanged, actions }) {
             <span className="today-slot__meta">집중 중</span>
             <span className="today-slot__push" />
             <Button variant="secondary" size="sm" icon="pause" onClick={() => setTimer(null)}>멈춤</Button>
-            <Button variant="primary" size="sm" icon="check" onClick={() => complete(task)}>끝</Button>
+            <Button variant="primary" size="sm" icon="check" disabled={busy} onClick={() => complete(task)}>끝</Button>
           </div>;
         } else {
           foot = <div className="today-slot__actions">
@@ -247,6 +247,7 @@ export function TodaySlots({ taskToday, onChanged, actions }) {
               {n}
               <span className="today-slot__chip">할 일</span>
               <span className="today-slot__push" />
+              {onEdit && (!slot.done || slot.persisted) && <Button variant="ghost" size="sm" aria-label={`편집·삭제: ${task.title}`} disabled={busy} onClick={() => onEdit(task)}>편집</Button>}
               {(!slot.done || slot.persisted) && <IconButton icon="x" size={32} iconSize={13} tooltip={`${task.title} 오늘 3개에서 빼기`} disabled={busy} onClick={() => release(task)} />}
             </div>
             <span className="today-slot__title">{task.title}</span>

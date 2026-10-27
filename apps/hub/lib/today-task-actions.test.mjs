@@ -93,8 +93,8 @@ test('fresh reads replace choices even when picked stays the same and remove del
   client.observe(read([])); assert.equal(client.view().focus.picked, 0); assert.deepEqual(client.view().focusItems, []);
 });
 
-test('row projection preserves hidden counts and historical streak while reflecting the acknowledged choice', () => {
-  const source = { ...read([task('a')]), laterCount: 12, streak: { streak: 9, todayDoneCount: 1 } };
+test('legacy compact row projection preserves unobserved counts and historical streak', () => {
+  const source = { ...read([task('a')]), queueItems: undefined, queueCount: undefined, completionDayCounts: undefined, laterCount: 12, streak: { streak: 9, todayDoneCount: 1 } };
   const next = applyTodayTaskRow(source, { ...task('a'), focusDates: [date] }, { now: today });
   assert.equal(next.hiddenCount, 0); assert.equal(next.laterCount, 11); assert.equal(next.streak.streak, 9);
   assert.equal(next.focus.picked, 1); assert.equal(next.items[0].focusToday, true);
@@ -105,7 +105,9 @@ test('a visible row acknowledgement preserves aggregate lanes outside the five-r
   const source = read(tasks), chosen = source.items[0];
   assert.equal(source.counts.missed, 20); assert.equal(source.items.length, 5); assert.equal(source.hiddenCount, 15);
   const next = applyTodayTaskRow(source, { ...chosen, focusDates: [date] }, { now: today });
-  assert.equal(next.counts.missed, 19); assert.equal(next.counts.focus, 1); assert.equal(next.counts.total, 20); assert.equal(next.hiddenCount, 15);
+  assert.equal(next.counts.missed, 19); assert.equal(next.counts.focus, 1); assert.equal(next.counts.total, 20);
+  assert.equal(next.items.length, 6, 'full queue supplies the next real row while preserving the five non-focus preview slots');
+  assert.equal(next.hiddenCount, 14); assert.equal(next.queueItems.length, 19);
 });
 
 test('an unresponsive reread cannot hold the acknowledged write queue or pending controls forever', async () => {
@@ -124,4 +126,138 @@ test('release and completion require explicit persisted focus and completion-tim
   assert.equal(todayTaskAcknowledges({ id: 'a', focusDates: [] }, task('a'), { focus: { on: false } }, date), true);
   assert.equal(todayTaskAcknowledges({ id: 'a', status: 'done' }, task('a'), { status: 'done' }, date), false);
   assert.equal(todayTaskAcknowledges({ id: 'a', status: 'done', completed_at: today.toISOString() }, task('a'), { status: 'done' }, date), true);
+});
+
+test('editor acknowledgement proves every changed field including nullable dates and raw snake_case clears', () => {
+  const patch = { title: '새 제목', dueAt: null, priority: 'high', description: '', nextAction: '', expectedUpdatedAt: today.toISOString() };
+  const row = { id: 'a', title: '새 제목', due_at: null, priority: 'high', description: null, next_action: null, updated_at: today.toISOString() };
+  assert.equal(todayTaskAcknowledges(row, task('a'), patch, date), true);
+  for (const key of ['title', 'due_at', 'priority', 'description', 'next_action', 'updated_at']) {
+    const incomplete = { ...row }; delete incomplete[key];
+    assert.equal(todayTaskAcknowledges(incomplete, task('a'), patch, date), false, `${key} must be present in the actual persisted acknowledgement`);
+  }
+  assert.equal(todayTaskAcknowledges({ ...row, due_at: date }, task('a'), patch, date), false);
+  assert.equal(todayTaskAcknowledges({ ...row, title: '원래 제목' }, task('a'), patch, date), false);
+  assert.equal(todayTaskAcknowledges({ ...row, next_action: '원래 다음 행동' }, task('a'), patch, date), false);
+  assert.equal(todayTaskAcknowledges({ ...row, dueAt: date, due_at: `${date}T00:00:00Z` }, task('a'), { dueAt: date }, date), true);
+});
+
+test('editing a formerly hidden queue task preserves focus membership and survives a failed reread', async () => {
+  const tasks = Array.from({ length: 9 }, (_, i) => ({ ...task(`item-${i}`), status: 'inbox' }));
+  tasks[0].focusDates = [date];
+  const calls = [], client = createTodayTaskActions({ now: () => today,
+    onChanged: () => client.observe({ ...client.view(), state: 'partial', stale: true }),
+    fetchImpl: async (_url, options) => { calls.push(JSON.parse(options.body)); return reply({ id: 'item-8', title: '수정된 마지막', due_at: null, priority: 'high', description: null, next_action: null, updated_at: today.toISOString() }); },
+  });
+  client.observe(read(tasks));
+  const patch = { title: '수정된 마지막', dueAt: null, priority: 'high', description: '', nextAction: '', expectedUpdatedAt: today.toISOString() };
+  const result = await client.run(tasks[8], patch);
+  assert.equal(result.ok, true); assert.deepEqual(calls, [{ id: 'item-8', ...patch }]);
+  assert.equal(client.view().queueCount, 8); assert.equal(client.view().queueItems.length, 8);
+  assert.equal(client.view().queueItems.find(row => row.id === 'item-8').title, '수정된 마지막');
+  assert.equal(client.view().focusItems[0].id, 'item-0'); assert.equal(client.view().focus.picked, 1);
+});
+
+test('deferred delete joins duplicate requests, retains the row until saved and serializes other changes', async () => {
+  const selected = { ...task('a'), focusDates: [date] }, candidates = ['b', 'c', 'd'].map(id => ({ ...task(id), focusDates: id === 'd' ? [] : [date] }));
+  let resolveDelete;
+  const calls = [], client = createTodayTaskActions({ now: () => today, onChanged: () => client.observe({ ...client.view(), state: 'partial', stale: false }),
+    fetchImpl: async (_url, options) => {
+      const body = JSON.parse(options.body); calls.push({ method: options.method, body });
+      if (options.method === 'DELETE') return new Promise(resolve => { resolveDelete = resolve; });
+      return reply({ ...task(body.id), focusDates: [date] });
+    },
+  });
+  client.observe(read([selected, ...candidates]));
+  const first = client.remove(selected), duplicate = client.remove(selected);
+  assert.equal(first, duplicate);
+  const pick = client.run(candidates[2], { focus: { on: true } });
+  await tick(); assert.equal(calls.length, 1); assert.deepEqual(calls[0], { method: 'DELETE', body: { id: 'a' } });
+  assert.equal(client.view().focus.picked, 3); assert.equal(client.view().focusItems.some(row => row.id === 'a'), true);
+  assert.deepEqual(new Set(client.snapshot().pendingIds), new Set(['a', 'd']));
+  resolveDelete(reply(undefined)); assert.equal((await first).ok, true);
+  // A failed reread truthfully blocks new focus choices, but cannot resurrect the saved deletion.
+  assert.equal((await pick).status, 'unverified'); assert.equal(calls.length, 1);
+  assert.equal(client.view().focus.picked, 2); assert.equal(client.view().focusItems.some(row => row.id === 'a'), false);
+  assert.equal(client.view().queueItems[0].id, 'd'); assert.deepEqual(client.snapshot().pendingIds, []);
+  client.observe({ ...client.view(), state: 'partial', stale: true });
+  assert.equal(client.view().focus.picked, 2, 'replaying the partial cached projection never subtracts twice');
+  client.observe(read(candidates));
+  assert.equal((await client.run(candidates[2], { focus: { on: true } })).ok, true);
+  assert.equal(client.view().focus.picked, 3); assert.equal(calls.length, 2);
+});
+
+test('delete failures preserve the focused and queued rows and allow explicit retry', async () => {
+  for (const send of [async () => reply(undefined, 202, 'preview'), async () => reply(undefined, 502, 'error'), async () => ({ ok: true, status: 200, json: async () => { throw Error('synthetic parse failure'); } }), async () => { throw Error('synthetic transport loss'); }]) {
+    const original = { ...task('a'), focusDates: [date] }, calls = [];
+    const client = createTodayTaskActions({ now: () => today, fetchImpl: (...args) => { calls.push(args[1]); return send(...args); } });
+    client.observe(read([original, task('b')]));
+    assert.equal((await client.remove(original)).ok, false);
+    assert.equal(client.view().focus.picked, 1); assert.equal(client.view().queueCount, 1);
+    assert.equal(client.view().focusItems[0].id, 'a'); assert.equal(client.view().queueItems[0].id, 'b');
+    await client.remove(original); assert.equal(calls.length, 2); assert.equal(calls[0].body, calls[1].body);
+    assert.deepEqual(client.snapshot().pendingIds, []);
+  }
+});
+
+test('saved deletion removes a completed focus row and its streak evidence without waiting for refresh', async () => {
+  const completed = { ...task('a'), status: 'done', completedAt: today.toISOString(), focusDates: [date] };
+  const client = createTodayTaskActions({ now: () => today, onChanged: () => new Promise(() => {}), fetchImpl: async () => reply(undefined) });
+  client.observe(read([completed, task('b')]));
+  assert.equal(client.view().streak.streak, 1);
+  const result = await client.remove(completed); assert.equal(result.deletedId, 'a');
+  assert.equal(client.view().focus.picked, 0); assert.equal(client.view().focus.done, 0);
+  assert.equal(client.view().focusCompletedItems.length, 0); assert.equal(client.view().queueCount, 1);
+  assert.equal(client.view().streak.streak, 0); assert.equal(client.view().streak.todayDoneCount, 0);
+  assert.equal((await client.run(completed, { status: 'todo' })).status, 'missing');
+});
+
+test('editor version conflicts preserve the row and distinguish changed-elsewhere recovery from uncertain writes', async () => {
+  let refreshes = 0;
+  const client = createTodayTaskActions({ now: () => today, onChanged: () => { refreshes++; }, fetchImpl: async () => reply(undefined, 409, 'conflict') });
+  client.observe(read([task('a')]));
+  const result = await client.run(task('a'), { title: '내가 편집한 제목', expectedUpdatedAt: today.toISOString() });
+  assert.equal(result.ok, false); assert.equal(result.status, 'conflict'); assert.match(result.message, /입력은 유지/);
+  assert.equal(client.view().queueItems[0].title, '입력 a'); assert.equal(refreshes, 1);
+  assert.deepEqual(client.snapshot().pendingIds, []);
+});
+
+test('completed rows leaving both visible lists retain ACK evidence through cached partial reads and a following deletion', async () => {
+  const stored = { ...task('a'), focusDates: [date] };
+  const client = createTodayTaskActions({ now: () => today,
+    onChanged: () => client.observe({ ...client.view(), state: 'partial', stale: true }),
+    fetchImpl: async (_url, options) => {
+      if (options.method === 'DELETE') return reply(undefined);
+      const patch = JSON.parse(options.body);
+      if (patch.status) { stored.status = patch.status; stored.completedAt = today.toISOString(); }
+      if (patch.focus) stored.focusDates = [];
+      return reply({ ...stored });
+    },
+  });
+  client.observe(read([stored]));
+  assert.equal((await client.run(stored, { status: 'done' })).ok, true);
+  assert.equal(client.view().streak.todayDoneCount, 1);
+  assert.equal((await client.run(stored, { focus: { on: false } })).ok, true);
+  assert.equal(client.view().focus.picked, 0); assert.equal(client.view().focusCompletedItems.length, 0); assert.equal(client.view().queueCount, 0);
+  assert.equal(client.view().streak.todayDoneCount, 1);
+  client.observe({ ...client.view(), state: 'partial', stale: true });
+  assert.equal(client.view().streak.todayDoneCount, 1, 'cached ACK replays do not credit the completed row twice');
+  assert.equal((await client.remove(stored)).ok, true);
+  assert.equal(client.view().streak.todayDoneCount, 0); assert.equal(client.view().streak.streak, 0);
+  client.observe({ ...client.view(), state: 'partial', stale: true });
+  assert.equal(client.view().streak.todayDoneCount, 0);
+});
+
+test('raw priority acknowledgement replaces the preserved edit enum and a partial title ACK cannot downgrade it', async () => {
+  const original = { ...task('a'), priority: 'high', priorityRaw: 'critical' };
+  const responses = [reply({ id: 'a', priority: 'low' }), reply({ id: 'a', title: '새 제목' })];
+  const client = createTodayTaskActions({ now: () => today, fetchImpl: async () => responses.shift() });
+  client.observe(read([original]));
+  assert.equal((await client.run(original, { priority: 'low' })).ok, true);
+  assert.equal(client.view().queueItems[0].priorityRaw, 'low');
+  assert.equal((await client.run(original, { title: '새 제목' })).ok, true);
+  assert.equal(client.view().queueItems[0].priorityRaw, 'low');
+  assert.equal(client.view().queueItems[0].title, '새 제목');
+  const legacy = applyTodayTaskRow(read([{ ...task('b'), priority: 'med', priorityRaw: 'medium' }]), { id: 'b', priority: 'high' }, { now: today });
+  assert.equal(legacy.queueItems[0].priorityRaw, 'high');
 });
