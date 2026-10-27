@@ -13,3 +13,24 @@ apps/desktop/*
 apps/desktop/pet/*
 !apps/desktop/pet/shared
 apps/android
+# CLI 배포(--archive=tgz)는 .gitignore를 읽지 않는다 — 로컬 캐시·산출물·프로토타입이 그대로 올라갔다(2026-10-22 검토).
+**/.turbo
+/prototypes
+/artifacts
+/deliverables
+**/output
+/review-r15
+/skills
+**/.gstack
+/.serena
+# Vercel 기본 제외는 .env.local·.env.*.local뿐이라 .env.local.pre-* 같은 백업 키가 배포 소스에 실렸다. 빌드는 프로젝트 env를 쓴다.
+**/.env*
+# .gitignore가 막는 비밀·고객 데이터도 .gitignore처럼 어느 깊이에서든 다시 막는다 — OAuth 자격 증명,
+# 리전 이전 덤프(apps/<app>에서 실행하면 그 아래에 생긴다), 로컬 설정.
+**/client_secret_*.json
+**/credentials.json
+**/google-credentials*.json
+**/.migration-dump
+**/.superpowers
+**/.mcp.json
+**/coverage

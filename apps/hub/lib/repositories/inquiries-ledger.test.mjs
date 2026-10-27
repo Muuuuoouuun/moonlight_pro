@@ -21,6 +21,11 @@ test('CRM choices are scoped and partial read failure does not become an empty s
  assert.equal(r.status,'error'); assert.equal(calls.length,3);
  assert.ok(calls.every(([,o])=>o.filters.some(([k,v])=>k==='workspace_id'&&v.includes(workspaceId))));
 });
+test('reference search sends an unquoted ilike pattern because top-level PostgREST values are literal',async()=>{
+ const calls=[];
+ await getInquiryReferences({workspaceId,query:' A,B (1)%_*\\ '},{config:configured,read:async(table,options)=>{calls.push(options.filters.find(([k])=>k!=='workspace_id'));return {rows:[]};}});
+ assert.deepEqual(calls,[['name','ilike.*A,B (1)*'],['title','ilike.*A,B (1)*'],['title','ilike.*A,B (1)*']]);
+});
 test('missing config is preview without querying',async()=>{
  const r=await getInquiriesLedger({workspaceId},{config:()=>null,read:()=>assert.fail()}); assert.equal(r.status,'preview'); assert.equal(r.total,null);
 });

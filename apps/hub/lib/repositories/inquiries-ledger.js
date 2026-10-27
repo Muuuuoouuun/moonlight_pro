@@ -75,11 +75,12 @@ export async function getInquirySyncStatus({ workspaceId = resolveDefaultWorkspa
 export async function getInquiryReferences({ workspaceId = resolveDefaultWorkspaceId(), query = '' } = {}, deps = dependencies) {
   if (!workspaceId || !deps.config()) return { status: 'preview', leads: [], deals: [], cases: [] };
   if (!UUID.test(workspaceId)) return { status: 'error', error: 'invalid-workspace' };
-  // Quoted PostgREST operands prevent punctuation from becoming query syntax.
+  // A top-level PostgREST value is literal after the operator, so punctuation is not syntax here;
+  // quoting it would make the quotes part of the pattern. Only wildcard and escape characters go.
   const term = String(query).trim().slice(0, 100).replace(/[\\%_*]/g, '');
   try {
     const results = await Promise.all([['leads', 'name'], ['deals', 'title'], ['operation_cases', 'title']].map(([table, label]) => deps.read(table, {
-      select: `id,${label}`, filters: [['workspace_id', eqFilter(workspaceId)], ...(term ? [[label, `ilike.${JSON.stringify(`*${term}*`)}`]] : [])],
+      select: `id,${label}`, filters: [['workspace_id', eqFilter(workspaceId)], ...(term ? [[label, `ilike.*${term}*`]] : [])],
       order: `${label}.asc.nullslast,id.asc`, limit: 51,
     })));
     if (results.some(r => !Array.isArray(r?.rows))) return { status: 'error', error: 'inquiry-references-read-failed' };

@@ -423,6 +423,33 @@ test("overview withholds project KPIs and update history when bounded slices are
   assert.equal(body.brandActivity, null);
 });
 
+test("overview buckets activity by Seoul calendar day on any server clock", async (t) => {
+  // 운영 서버(Vercel)는 UTC, 운영자 Mac은 KST로 돈다. 어느 시간대에서든 KST 10-22 00:30에 연 현황은 10분 전 기록을
+  // 10-22 막대에 붙이고, 이번 주(10-16~10-22) 첫날 00:00 기록은 세며 그 직전 10-15 23:50 기록은 세지 않는다.
+  const savedTz = process.env.TZ;
+  t.after(() => { if (savedTz === undefined) delete process.env.TZ; else process.env.TZ = savedTz; });
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-21T15:30:00Z") });
+  for (const tz of ["UTC", "Asia/Seoul", "America/Los_Angeles"]) {
+    process.env.TZ = tz;
+    state.projects = liveProjectLedger({
+      updates: [
+        { id: "update-today", projectId: "project-1", happenedAt: "2026-10-21T15:10:00Z" },
+        { id: "update-week-start", projectId: "project-1", happenedAt: "2026-10-15T15:00:00Z" },
+        { id: "update-edge", projectId: "project-1", happenedAt: "2026-10-15T14:50:00Z" },
+      ],
+    });
+
+    const body = await (await overviewRoute.GET()).json();
+
+    assert.equal(body.activitySeries.length, 30, tz);
+    assert.equal(body.activitySeries[0].date, "2026-09-23", tz);
+    assert.deepEqual(body.activitySeries.at(-1), { date: "2026-10-22", work: 1, decisions: 0, content: 0 }, tz);
+    assert.equal(body.activitySeries.find((bucket) => bucket.date === "2026-10-16")?.work, 1, tz);
+    assert.equal(body.activitySeries.find((bucket) => bucket.date === "2026-10-15")?.work, 1, tz);
+    assert.equal(body.kpis.updatesThisWeek, 2, tz);
+  }
+});
+
 test("overview withholds published count when only publish logs failed", async () => {
   state.content = {
     source: "supabase",

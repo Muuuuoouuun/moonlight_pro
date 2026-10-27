@@ -54,6 +54,27 @@ for (const [provider, connect, decode] of [
     assert.equal(createdFlow.app_id, state.appId);
   });
 
+  test(`${provider} connect keeps immediate error redirects on the Hub and preserves valid return paths`, async () => {
+    globalThis.fetch = async () => { throw new Error("an invalid brand key must fail before any request"); };
+    const key = provider === "instagram_api" ? "instagram" : "metaThreads";
+    const redirectFor = async (returnPath) => {
+      const url = new URL("http://localhost:3000/api/social/connect?brandKey=Bad%20Key!");
+      url.searchParams.set("returnPath", returnPath);
+      return new URL((await connect(new NextRequest(url))).headers.get("location"));
+    };
+    for (const returnPath of ["/\t/outside.example", "//outside.example", "/\\outside.example", "https://outside.example", "/.//outside.example"]) {
+      const location = await redirectFor(returnPath);
+      assert.equal(location.origin, "http://localhost:3000", JSON.stringify(returnPath));
+      assert.equal(location.pathname, "/dashboard/settings", JSON.stringify(returnPath));
+      assert.equal(location.searchParams.get(key), "invalid-brand");
+    }
+    const kept = await redirectFor("/dashboard/brands/bridgemaker?tab=channels#sns");
+    assert.equal(kept.pathname, "/dashboard/brands/bridgemaker");
+    assert.equal(kept.searchParams.get("tab"), "channels");
+    assert.equal(kept.searchParams.get(key), "invalid-brand");
+    assert.equal(kept.hash, "#sns");
+  });
+
   test(`${provider} Class.Moon starts a fresh app-scoped authorization beside a historical Moonlight ID`, async () => {
     process.env.SUPABASE_URL = "https://db.example.com";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";

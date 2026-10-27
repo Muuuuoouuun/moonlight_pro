@@ -46,6 +46,7 @@ const providers = [
 const unsafePaths = [
   "https://outside.example", "//outside.example", "/\\outside.example", "/\t/outside.example",
   "/dashboard\r\nLocation: https://outside.example", "/dashboard\u0000", "/dashboard\u007f", "dashboard",
+  "/.//outside.example", "/..//outside.example", "/%2e//outside.example",
 ];
 
 for (const provider of providers) {
@@ -147,6 +148,27 @@ test("Gmail retains its existing shared-secret fallback for freshly signed state
   assert.deepEqual(decodeGoogleGmailState(value), body);
   assert.deepEqual(decodeGoogleCalendarState(value), { invalid: true });
   assert.deepEqual(decodeGoogleSheetsState(value), { invalid: true });
+});
+
+test("YouTube callback keeps unsafe return paths within the Hub and preserves valid ones", async () => {
+  const { GET } = await import("../app/api/social/youtube/callback/route.js");
+  const redirectFor = async (returnPath) => {
+    const request = new URL("/api/social/youtube/callback?error=access_denied", ORIGIN);
+    request.searchParams.set("state", signedState({ iat: Date.now(), workspaceId: "workspace-one", returnPath }));
+    return new URL((await GET(new NextRequest(request))).headers.get("location"));
+  };
+  for (const returnPath of unsafePaths) {
+    const target = await redirectFor(returnPath);
+    assert.equal(target.origin, ORIGIN, JSON.stringify(returnPath));
+    assert.equal(target.pathname, "/dashboard/settings", JSON.stringify(returnPath));
+    assert.equal(target.searchParams.get("youtube"), "oauth-denied");
+  }
+  const kept = await redirectFor("/dashboard/brands/bridgemaker?tab=channels#youtube");
+  assert.equal(kept.origin, ORIGIN);
+  assert.equal(kept.pathname, "/dashboard/brands/bridgemaker");
+  assert.equal(kept.searchParams.get("tab"), "channels");
+  assert.equal(kept.searchParams.get("youtube"), "oauth-denied");
+  assert.equal(kept.hash, "#youtube");
 });
 
 test("Google return paths accept local navigation and reject unsafe URL forms", () => {

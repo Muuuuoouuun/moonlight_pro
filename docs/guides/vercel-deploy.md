@@ -34,7 +34,7 @@
 npx vercel link --repo --yes --scope muuuuoouuuns-projects   # .vercel/repo.json (gitignore) — 두 프로젝트를 디렉터리로 매핑
 ```
 
-`apps/hub`·`apps/engine` 안에서 `vercel link`를 따로 하면 안 된다 — 그 디렉터리만 업로드돼 `packages/*` 워크스페이스 의존이 빠진다. 루트 repo 링크 상태에서 `apps/<app>`에서 `vercel deploy`를 실행하면 저장소 전체가 올라가고 서버의 Root Directory가 앱을 고른다.
+`apps/hub`·`apps/engine` 안에서 `vercel link`를 따로 하면 안 된다 — 그 디렉터리만 업로드돼 `packages/*` 워크스페이스 의존이 빠진다. 루트 repo 링크 상태에서 `apps/<app>`에서 `vercel deploy`를 실행하면 저장소 전체(`.vercelignore` 제외분 빼고)가 올라가고 서버의 Root Directory가 앱을 고른다.
 
 ## 4. 환경 변수 → 배포
 
@@ -44,7 +44,7 @@ node scripts/vercel-env-push.mjs --app hub --dry-run
 node scripts/vercel-env-push.mjs --app hub
 node scripts/vercel-env-push.mjs --app engine
 
-# 프로덕션 배포 — 저장소 파일이 15,000개를 넘어 --archive=tgz 가 필수. 루트 .vercelignore가 docs·design-system·테스트를 제외한다.
+# 프로덕션 배포 — 저장소 파일이 15,000개를 넘어 --archive=tgz 가 필수. 올라가는 범위는 루트 .vercelignore가 정한다(아래).
 (cd apps/engine && npx vercel deploy --prod --yes --archive=tgz --scope muuuuoouuuns-projects)
 (cd apps/hub    && npx vercel deploy --prod --yes --archive=tgz --scope muuuuoouuuns-projects)
 ```
@@ -55,6 +55,8 @@ PowerShell 5.1은 `&&`와 `(cd … && …)`를 읽지 못한다 — 거기서는
 Set-Location apps\engine; npx vercel deploy --prod --yes --archive=tgz --scope muuuuoouuuns-projects; Set-Location ..\..
 Set-Location apps\hub;    npx vercel deploy --prod --yes --archive=tgz --scope muuuuoouuuns-projects; Set-Location ..\..
 ```
+
+**업로드 제외는 루트 [`.vercelignore`](../../.vercelignore) 하나가 정한다.** CLI `--archive=tgz` 배포는 `.gitignore`를 읽지 않고, env 파일 중 Vercel이 기본으로 빼는 것은 `.env.local`·`.env.*.local`뿐이다. 그래서 `.vercelignore`가 빌드에 쓰지 않는 docs·design-system·테스트·데스크톱 앱(허브가 쓰는 `pet/shared`만 남김)·안드로이드·로컬 산출물·캐시와 함께, 어느 깊이에서든 `.env*` 전부(`.env.local.pre-*` 백업 포함 — 빌드는 Vercel 프로젝트 env를 쓴다)·OAuth 자격 증명 JSON·리전 이전 덤프 기본 폴더(`.migration-dump`)·`.mcp.json`을 뺀다. 로컬에만 둘 비밀·고객 데이터 파일을 새로 두면 `.gitignore`와 함께 여기에도 올리고, [`scripts/vercelignore.test.mjs`](../../scripts/vercelignore.test.mjs)의 목록에도 넣는다. 그 테스트는 목록의 규칙이 빠지거나 그 이름을 되살리는 `!` 규칙이 생기면 실패하지만, `!**/*.json` 같은 넓은 되살림은 잡지 못한다.
 
 환경 변수를 바꾼 뒤에는 재배포해야 반영된다. Git 연동 자동 배포는 프로덕션 브랜치(`main`)에만 붙어 있으므로, 작업 브랜치(`09.WIN1.6`)를 올릴 때는 위 CLI `--prod` 배포를 쓴다(다른 브랜치 push는 프리뷰 배포만 만든다).
 
