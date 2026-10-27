@@ -299,7 +299,7 @@ test('Go;Re status exposes only matching account metadata and never calls a prov
 
 test('the prepared OAuth allowlist migration covers every registry app and preserves existing guards', async () => {
   // Static compatibility check only; no migration is applied to a real database.
-  const sql = await readFile(new URL('../../../../../supabase/migrations/20261026_0071_brand_social_oauth_apps.sql', import.meta.url), 'utf8');
+  const sql = await readFile(new URL('../../../../../supabase/migrations/20261027_0072_study_seagull_instagram_oauth.sql', import.meta.url), 'utf8');
   const allowlist = sql.match(/app_key in \(([^)]+)\)/)?.[1];
   assert.ok(allowlist);
   const keys = [...allowlist.matchAll(/'([^']+)'/g)].map(match => match[1]);
