@@ -47,7 +47,7 @@
 - typecheck 4/4, contract checks, ClassIn checks 통과.
 - Desktop 계약 시험 471 pass, 0 fail, 0 skip.
 - Hub·Engine production build 통과.
-- 접근성·공용 컴포넌트 집중 시험 25 pass, OAuth·루틴 등 집중 시험 37 pass.
+- 접근성·공용 컴포넌트 집중 시험 24 pass, OAuth·루틴 등 집중 시험 37 pass.
 - 로컬 전체 root suite: 6,433 tests, 6,398 pass, 20 fail, 15 skip. 실패 20개는 모두 Mac의 SysV 공유 메모리 32개 한도로 `initdb`가 시작되지 않은 환경 실패다. `ipcs`와 실행 프로세스를 읽기 전용으로 확인했으며 시스템 설정·공유 메모리·다른 작업자의 프로세스를 변경하지 않았다. 첫 샌드박스 시도는 네트워크/프로세스 제한으로 진행이 멈춰 이 작업의 해당 테스트 프로세스만 종료했다. 이후 재실행한 suite 결과가 위 수치다.
 - CI에서는 PostgreSQL bin을 PATH에 올려 임시 DB 계약 시험을 실제 실행하도록 했다. 최종 정확한 head의 CI 결과는 PR55에서 확인한다. local 환경 실패나 skipped 검사를 성공으로 바꾸어 보고하지 않는다.
 
