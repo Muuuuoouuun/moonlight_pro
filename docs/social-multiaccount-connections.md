@@ -18,3 +18,25 @@
 연결 상태 API는 플랫폼별 `connections` 배열에 토큰 없는 요약을 제공한다. Threads·Instagram은 `?brand=<핸들>` 또는 `?accountId=<플랫폼_ID>`, YouTube는 `?channelId=<UC_ID>` 또는 `?brandKey=<브랜드_slug>`로 해당 연결의 `status`와 단일 `connection`을 확인한다. 다른 계정이 연결돼 있어도 요청한 계정이 없으면 `ready`로 응답한다. Supabase 읽기가 실패하면 `storage-error`로 표시한다.
 
 여러 YouTube 채널의 브랜드 소속과 실제 Google OAuth 선택 가능 여부는 각각 확인해야 한다. Studio의 소유자 표시는 특정 로그인에서 해당 채널이 OAuth 선택 목록에 나온다는 증거가 아니다. 이 단계는 자격증명 연결만 구현하며 업로드·게시 실행 코드는 포함하지 않는다.
+
+## Meta 전용 앱 대상 (2026-10-26 운영자 승인)
+
+현재 Meta 연결의 브랜드·핸들·지원 provider는 `apps/hub/lib/social-brand-registry.js`가 제한한다. 위의 일반적인 선택 사항 계약과 달리, 전용 앱 대상은 정확한 `brandKey`와 핸들을 함께 전달해야 한다. 전용 자격증명이 없거나 앱 ID가 다른 브랜드와 겹치면 다른 앱으로 우회하지 않는다.
+
+| 브랜드 키 | 정확한 핸들 | provider | 전용 환경 변수 접미사 |
+| --- | --- | --- | --- |
+| `gore` | `go_re_startagain` | Instagram, Threads | `GORE` |
+| `22nomad` | `22th.nomad` | Instagram, Threads | `NOMAD_22` |
+| `holyfuncollector` | `holyfuncollect0r` (숫자 0) | Instagram | `HOLYFUN_COLLECTOR` |
+| `sinabro` | `dazz.ling_u` | Threads | `SINABRO` |
+| `studyseagull` | `study_seagull` | Instagram | `STUDY_SEAGULL` |
+
+Instagram은 `COM_MOON_INSTAGRAM_<접미사>_APP_ID`·`APP_SECRET`, Threads는 `COM_MOON_META_THREADS_<접미사>_APP_ID`·`APP_SECRET` 쌍을 사용한다. 각 제품 화면의 앱 ID와 secret을 사용하며 부모 Meta 앱 ID로 대체하지 않는다. Class.Moon(`CLASSMOON`)·Politic Officer(`POLITIC_OFFICER`)·BridgeMaker의 기존 연결 계약은 유지한다.
+
+전용 앱의 OAuth 권한은 프로필 기본 조회와 콘텐츠 게시 두 가지로 고정된다. 테스터 역할 등록 → 해당 계정에서 초대 수락 → OAuth 승인 → 실제 `/me`의 ID·핸들 대조 순서로 검증한다. 상태 API의 `stored-metadata` 표시는 실제 API 검증을 대신하지 않는다. 연결 작업에는 실제 게시물 발행을 포함하지 않는다.
+
+`20261026_0071_brand_social_oauth_apps.sql`은 OAuth 일회용 원장의 앱 허용 목록만 확장한다. 기존 앱 키, 앱 ID 쌍, 만료·재사용 차단, 연결 소유권 보호를 유지한다. 서울 운영 DB에는 2026-10-26 적용했고 migration ledger의 SHA-256 `b97b9853f2cc3c582af6ca192d578a30fed7fcf8d01b88d12c1faab754648df1`과 제약 조건을 재조회했다.
+
+2026-10-27 추가 연결 대상은 Study.Seagull의 Instagram만이다. ClassIn Side와 MoonPM의 Meta 연결은 이번 범위에서 제외하고, 22th.Nomad의 Instagram·Threads는 운영자가 집에서 이메일 인증을 완료할 때까지 보류한다. 기존 Threads·YouTube 연결은 유지한다. `20261027_0072_study_seagull_instagram_oauth.sql`은 `studyseagull` 앱 키만 추가한다. 서울 운영 DB에 적용한 뒤 migration ledger의 SHA-256 `efdb5735389fc00a0813265a54f43968a4453cd2c42dce98f5141859feae72bb`과 기존 앱 ID 쌍·형식 제약, RLS 유지를 재조회했다. 실제 앱 생성·테스터 수락·OAuth 완료 여부는 별도 운영 검증으로 확인한다.
+
+같은 날 Study.Seagull 앱 생성·Seoulmentoss 소유·테스터 수락·운영 OAuth 저장을 완료했다. 11:14 KST 실제 API 조회에서 Meta 11개 연결 모두 HTTP 200과 계정 ID·핸들 일치를 확인했다. 테스터 추가 시 사용자 이름을 입력한 뒤 자동완성의 정확한 계정 항목을 선택해야 한다. 검색 결과를 선택하기 전에 Enter로 만든 문자열 태그는 계정 선택을 대신하지 않으며 양식 저장 오류를 일으킨다. 앱은 개발 상태이며 비즈니스 인증·앱 검수·실제 게시물 발행은 이 연결 작업에 포함하지 않는다.

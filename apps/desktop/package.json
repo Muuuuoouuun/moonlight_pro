@@ -17,7 +17,7 @@
     "test": "node --test"
   },
   "devDependencies": {
-    "electron": "44.4.5",
+    "electron": "44.9.3",
     "electron-builder": "^26.15.3",
     "node-api-headers": "1.9.0",
     "png-to-ico": "^3.0.2"

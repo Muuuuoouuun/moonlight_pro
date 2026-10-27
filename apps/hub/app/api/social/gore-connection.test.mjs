@@ -138,7 +138,7 @@ test('Go;Re auth binds its own app, handle and fixed scopes without expanding pe
   assert.equal(state.provider, 'meta_threads');
   assert.equal(state.workspaceId, workspaceId);
   assert.equal(resolveMetaOAuthApp({ ...target, brandHandle: 'ml_bridgemaker' }), null);
-  assert.equal(resolveMetaOAuthApp({ ...target, provider: 'instagram_api' }), null);
+  assert.equal(resolveMetaOAuthApp({ ...target, provider: 'instagram_api' }).configured, false);
   assert.equal(resolveMetaOAuthAppFromState({ ...state, appKey: 'moonlight' }), null);
   assert.equal(resolveMetaOAuthAppFromState({ ...state, provider: 'instagram_api' }), null);
 });
@@ -152,8 +152,8 @@ test('Go;Re app isolation preserves existing Instagram brands and rejects a shar
   process.env.COM_MOON_INSTAGRAM_APP_SECRET = 'synthetic-ig-bridge-secret';
   process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_ID = 'synthetic-ig-class-app';
   process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_SECRET = 'synthetic-ig-class-secret';
-  // An unsupported Go;Re Instagram setting must not block another Instagram app.
-  process.env.COM_MOON_INSTAGRAM_GORE_APP_ID = 'synthetic-ig-class-app';
+  process.env.COM_MOON_INSTAGRAM_GORE_APP_ID = 'synthetic-ig-gore-app';
+  process.env.COM_MOON_INSTAGRAM_GORE_APP_SECRET = 'synthetic-ig-gore-secret';
   for (const [brandKey, brandHandle] of [['bridgemaker', 'ml_bridgemaker'], ['classmoon', 'moon.classin']]) {
     assert.equal(resolveMetaOAuthApp({ provider: 'instagram_api', brandKey, brandHandle }).configured, true);
   }
@@ -299,7 +299,7 @@ test('Go;Re status exposes only matching account metadata and never calls a prov
 
 test('the prepared OAuth allowlist migration covers every registry app and preserves existing guards', async () => {
   // Static compatibility check only; no migration is applied to a real database.
-  const sql = await readFile(new URL('../../../../../supabase/migrations/20261001_0063_gore_oauth_app_binding.sql', import.meta.url), 'utf8');
+  const sql = await readFile(new URL('../../../../../supabase/migrations/20261027_0072_study_seagull_instagram_oauth.sql', import.meta.url), 'utf8');
   const allowlist = sql.match(/app_key in \(([^)]+)\)/)?.[1];
   assert.ok(allowlist);
   const keys = [...allowlist.matchAll(/'([^']+)'/g)].map(match => match[1]);

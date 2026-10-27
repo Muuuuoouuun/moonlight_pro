@@ -21,7 +21,7 @@ export function clientStore(file,log=()=>{}){
     const next=`${stat.ino}:${stat.mtimeMs}:${stat.size}`;
     if(next!==key){
       try{clients=readClients(file);key=next;}
-      catch(error){clients=[];key=null;log(`client registry unreadable, rejecting every request: ${error.message}`);}
+      catch{clients=[];key=null;log('client registry unreadable, rejecting every request');}
     }
     return clients;
   };
@@ -71,6 +71,7 @@ export function createHttpHandler({getClients,allowedHosts=[],allowedOrigins=[],
     // A header wins; the path token is only for clients that cannot send headers and must be
     // enabled per client, because URLs end up in logs and connector settings.
     const bearer=/^Bearer\s+(\S+)$/i.exec(req.headers.authorization||'');
+    if(req.headers.authorization&&!bearer)return fail(401,-32001,'Unauthorized',{'www-authenticate':'Bearer realm="moonlight"'});
     const clients=getClients();
     const pathClient=!bearer&&route[1]?findClient(clients,route[1]):null;
     const viaUrl=!bearer&&Boolean(pathClient?.allowUrl);
@@ -84,7 +85,10 @@ export function createHttpHandler({getClients,allowedHosts=[],allowedOrigins=[],
     catch(error){return error.code==='too-large'?fail(413,-32000,'Request body too large'):undefined;}
     try{body=JSON.parse(text);}catch{return fail(400,-32700,'Parse error');}
     // Audit trail names the client and tool, never arguments (they carry customer data).
-    const calls=[body].flat().map(message=>message?.method==='tools/call'?`tools/call:${String(message.params?.name||'?').slice(0,64)}`:String(message?.method||'response').slice(0,64));
+    const auditName=value=>typeof value==='string'&&/^[a-zA-Z0-9_./-]{1,64}$/.test(value)?value:'invalid';
+    const messages=Array.isArray(body)?body:[body];
+    const calls=messages.slice(0,16).map(message=>message?.method==='tools/call'?`tools/call:${auditName(message.params?.name)}`:auditName(message?.method));
+    if(messages.length>16)calls.push(`additional-calls=${messages.length-16}`);
     res.on('finish',()=>log(`${new Date().toISOString()} client=${client.name} ${calls.join(',')} status=${res.statusCode} ms=${Date.now()-started}`));
     let server,transport;
     res.on('close',()=>{transport?.close().catch(()=>{});server?.close().catch(()=>{});});
@@ -94,7 +98,7 @@ export function createHttpHandler({getClients,allowedHosts=[],allowedOrigins=[],
       transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
       await server.connect(transport);await transport.handleRequest(req,res,body);
     }
-    catch(error){log(`request failed for client=${client.name}: ${error.message}`);if(!res.headersSent)fail(500,-32603,'Internal error');}
+    catch{log(`request failed for client=${client.name}`);if(!res.headersSent)fail(500,-32603,'Internal error');}
   };
 }
 
@@ -112,7 +116,9 @@ export async function startHttpServer({host,port,env=process.env,log=line=>proce
     ratePerMinute:Number(env.COM_MOON_MCP_HTTP_RATE_PER_MIN)||120,
     log,
   });
-  const server=http.createServer((req,res)=>{handler(req,res).catch(error=>{log(`unhandled: ${error.message}`);if(!res.headersSent){res.writeHead(500);res.end();}});});
+  const server=http.createServer({requestTimeout:15000,headersTimeout:10000,keepAliveTimeout:5000},(req,res)=>{handler(req,res).catch(()=>{log('unhandled MCP request failure');if(!res.headersSent){res.writeHead(500);res.end();}});});
+  server.maxConnections=128;
+  server.maxRequestsPerSocket=1000;
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(bindPort,bindHost,resolve);});
   const count=getClients().length;
   if(!['127.0.0.1','localhost','::1'].includes(bindHost))log(`WARNING: listening on ${bindHost}, not loopback. Every request still needs a client token and an allowed Host.`);

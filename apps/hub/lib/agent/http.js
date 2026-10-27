@@ -53,6 +53,7 @@ export function createAgentHttpHandler(operation,deps={}){
       const query=Object.fromEntries(new URL(request.url).searchParams);
       let result;
       if(operation==='capabilities')result=await (deps.capabilities||(await import('./capabilities.js')).getAgentCapabilities)(context);
+      else if(operation==='integrations')result=await (deps.integrations||(await import('./integrations.js')).getAgentIntegrationHealth)(query,context);
       else if(operation==='query')result=await (deps.query||(await import('./queries.js')).queryAgentData)(await readAgentJson(request),context);
       else if(operation==='entity')result=await (deps.entity||(await import('./queries.js')).getAgentEntity)(params.type,params.id,query,context);
       else if(operation==='receipt'){
