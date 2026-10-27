@@ -169,6 +169,8 @@ export const DATABASE_FEATURES = [
   { name: '브랜드별 소셜 OAuth 앱', migration: '20261026_0071_brand_social_oauth_apps.sql', tables: [], functions: [],
     constraintIncludes: ['22nomad', 'holyfuncollector', 'sinabro']
       .map(key => ['social_oauth_flows', 'social_oauth_flows_app_key_check', `'${key}'`]) },
+  { name: 'Study.Seagull Instagram OAuth 앱', migration: '20261027_0072_study_seagull_instagram_oauth.sql', tables: [], functions: [],
+    constraintIncludes: [['social_oauth_flows', 'social_oauth_flows_app_key_check', "'studyseagull'"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

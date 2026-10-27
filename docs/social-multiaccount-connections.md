@@ -29,9 +29,12 @@
 | `22nomad` | `22th.nomad` | Instagram, Threads | `NOMAD_22` |
 | `holyfuncollector` | `holyfuncollect0r` (숫자 0) | Instagram | `HOLYFUN_COLLECTOR` |
 | `sinabro` | `dazz.ling_u` | Threads | `SINABRO` |
+| `studyseagull` | `study_seagull` | Instagram | `STUDY_SEAGULL` |
 
 Instagram은 `COM_MOON_INSTAGRAM_<접미사>_APP_ID`·`APP_SECRET`, Threads는 `COM_MOON_META_THREADS_<접미사>_APP_ID`·`APP_SECRET` 쌍을 사용한다. 각 제품 화면의 앱 ID와 secret을 사용하며 부모 Meta 앱 ID로 대체하지 않는다. Class.Moon(`CLASSMOON`)·Politic Officer(`POLITIC_OFFICER`)·BridgeMaker의 기존 연결 계약은 유지한다.
 
 전용 앱의 OAuth 권한은 프로필 기본 조회와 콘텐츠 게시 두 가지로 고정된다. 테스터 역할 등록 → 해당 계정에서 초대 수락 → OAuth 승인 → 실제 `/me`의 ID·핸들 대조 순서로 검증한다. 상태 API의 `stored-metadata` 표시는 실제 API 검증을 대신하지 않는다. 연결 작업에는 실제 게시물 발행을 포함하지 않는다.
 
 `20261026_0071_brand_social_oauth_apps.sql`은 OAuth 일회용 원장의 앱 허용 목록만 확장한다. 기존 앱 키, 앱 ID 쌍, 만료·재사용 차단, 연결 소유권 보호를 유지한다. 서울 운영 DB에는 2026-10-26 적용했고 migration ledger의 SHA-256 `b97b9853f2cc3c582af6ca192d578a30fed7fcf8d01b88d12c1faab754648df1`과 제약 조건을 재조회했다.
+
+2026-10-27 추가 연결 대상은 Study.Seagull의 Instagram만이다. ClassIn Side와 MoonPM의 Meta 연결은 이번 범위에서 제외하고, 22th.Nomad의 Instagram·Threads는 운영자가 집에서 이메일 인증을 완료할 때까지 보류한다. 기존 Threads·YouTube 연결은 유지한다. `20261027_0072_study_seagull_instagram_oauth.sql`은 `studyseagull` 앱 키만 추가한다. 서울 운영 DB에 적용한 뒤 migration ledger의 SHA-256 `efdb5735389fc00a0813265a54f43968a4453cd2c42dce98f5141859feae72bb`과 기존 앱 ID 쌍·형식 제약, RLS 유지를 재조회했다. 실제 앱 생성·테스터 수락·OAuth 완료 여부는 별도 운영 검증으로 확인한다.

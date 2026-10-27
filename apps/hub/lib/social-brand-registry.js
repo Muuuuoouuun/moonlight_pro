@@ -8,6 +8,7 @@ export const SOCIAL_BRAND_REGISTRY = Object.freeze({
   '22nomad': { brandKey: '22nomad', appKey: '22nomad', envSuffix: 'NOMAD_22', brandHandle: '22th.nomad', label: '22th.Nomad', providers: ['instagram_api', 'meta_threads'] },
   holyfuncollector: { brandKey: 'holyfuncollector', appKey: 'holyfuncollector', envSuffix: 'HOLYFUN_COLLECTOR', brandHandle: 'holyfuncollect0r', label: 'HolyFunCollector', providers: ['instagram_api'] },
   sinabro: { brandKey: 'sinabro', appKey: 'sinabro', envSuffix: 'SINABRO', brandHandle: 'dazz.ling_u', label: 'Sinabro', providers: ['meta_threads'] },
+  studyseagull: { brandKey: 'studyseagull', appKey: 'studyseagull', envSuffix: 'STUDY_SEAGULL', brandHandle: 'study_seagull', label: 'Study.Seagull', providers: ['instagram_api'] },
 });
 
 export function socialBrandSupportsProvider(brandKey, provider) {

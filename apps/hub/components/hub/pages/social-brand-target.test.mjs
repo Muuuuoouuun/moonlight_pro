@@ -31,6 +31,7 @@ test('approved brand URLs preserve exact handles and provider boundaries', () =>
     ['22nomad', '22th.nomad', ['instagram_api', 'meta_threads']],
     ['holyfuncollector', 'holyfuncollect0r', ['instagram_api']],
     ['sinabro', 'dazz.ling_u', ['meta_threads']],
+    ['studyseagull', 'study_seagull', ['instagram_api']],
   ]) {
     assert.ok(SOCIAL_BRAND_OPTIONS.some(option => option.value === brandKey && option.label.includes(`@${handle}`)));
     for (const action of ['status', 'connect']) {

@@ -77,6 +77,7 @@ test("new brand apps require dedicated credentials and reject cross-brand callba
     ['22nomad', '22th.nomad', 'NOMAD_22', ['instagram_api', 'meta_threads']],
     ['holyfuncollector', 'holyfuncollect0r', 'HOLYFUN_COLLECTOR', ['instagram_api']],
     ['sinabro', 'dazz.ling_u', 'SINABRO', ['meta_threads']],
+    ['studyseagull', 'study_seagull', 'STUDY_SEAGULL', ['instagram_api']],
   ]) {
     for (const [provider, prefix, scopes] of [
       ['instagram_api', 'COM_MOON_INSTAGRAM', ['instagram_business_basic', 'instagram_business_content_publish']],
