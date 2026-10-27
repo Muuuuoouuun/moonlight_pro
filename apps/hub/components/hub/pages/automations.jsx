@@ -390,8 +390,11 @@ export function Webhooks({ onNavigate }) {
   const hooks = liveHooks;
   const sTone = { ok: 'neutral', warn: 'neutral', err: 'danger' };
   const [testState, setTestState] = React.useState({}); // { [idx]: { tone: 'success'|'warning'|'danger', label, pending } }
+  const pendingTests = React.useRef(new Set());
 
   async function runHookTest(idx, hook) {
+    if (pendingTests.current.has(idx)) return;
+    pendingTests.current.add(idx);
     setTestState(s => ({ ...s, [idx]: { pending: true } }));
     try {
       const response = await fetch('/api/webhooks/project-test', {
@@ -421,6 +424,8 @@ export function Webhooks({ onNavigate }) {
       }, 4000);
     } catch (error) {
       setTestState(s => ({ ...s, [idx]: { tone: 'danger', label: 'failed' } }));
+    } finally {
+      pendingTests.current.delete(idx);
     }
   }
 
@@ -447,7 +452,7 @@ export function Webhooks({ onNavigate }) {
               : 'Project webhook smoke test가 들어오면 endpoint별 활동이 집계됩니다.'}
             action={
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <Button variant="primary" size="sm" icon="play" onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>
+                <Button variant="primary" size="sm" icon="play" disabled={Boolean(testState[0]?.pending)} aria-busy={Boolean(testState[0]?.pending)} onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>
                   {testState[0]?.pending ? '전송 중…' : 'Send test'}
                 </Button>
                 {/* 목록이 비어 hooks.map이 결과를 못 그린다 — 여기서 직접 표시(무언 no-op 방지, 5차 재감사 S) */}
@@ -478,7 +483,7 @@ export function Webhooks({ onNavigate }) {
                 <Badge tone={state.tone} size="xs">{state.label}</Badge>
               )}
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{h.count24}/24h · {h.lastHit}</span>
-              <IconButton icon="play" tooltip="Send test" onClick={() => runHookTest(i, h)} />
+              <IconButton icon="play" tooltip="Send test" disabled={Boolean(state?.pending)} aria-busy={Boolean(state?.pending)} onClick={() => runHookTest(i, h)} />
               <IconButton icon="moreV" tooltip="Manage endpoint" onClick={() => onNavigate?.('dashboard/settings')} />
             </div>
             {h.url && <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>{h.url}</div>}
@@ -819,7 +824,7 @@ export function Flows({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Flows</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            자동화 정의 기록
+            Flow 캔버스 · 준비 중
             <SyncBadge state={syncState} />
           </div>
         </div>
@@ -829,8 +834,9 @@ export function Flows({ onNavigate }) {
       <Card>
         <EmptyState
           icon="zap"
-          title="등록된 Flow가 없습니다"
-          description="실제 자동화 정의를 읽는 기록이 연결되면 이 화면에 표시됩니다."
+          title="Flow 캔버스는 준비 중입니다"
+          description="자동화 정의를 표시하고 편집하는 기능은 아직 연결되지 않았습니다. 등록된 정기 운영과 실행 결과는 자동화 개요와 Runs에서 확인하세요."
+          action={<Button variant="outline" size="sm" onClick={() => onNavigate?.('dashboard/automations')}>자동화 개요 보기</Button>}
         />
       </Card>
     </div>

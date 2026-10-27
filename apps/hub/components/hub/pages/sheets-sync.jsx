@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Card, Button, Badge, Dot, SectionTitle, EmptyState, SyncBadge } from "../hub-primitives";
+import { Card, Button, Badge, Dot, SectionTitle, EmptyState, TruthBadge, Skeleton } from "../hub-primitives";
 
 // §5.3 lifecycle 중립 — 라벨이 상태를 말하고, 색 증명은 없다.
 const STAGING_LABELS = [
@@ -20,12 +20,36 @@ function shortId(id) {
 }
 
 function summarize(action, results) {
-  if (!results) return "완료";
+  if (!results) return "처리 건수 미확인";
   const parts = [];
-  if (results.import) parts.push(`import ${results.import.imported ?? 0}건(skip ${results.import.skipped ?? 0})`);
-  if (results.promote) parts.push(`promote 신규 ${results.promote.promoted ?? 0}·매칭 ${results.promote.merged ?? 0}·검토 ${results.promote.review ?? 0}`);
-  if (results.push) parts.push(`push ${results.push.pushed ?? 0}행`);
-  return parts.length ? parts.join(" · ") : "완료";
+  if (results.import) parts.push(`import ${results.import.imported ?? "—"}건(skip ${results.import.skipped ?? "—"})`);
+  if (results.promote) parts.push(`promote 신규 ${results.promote.promoted ?? "—"}·매칭 ${results.promote.merged ?? "—"}·검토 ${results.promote.review ?? "—"}`);
+  if (results.push) parts.push(`push ${results.push.pushed ?? "—"}행`);
+  return parts.length ? parts.join(" · ") : "처리 건수 미확인";
+}
+
+const SYNC_ACTION_LABELS = { import: "시트→DB import", promote: "승격", push: "DB→시트 push" };
+const SYNC_FAILURE_LABELS = {
+  "not-connected": "시트 연결을 확인해 주세요",
+  "missing-spreadsheet-id": "스프레드시트 지정을 확인해 주세요",
+  "auth-failed": "구글 계정을 다시 연결해 주세요",
+  "import-failed": "시트를 읽거나 가져오지 못했습니다",
+  "push-failed": "시트에 쓰지 못했습니다",
+};
+const UNKNOWN_SYNC_MESSAGE = "동기화 결과를 확인하지 못했습니다. 최근 동기화를 다시 읽어 반영 여부를 확인한 뒤 재시도하세요.";
+
+function syncOutcome(action, data) {
+  const keys = action === "all" ? ["import", "promote", "push"] : [action];
+  if (!["ok", "partial"].includes(data?.status) || keys.some(key => typeof data?.results?.[key]?.ok !== "boolean")) {
+    return { tone: "danger", text: UNKNOWN_SYNC_MESSAGE };
+  }
+  const failed = keys.filter(key => data.results[key].ok === false);
+  if (failed.length || data.status !== "ok") {
+    const details = failed.map(key => `${SYNC_ACTION_LABELS[key]} 실패: ${SYNC_FAILURE_LABELS[data.results[key].reason] || "처리하지 못했습니다. 연결과 최근 동기화를 확인해 주세요"}`);
+    const completed = Object.fromEntries(keys.filter(key => data.results[key].ok).map(key => [key, data.results[key]]));
+    return { tone: "danger", text: [details.length ? details.join(" · ") : "일부 동기화 결과를 확인하지 못했습니다", Object.keys(completed).length ? `확인된 처리: ${summarize(action, completed)}` : null].filter(Boolean).join(" · ") };
+  }
+  return { tone: "neutral", text: summarize(action, data.results) };
 }
 
 export function SheetsSync() {
@@ -38,9 +62,11 @@ export function SheetsSync() {
     lastSyncAt: null,
     staging: {},
     recentRuns: [],
+    failedSources: [],
   });
   const [busy, setBusy] = React.useState(null);
   const [msg, setMsg] = React.useState(null);
+  const syncLock = React.useRef(false);
 
   const load = React.useCallback(async () => {
     setState((s) => ({ ...s, syncState: "loading" }));
@@ -54,14 +80,15 @@ export function SheetsSync() {
       setState({
         // provider status(connected/ready/disabled/missing-config)는 truth state가 아니다 —
         // 연결 여부는 `connected`가 들고, syncState는 "이 화면을 믿어도 되는가"만 말한다.
-        syncState: d.status === "error" ? "error" : d.status === "connected" ? "live" : d.partial ? "partial" : "preview",
+        syncState: d.status === "error" ? "error" : d.partial ? "partial" : d.status === "connected" ? "live" : "preview",
         enabled: Boolean(d.enabled),
         reason: d.reason || null,
         connected: Boolean(d.connected),
         spreadsheetId: d.spreadsheetId || null,
         lastSyncAt: d.lastSyncAt || null,
-        staging: d.staging || {},
+        staging: d.staging === null ? null : d.staging || {},
         recentRuns: Array.isArray(d.recentRuns) ? d.recentRuns : [],
+        failedSources: Array.isArray(d.failedSources) ? d.failedSources : [],
       });
     } catch {
       setState((s) => ({ ...s, syncState: "error" }));
@@ -73,6 +100,8 @@ export function SheetsSync() {
   }, [load]);
 
   const runSync = async (action) => {
+    if (syncLock.current) return;
+    syncLock.current = true;
     setBusy(action);
     setMsg(null);
     try {
@@ -83,14 +112,15 @@ export function SheetsSync() {
       });
       const d = await r.json().catch(() => null);
       if (!r.ok) {
-        setMsg({ tone: "danger", text: d?.reason ? `실패: ${d.reason}` : `실패 (${r.status})` });
+        setMsg({ tone: "danger", text: r.status === 401 || r.status === 403 ? "동기화 권한을 확인하지 못했습니다. 로그인 상태를 확인한 뒤 다시 시도하세요." : UNKNOWN_SYNC_MESSAGE });
       } else {
-        setMsg({ tone: "neutral", text: summarize(action, d?.results) });
+        setMsg(syncOutcome(action, d));
         load();
       }
-    } catch (e) {
-      setMsg({ tone: "danger", text: String(e) });
+    } catch {
+      setMsg({ tone: "danger", text: UNKNOWN_SYNC_MESSAGE });
     } finally {
+      syncLock.current = false;
       setBusy(null);
     }
   };
@@ -99,10 +129,11 @@ export function SheetsSync() {
     window.location.href = "/api/integrations/sheets/connect";
   };
 
-  const { syncState, enabled, reason, connected, spreadsheetId, lastSyncAt, staging, recentRuns } = state;
+  const { syncState, enabled, reason, connected, spreadsheetId, lastSyncAt, staging, recentRuns, failedSources } = state;
   // 코어 read가 실패하면 연결 UI를 띄우지 않는다 — 연결은 이미 돼 있을 수 있고, 운영자가
   // 할 일은 재연결이 아니라 다시 읽기다(2026-08-07 사용성 재감사 D).
   const readFailed = syncState === "error";
+  const loading = syncState === "loading";
 
   return (
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)", maxWidth: 1100 }}>
@@ -111,7 +142,7 @@ export function SheetsSync() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>세일즈 시트 동기화</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             구글시트 ↔ 세일즈 DB · 리드 import → 정규화·중복제거 → 라이브 뷰 push
-            <SyncBadge state={syncState} />
+            <TruthBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -131,8 +162,13 @@ export function SheetsSync() {
               {lastSyncAt ? ` · 최근 ${new Date(lastSyncAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
             </div>
           </div>
-          <Badge tone="neutral" size="xs">{readFailed ? "확인 불가" : connected ? "연결됨" : "미연결"}</Badge>
+          <Badge tone="neutral" size="xs">{loading ? "확인 중" : readFailed ? "확인 불가" : connected ? "연결됨" : "미연결"}</Badge>
         </div>
+
+        {loading && <Skeleton lines={2} label="시트 연결 기록 읽는 중" style={{ marginTop: 12 }} />}
+        {syncState === "partial" && <div role="alert" style={{ marginTop: 12, fontSize: 12, color: "var(--fg-muted)" }}>
+          일부 기록을 읽지 못했습니다{failedSources.length ? ` (${failedSources.map(source => source === "lead_intake_raw" ? "대기·처리 집계" : source === "sync_runs" ? "최근 동기화" : "보강 기록").join(" · ")})` : ""}. 새로고침으로 다시 확인하세요.
+        </div>}
 
         {readFailed && (
           <div role="alert" style={{ marginTop: 12, fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6 }}>
@@ -144,7 +180,7 @@ export function SheetsSync() {
           </div>
         )}
 
-        {!readFailed && !connected && (
+        {!loading && !readFailed && !connected && (
           <div style={{ marginTop: 12, fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6 }}>
             {enabled
               ? "구글 계정으로 연결하면 시트의 리드를 DB로 가져오고, 라이브 뷰를 시트로 되돌립니다."
@@ -157,7 +193,7 @@ export function SheetsSync() {
           </div>
         )}
 
-        {!readFailed && connected && (
+        {!loading && !readFailed && connected && (
           <>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
               {STAGING_LABELS.map((s) => (
@@ -170,26 +206,28 @@ export function SheetsSync() {
               ))}
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <Button variant="primary" size="sm" icon="bolt" onClick={() => runSync("all")} active={busy === "all"}>{busy === "all" ? "동기화 중…" : "전체 동기화"}</Button>
-              <Button variant="outline" size="sm" icon="download" onClick={() => runSync("import")} active={busy === "import"}>시트→DB import</Button>
-              <Button variant="outline" size="sm" icon="check" onClick={() => runSync("promote")} active={busy === "promote"}>승격(dedupe)</Button>
-              <Button variant="outline" size="sm" icon="upload" onClick={() => runSync("push")} active={busy === "push"}>DB→시트 push</Button>
-              <Button variant="ghost" size="sm" icon="link" onClick={connect}>재연결</Button>
+              <Button variant="primary" size="sm" icon="bolt" onClick={() => runSync("all")} disabled={Boolean(busy)} active={busy === "all"}>{busy === "all" ? "동기화 중…" : "전체 동기화"}</Button>
+              <Button variant="outline" size="sm" icon="download" onClick={() => runSync("import")} disabled={Boolean(busy)} active={busy === "import"}>시트→DB import</Button>
+              <Button variant="outline" size="sm" icon="check" onClick={() => runSync("promote")} disabled={Boolean(busy)} active={busy === "promote"}>승격(dedupe)</Button>
+              <Button variant="outline" size="sm" icon="upload" onClick={() => runSync("push")} disabled={Boolean(busy)} active={busy === "push"}>DB→시트 push</Button>
+              <Button variant="ghost" size="sm" icon="link" onClick={connect} disabled={Boolean(busy)}>재연결</Button>
             </div>
-            {msg && (
-              <div role="status" aria-live="polite" style={{ marginTop: 10, fontSize: 12, color: msg.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)', display: "flex", alignItems: "center", gap: 6 }}>
-                <Dot tone={msg.tone === 'danger' ? 'danger' : 'neutral'} />
-                {msg.text}
-              </div>
-            )}
           </>
+        )}
+        {msg && (
+          <div role="status" aria-live="polite" style={{ marginTop: 10, fontSize: 12, color: msg.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)', display: "flex", alignItems: "center", gap: 6 }}>
+            <Dot tone={msg.tone === 'danger' ? 'danger' : 'neutral'} />
+            {msg.text}
+          </div>
         )}
       </Card>
 
       {/* Recent sync runs */}
       <SectionTitle>최근 동기화</SectionTitle>
       <Card pad={false} className="hub-table-card">
-        {recentRuns.length === 0 ? (
+        {loading ? <div style={{ padding: 16 }}><Skeleton lines={2} label="동기화 이력 읽는 중" /></div> : readFailed || failedSources.includes("sync_runs") ? (
+          <EmptyState icon="runs" title="동기화 이력을 확인하지 못했습니다" description="실제 이력이 있을 수 있습니다. 다시 읽은 뒤 확인하세요." action={<Button variant="outline" size="sm" onClick={load}>다시 읽기</Button>} />
+        ) : recentRuns.length === 0 ? (
           <EmptyState
             icon="runs"
             title="동기화 이력이 없습니다"

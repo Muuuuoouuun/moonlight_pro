@@ -1580,8 +1580,11 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
 
   // Sync local deals state when live data arrives
   React.useEffect(() => {
+    // invalidate의 빈 loading 스냅샷은 목록 결과가 아니다. 다른 딜을 편집하는
+    // 동안 저장 ACK가 와도 그 드로어와 아직 저장하지 않은 입력을 유지한다.
+    if (syncState === 'loading') return;
     setDeals(previous => mergeRevenueDrafts(ledger.deals, previous.filter(row => String(row.id).toLowerCase().startsWith('local-'))));
-  }, [ledger.deals]);
+  }, [ledger.deals, syncState]);
 
   // 드로어 편집은 드래프트 오버레이로 격리 — 이전에는 키스트로크마다 setDeals(전체 배열
   // re-map)로 보드 전체가 재계산됐다(system-eval P-6, 이 파일 memo 0개). 보드는 저장
@@ -1614,7 +1617,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: nextHidden } : d)));
     if (!String(id).toLowerCase().startsWith('local-')) {
       saveRevenueRecord('deal', 'update', { id, hidden: nextHidden }).then((r) => {
-        if (r.ok) return;
+        if (r.ok) { void reloadLedger(); return; }
         // 실패한 낙관 토글은 되돌리고 명명한다 — 새로고침 때 말없이 스냅백하던 경로.
         setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: !nextHidden } : d)));
         setBoardNotice({ tone: 'err', label: `숨김 상태 저장 실패 (${r.status})` });
@@ -1682,7 +1685,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       pendingStageRef.current.delete(key);
       setBoardNotice(cur => (cur?.key === key ? null : cur)); // 창 종료 시 알림 소거(19차 수명 계약)
       saveRevenueRecord('deal', 'update', { id, stage: to }).then((r) => {
-        if (r.ok) return;
+        if (r.ok) { void reloadLedger(); return; }
         setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
         setBoardNotice({ tone: 'err', label: `스테이지 이동 저장 실패 (${r.status}) — 원위치로 되돌렸습니다` });
         if (showDealConflict(r)) return;
@@ -1724,7 +1727,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
     scheduleUndoable(key, () => {
       pendingCloseRef.current.delete(key);
       saveRevenueRecord('deal', 'update', { id, closeAt: next, ...(planBaseline ? { planBaseline } : {}) }).then((r) => {
-        if (r.ok) return;
+        if (r.ok) { void reloadLedger(); return; }
         restore();
         if (showDealConflict(r)) return;
         toast.error(r.status === 'preview'
@@ -1758,6 +1761,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       pendingPaymentsRef.current.delete(key);
       saveRevenueRecord('deal', 'update', { id, payments: nextPayments }).then((r) => {
         if (r.ok) {
+          void reloadLedger();
           toast.success(label);
           return;
         }
@@ -1792,7 +1796,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
     scheduleUndoable(key, () => {
       pendingRecurringRef.current.delete(key);
       saveRevenueRecord('deal', 'update', { id, recurring: nextRecurring }).then((r) => {
-        if (r.ok) return;
+        if (r.ok) { void reloadLedger(); return; }
         restore();
         if (showDealConflict(r)) return;
         toast.error(r.status === 'preview'
@@ -1873,6 +1877,9 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), ...(planBaseline ? { planBaseline } : {}), id: realId } : d)));
       setDealDrafts(prev => { if (!prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
       if (isNew && r.id) setEditDealId(realId);
+      // 공용 캐시의 이전 GET을 취소하고 새로 읽는다. 저장 직전 시작한 응답이나
+      // 다른 매출 탭의 오래된 스냅샷이 방금 확인한 값을 되돌려 보이면 안 된다.
+      void reloadLedger();
       toast.success(isNew ? '새 딜을 저장했습니다.' : '딜 정보를 저장했습니다.');
     } else {
       if (isNew || !showDealConflict(r)) notifyRevenueSaveFailure(toast, r, r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '딜 저장에 실패했습니다.');
@@ -1897,6 +1904,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       setDeals(ds => (ds.some(d => d.id === id) ? ds : [removed, ...ds])); // preview 포함 복원(7차)
       toast.error('딜 삭제에 실패하여 복원했습니다.');
     } else {
+      if (r.ok) void reloadLedger();
       toast.info('딜을 삭제했습니다.');
     }
     return r;

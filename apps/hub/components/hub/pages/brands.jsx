@@ -437,7 +437,7 @@ export function Brands({ onNavigate, onGuidanceAsk }) {
       if (data.status === "preview") {
         // Engine 미설정 — 저장되지 않은 브랜드를 목록에 그리지 않는다.
         setSaveNote({ tone: "warn", label: "Engine 미설정 · 저장되지 않았습니다" });
-        return { ok: true, status: "preview" };
+        return { ok: false, status: "preview", message: "Engine 연결이 없어 브랜드가 저장되지 않았습니다. 입력을 유지했으니 연결 후 다시 시도하세요." };
       }
       setSaveNote({ tone: "err", label: data.error || `저장 실패 ${response.status}` });
       return { ok: false, status: data.status || "error" };

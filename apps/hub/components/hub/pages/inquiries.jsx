@@ -13,14 +13,14 @@ import './inquiries.css';
 const FILTERS = [{ key: 'active', label: '진행 중' }, { key: 'unread', label: '미확인' }, { key: 'closed', label: '완료' }, { key: 'ignored', label: '제외' }, { key: 'all', label: '전체' }];
 const blankDraft = () => ({ subject: '', body: '', contact_name: '', contact_email: '', contact_phone: '', kind: 'general', org_scope: 'unclassified' });
 
-function InquiryFields({ draft, setDraft, create = false }) {
+function InquiryFields({ draft, setDraft, create = false, classificationOnly = false }) {
   const field = key => ({ value: draft[key] || '', onChange: e => setDraft(d => ({ ...d, [key]: e.target.value })) });
   return <>
-    <TextField label="제목" required maxLength={300} {...field('subject')} />
-    {create && <TextAreaField label="문의 내용" required rows={7} maxLength={20000} {...field('body')} />}
-    <TextField label="이름" maxLength={160} {...field('contact_name')} />
-    <TextField label="이메일" type="email" maxLength={254} {...field('contact_email')} />
-    <TextField label="연락처" type="tel" maxLength={80} {...field('contact_phone')} />
+    <TextField label="제목" disabled={classificationOnly} required maxLength={300} {...field('subject')} />
+    {create && <TextAreaField label="문의 내용" disabled={classificationOnly} required rows={7} maxLength={20000} {...field('body')} />}
+    <TextField label="이름" disabled={classificationOnly} maxLength={160} {...field('contact_name')} />
+    <TextField label="이메일" disabled={classificationOnly} type="email" maxLength={254} {...field('contact_email')} />
+    <TextField label="연락처" disabled={classificationOnly} type="tel" maxLength={80} {...field('contact_phone')} />
     <SelectField label="문의 유형" options={optionsFor(INQUIRY_KINDS)} {...field('kind')} />
     <SelectField label="업무 구분" options={optionsFor(INQUIRY_SCOPES).filter(o => o.value !== 'all')} {...field('org_scope')} />
     {!create && <>
@@ -61,21 +61,36 @@ function CreateInquiry({ onClose, onSaved, scope }) {
   const [draft, setDraft] = React.useState(() => ({ ...blankDraft(), org_scope: scope === 'all' ? 'unclassified' : scope }));
   const idempotencyKey = React.useRef(null);
   const receivedAt = React.useRef(null);
+  const draftRef = React.useRef(draft);
+  draftRef.current = draft;
+  const [existing, setExisting] = React.useState(null);
+  const sending = React.useRef(false);
   const [busy, setBusy] = React.useState(false), [error, setError] = React.useState('');
   const save = async e => {
-    e.preventDefault(); if (busy) return;
+    e.preventDefault(); if (sending.current) return;
+    sending.current = true;
     setBusy(true); setError('');
     idempotencyKey.current ||= crypto.randomUUID();
     receivedAt.current ||= new Date().toISOString();
     try {
-      const data = await writeInquiry({ action: 'ingest', externalEventId: idempotencyKey.current, receivedAt: receivedAt.current, subject: draft.subject.trim(), body: draft.body.trim(), contact: { name: draft.contact_name, email: draft.contact_email, phone: draft.contact_phone }, kind: draft.kind, orgScope: draft.org_scope });
+      const data = await writeInquiry(existing
+        ? { action: 'update', id: existing.id, expectedUpdatedAt: existing.updated_at, patch: { kind: draft.kind, org_scope: draft.org_scope } }
+        : { action: 'ingest', externalEventId: idempotencyKey.current, receivedAt: receivedAt.current, subject: draft.subject.trim(), body: draft.body.trim(), contact: { name: draft.contact_name, email: draft.contact_email, phone: draft.contact_phone }, kind: draft.kind, orgScope: draft.org_scope });
+      const saved = data.inquiry;
+      // 재시도 duplicate는 첫 등록의 영수증이다. 분류는 event identity 밖이라
+      // 지금 선택한 유형·업무 구분이 다르면 성공으로 닫지 않고 명시 저장을 받는다.
+      if (saved && (saved.kind !== draftRef.current.kind || saved.org_scope !== draftRef.current.org_scope)) {
+        setExisting(saved);
+        setError('처음 등록한 문의는 저장돼 있어요. 지금 선택한 문의 유형·업무 구분은 아직 반영되지 않았습니다. 입력을 유지했으니 변경 저장을 눌러 주세요.');
+        return;
+      }
       onSaved(data.inquiry?.id);
     } catch (e) { setError(e.message); }
-    finally { setBusy(false); }
+    finally { sending.current = false; setBusy(false); }
   };
-  return <Drawer title="문의 직접 등록" onClose={busy ? undefined : onClose} width="min(540px, 94vw)" footer={<Button type="submit" form="create-inquiry" variant="primary" disabled={busy}>{busy ? '저장 중…' : '문의 등록'}</Button>}>
+  return <Drawer title="문의 직접 등록" onClose={busy ? undefined : onClose} width="min(540px, 94vw)" footer={<Button type="submit" form="create-inquiry" variant="primary" disabled={busy}>{busy ? '저장 중…' : existing ? '변경 저장' : '문의 등록'}</Button>}>
     <form id="create-inquiry" className="inquiry-form" onSubmit={save}>
-      <InquiryFields draft={draft} setDraft={setDraft} create />
+      <InquiryFields draft={draft} setDraft={setDraft} create classificationOnly={Boolean(existing)} />
       {error && <p className="inquiry-error" role="alert">{error}</p>}
     </form>
   </Drawer>;

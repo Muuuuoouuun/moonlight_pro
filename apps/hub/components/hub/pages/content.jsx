@@ -12,7 +12,7 @@ import { ContentStudio } from "./content-studio";
 import { businessTruthCompleteness, buildWeeklyScorecard, normalizeCampaignBusinessTruth } from "@/lib/campaign-business-truth";
 import { ContentIdeaCapture } from "./content-idea-capture";
 import { contentQueueScope, contentQueueTabs } from "@/lib/content-workflow";
-import { useContentLedger, readContentLedger } from "../use-content-ledger";
+import { useContentLedger, readContentLedger, refreshContentLedger } from "../use-content-ledger";
 import { campaignStudioHref } from '@/lib/content-studio-routing';
 import { resolveContentView } from '@/lib/content-flow';
 import { ContentFlow, ContentPageHead } from './content-flow';
@@ -659,8 +659,12 @@ export function Campaigns() {
   const [focusMode, setFocusMode] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const [createError, setCreateError] = React.useState(null);
+  const [needsCreateCheck, setNeedsCreateCheck] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const creatingLock = React.useRef(false);
 
   React.useEffect(() => {
+    if (ledger.syncState === 'loading') return;
     const nextCampaigns = Array.isArray(ledger.campaigns) ? ledger.campaigns : [];
     setCampaigns(nextCampaigns);
     setSelectedId((prev) => (nextCampaigns.some((c) => c.id === prev) ? prev : nextCampaigns[0]?.id || null));
@@ -702,6 +706,7 @@ export function Campaigns() {
           ? { ...campaign, businessTruth: persistedTruth, updatedAt: data?.campaign?.updatedAt || campaign.updatedAt }
           : campaign
       )));
+      void refreshContentLedger();
       return { ok: true };
     } catch {
       return { ok: false, message: '전략 저장 실패 — 네트워크를 확인하고 다시 시도하세요.' };
@@ -709,53 +714,57 @@ export function Campaigns() {
   }, [selected?.id]);
 
   const createCampaign = async () => {
-    if (creating) return;
+    if (creatingLock.current || needsCreateCheck || refreshing) return;
+    creatingLock.current = true;
     setCreating(true);
-    const localId = `local-campaign-${Date.now()}`;
-    const next = {
-      id: localId,
-      name: '새 캠페인',
-      status: 'Draft',
-      channels: ['Email'],
-      progress: 0,
-      end: '미정',
-      goal: '목표 설정',
-      current: 0,
-    };
-    setCampaigns(prev => [next, ...prev]);
-    setSelectedId(localId);
-    setTab('pulse');
-    setFocusMode(true);
+    setCreateError(null);
     try {
       const res = await fetch('/api/hub/campaigns', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ op: 'create', name: next.name, channels: next.channels }),
+        body: JSON.stringify({ op: 'create', name: '새 캠페인', channels: ['Email'] }),
+        signal: AbortSignal.timeout(15000),
       });
       const data = await res.json().catch(() => null);
-      if (data?.status === 'saved' && data?.campaign?.id) {
+      if (res.ok && data?.status === 'saved' && data?.campaign?.id) {
         const savedId = data.campaign.id;
-        setCampaigns(prev => prev.map(c => (c.id === localId ? { ...c, ...data.campaign, id: savedId } : c)));
+        setCampaigns(prev => [data.campaign, ...prev.filter(c => c.id !== savedId)]);
         setSelectedId(savedId);
+        const nextParams = new URLSearchParams(campaignParams.toString());
+        nextParams.set('campaign', savedId);
+        router.replace(`/dashboard/content/campaigns?${nextParams}`, { scroll: false });
+        setTab('pulse'); setFocusMode(true);
+        // Abort pre-save reads before they can replace this confirmed row with an older snapshot.
+        void refreshContentLedger();
       } else {
-        setCampaigns(prev => prev.filter(c => c.id !== localId));
-        setSelectedId(null);
-        setFocusMode(false);
-        setCreateError(`캠페인 생성 실패 (${data?.status || res.status}) — 다시 시도하세요.`);
+        const rejected = res.status < 500 && ['preview', 'error'].includes(data?.status);
+        setNeedsCreateCheck(!rejected);
+        setCreateError(rejected ? `캠페인이 저장되지 않았습니다 (${data.status}). 연결이나 입력을 확인해 주세요.`
+          : '캠페인 생성 결과를 확인하지 못했습니다. 중복 생성을 피하려면 먼저 생성 여부를 확인해 주세요.');
       }
     } catch {
-      setCampaigns(prev => prev.filter(c => c.id !== localId));
-      setSelectedId(null);
-      setFocusMode(false);
-      setCreateError('캠페인 생성 실패 — 네트워크를 확인하고 다시 시도하세요.');
+      setNeedsCreateCheck(true);
+      setCreateError('캠페인 생성 결과를 확인하지 못했습니다. 중복 생성을 피하려면 먼저 생성 여부를 확인해 주세요.');
     } finally {
+      creatingLock.current = false;
       setCreating(false);
     }
+  };
+  const refreshCampaigns = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const result = await refreshContentLedger();
+      if (needsCreateCheck && result.syncState === 'live') {
+        setNeedsCreateCheck(false);
+        setCreateError('최근 목록에서 방금 만든 캠페인이 있는지 확인해 주세요. 없으면 새로 만들 수 있습니다.');
+      }
+    } finally { setRefreshing(false); }
   };
   const createCampaignRef = React.useRef(createCampaign);
   createCampaignRef.current = createCampaign;
   const creatingRef = React.useRef(creating);
-  creatingRef.current = creating;
+  creatingRef.current = creating || needsCreateCheck || refreshing;
   const createCampaignHotkey = React.useCallback(() => {
     if (!creatingRef.current) createCampaignRef.current();
   }, []);
@@ -795,19 +804,23 @@ export function Campaigns() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={() => { setCreateError(null); createCampaign(); }} disabled={creating}>Campaign <Kbd>N</Kbd></Button>
+        <Button variant="outline" size="sm" onClick={refreshCampaigns} disabled={creating || refreshing}>{needsCreateCheck ? '생성 여부 확인' : '목록 새로고침'}</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating || needsCreateCheck || refreshing}>Campaign <Kbd>N</Kbd></Button>
       </div>
 
       {createError && (
         <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', padding: '0 2px' }}>{createError}</div>
       )}
 
-      {!selected && (
+      {ledger.syncState === 'error' && <EmptyState icon="campaigns" title="캠페인 목록을 읽지 못했습니다" description="생성 결과와 현재 목록을 확인하려면 다시 불러와 주세요." action={<Button onClick={refreshCampaigns} disabled={refreshing}>다시 불러오기</Button>} />}
+      {ledger.syncState === 'partial' && <p role="status" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>목록을 일부만 확인했습니다. 최신 캠페인이 보이지 않으면 목록을 다시 불러와 주세요.</p>}
+      {!selected && ledger.syncState === 'loading' && <Skeleton lines={4} label="캠페인 목록 불러오는 중" />}
+      {!selected && ledger.syncState !== 'loading' && ledger.syncState !== 'error' && (
         <EmptyState
           icon="campaigns"
-          title="캠페인이 없습니다"
-          description={ledger.syncState === 'live' ? 'Supabase campaigns 기록이 비어 있습니다.' : '캠페인을 만들면 war room에 표시됩니다.'}
-          action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>}
+          title={ledger.syncState === 'preview' ? '캠페인 저장소 연결이 필요합니다' : ledger.syncState === 'partial' ? '불러온 목록에서 캠페인을 확인하지 못했습니다' : '캠페인이 없습니다'}
+          description={ledger.syncState === 'live' ? 'Supabase campaigns 기록이 비어 있습니다.' : ledger.syncState === 'partial' ? '목록을 일부만 확인했습니다. 다시 불러와 주세요.' : '연결과 목록을 확인한 뒤 캠페인을 만들 수 있습니다.'}
+          action={ledger.syncState === 'partial' ? <Button onClick={refreshCampaigns} disabled={refreshing}>다시 불러오기</Button> : <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating || needsCreateCheck || refreshing}>Campaign</Button>}
         />
       )}
 

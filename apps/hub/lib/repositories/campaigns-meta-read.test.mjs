@@ -156,14 +156,15 @@ test('the actual route and strategy save handlers retain the draft on read failu
   const draft = { ...command.payload.businessTruth };
   let campaigns = [{ id: 'campaign-test', businessTruth: { primaryMetric: 'old metric' } }];
   let editing = true, saveState = 'idle', feedback = '';
+  let refreshes = 0;
   const responses = [];
-  const onSave = new Function('selected', 'fetch', 'normalizeCampaignBusinessTruth', 'setCampaigns', `return ${callback.getText(contentAst)}`)(
+  const onSave = new Function('selected', 'fetch', 'normalizeCampaignBusinessTruth', 'setCampaigns', 'refreshContentLedger', `return ${callback.getText(contentAst)}`)(
     campaigns[0], async (url, options) => {
       if (url !== '/api/hub/campaigns') state.unexpected.push(url);
       const response = await POST(new Request('http://synthetic.local/api/hub/campaigns', options));
       responses.push(response.status);
       return response;
-    }, normalizeCampaignBusinessTruth, update => { campaigns = update(campaigns); });
+    }, normalizeCampaignBusinessTruth, update => { campaigns = update(campaigns); }, async () => { refreshes++; });
   const submit = () => new Function('saveState', 'setSaveState', 'setFeedback', 'setEditing', 'onSave', 'draft', `return ${saveNode.getText(contentAst)}`)(
     saveState, value => { saveState = value; }, value => { feedback = value; }, value => { editing = value; }, onSave, draft)({ preventDefault() {} });
   state.rows = null;
@@ -171,6 +172,7 @@ test('the actual route and strategy save handlers retain the draft on read failu
   assert.equal(state.updates.length, 0);
   assert.deepEqual(responses, [502]);
   assert.equal(saveState, 'error');
+  assert.equal(refreshes, 0);
   assert.equal(editing, true);
   assert.match(feedback, /저장 실패/);
   assert.equal(campaigns[0].businessTruth.primaryMetric, 'old metric');
@@ -180,6 +182,7 @@ test('the actual route and strategy save handlers retain the draft on read failu
   assert.deepEqual(responses, [502, 200]);
   assert.equal(state.updates.length, 1);
   assert.equal(saveState, 'saved');
+  assert.equal(refreshes, 1);
   assert.equal(editing, false);
   assert.equal(campaigns[0].businessTruth.primaryMetric, 'Synthetic metric');
   assert.deepEqual(state.updates[0].patch.meta.channels, ['Email']);

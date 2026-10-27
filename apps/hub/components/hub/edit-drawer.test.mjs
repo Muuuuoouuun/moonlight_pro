@@ -66,6 +66,19 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
 
 const button = (app, label) => app.findAll(node => node.type === 'Button' && node.props.children.includes(label))[0];
 
+for (const message of [undefined, 'Engine 연결이 없어 저장되지 않았습니다. 입력을 유지했습니다.']) test(`preview keeps input and reports an unsaved draft${message ? ' with provider guidance' : ''}`, async t => {
+  const app = mount({ onSave: async () => ({ ok: false, status: 'preview', message }) });
+  t.after(app.unmount);
+  app.findAll(node => node.type === 'textarea')[0].props.onChange({ target: { value: '연결 후 저장할 입력' } });
+  app.render(); app.key(); await Promise.resolve(); app.render();
+  assert.equal(app.closed(), 0);
+  assert.equal(app.findAll(node => node.type === 'textarea')[0].props.value, '연결 후 저장할 입력');
+  const feedback = JSON.stringify(app.findAll(node => node.type === 'span'));
+  assert.match(feedback, /저장되지 않았습니다/);
+  assert.doesNotMatch(feedback, /로컬에만 반영/);
+  if (message) assert.ok(feedback.includes(message));
+});
+
 test('conflict keeps the drawer and input open with explicit retry guidance', async t => {
   const app = mount({ onSave: async () => ({ ok: false, status: 'conflict' }) });
   t.after(app.unmount);

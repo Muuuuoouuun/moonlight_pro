@@ -141,44 +141,33 @@ export function AgentsChat({ onNavigate }) {
   }, []);
 
   // Run a real execution or advice pass against Persona / Council
-  const runPersona = React.useCallback(async (personaId, mode, userText, { lens = null, draft = null } = {}) => {
+  const runPersona = React.useCallback(async (personaId, mode, userText, { lens = null, draft = null, convene = false } = {}) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     const agentName = CHAT_PERSONAS[personaId]?.name || personaId;
+    const pendingMessage = { role: 'agent', name: agentName, pending: true };
     setThread(prev => [
       ...prev,
-      { role: 'user', text: userText },
-      { role: 'agent', name: agentName, pending: true },
+      ...(convene ? [] : [{ role: 'user', text: userText }]),
+      pendingMessage,
     ]);
-    const r = await requestPersonaChat({
-      personaId,
-      mode,
-      lens,
-      message: userText,
-      draft,
-    });
-    setThread(prev => {
-      const next = prev.slice();
-      for (let i = next.length - 1; i >= 0; i--) {
-        if (next[i].pending) {
-          next[i] = {
-            role: 'agent',
-            name: agentName,
-            text:
-              r.state === 'done'
-                ? r.text
-                : r.state === 'preview'
-                ? (r.note || 'Engine이 연결되지 않아 preview 상태입니다.')
-                : `응답을 생성하지 못했어요: ${r.note || ''}`,
-          };
-          break;
-        }
-      }
-      return next;
-    });
-    busyRef.current = false;
-    setBusy(false);
+    try {
+      const r = await requestPersonaChat({ personaId, mode, lens, message: userText, draft });
+      const text = convene
+        ? r.state === 'done'
+          ? `【Council 종합 회의 (Convene)】\n5개 실행 페르소나 및 기록 상황을 종합 검토했습니다.\n\n${r.text}`
+          : `【Council 종합 회의】\n${r.note || '자문을 생성하지 못했습니다.'}`
+        : r.state === 'done' ? r.text : r.state === 'preview'
+          ? (r.note || 'Engine이 연결되지 않아 preview 상태입니다.')
+          : `응답을 생성하지 못했어요: ${r.note || ''}`;
+      // Only replace the placeholder created by this request. Preserve every
+      // existing/follow-up message rather than resetting the whole thread.
+      setThread(prev => prev.map(message => message === pendingMessage ? { role: 'agent', name: agentName, text } : message));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }, []);
 
   const handleSaveTask = React.useCallback(async (message, text, kind = 'task') => {
@@ -239,26 +228,11 @@ export function AgentsChat({ onNavigate }) {
     if (prompt === 'council') {
       setAgentKey('council');
       setActiveMode('sparring');
-      setThread([{ role: 'agent', name: 'Council', pending: true }]);
       setConversations(prev => [
         { name: 'Council Convene 회의', agent: 'Council', time: '지금', active: true },
         ...prev.map(c => ({ ...c, active: false })),
       ]);
-      requestPersonaChat({
-        personaId: 'council',
-        mode: 'sparring',
-        message: '현재 5대 페르소나 현황 및 비즈니스 기록을 종합 진단하고 전략적 합의를 도출하라.',
-      }).then(r => {
-        setThread([
-          {
-            role: 'agent',
-            name: 'Council',
-            text: r.state === 'done'
-              ? `【Council 종합 회의 (Convene)】\n5개 실행 페르소나 및 기록 상황을 종합 검토했습니다.\n\n${r.text}`
-              : `【Council 종합 회의】\n${r.note || '자문을 생성하지 못했습니다.'}`,
-          },
-        ]);
-      });
+      runPersona('council', 'sparring', '현재 5대 페르소나 현황 및 비즈니스 기록을 종합 진단하고 전략적 합의를 도출하라.', { convene: true });
       return;
     }
 
@@ -293,7 +267,7 @@ export function AgentsChat({ onNavigate }) {
 
   const send = () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busyRef.current) return;
     setInput('');
     if (agentKey === 'guru') {
       const mode = activeMode === 'advice' ? 'open-question'
@@ -313,6 +287,7 @@ export function AgentsChat({ onNavigate }) {
   };
 
   const startConversation = () => {
+    if (busyRef.current) return;
     setConversations(prev => [
       { name: '새 대화', agent: persona.name, time: '지금', active: true },
       ...prev.map(c => ({ ...c, active: false })),
@@ -327,7 +302,7 @@ export function AgentsChat({ onNavigate }) {
       <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>Conversations</span>
-          <IconButton icon="plus" size={24} iconSize={13} tooltip="New conversation" onClick={startConversation} />
+          <IconButton icon="plus" size={24} iconSize={13} tooltip="New conversation" disabled={busy} onClick={startConversation} />
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
           {conversations.map((c, i) => (
