@@ -2,10 +2,12 @@
 import {fileURLToPath} from 'node:url';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
+import {loadMcpEnv,mcpChildEnv} from './env.js';
 
 function dataOf(result){if(result.structuredContent)return result.structuredContent;const text=result.content.find(item=>item.type==='text')?.text||'';try{return JSON.parse(text);}catch{return {status:'error',error:text.slice(0,200)};}}
 const client=new Client({name:'moonlight-doctor',version:'0.2.0'},{capabilities:{}});
-const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>key.startsWith('COM_MOON_')||['PATH','HOME','TMPDIR','SYSTEMROOT'].includes(key)));
+const env=mcpChildEnv();
+loadMcpEnv({env});
 env.COM_MOON_MCP_PROFILE='core';
 const transport=new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('./index.js',import.meta.url))],env,stderr:'pipe'});
 const report={configured:{hub:Boolean(env.COM_MOON_HUB_URL),agentToken:Boolean(env.COM_MOON_AGENT_API_TOKEN),legacyWriteSecret:Boolean(env.COM_MOON_HUB_WRITE_SECRET)},discovered:false,tools:[],read:null,capabilities:null};

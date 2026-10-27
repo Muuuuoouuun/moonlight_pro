@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import {createHttpHandler,clientStore} from './http.js';
+import {createHttpHandler,clientStore,startHttpServer} from './http.js';
 import {createClient,revokeClient} from './clients.js';
 
 const HUB_TOKEN='fixture-agent-token';
@@ -102,15 +102,13 @@ test('URL tokens work only for clients created with allowUrl',async t=>{
   assert.equal(h.logs.some(line=>line.includes(url.token)),false);
 });
 
-test('URL-token access stays read-only even if the registry is edited by hand',async t=>{
+test('an edited URL-token grant cannot turn into a header write grant',async t=>{
   const h=await harness(t);
   const {token}=createClient(h.file,{name:'edited',profile:'core',readOnly:true,allowUrl:true});
   const {readFileSync,writeFileSync}=await import('node:fs');
   const data=JSON.parse(readFileSync(h.file,'utf8'));data.clients[0].readOnly=false;writeFileSync(h.file,JSON.stringify(data));
-  const viaUrl=await h.connect(null,{path:`${h.url}/${token}`});
-  assert.equal((await viaUrl.listTools()).tools.some(tool=>tool.name==='create_task'),false);
-  const viaHeader=await h.connect(token);
-  assert.equal((await viaHeader.listTools()).tools.some(tool=>tool.name==='create_task'),true);
+  assert.equal((await h.raw({path:`/mcp/${token}`,body:INIT})).status,401);
+  assert.equal((await h.raw({body:INIT,headers:{authorization:`Bearer ${token}`}})).status,401);
 });
 
 test('revoking a client takes effect on the next request without a restart',async t=>{
@@ -145,4 +143,21 @@ test('an unreadable registry fails closed',async t=>{
   const {writeFileSync}=await import('node:fs');
   writeFileSync(h.file,'{not json');
   assert.equal((await h.raw({body:INIT,headers:{authorization:`Bearer ${token}`}})).status,401);
+});
+
+test('malformed authorization never falls back to a URL token and audit lines cannot be forged',async t=>{
+  const h=await harness(t);const {token}=createClient(h.file,{name:'audit',readOnly:true,allowUrl:true});
+  assert.equal((await h.raw({path:`/mcp/${token}`,body:INIT,headers:{authorization:'Basic invalid'}})).status,401);
+  await h.raw({body:JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'forged\nclient=admin',arguments:{token}}}),headers:{authorization:`Bearer ${token}`}});
+  assert.equal(h.logs.some(line=>line.includes('client=admin')||line.includes(token)),false);
+  assert.ok(h.logs.some(line=>line.includes('tools/call:invalid')));
+  await h.raw({body:JSON.stringify(Array.from({length:200},()=>({jsonrpc:'2.0',id:3,method:'bounded'.repeat(9)}))),headers:{authorization:`Bearer ${token}`}});
+  const batch=h.logs.find(line=>line.includes('additional-calls=184'));
+  assert.ok(batch);assert.ok(batch.length<1500);
+});
+
+test('the HTTP listener bounds slow requests and simultaneous connections',async()=>{
+  const server=await startHttpServer({port:0,env:{COM_MOON_MCP_CLIENTS_FILE:join(tmpdir(),'missing-moonlight-clients.json')},log:()=>{}});
+  try{assert.equal(server.requestTimeout,15000);assert.equal(server.headersTimeout,10000);assert.equal(server.maxConnections,128);}
+  finally{await new Promise(resolve=>server.close(resolve));}
 });

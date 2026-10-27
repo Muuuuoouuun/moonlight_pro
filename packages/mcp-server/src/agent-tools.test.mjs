@@ -103,6 +103,19 @@ test('core profile is small and all profile retains legacy aliases',()=>{
   assert.throws(()=>registry({profile:'misspelled'}),/profile/i);
 });
 
+test('integration profile exposes only read-only diagnostics with bounded selectors',async t=>{
+  setup(t,async(url,options)=>{
+    assert.equal(String(url),'http://localhost:3000/api/agent/v1/integrations?brandKey=studyseagull&limit=1');
+    assert.equal(options.method,'GET');return response({status:'live',verification:'stored-metadata',data:{connections:[]}});
+  });
+  const tools=registry({mode:'agent',profile:'integrations'});
+  assert.deepEqual([...tools.keys()].sort(),['get_api_connections','get_hub_health']);
+  const tool=tools.get('get_api_connections');assert.equal(tool.definition.annotations.readOnlyHint,true);
+  assert.equal(tool.definition.inputSchema.limit.safeParse(101).success,false);
+  assert.equal(tool.definition.inputSchema.brandKey.safeParse('x,y').success,false);
+  assert.equal((await tool.handler({brandKey:'studyseagull',limit:1})).structuredContent.verification,'stored-metadata');
+});
+
 test('local skill MCP tools read the exact request and record evidence without a task mutation', async t => {
   const sent = [];
   setup(t, async (url, init) => { sent.push({ url: String(url), method: init.method, body: init.body && JSON.parse(init.body) });

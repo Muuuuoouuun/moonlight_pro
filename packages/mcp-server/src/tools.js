@@ -5,6 +5,7 @@ import {registerAgentTools} from './agent-tools.js';
 import {hasAgentToken} from './agent-client.js';
 import {projectLegacyPayload} from './legacy-projection.js';
 import {projectWeeklyPayload} from './weekly-projection.js';
+import {sanitizeToolResult} from './transport-security.js';
 export {errorResult} from './legacy-tools.js';
 
 const PROFILES={
@@ -14,6 +15,7 @@ const PROFILES={
   sales:['get_hub_health','list_followups','list_work_orders','get_work_order','record_contact_outcome','get_command_receipt','get_revenue'],
   content:['get_hub_health','get_content_queue','create_campaign'],
   jobs:['get_hub_health','list_codex_projects','list_codex_jobs','get_codex_job','start_codex_job','cancel_codex_job','resume_codex_job'],
+  integrations:['get_hub_health','get_api_connections'],
 };
 export const PROFILE_NAMES=[...Object.keys(PROFILES),'all'];
 // Export defaults preserve embedding clients; CLI explicitly selects the small core profile.
@@ -34,6 +36,6 @@ export function registerMoonlightTools(server,{profile='all',mode='auto',readOnl
   registerAssistanceTools(collector);
   const allowed=profile==='all'?null:new Set(PROFILES[profile]);
   const selected=[...tools].filter(([name,{definition}])=>(!allowed||allowed.has(name))&&(!readOnly||definition.annotations?.readOnlyHint===true));
-  for(const [name,{definition,handler}] of selected)server.registerTool(name,definition,handler);
+  for(const [name,{definition,handler}] of selected)server.registerTool(name,definition,async args=>sanitizeToolResult(await handler(args)));
   return selected.map(([name])=>name);
 }

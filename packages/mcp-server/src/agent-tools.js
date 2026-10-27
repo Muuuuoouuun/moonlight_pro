@@ -14,6 +14,10 @@ function register(server,name,description,inputSchema,handler,{write=false,idemp
 }
 export function registerAgentTools(server,{replaceLegacy=true}={}){
   register(server,'get_hub_health','Check Agent API authentication, sources, granted actions, and worker availability. No writes.',{},async()=>output(await agentRequest('/capabilities')));
+  register(server,'get_api_connections','Read bounded connection metadata and dedicated Meta app readiness. No credentials, provider requests, refresh or publishing. Requires read. Token state is stored metadata, not live provider verification.',{
+    brandKey:z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).optional(),provider:z.enum(['instagram_api','meta_threads','youtube']).optional(),
+    limit:z.number().int().min(1).max(100).optional(),offset:z.number().int().min(0).max(10000).optional(),
+  },async(args={})=>output(await agentRequest(`/integrations?${new URLSearchParams(Object.entries(args).filter(([,value])=>value!==undefined))}`)));
   const lists=[['list_tasks','tasks'],['list_projects','projects'],['list_followups','followups'],['list_work_orders','work-orders']];
   for(const [name,resource] of lists){
     if(!replaceLegacy&&['list_tasks','list_projects','list_work_orders'].includes(name))continue;

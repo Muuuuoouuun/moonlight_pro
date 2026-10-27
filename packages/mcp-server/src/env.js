@@ -9,6 +9,12 @@ export const DEFAULT_ENV_FILE=`${REPO_ROOT}/apps/hub/.env.local`;
 // Hub's .env.local also holds model/OAuth/DB secrets. The MCP process only needs these.
 export const MCP_ENV_KEY=/^COM_MOON_(HUB_URL|HUB_WRITE_SECRET|AGENT_API_TOKEN|MCP_[A-Z0-9_]+)$/;
 
+// Do not pass the shell's provider, database or model credentials to a diagnostic child.
+export function mcpChildEnv(source=process.env){
+  const runtimeKeys=new Set(['path','home','userprofile','tmpdir','tmp','temp','systemroot']);
+  return Object.fromEntries(Object.entries(source).filter(([key])=>MCP_ENV_KEY.test(key)||runtimeKeys.has(key.toLowerCase())));
+}
+
 export function loadMcpEnv({file,env=process.env}={}){
   const path=file||env.COM_MOON_MCP_ENV_FILE||DEFAULT_ENV_FILE;
   if(!existsSync(path))return {file:path,missing:true,loaded:[]};

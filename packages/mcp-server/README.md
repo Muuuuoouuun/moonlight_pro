@@ -40,20 +40,32 @@ Restart the MCP connection after changing its environment/profile.
 Read-only connection diagnosis:
 
 ```sh
-node --env-file=apps/hub/.env.local packages/mcp-server/src/doctor.js
+npm run mcp:doctor
 ```
 
-It initializes the actual stdio protocol, discovers tools and performs a small read. Output includes discovered tool count, status, payload bytes and latency; it excludes row content and credentials. It neither writes a business record nor starts a model. `npm run mcp:doctor` automatically loads the local Hub environment file when present.
+It initializes the actual stdio protocol, discovers tools and performs a small read. Output includes discovered tool count, status, payload bytes and latency; it excludes row content and credentials. It neither writes a business record nor starts a model. It loads only MCP keys from the local Hub environment file (or `COM_MOON_MCP_ENV_FILE`) and passes only MCP keys and runtime paths to its child, excluding database, provider and model credentials.
 
 ## Connecting AI clients
 
 Every client runs the same launcher, `bin/moonlight-mcp.js`, by absolute path. It finds the repository from its own location and reads `apps/hub/.env.local` itself, so a registration holds one path, no `cwd` and no `--env-file`. From that file it loads only `COM_MOON_HUB_URL`, `COM_MOON_HUB_WRITE_SECRET`, `COM_MOON_AGENT_API_TOKEN` and `COM_MOON_MCP_*`; model, OAuth and database secrets never enter the MCP process. Values already set in the client's `env` win over the file, and `COM_MOON_MCP_ENV_FILE` points at a different file.
 
 ```sh
-node packages/mcp-server/bin/moonlight-mcp.js [--profile core|pms|sales|content|jobs|assistant|all] [--read-only]
+node packages/mcp-server/bin/moonlight-mcp.js [--profile core|pms|sales|content|jobs|assistant|integrations|all] [--read-only]
 ```
 
 `--read-only` keeps only tools annotated `readOnlyHint`, in any profile. Registrations made with `src/index.js` and `--env-file` keep working unchanged. `mcp:connect install` treats only an `--env-file` pointing at Hub's `apps/hub/.env.local` as legacy; any other env file (such as a private file holding just `COM_MOON_HUB_URL` and `COM_MOON_AGENT_API_TOKEN`) is carried over as `COM_MOON_MCP_ENV_FILE`, so the write secret never gets loaded behind your back.
+
+### API connection diagnostics
+
+The `integrations` profile contains only `get_hub_health` and `get_api_connections`. The latter accepts optional `brandKey`, `provider` (`instagram_api`, `meta_threads`, `youtube`), `limit` (1–100, default 50) and `offset` (0–10000). It calls the authenticated, `read`-scoped `GET /api/agent/v1/integrations`; the core profile stays unchanged.
+
+The response explicitly says `verification: stored-metadata`. It reports dedicated Meta app readiness, app/account binding and expiry metadata; it never reads token values from the database, contacts a provider, refreshes a token or publishes content. `stored-active` means the saved expiry is in the future, not that a provider call succeeded. A YouTube access token can require refresh while its refresh grant remains valid. Follow `nextOffset` when `hasMore` is true; a truncated page is incomplete.
+
+### Credential and transport boundaries
+
+`COM_MOON_HUB_URL` must be an HTTPS origin, or an HTTP origin on `localhost`, `127.0.0.1` or `::1`. Userinfo, paths, queries and fragments are rejected before sending a credential. API requests stay on that origin, reject redirects and bound streamed responses (Agent: 128 KiB; legacy Hub: 512 KiB). Both MCP text and structured results redact provider credential fields and configured server credentials, while retaining non-secret presence/expiry metadata and signed assistance recovery receipts.
+
+HTTP client registries validate grant types, profiles and unique names/digests on every reload. An invalid registry rejects every client, including a hand-edited URL-token grant that tries to enable writes. Invalid Authorization headers cannot fall back to URL authentication. Audit logs accept only bounded method/tool identifiers and never echo exception bodies, request arguments or token values.
 
 `npm run mcp:connect` manages the `moonlight` entry in each client's own file:
 
@@ -126,7 +138,7 @@ Clients send `Authorization: Bearer <token>` with each POST.
 - **One token per external tool.** The token decides the profile and read-only status; a fresh server is built per request (stateless), so one client's grant never reaches another's tool list. `~/.moonlight/mcp/clients.json` (mode 0600, override `COM_MOON_MCP_CLIENTS_FILE`) stores SHA-256 digests only. `token list`, `token revoke <name>` — revocation applies to the running server on the next request. An unreadable registry rejects everything.
 - **Client tokens stop at the MCP process.** Hub calls use the MCP process's own `COM_MOON_AGENT_API_TOKEN`; Hub scopes still apply on top of the client's profile.
 - **Loopback by default.** Other bind addresses need `--host` and print a warning. `Host` must be loopback or listed in `COM_MOON_MCP_ALLOWED_HOSTS`; a request carrying `Origin` must match `COM_MOON_MCP_ALLOWED_ORIGINS` (empty by default). This blocks DNS rebinding from browser pages.
-- **Bounded.** POST only (GET/DELETE get 405, no server-initiated stream), 512 KiB bodies, 120 requests per minute per client (`COM_MOON_MCP_HTTP_RATE_PER_MIN`). `GET /healthz` answers without credentials and returns only name and version.
+- **Bounded.** POST only (GET/DELETE get 405, no server-initiated stream), 512 KiB bodies, 120 requests per minute per client (`COM_MOON_MCP_HTTP_RATE_PER_MIN`), 128 simultaneous connections and 1000 requests per socket. Request, header and keep-alive timeouts are 15, 10 and 5 seconds. `GET /healthz` answers without credentials and returns only name and version.
 - **Audit.** stderr gets one line per request with client name, JSON-RPC method and tool name, HTTP status and latency. Arguments, results and tokens are not logged.
 - **URL tokens, last resort.** Some hosted connectors have no field for headers. A client created with `--allow-url --read-only` may put its token in the path, `/mcp/<token>`. The URL then is the password and ends up in connector settings and proxy logs — [Claude's connector guidance](https://claude.com/docs/connectors/building/authentication) and the [MCP authorization spec](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#token-requirements) advise against credentials in URLs — so URL-token clients are always read-only (enforced at creation and per request). Revoke on any doubt.
 
