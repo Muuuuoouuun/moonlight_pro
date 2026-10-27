@@ -20,6 +20,8 @@ import {
 } from '@/lib/content-flow';
 import { useContentSchedule } from './use-content-schedule';
 import { ContentIdeaCapture } from './content-idea-capture';
+import { OfficeSessionContext } from '../office-session-provider';
+import { contentPlanKey, createContentPlanStore } from '@/lib/content-plan-store';
 import { postStudio } from './content-studio-api';
 import './content-flow.css';
 
@@ -89,14 +91,26 @@ const variantFor = (card, format) => {
   return primary?.type === format.type ? primary : card.variants.find((variant) => variant.type === format.type) || null;
 };
 
-function usePlanDrafts() {
-  // 콘텐츠마다 { edits, saved: { brief, updatedAt }, status, message, at } — 다른 아이디어를 골랐다 돌아와도 쓰던 칸이 남는다.
-  const [plans, setPlans] = React.useState({});
-  const patch = React.useCallback((id, next) => setPlans((current) => ({ ...current, [id]: { ...current[id], ...(typeof next === 'function' ? next(current[id] || {}) : next) } })), []);
-  return [plans, patch];
+function usePlanDrafts(item) {
+  // The account-keyed shell owns memory; view filters do not change a record's identity.
+  const holder = React.useContext(OfficeSessionContext);
+  const [localStore] = React.useState(createContentPlanStore);
+  const store = holder ? (holder.contentPlans ||= localStore) : localStore;
+  const key = contentPlanKey(item);
+  const plan = React.useSyncExternalStore(store.subscribe, () => store.get(key), () => store.get(key));
+  const isActive = React.useCallback(() => !holder || holder.active, [holder]);
+  const patchPlan = React.useCallback((id, next) => {
+    if (id === item?.id) store.patch(key, next);
+  }, [store, key, item?.id]);
+  const beginSave = React.useCallback(() => {
+    if (!isActive() || store.get(key).status === 'saving') return false;
+    store.patch(key, { status: 'saving', message: '' });
+    return true;
+  }, [store, key, isActive]);
+  return [plan, patchPlan, beginSave, isActive];
 }
 
-function PlanPane({ card, plan, patchPlan, format, onFormat }) {
+function PlanPane({ card, plan, patchPlan, beginSave, isActive, format, onFormat }) {
   const { item } = card;
   const saved = plan.saved && Date.parse(item.updatedAt) < Date.parse(plan.saved.updatedAt) ? plan.saved.brief : null;
   const base = (key) => (saved ? saved[key] : item.brief?.[key]) ?? '';
@@ -106,16 +120,17 @@ function PlanPane({ card, plan, patchPlan, format, onFormat }) {
   const memo = isReadyToMake({ ...item, sourceUrl: null }) ? item.sourceIdea : '';
 
   const save = async () => {
-    if (saving || !Object.keys(dirty).length) return;
-    patchPlan(item.id, { status: 'saving', message: '' });
+    if (!Object.keys(dirty).length || !beginSave()) return;
     try {
       // 버전은 방금 읽은 상세에서 — 응답을 못 받았으면 다시 눌러 같은 값을 다시 보내면 된다.
       const response = await fetch('/api/hub/content/workflow?item=' + encodeURIComponent(item.id), { cache: 'no-store', signal: AbortSignal.timeout(15000) });
       const detail = await response.json();
+      if (!isActive()) return;
       if (!response.ok || detail?.status !== 'live') throw new Error(studioErrorMessage(detail, '저장할 글을 다시 읽지 못했어요. 쓴 칸은 그대로예요.'));
       const command = buildPlanSave(detail, dirty, crypto.randomUUID());
       if (!command) throw new Error('이 글은 원고 작성의 더보기 → 기획 구체화에서 채워 주세요.');
       const result = await postStudio('workflow', command);
+      if (!isActive()) return;
       if (result.status === 'preview') { patchPlan(item.id, { status: 'preview', message: '저장소가 연결되지 않아 저장하지 않았어요.' }); return; }
       if (!planSaveConfirmed(result, command)) {
         patchPlan(item.id, { status: 'error', message: result.status === 'conflict' ? '다른 곳에서 방금 바뀌었어요. 다시 저장하면 최신 내용 위에 이 칸만 씁니다.' : studioErrorMessage(result, '저장을 확인하지 못했어요. 쓴 칸은 그대로예요 — 다시 저장해 주세요.') });
@@ -128,6 +143,7 @@ function PlanPane({ card, plan, patchPlan, format, onFormat }) {
       }));
       void refreshContentLedger();
     } catch (error) {
+      if (!isActive()) return;
       patchPlan(item.id, { status: 'error', message: error?.message || '저장을 확인하지 못했어요. 다시 저장해 주세요.' });
     }
   };
@@ -147,7 +163,11 @@ function PlanPane({ card, plan, patchPlan, format, onFormat }) {
         {PLAN_FIELDS.map((field) => (
           <TextAreaField key={field.key} label={field.key === 'message' ? `${field.label} · 이것만 있으면 시작` : field.label}
             placeholder={field.placeholder} value={value(field.key)} rows={2} autoResize disabled={saving}
-            onChange={(event) => patchPlan(item.id, (current) => ({ edits: { ...current.edits, [field.key]: event.target.value }, status: 'idle', message: '' }))}
+            onChange={(event) => patchPlan(item.id, (current) => {
+              const edits = { ...current.edits, [field.key]: event.target.value };
+              if (event.target.value === base(field.key)) delete edits[field.key];
+              return { edits, status: 'idle', message: '' };
+            })}
             onCmdEnter={save} className="cflow-bf__input"
             fieldClassName={`cflow-bf${String(value(field.key)).trim() ? '' : ' is-empty'}${field.key === 'message' || field.key === 'ending' ? ' is-wide' : ''}`} />
         ))}
@@ -214,7 +234,7 @@ function MakeView({ lanes, capture, week, scheduleUnknown, partial, onBoard }) {
   const activeFilter = filter ?? (readyCount && (!urlPick || urlPick.ready) ? 'ready' : 'all');
   const visible = activeFilter === 'ready' ? pickable.filter((card) => card.ready) : pickable;
   const picked = urlPick || visible[0] || null;
-  const [plans, patchPlan] = usePlanDrafts();
+  const [plan, patchPlan, beginSave, isActive] = usePlanDrafts(picked?.item);
   const [formats, setFormats] = React.useState({});
   const format = picked ? FLOW_FORMATS.find((option) => option.key === formats[picked.item.id])
     || formatOfType(primaryVariant(picked)?.type) || FLOW_FORMATS[0] : FLOW_FORMATS[0];
@@ -251,7 +271,7 @@ function MakeView({ lanes, capture, week, scheduleUnknown, partial, onBoard }) {
         </section>
         {picked ? (
           <>
-            <PlanPane key={picked.item.id} card={picked} plan={plans[picked.item.id] || {}} patchPlan={patchPlan}
+            <PlanPane key={picked.item.id} card={picked} plan={plan} patchPlan={patchPlan} beginSave={beginSave} isActive={isActive}
               format={format} onFormat={(key) => setFormats((current) => ({ ...current, [picked.item.id]: key }))} />
             <ScriptPane card={picked} format={format} onOpen={(href) => router.push(href)} />
           </>

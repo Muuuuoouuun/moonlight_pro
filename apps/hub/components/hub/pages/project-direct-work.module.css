@@ -20,7 +20,7 @@
 .progressMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--fg-muted); font-size: 10.5px; }
 .risk { color: var(--danger); margin-left: auto; }
 .mobileOnly { display: none; }
-.addOptions > div { position: absolute; z-index: 8; right: 0; top: calc(100% + 4px); display: grid; min-width: 166px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card-legacy, var(--shadow-card)); }
+.addOptions > div { position: absolute; z-index: 8; right: 0; top: calc(100% + 4px); display: grid; min-width: 166px; padding: 4px; border: 1px solid var(--panel-edge); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card-legacy, var(--shadow-card)); }
 .addOptions button { min-height: 36px; padding: 6px 10px; text-align: left; color: var(--fg); font-size: 12px; border-radius: var(--r-sm); }
 .addOptions button:hover { background: var(--surface-2); }
 /* 목록은 선택 프로젝트 카드(project-focus-stage.module.css .sheet) 안에 놓이므로 자기 테두리를 그리지 않는다. */
@@ -80,7 +80,7 @@
 .task[data-drop]::before, .checkRow[data-drop]::before { content: ''; position: absolute; z-index: 2; inset-inline: 8px; height: 1px; background: var(--moon-300); pointer-events: none; }
 .task[data-drop="before"]::before, .checkRow[data-drop="before"]::before { top: 0; }
 .task[data-drop="after"]::before, .checkRow[data-drop="after"]::before { bottom: 0; }
-.orderMenu { position: fixed; z-index: var(--z-navigation-overlay); display: grid; min-width: 180px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow-pop); }
+.orderMenu { position: fixed; z-index: var(--z-navigation-overlay); display: grid; min-width: 180px; padding: 4px; border: 1px solid var(--panel-edge); border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow-pop); }
 .orderMenu > :global(.hub-btn) { justify-content: flex-start; }
 .orderMenu p { margin: 6px 10px; font-size: 10.5px; color: var(--fg-muted); }
 

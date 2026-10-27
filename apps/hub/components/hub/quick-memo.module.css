@@ -11,13 +11,13 @@
 .launcher, .panel, .toast {
   color: var(--fg);
   background: var(--surface);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-panel, var(--shadow-pop));
 }
 .launchArea { position: relative; width: 48px; height: 48px; margin-left: auto; }
 /* `.hub-app button { background: none }`(0,1,1)을 이기려면 0,2,0이 필요하다 — 그래서 런처 면은 .root에 묶는다. */
-.root .launcher { background: var(--raise-face, var(--surface)); box-shadow: var(--shadow-raise, var(--shadow-pop)); border: 1px solid var(--line-soft); position: absolute; right: 0; bottom: 0; width: max-content; display: flex; align-items: center; gap: 0; min-width: 48px; min-height: 48px; padding: 0; border-radius: 28px; cursor: pointer; font-size: 13px; transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease; }
+.root .launcher { background: var(--raise-face, var(--surface)); box-shadow: var(--shadow-raise, var(--shadow-pop)); border: 1px solid var(--panel-edge); position: absolute; right: 0; bottom: 0; width: max-content; display: flex; align-items: center; gap: 0; min-width: 48px; min-height: 48px; padding: 0; border-radius: 28px; cursor: pointer; font-size: 13px; transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease; }
 .launcherIcon { position: relative; display: grid; place-items: center; flex: 0 0 46px; width: 46px; height: 46px; transition: width var(--dur-panel) ease, height var(--dur-panel) ease, flex-basis var(--dur-panel) ease; }
 .launcherIcon svg { transition: transform var(--dur-panel) ease; }
 .launcherLabel { display: block; width: 0; flex-shrink: 0; overflow: hidden; opacity: 0; transition: width var(--dur-panel) ease, opacity var(--dur-hover) ease; }
