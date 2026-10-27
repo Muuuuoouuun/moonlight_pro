@@ -15,9 +15,9 @@ const code = ts.transpileModule(parts.map(node => node.getText(ast).replace(/^ex
 
 // Render the real Webhooks handlers against deferred local transport. No real
 // webhook, Engine, or model can be invoked from this harness.
-function harness(webhookEvents = []) {
+function harness(webhookEvents = [], syncState = 'live') {
   const slots = [], requests = [];
-  let cursor = 0, tree;
+  let cursor = 0, tree, reloads = 0;
   const dependencies = {
     React: { ...React,
       useState(initial) {
@@ -27,11 +27,11 @@ function harness(webhookEvents = []) {
       },
       useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
     },
-    useAutomationsLedger: () => ({ webhookEvents, syncState: 'live' }),
+    useAutomationsLedger: () => ({ webhookEvents, syncState, reload: () => { reloads++; } }),
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
     setTimeout() {},
   };
-  for (const name of ['Iconed', 'Dot', 'Card', 'Badge', 'IconButton', 'Button', 'SyncBadge', 'EmptyState']) dependencies[name] = name;
+  for (const name of ['Iconed', 'Dot', 'Card', 'Badge', 'IconButton', 'Button', 'SyncBadge', 'EmptyState', 'Skeleton']) dependencies[name] = name;
   const Component = new Function(...Object.keys(dependencies), `${code}\nreturn Webhooks;`)(...Object.values(dependencies));
   function render() { cursor = 0; tree = Component({}); return tree; }
   function nodes(node) {
@@ -43,7 +43,7 @@ function harness(webhookEvents = []) {
     return nodes(tree).filter(node => node.props.icon === 'play' && ['Button', 'IconButton'].includes(node.type));
   }
   render();
-  return { render, requests, triggers, state: () => slots[0].value };
+  return { render, requests, triggers, state: () => slots[0].value, nodes: () => nodes(tree), reloads: () => reloads };
 }
 const sent = () => ({ ok: true, json: async () => ({ status: 'sent' }) });
 
@@ -73,4 +73,47 @@ test('a failed send releases the synchronous lock and permits one explicit retry
   assert.equal(h.requests.length, 2);
   h.requests[1].resolve(sent()); await retry;
   assert.equal(h.state()[0].label, '✓ sent');
+});
+
+for (const [source, targetRoute] of [['project', 'generic'], ['moltbot', 'moltbot']]) {
+  test(`${source} row sends the server's actual ${targetRoute} target contract`, async () => {
+    const h = harness([{ source, eventType: 'updated', status: 'ok', lastHit: '지금' }]);
+    const pending = h.triggers()[0].props.onClick();
+    assert.deepEqual(JSON.parse(h.requests[0].options.body), {
+      targetRoute, title: `Webhook smoke test · ${source} — updated`,
+    });
+    assert.equal(h.requests[0].url, '/api/webhooks/project-test');
+    h.requests[0].resolve(sent()); await pending;
+  });
+}
+
+test('an unmapped source cannot silently send a generic Project webhook', async () => {
+  const h = harness([{ source: 'unknown-provider', eventType: 'received', status: 'ok', lastHit: '지금' }]);
+  assert.equal(h.triggers()[0].props.disabled, true);
+  assert.match(h.triggers()[0].props.tooltip, /테스트 경로는 아직 연결되지 않았습니다/);
+  await h.triggers()[0].props.onClick();
+  assert.equal(h.requests.length, 0);
+});
+
+for (const [body, expected, tone] of [
+  [{ status: 'preview', sent: false, reason: 'missing-engine-url' }, 'Engine 연결 필요', 'neutral'],
+  [{ status: 'preview', sent: false, statusCode: 401 }, '전송 실패 (401)', 'danger'],
+  [{ status: 'preview', sent: false, statusCode: 500 }, '전송 실패 (500)', 'danger'],
+  [{}, '전송 결과 확인 필요', 'danger'],
+]) test(`HTTP-success wrapper preserves ${expected} instead of saying preview or sent`, async () => {
+  const h = harness(), pending = h.triggers()[0].props.onClick();
+  h.requests[0].resolve({ ok: true, status: 202, json: async () => body });
+  await pending;
+  assert.deepEqual(h.state()[0], { tone, label: expected });
+});
+
+test('Webhook read failures provide a working refresh and never claim empty while still loading', () => {
+  const loading = harness([], 'loading');
+  assert.equal(loading.nodes().some(node => node.type === 'EmptyState'), false);
+  assert.ok(loading.nodes().some(node => node.type === 'Skeleton' && node.props.label === 'Webhook 수신 기록 읽는 중'));
+  const failed = harness([], 'error');
+  failed.nodes().find(node => node.type === 'Button' && node.props.children === '새로고침').props.onClick();
+  assert.equal(failed.reloads(), 1);
+  const partial = harness([], 'partial');
+  assert.equal(partial.nodes().find(node => node.type === 'EmptyState').props.title, '일부 webhook 기록만 확인했습니다');
 });

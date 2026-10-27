@@ -362,6 +362,7 @@ export function Projects({ workspace }) {
   const [inlineTaskTitle, setInlineTaskTitle] = React.useState('');
   const [inlineSubmitting, setInlineSubmitting] = React.useState(false);
   const searchInputRef = React.useRef(null);
+  const [projectSearchRequest, setProjectSearchRequest] = React.useState(0);
   const normalizedQuery = projectQuery.trim().toLowerCase();
   const resetTaskFilters = () => {
     setProjectQuery('');
@@ -1775,7 +1776,10 @@ export function Projects({ workspace }) {
     selection: kbSelection,
     // n은 위 뷰 인지 리스너가 소유(18차 회귀 이력) — 여기서는 바인딩하지 않는다.
     onEditSelected: openKbSelected,
-    onSearchFocus: () => searchInputRef.current?.focus(),
+    onSearchFocus: () => {
+      if (view === 'tree') setProjectSearchRequest(current => current + 1);
+      else searchInputRef.current?.focus();
+    },
   });
   React.useEffect(() => {
     if (!kbSelection.selectedId) return;
@@ -2179,6 +2183,7 @@ export function Projects({ workspace }) {
               query={projectQuery}
               onQueryChange={setProjectQuery}
               searchInputRef={searchInputRef}
+              searchRequest={projectSearchRequest}
               onOpenProject={openProjectDetail}
               onSelectProject={selectOverviewProject}
               onOpenCustomer={projectId => openProjectDetail(projectId, { customer: true })}

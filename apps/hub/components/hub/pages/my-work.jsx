@@ -1461,7 +1461,8 @@ export function MyWork({ onNavigate }) {
   // detail panel instead of creating a second task-detail implementation.
   React.useEffect(() => {
     const requestedTaskId = searchParams?.get('task');
-    if (!requestedTaskId || taskDeepLinkRef.current === requestedTaskId) return;
+    if (!requestedTaskId) { taskDeepLinkRef.current = null; return; }
+    if (taskDeepLinkRef.current === requestedTaskId || state !== 'ready' || !['live', 'partial'].includes(sources.tasks)) return;
     const item = items.find((candidate) => (
       candidate.lane === 'task'
       && (candidate.entityId === requestedTaskId || candidate.id === requestedTaskId || candidate.id === `task-${requestedTaskId}`)
@@ -1481,7 +1482,7 @@ export function MyWork({ onNavigate }) {
     params.delete('task');
     params.delete('lens');
     router.replace(`${pathname}${params.size ? `?${params}` : ''}`);
-  }, [items, pathname, router, searchParams, scrollToRow]);
+  }, [items, pathname, router, searchParams, scrollToRow, state, sources.tasks]);
 
   const toggleProject = (projectId) => {
     setCollapsedProjects((prev) => {

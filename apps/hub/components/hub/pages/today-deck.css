@@ -6,6 +6,15 @@
 
 /* 빠른 입력 | 하루 띠 */
 .hub-app .today-deck__bar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; align-items: center; }
+.hub-app .today-task-capture { min-width: 0; }
+.hub-app .today-task-capture__choice { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; font-size: 12px; }
+.hub-app .today-task-capture__choice > span { color: var(--fg-dim); }
+.hub-app .today-task-capture__feedback { margin-top: 8px; font-size: 12px; color: var(--fg-muted); line-height: 1.6; }
+.hub-app .today-task-capture__feedback > div { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.hub-app .today-selection__head { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.hub-app .today-selection__head h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.hub-app .today-selection__head > span { font-size: 12px; color: var(--fg-dim); }
+.hub-app .today-selection__head > a { margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; font-size: 12px; color: var(--fg-muted); text-underline-offset: 3px; }
 
 .hub-app .today-strip { position: relative; height: 52px; min-width: 0; }
 .hub-app .today-strip__track {

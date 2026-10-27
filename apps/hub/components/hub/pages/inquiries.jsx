@@ -188,7 +188,7 @@ function InquiryDetail({ id, onClose, onSelect, onChanged, onNavigate }) {
             ? <Button key={link.type} onClick={() => onNavigate?.(link.href)}>{link.typeLabel}: {link.label} ↗</Button>
             : <span className="inquiry-notice" key={link.type}>{link.typeLabel} 연결 {link.status === 'not-found' ? '내역 없음' : '확인 실패'}</span>)
             : <span className="inquiry-notice">연결된 고객·거래·지원 건 없음</span>}
-          {!row.lead_id && <Button size="sm" variant="outline" onClick={() => onNavigate?.(`dashboard/revenue/customers?new=customer${row.contact_name ? `&q=${encodeURIComponent(row.contact_name)}` : ''}${row.contact_phone ? `&phone=${encodeURIComponent(row.contact_phone)}` : ''}`)}>고객으로 등록 ↗</Button>}
+          {!row.lead_id && <Button size="sm" variant="outline" onClick={() => onNavigate?.(`dashboard/revenue/customers?new=customer${['personal', 'classin'].includes(row.org_scope) ? `&scope=${row.org_scope}` : ''}${row.contact_name ? `&q=${encodeURIComponent(row.contact_name)}` : ''}${row.contact_phone ? `&phone=${encodeURIComponent(row.contact_phone)}` : ''}`)}>고객으로 등록 ↗</Button>}
         </div>
         <InquiryProductLink inquiryId={id} onNavigate={onNavigate} />
         {(detail.events || []).map(event => {

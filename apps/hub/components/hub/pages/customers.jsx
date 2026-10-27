@@ -1018,7 +1018,7 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   // (?lead= 딥링크)가 담당한다. 계약 고객(account)은 아직 ?account= 딥링크가 없어
   // followups ActivityPanel과 같은 규칙으로 링크를 숨긴다.
   const editHref = row.kind !== "account" && row.id
-    ? `dashboard/revenue/leads?lead=${encodeURIComponent(row.id)}`
+    ? `dashboard/revenue/leads?lead=${encodeURIComponent(row.id)}${scopeKey ? `&scope=${scopeKey}` : ""}`
     : null;
 
   if (memoState) {
@@ -1458,6 +1458,7 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
   // explicit so clearing the original phone/promise is not silently ignored.
   const createPayload = { createId, name: name.trim(), stage,
     phone: phone.trim(), next_action: nextAction.trim(), next_action_at: nextActionAt || "",
+    ...(workspace === "brand" ? { type: "personal" } : workspace === "classin" ? { type: "company" } : {}),
     ...(workspace ? { workspace } : {}), focusOverride: isImportant ? "raise" : "default" };
   React.useEffect(() => { rememberRevenueDraft('lead', createPayload); }, [name, phone, stage, nextAction, nextActionAt, isImportant, workspace, createId]);
 
@@ -2247,7 +2248,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
         <NewCustomerDrawer
           initialName={newCustomer.name || ""}
           initialPhone={newCustomer.phone || ""}
-          workspace={scopeKey === "classin" ? "classin" : null}
+          workspace={scopeKey === "classin" ? "classin" : scopeKey === "personal" ? "brand" : null}
           onClose={() => setNewCustomer(null)}
           onCreated={(id, name) => {
             toast.success(`고객 등록됨 · ${name}`);

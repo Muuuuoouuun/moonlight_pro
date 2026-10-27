@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from 'next/navigation';
 import { TodayTimeFlow } from "./today-time-flow";
 import { DayStrip, TodayHeadline, TodayModePanel, TodaySlots } from "./today-deck";
 import "./workflow-pages.css";
@@ -29,7 +30,8 @@ import { BurningStreakBadge, StreakMark, streakLevel } from "../burning-streak";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { ContactRecordDrawer } from "../deferred-contact-record-drawer";
 import { createClientId } from "@/lib/pms-ui";
-import { QuickCaptureForm } from "../quick-capture";
+import { TodayTaskCapture } from './today-task-capture';
+import { useTodayTaskActions } from '../use-today-task-actions';
 import { buildTaskToday, focusLimitMessage, groupTaskRows, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY, taskDueLabel, taskPriorityLabel } from "@/lib/task-today";
 import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
 import { formatWonShort } from "@/lib/won-format";
@@ -115,13 +117,14 @@ function sourceLabel(state) {
   return '연결 필요';
 }
 
-function TaskToday({ taskToday, onNavigate, onChanged }) {
+function TaskToday({ taskToday, onNavigate, onChanged, actions }) {
   const allItems = Array.isArray(taskToday?.items) ? taskToday.items : [];
   const counts = taskToday?.counts || {};
   const [feedback, setFeedback] = React.useState({ status: 'idle', message: '', action: null });
   // my-work와 동일한 되돌리기 계약(공유 훅): 완료 탭 → 행 낙관 제거 → 3.5초 되돌리기 창이
   // 닫힌 뒤에만 PATCH. 창 안의 되돌리기는 네트워크 없이 완전 복구, 언마운트는 flush.
   const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
+  const completingRef = React.useRef(new Set());
   const { schedule, cancel } = useUndoableAction();
   const items = allItems.filter((t) => !hiddenIds.has(t.id));
 
@@ -146,6 +149,9 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
 
   const streakInfo = taskToday?.streak || cachedStreak || { streak: 0, todayDoneCount: 0, isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
   const [optimisticDoneIds, setOptimisticDoneIds] = React.useState(() => new Set());
+  React.useEffect(() => {
+    setHiddenIds(new Set()); setOptimisticDoneIds(new Set()); completingRef.current.clear();
+  }, [taskToday?.focus?.date]);
   // A reread may include only some of several pending completions. Reconcile by
   // identity so confirmed rows are counted once without clearing unrelated work.
   const confirmedDoneIds = taskToday?.streak?.todayDoneIds;
@@ -153,6 +159,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   React.useEffect(() => {
     if (!confirmedDoneIds?.length) return;
     const confirmed = new Set(confirmedDoneIds);
+    confirmed.forEach(id => completingRef.current.delete(id));
     setOptimisticDoneIds(ids => new Set([...ids].filter(id => !confirmed.has(id))));
     setHiddenIds(ids => new Set([...ids].filter(id => !confirmed.has(id))));
   }, [confirmedDoneIds]);
@@ -167,6 +174,10 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
 
   async function persistComplete(task) {
     try {
+      if (actions) {
+        const result = await actions.run(task, { status: 'done' });
+        if (!result.ok) throw new Error(result.message);
+      } else {
       const response = await fetch('/api/hub/tasks', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -177,10 +188,12 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
       if (!response.ok || !isDurableTaskUpdateResult(data)) {
         throw new Error(data.error || data.status || `완료 저장 실패 (${response.status})`);
       }
+      }
 
       setFeedback({ status: 'saved', message: `${task.title} 완료됨.`, action: null });
-      onChanged?.();
+      if (!actions) onChanged?.();
     } catch (error) {
+      completingRef.current.delete(task.id);
       // 실패 시 행 복귀 — 완료된 것처럼 남기지 않는다.
       setHiddenIds((s) => { const n = new Set(s); n.delete(task.id); return n; });
       setOptimisticDoneIds((ids) => { const next = new Set(ids); next.delete(task.id); return next; });
@@ -193,6 +206,8 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   }
 
   function complete(task) {
+    if (completingRef.current.has(task.id)) return;
+    completingRef.current.add(task.id);
     setHiddenIds((s) => new Set(s).add(task.id));
     setOptimisticDoneIds((ids) => new Set(ids).add(task.id));
     setIsPopping(true);
@@ -212,6 +227,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
 
   function undoComplete(task) {
     if (!cancel(task.id)) return; // 창이 이미 닫혔으면 되돌릴 수 없음
+    completingRef.current.delete(task.id);
     setHiddenIds((s) => { const n = new Set(s); n.delete(task.id); return n; });
     setOptimisticDoneIds((ids) => { const next = new Set(ids); next.delete(task.id); return next; });
     setFeedback({ status: 'idle', message: '완료 취소됨', action: null });
@@ -221,24 +237,26 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   // 강제하고(409 focus-limit), 화면은 상한에서 넣기 버튼을 비활성으로 그린다.
   const focusSummary = taskToday?.focus || { picked: 0, done: 0, limit: MAX_FOCUS_PER_DAY, remaining: MAX_FOCUS_PER_DAY };
   const [focusBusyId, setFocusBusyId] = React.useState(null);
-  // focusSummary는 마지막 로드 시점 값이라, 저장 왕복 동안 연달아 누르면 화면상 상한에 안 닿았는데
-  // 서버가 409로 막는다. 저장이 확인된 토글을 여기 더해 내 작업 타일과 같은 분모로 비활성을 그린다.
-  // 새 요약이 도착하면(picked가 바뀌면) 0으로 되돌린다.
-  const [focusDelta, setFocusDelta] = React.useState(0);
-  React.useEffect(() => { setFocusDelta(0); }, [focusSummary.picked]);
-  const focusFull = focusSummary.picked + focusDelta >= focusSummary.limit;
+  const focusBusyRef = React.useRef(false);
+  const focusFull = focusSummary.picked >= focusSummary.limit;
   async function toggleFocus(task) {
+    if (focusBusyRef.current) return;
     const on = !task.focusToday;
     if (on && focusFull) {
       setFeedback({ status: 'error', message: focusLimitMessage(focusSummary.limit), action: null });
       return;
     }
+    focusBusyRef.current = true;
     setFocusBusyId(task.id);
     try {
+      if (actions) {
+        const result = await actions.run(task, { focus: { on } });
+        if (!result.ok) throw new Error(result.message);
+      } else {
       const response = await fetch('/api/hub/tasks', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: task.id, focus: { on } }),
+        body: JSON.stringify({ id: task.id, focus: { on, date: focusSummary.date } }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 409 && data.error === 'focus-limit') {
@@ -247,12 +265,13 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
       if (!response.ok || !isDurableTaskUpdateResult(data)) {
         throw new Error(data.error || data.status || `저장 실패 (${response.status})`);
       }
-      setFocusDelta((n) => n + (on ? 1 : -1));
+      }
       setFeedback({ status: 'saved', message: on ? `${task.title} — 오늘 3개에 넣음.` : `${task.title} — 오늘 3개에서 뺌.`, action: null });
-      onChanged?.();
+      if (!actions) onChanged?.();
     } catch (error) {
       setFeedback({ status: 'error', message: error instanceof Error ? error.message : '오늘 3개를 저장하지 못했습니다.', action: null });
     } finally {
+      focusBusyRef.current = false;
       setFocusBusyId(null);
     }
   }
@@ -279,7 +298,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   const taskGroups = groupTaskRows(listItems);
 
   return (
-    <div role="group" aria-label="오늘 할 일">
+    <div role="group" aria-label="오늘 할 일" id="daily-brief-task-candidates" tabIndex={-1}>
       <SectionTitle right={(
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
           {(taskState !== 'live' || taskToday?.stale) && <TruthBadge state={taskToday?.stale ? 'partial' : taskState} label={taskToday?.stale ? '이전 값 · 다시 확인 필요' : taskState === 'partial' ? '일부 확인' : undefined} />}
@@ -338,7 +357,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                         iconSize={15}
                         tooltip={task.focusToday ? '오늘 3개에서 빼기' : focusFull ? `오늘 3개가 찼습니다 (${focusSummary.limit}/${focusSummary.limit})` : '오늘 3개에 넣기'}
                         aria-pressed={task.focusToday ? 'true' : 'false'}
-                        disabled={focusBusyId === task.id || (!task.focusToday && focusFull)}
+                        disabled={Boolean(focusBusyId) || Boolean(actions?.pendingIds.length) || (!task.focusToday && (focusFull || taskToday?.stale || taskState !== 'live'))}
                         onClick={() => toggleFocus(task)}
                         className={task.focusToday ? 'hub-iconbtn--star-active' : ''}
                         style={{ flexShrink: 0 }}
@@ -349,6 +368,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                         icon="check"
                         aria-label={`완료: ${task.title}`}
                         onClick={() => complete(task)}
+                        disabled={Boolean(actions?.pendingIds.length)}
                         style={{ minHeight: 44, padding: '0 14px', flexShrink: 0 }}
                       >
                         완료
@@ -609,7 +629,7 @@ function useDailyBriefLedger(refreshKey) {
     }
     recordTaskTruth((previous) => pendingTaskState(previous));
     try {
-      const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
+      const res = await fetch('/api/hub/tasks', { cache: 'no-store', signal: AbortSignal.timeout(15000) });
       const data = await res.json().catch(() => null);
       if (!mountedRef.current || taskRefreshRef.current !== requestId) return false;
       if (res.status === 401 || data?.status === 'unauthorized') {
@@ -631,6 +651,21 @@ function useDailyBriefLedger(refreshKey) {
       return unverifiedTasks();
     }
   }, []);
+
+  // Task selection belongs to a KST day. Refresh on return and at the day
+  // boundary so a clock-only rerender never leaves yesterday's choices active.
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.setInterval !== 'function') return undefined;
+    let date = buildTaskToday([]).focus.date;
+    const onFocus = () => { date = buildTaskToday([]).focus.date; refreshTasks(); };
+    const tick = () => {
+      const next = buildTaskToday([]).focus.date;
+      if (next !== date) { date = next; refreshTasks(); }
+    };
+    const timer = window.setInterval(tick, 60000);
+    window.addEventListener('focus', onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', onFocus); };
+  }, [refreshTasks]);
 
   return { ...state, refreshTasks };
 }
@@ -1022,11 +1057,11 @@ function StatusLine({ state, onRetry }) {
 }
 
 function BriefNavigation({ taskToday, onNavigate }) {
-  const taskCount = Number(taskToday?.counts?.missed || 0) + Number(taskToday?.counts?.today || 0);
-  // 오늘·기한 지남이 0이어도 기한 없는 열린 할 일이 있으면 "0건"이라 말하지 않는다.
-  const laterCount = Number(taskToday?.laterCount || 0);
-  const taskDetail = taskToday?.state !== 'live' ? '기록 확인'
-    : taskCount === 0 && laterCount > 0 ? `열린 할 일 ${laterCount}건` : `${taskCount}건 확인`;
+  // Selecting a task changes its lane, not the number of open tasks. Include
+  // focus/waiting/inbox as well as later tasks, including rows beyond the cap.
+  const total = taskToday?.counts?.total, laterCount = taskToday?.laterCount;
+  const taskDetail = taskToday?.state !== 'live' || taskToday?.stale || !Number.isInteger(total) || !Number.isInteger(laterCount)
+    ? '기록 확인' : `열린 할 일 ${total + laterCount}건`;
   const detailByKey = {
     tasks: taskDetail,
     'daily-review': `${REVIEW_EVENING_HOUR}:00 회고`,
@@ -1184,9 +1219,23 @@ function CommandClear({ signalCount, state }) {
 // this disclosure rather than competing for the top of the page.
 // `summary`는 접힌 상태에서 안에 무엇이 기다리는지 말한다 — 접혀 있다는 이유로 "섹션당
 // 다음 행동 1개" 계약 밖에 있던 보조 섹션(승인 큐 포함)을 계약 안으로 들인다(사용성 재감사 E).
-function MoreDetail({ title, summary, children }) {
+function MoreDetail({ title, summary, children, revealPanel }) {
   const [open, setOpen] = React.useState(false);
   const [visited, setVisited] = React.useState(false);
+  const requestedPanel = useSearchParams().get('panel');
+  React.useEffect(() => {
+    if (!revealPanel || requestedPanel !== revealPanel) return;
+    setVisited(true); setOpen(true);
+  }, [requestedPanel, revealPanel]);
+  React.useEffect(() => {
+    if (!open || !visited || !revealPanel || requestedPanel !== revealPanel) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(`daily-brief-${revealPanel}`);
+      target?.scrollIntoView({ block: 'center' });
+      target?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, visited, requestedPanel, revealPanel]);
   return (
     <div>
       <button
@@ -1502,6 +1551,8 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
 
   return (
     <Card
+      id="daily-brief-briefing"
+      tabIndex={-1}
       className="daily-brief__panel"
       style={{
         background: "var(--surface)",
@@ -2019,7 +2070,9 @@ export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onT
 export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [advisorSignal, setAdvisorSignal] = React.useState(null);
-  const ledger = useDailyBriefLedger(refreshKey);
+  const readLedger = useDailyBriefLedger(refreshKey);
+  const taskActions = useTodayTaskActions(readLedger.taskToday, readLedger.refreshTasks);
+  const ledger = { ...readLedger, taskToday: taskActions.taskToday };
   const guruRecommendations = useGuruRecommendations();
   // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
   // 늦은 실패면 { draft, error }를 얹어 입력 그대로 다시 연다(드로어를 먼저 닫았어도 무언 소실 금지).
@@ -2068,15 +2121,18 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
           보이지 않는다. docs/README.md 의 운영자 확정 "첫 화면은 **할 일**, 매출, 메시지, 기획,
           콘텐츠 순서의 판단을 돕는다"(2026-09-20 재확정). 긴급 KA·집중 고객 ≤5 제한은 그대로다. */}
       <div className="today-deck__bar">
-        <QuickCaptureForm layout="inline" inputId="daily-brief-quick-task" inputClassName="daily-brief__quick-input" onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+        <TodayTaskCapture taskToday={ledger.taskToday} actions={taskActions} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
         <DayStrip agenda={ledger.dailyFocus?.todayAgenda} />
       </div>
 
-      <TodaySlots taskToday={ledger.taskToday} onChanged={ledger.refreshTasks} />
+      <section className="today-selection" aria-label="오늘 먼저 끝낼 일">
+        <div className="today-selection__head"><h3>오늘 먼저 끝낼 일</h3><span>최대 3개 · 완료한 일도 포함</span><a href="#daily-brief-task-candidates">목록에서 고르기 ↓</a></div>
+        <TodaySlots taskToday={ledger.taskToday} onChanged={ledger.refreshTasks} actions={taskActions} />
+      </section>
 
       <div className="today-deck__below">
         <TodayModePanel taskToday={ledger.taskToday} agenda={ledger.dailyFocus?.todayAgenda} onNavigate={onNavigate} />
-        <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
+        <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} actions={taskActions} />
       </div>
       <GuidanceInlineTip variant="today" onNavigate={onNavigate} />
 
@@ -2130,7 +2186,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
           </div>
         </div>
 
-        <MoreDetail title="더보기 · 주간 정리, 실행 오더, 문의, 보조 정보" summary={approvalSummary}>
+        <MoreDetail title="더보기 · 주간 정리, 실행 오더, 문의, 보조 정보" summary={approvalSummary} revealPanel="briefing">
           <WeeklyReportCard onNavigate={onNavigate} onAdvisorOpen={setAdvisorSignal} onTaskCreated={ledger.refreshTasks} />
           {/* 저장된 사실이 있는 고객·거래에만 원문 기법을 잇는다(agent-layer-direction §2.1 ⑦).
               시간대로 도는 Guru 관점은 위의 한 줄 팁(GuidanceInlineTip)만 두고 카드로 늘리지 않는다 —

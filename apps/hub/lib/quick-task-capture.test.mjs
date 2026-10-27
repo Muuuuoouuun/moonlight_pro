@@ -176,7 +176,9 @@ test("submitQuickCapture posts the inbox payload once and settles every envelope
   };
 
   const saved = makeSession();
-  assert.deepEqual(await quickCapture.submitQuickCapture(saved, { fetchImpl: fetchWith(jsonResponse(200, { status: 'saved', destinationType: 'work_order' })) }), { started: true, durable: true });
+  const result = await quickCapture.submitQuickCapture(saved, { fetchImpl: fetchWith(jsonResponse(200, { status: 'saved', destinationType: 'work_order' })) });
+  assert.equal(result.started, true); assert.equal(result.durable, true);
+  assert.equal(result.capture.raw, '위젯 메모'); assert.equal(result.data.destinationType, 'work_order');
   assert.deepEqual(calls[0], ['/api/hub/inbox', { raw: '위젯 메모', hint: 'inbox', idempotencyKey: 'key-1' }, 'POST', true]);
   assert.equal(saved.snapshot().status, 'saved');
   assert.equal(saved.snapshot().raw, '');

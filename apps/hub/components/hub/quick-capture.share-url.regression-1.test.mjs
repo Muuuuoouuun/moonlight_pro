@@ -89,7 +89,7 @@ function mount(initialUrl = 'https://moonlight.test/dashboard') {
     async save(result = 'saved') {
       const fetchImpl = result === 'timeout' ? async () => { const error = new Error('lost response'); error.name = 'TimeoutError'; throw error; }
         : async () => ({ ok: result !== 'error', status: result === 'error' ? 500 : 200, json: async () => ({ status: result, destinationType: 'task' }) });
-      const submit = new Function('session', 'onSaved', 'submitQuickCapture', `${submitJavascript}; return submit;`)(session(), tree.props.children[0].props.onSaved, current => submitQuickCapture(current, { fetchImpl }));
+      const submit = new Function('session', 'onSaved', 'submitQuickCapture', 'disabled', `${submitJavascript}; return submit;`)(session(), tree.props.children[0].props.onSaved, current => submitQuickCapture(current, { fetchImpl }), false);
       await submit({ preventDefault() {} });
       render();
     },

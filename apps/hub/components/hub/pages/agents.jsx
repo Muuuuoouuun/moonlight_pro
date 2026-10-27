@@ -301,24 +301,25 @@ export function AgentsChat({ onNavigate }) {
     <div className="hub-chat-shell" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '100%', overflow: 'hidden' }}>
       <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>Conversations</span>
+          <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>현재 대화</span>
           <IconButton icon="plus" size={24} iconSize={13} tooltip="New conversation" disabled={busy} onClick={startConversation} />
         </div>
+        <div style={{ padding: '8px 14px', fontSize: 11.5, lineHeight: 1.5, color: 'var(--fg-muted)' }}>이 화면의 대화만 유지됩니다. 이전 대화 복원은 준비 중입니다.</div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
           {conversations.map((c, i) => (
-            <button key={i} onClick={() => setConversations(prev => prev.map((item, idx) => ({ ...item, active: idx === i })))} style={{
+            <div key={i} style={{
               width: '100%', padding: '9px 10px', marginBottom: 1,
               background: c.active ? 'var(--surface-3)' : 'transparent',
               border: c.active ? '1px solid var(--line)' : '1px solid transparent',
               borderRadius: 'var(--r-sm)', textAlign: 'left',
             }}>
-              <div style={{ fontSize: 12.5, color: c.active ? 'var(--fg)' : 'var(--fg-muted)', fontWeight: c.active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+              <div style={{ fontSize: 12.5, color: c.active ? 'var(--fg)' : 'var(--fg-muted)', fontWeight: c.active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}{c.active ? ' · 현재' : ' · 복원 준비 중'}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{c.agent}</span>
                 <div style={{ flex: 1 }} />
                 <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{c.time}</span>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </aside>
@@ -590,8 +591,8 @@ export function AgentsChat({ onNavigate }) {
               color: 'var(--fg)', fontSize: 16, lineHeight: 1.5,
             }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <Button variant="ghost" size="xs" icon="upload" onClick={() => setInput(v => v ? `${v}\n[첨부: context]` : '[첨부: context]')}>Attach</Button>
-              <Button variant="ghost" size="xs" icon="link" onClick={() => onNavigate?.('dashboard/work/decisions?new=decision')}>Link decision</Button>
+              <Button variant="ghost" size="xs" icon="upload" disabled title="파일 첨부는 아직 연결되지 않았습니다">첨부 준비 중</Button>
+              <Button variant="ghost" size="xs" icon="link" onClick={() => onNavigate?.('dashboard/work/decisions?new=decision')}>새 결정 기록</Button>
               <div style={{ flex: 1 }} />
               <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>
                 {persona.name} · {agentKey === 'guru' ? (guruModel ? `최근 응답 ${guruModel}` : '요청 시 연결') : persona.model}
@@ -844,7 +845,8 @@ function CouncilCoachPanel({ onNavigate }) {
           )}
 
           <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
-            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(councilChatPath())}>코칭·대화에서 이어가기</Button>
+            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(councilChatPath())}>새 자문 대화 열기</Button>
+            <span style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>현재 안건과 답변은 자동 전달되지 않습니다. 필요한 내용을 복사해 새 대화에 붙여 넣으세요.</span>
           </div>
         </div>
       )}

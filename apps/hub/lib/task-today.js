@@ -224,9 +224,49 @@ export function buildTaskToday(
     // 소스로 쓴다(§6.2). 비어 있으면 카드가 레인 상위 3개를 dashed 권장으로 보여준다.
     // 완료된 선택은 여기서 빠지므로 분모·분자는 `focus` 요약(summarizeFocusDay)을 쓴다.
     focusItems: candidates.filter((task) => task.lane === "focus"),
+    focusCompletedItems: (Array.isArray(todos) ? todos : []).filter((task) => isFocusedOn(task, todayKey) && isDoneTask(task) && dateKeyInZone(task.completedAt, timeZone) === todayKey),
     focus,
     later: later.slice(0, Math.max(0, limit)),
     laterCount: later.length,
+  };
+}
+
+// Apply an acknowledged row to the currently visible slice. Hidden task counts
+// and historical streak evidence remain owned by the read, not this projection.
+export function applyTodayTaskRow(previous, row, { now = new Date() } = {}) {
+  const known = [...(previous?.items || []), ...(previous?.later || []), ...(previous?.focusItems || []), ...(previous?.focusCompletedItems || [])];
+  const byId = new Map(known.map(task => [task.id, task]));
+  const priorKnown = buildTaskToday([...byId.values()], { now });
+  const before = byId.get(row.id);
+  const task = {
+    ...before, ...row,
+    dueAt: row.due_at !== undefined ? row.due_at : row.dueAt !== undefined ? row.dueAt : before?.dueAt,
+    completedAt: row.completed_at !== undefined ? row.completed_at : row.completedAt !== undefined ? row.completedAt : before?.completedAt,
+    updatedAt: row.updated_at !== undefined ? row.updated_at : row.updatedAt !== undefined ? row.updatedAt : before?.updatedAt,
+    focusDates: Array.isArray(row.meta?.focus_dates) ? row.meta.focus_dates : row.focusDates || before?.focusDates || [],
+    done: row.status === 'done',
+  };
+  byId.set(task.id, task);
+  const rebuilt = buildTaskToday([...byId.values()], { now });
+  const date = dateKeyInZone(now);
+  const delta = Number(isFocusedOn(task, date)) - Number(isFocusedOn(before, date));
+  const completed = item => isFocusedOn(item, date) && isDoneTask(item) && dateKeyInZone(item.completedAt) === date;
+  const doneDelta = Number(completed(task)) - Number(completed(before));
+  const picked = Math.max(0, (previous.focus?.picked || 0) + delta);
+  const done = Math.max(0, (previous.focus?.done || 0) + doneDelta);
+  const counts = { ...rebuilt.counts };
+  for (const key of ['total', 'focus', 'missed', 'today', 'waiting', 'inbox']) {
+    if (Number.isInteger(previous.counts?.[key])) counts[key] = previous.counts[key] + rebuilt.counts[key] - priorKnown.counts[key];
+    else delete counts[key];
+  }
+  return {
+    ...previous, ...rebuilt,
+    counts,
+    state: previous.state, stale: previous.stale, observedState: previous.observedState,
+    hiddenCount: Number.isInteger(counts.total) ? Math.max(0, counts.total - counts.shown) : previous.hiddenCount || 0,
+    laterCount: rebuilt.laterCount + Math.max(0, (previous.laterCount || 0) - (previous.later?.length || 0)),
+    focus: { date, picked, done, limit: MAX_FOCUS_PER_DAY, remaining: Math.max(0, MAX_FOCUS_PER_DAY - picked) },
+    streak: previous.streak,
   };
 }
 

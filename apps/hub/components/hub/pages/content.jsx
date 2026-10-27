@@ -786,12 +786,14 @@ export function Campaigns() {
     setSelectedId(id);
     setTab('pulse');
     setFocusMode(false);
-  }, []);
+    const next = new URLSearchParams(campaignParams.toString());
+    next.set('campaign', id);
+    router.replace(`/dashboard/content/campaigns?${next}`, { scroll: false });
+  }, [campaignParams, router]);
   const focusCampaign = React.useCallback((id) => {
-    setSelectedId(id);
-    setTab('pulse');
+    selectCampaign(id);
     setFocusMode(true);
-  }, []);
+  }, [selectCampaign]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -949,9 +951,10 @@ export function Campaigns() {
                   variant="outline"
                   size="sm"
                   icon="decisions"
-                  onClick={() => router.push(`/dashboard/work/decisions?new=decision&campaign=${encodeURIComponent(selected.id)}`)}
+                  disabled
+                  title="캠페인에 연결한 결정 저장은 아직 지원하지 않습니다."
                 >
-                  Decision
+                  캠페인 결정 연결 준비 중
                 </Button>
               </div>
 

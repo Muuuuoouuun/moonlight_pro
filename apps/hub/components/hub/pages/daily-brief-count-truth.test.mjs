@@ -26,6 +26,7 @@ const ledgerOf = (syncState = 'live', extra = {}) => ({
 function render(ledger, cachedStreak = null) {
   const deps = {
     React, ...taskModel, useDailyBriefLedger: () => ledger,
+    useTodayTaskActions: taskToday => ({ taskToday, pendingIds: [] }),
     useGuruRecommendations: () => ({}), useToast: () => ({}), rankSignals: items => items,
     useUndoableAction: () => ({}), formatBriefDate: () => '합성 날짜', greetingFor: () => '안녕하세요',
     window: {}, localStorage: { getItem: () => JSON.stringify(cachedStreak) },

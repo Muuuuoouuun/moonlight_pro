@@ -44,7 +44,7 @@ export function HomeMorningBrief({ brief, schedule, onNavigate, now = new Date()
           <span className="home-morning__source">{sourceNote}</span>
           <div className="home-morning__actions">
             <Button variant="primary" size="sm" onClick={() => onNavigate?.('dashboard/daily-brief')}>오늘 열기</Button>
-            <Button variant="outline" size="sm" onClick={() => onNavigate?.('dashboard/daily-brief')}>30초 AI 브리핑 열기</Button>
+            <Button variant="outline" size="sm" onClick={() => onNavigate?.('dashboard/daily-brief?panel=briefing')}>30초 AI 브리핑 열기</Button>
           </div>
         </div>
       </div>

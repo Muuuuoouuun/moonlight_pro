@@ -249,7 +249,7 @@ function useEmailIntegrationStatus(url) {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!active) return;
-        setState(data || { status: 'missing-config', configured: false });
+        setState(data && data.status !== 'error' && data.source !== 'error' ? data : { status: 'degraded', configured: false });
       })
       .catch(() => {
         if (active) setState({ status: 'degraded', configured: false });
@@ -303,11 +303,7 @@ export function EmailAutomation({ onNavigate }) {
             메일 읽기 권한이 확인되면 수신 문의를 감지합니다. 연결이 만료되면 설정에서 Gmail을 다시 연결해 주세요.
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-            {gmailBadge.label === 'Not connected' || gmailBadge.label === 'OAuth ready' ? (
-              <Button variant="outline" size="xs" onClick={() => window.location.assign('/api/email/gmail/connect?returnPath=%2Fdashboard%2Fautomations%2Femail')}>Gmail 연결</Button>
-            ) : (
-              <Button variant="outline" size="xs" onClick={() => window.location.assign('/api/email/gmail/connect?returnPath=%2Fdashboard%2Fautomations%2Femail')}>Gmail 재연결</Button>
-            )}
+            <Button variant="outline" size="xs" disabled={!gmail.setup?.connectUrl} title={!gmail.setup?.connectUrl ? 'Gmail OAuth 연결 설정을 확인한 뒤 사용할 수 있습니다' : undefined} onClick={() => window.location.assign('/api/email/gmail/connect?returnPath=%2Fdashboard%2Fautomations%2Femail')}>{gmail.connection ? 'Gmail 재연결' : 'Gmail 연결'}</Button>
             <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Logs</Button>
           </div>
         </Card>
@@ -325,11 +321,11 @@ export function EmailAutomation({ onNavigate }) {
             <Badge tone={resendBadge.tone} size="xs">{resendBadge.label}</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-            뉴스레터, 트랜잭션 메일, 리마인더 발송. 스케줄된 발송은 Queue에서 관리.
+            발송 서비스의 연결 상태입니다. 이 화면의 메일 템플릿·발송 예약·전달률 관리는 아직 연결되지 않았습니다.
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-            <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio?new=draft')}>Templates</Button>
-            <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Deliverability</Button>
+            <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio?new=draft')}>새 원고 열기</Button>
+            <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>실행 로그 보기</Button>
           </div>
         </Card>
       </div>
@@ -347,7 +343,7 @@ export function EmailAutomation({ onNavigate }) {
             <Iconed name="arrowRight" size={13} style={{ color: 'var(--fg-faint)' }} />
             <div><Badge tone={r.tone} size="xs">{r.then}</Badge></div>
             <div style={{ textAlign: 'right' }}>
-              <IconButton icon="moreV" size={22} iconSize={12} tooltip="Open flow rules" onClick={() => onNavigate?.('dashboard/automations/flows')} />
+              <IconButton icon="moreV" size={22} iconSize={12} tooltip="규칙 편집은 아직 연결되지 않았습니다" disabled />
             </div>
           </div>
         ))}
@@ -372,6 +368,7 @@ function aggregateWebhookEndpoints(events) {
     const entry = byKey.get(key) || {
       name: `${ev.source} — ${ev.eventType}`,
       url: ENGINE_INGEST_PATHS[ev.source] || null,
+      targetRoute: ev.source === 'moltbot' ? 'moltbot' : ev.source === 'project' ? 'generic' : null,
       status: 'ok',
       lastHit: ev.lastHit,
       count24: 0,
@@ -385,7 +382,7 @@ function aggregateWebhookEndpoints(events) {
 }
 
 export function Webhooks({ onNavigate }) {
-  const { webhookEvents, syncState } = useAutomationsLedger();
+  const { webhookEvents, syncState, reload } = useAutomationsLedger();
   const liveHooks = aggregateWebhookEndpoints(webhookEvents);
   const hooks = liveHooks;
   const sTone = { ok: 'neutral', warn: 'neutral', err: 'danger' };
@@ -393,6 +390,7 @@ export function Webhooks({ onNavigate }) {
   const pendingTests = React.useRef(new Set());
 
   async function runHookTest(idx, hook) {
+    if (!['generic', 'moltbot'].includes(hook.targetRoute)) return;
     if (pendingTests.current.has(idx)) return;
     pendingTests.current.add(idx);
     setTestState(s => ({ ...s, [idx]: { pending: true } }));
@@ -400,17 +398,19 @@ export function Webhooks({ onNavigate }) {
       const response = await fetch('/api/webhooks/project-test', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ slug: hook.name, source: hook.url }),
+        body: JSON.stringify({ targetRoute: hook.targetRoute, title: `Webhook smoke test · ${hook.name}` }),
       });
       const data = await response.json().catch(() => ({}));
 
       let entry;
-      if (data && data.preview === true) {
-        entry = { tone: 'neutral', label: 'preview' };
-      } else if (response.ok && (data.status === 'sent' || data.sent)) {
+      if (response.ok && data.status === 'sent' && data.sent !== false) {
         entry = { tone: 'neutral', label: '✓ sent' };
+      } else if (data.sent === false && data.reason === 'missing-engine-url') {
+        entry = { tone: 'neutral', label: 'Engine 연결 필요' };
+      } else if (data.sent === false && Number.isInteger(data.statusCode)) {
+        entry = { tone: 'danger', label: `전송 실패 (${data.statusCode})` };
       } else if (response.ok) {
-        entry = { tone: 'neutral', label: 'preview' };
+        entry = { tone: 'danger', label: '전송 결과 확인 필요' };
       } else {
         entry = { tone: 'danger', label: 'failed' };
       }
@@ -440,19 +440,22 @@ export function Webhooks({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate?.('dashboard/settings')}>Endpoint</Button>
+        <Button variant="ghost" size="sm" icon="refresh" onClick={reload}>새로고침</Button>
+        <Button variant="outline" size="sm" icon="settings" onClick={() => onNavigate?.('dashboard/settings')}>연결 설정 보기</Button>
       </div>
       <Card pad={false}>
-        {hooks.length === 0 && (
+        {hooks.length === 0 && syncState === 'loading' && <div style={{ padding: 16 }}><Skeleton lines={3} label="Webhook 수신 기록 읽는 중" /></div>}
+        {hooks.length === 0 && syncState !== 'loading' && (
           <EmptyState
             icon="webhook"
-            title={syncState === 'error' ? 'webhook 기록을 읽지 못했습니다' : '수신된 webhook 이벤트가 없습니다'}
+            title={syncState === 'error' ? 'webhook 기록을 읽지 못했습니다' : syncState === 'partial' ? '일부 webhook 기록만 확인했습니다' : '수신된 webhook 이벤트가 없습니다'}
             description={syncState === 'error'
               ? '지금 화면은 비어 보여도 실제 이벤트가 있을 수 있습니다. 새로고침으로 재시도하세요.'
+              : syncState === 'partial' ? '누락된 수신 기록이 있을 수 있습니다. 새로고침으로 다시 확인하세요.'
               : 'Project webhook smoke test가 들어오면 endpoint별 활동이 집계됩니다.'}
             action={
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <Button variant="primary" size="sm" icon="play" disabled={Boolean(testState[0]?.pending)} aria-busy={Boolean(testState[0]?.pending)} onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>
+                <Button variant="primary" size="sm" icon="play" disabled={Boolean(testState[0]?.pending)} aria-busy={Boolean(testState[0]?.pending)} onClick={() => runHookTest(0, { name: 'Project smoke test', targetRoute: 'generic' })}>
                   {testState[0]?.pending ? '전송 중…' : 'Send test'}
                 </Button>
                 {/* 목록이 비어 hooks.map이 결과를 못 그린다 — 여기서 직접 표시(무언 no-op 방지, 5차 재감사 S) */}
@@ -483,8 +486,8 @@ export function Webhooks({ onNavigate }) {
                 <Badge tone={state.tone} size="xs">{state.label}</Badge>
               )}
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{h.count24}/24h · {h.lastHit}</span>
-              <IconButton icon="play" tooltip="Send test" disabled={Boolean(state?.pending)} aria-busy={Boolean(state?.pending)} onClick={() => runHookTest(i, h)} />
-              <IconButton icon="moreV" tooltip="Manage endpoint" onClick={() => onNavigate?.('dashboard/settings')} />
+              <IconButton icon="play" tooltip={h.targetRoute ? 'Send test' : '이 소스의 테스트 경로는 아직 연결되지 않았습니다'} disabled={!h.targetRoute || Boolean(state?.pending)} aria-busy={Boolean(state?.pending)} onClick={() => runHookTest(i, h)} />
+              <IconButton icon="moreV" tooltip="연결 설정 보기 · endpoint 편집 준비 중" onClick={() => onNavigate?.('dashboard/settings')} />
             </div>
             {h.url && <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>{h.url}</div>}
           </div>

@@ -72,7 +72,7 @@ export function buildTodayDeck({ taskToday, agenda, now }) {
   } else if (mode === "day") {
     headline = current ? `지금은 ${current.title}`
       : next ? `빈 시간 · 다음은 ${hm(next.s)}`
-        : focusOpen.length ? `남은 자리 ${focusOpen.length}개`
+        : focusOpen.length ? `오늘 끝낼 일 ${focusOpen.length}개`
           : picked === 0 ? "세 자리가 비어 있어요"
             : picked != null && done === picked ? "오늘 3개를 다 끝냈어요"
               : agendaReadable ? "다음 일정은 없어요" : "오늘 세 자리";

@@ -587,7 +587,9 @@ export function Leads({ workspace }) {
     if (createdLeadFromQueryRef.current) return;
     createdLeadFromQueryRef.current = true;
     createLead();
-    router.replace(pathname);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('new');
+    router.replace(params.size ? `${pathname}?${params}` : pathname, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -611,6 +613,7 @@ export function Leads({ workspace }) {
         setEditLeadId(realId);
       }
       toast.success(isNew ? '새 리드를 저장했습니다.' : '리드 정보를 저장했습니다.');
+      void reloadLedger({ preserve: true });
     } else {
       notifyRevenueSaveFailure(toast, r, r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '리드 저장에 실패했습니다.');
     }
@@ -660,6 +663,7 @@ export function Leads({ workspace }) {
           });
           toast.error(r.status === 'preview' ? 'Supabase 미설정 — 리드를 되살렸습니다.' : '삭제 실패 — 리드를 되살렸습니다.');
         }
+        else void reloadLedger({ preserve: true });
       });
     });
     return { ok: true, status: 'deferred' };
@@ -671,14 +675,19 @@ export function Leads({ workspace }) {
   const leadParam = searchParams?.get('lead') || null;
   const consumedLeadRef = React.useRef(null);
   React.useEffect(() => {
-    if (!leadParam || syncState === 'loading') return;
+    if (!leadParam) { consumedLeadRef.current = null; return; }
+    if (syncState === 'loading' || syncState === 'error') return;
     if (consumedLeadRef.current === leadParam) return;
     if (mergedLeads.some(l => String(l.id) === String(leadParam))) {
       consumedLeadRef.current = leadParam;
       setEditLeadId(leadParam);
-      if (pathname) router.replace(pathname);
+      if (pathname) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('lead');
+        router.replace(params.size ? `${pathname}?${params}` : pathname, { scroll: false });
+      }
     }
-  }, [leadParam, syncState, mergedLeads, pathname, router]);
+  }, [leadParam, syncState, mergedLeads, pathname, router, searchParams]);
 
   // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 편집 · n 생성 · / 검색 포커스 · x 다중 선택 ·
   // Esc 해제. useCrmKeyboard가 입력 포커스/드로어(role=dialog)/치트시트에서 스스로 양보하므로
@@ -1929,7 +1938,8 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   const dealParam = searchParams?.get('deal') || null;
   const consumedDealRef = React.useRef(null);
   React.useEffect(() => {
-    if (!dealParam || syncState === 'loading') return;
+    if (!dealParam) { consumedDealRef.current = null; return; }
+    if (syncState === 'loading' || syncState === 'error') return;
     if (consumedDealRef.current === dealParam) return;
     if (deals.some(d => String(d.id) === String(dealParam))) {
       consumedDealRef.current = dealParam;
@@ -2125,6 +2135,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
 
       {view === 'money' && !ledgerUnavailable && !wsEmpty && (
         <DealsMoney
+          scope={effectiveWorkspace === 'classin' ? 'classin' : effectiveWorkspace === 'brand' ? 'personal' : null}
           model={moneyModel}
           deals={timelineSource}
           stages={DEAL_STAGES}
@@ -2487,7 +2498,9 @@ export function Cases() {
     if (createdCaseFromQueryRef.current) return;
     createdCaseFromQueryRef.current = true;
     createCase();
-    router.replace(pathname);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('new');
+    router.replace(params.size ? `${pathname}?${params}` : pathname, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -2496,14 +2509,19 @@ export function Cases() {
   const caseParam = searchParams?.get('case') || null;
   const consumedCaseRef = React.useRef(null);
   React.useEffect(() => {
-    if (!caseParam || syncState === 'loading') return;
+    if (!caseParam) { consumedCaseRef.current = null; return; }
+    if (syncState === 'loading' || syncState === 'error') return;
     if (consumedCaseRef.current === caseParam) return;
     if (mergedCases.some(c => String(c.id) === String(caseParam))) {
       consumedCaseRef.current = caseParam;
       setEditCaseId(caseParam);
-      if (pathname) router.replace(pathname);
+      if (pathname) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('case');
+        router.replace(params.size ? `${pathname}?${params}` : pathname, { scroll: false });
+      }
     }
-  }, [caseParam, syncState, mergedCases, pathname, router]);
+  }, [caseParam, syncState, mergedCases, pathname, router, searchParams]);
 
   // Persist the drawer edit. New local rows (id `CASE-…`) insert; on success the returned
   // real id replaces the local one so a later edit takes the update path and the overlay re-keys.
@@ -2524,6 +2542,7 @@ export function Cases() {
         setEditCaseId(realId);
       }
       toast.success(isNew ? '새 케이스를 저장했습니다.' : '케이스 정보를 저장했습니다.');
+      void reloadLedger({ preserve: true });
     } else {
       notifyRevenueSaveFailure(toast, r, r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '케이스 저장에 실패했습니다.');
     }
@@ -2548,6 +2567,7 @@ export function Cases() {
       toast.error('케이스 삭제에 실패하여 복원했습니다.');
     } else {
       toast.info('케이스를 삭제했습니다.');
+      void reloadLedger({ preserve: true });
     }
     return r;
   };

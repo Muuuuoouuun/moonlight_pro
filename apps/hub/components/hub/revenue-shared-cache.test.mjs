@@ -66,6 +66,24 @@ test('cold snapshots are stable loading values and overlapping reads share one r
   assert.equal(h.cache.getSnapshot(), result);
 });
 
+test('preserving invalidation retains open legacy rows while canceling the pre-save read', async () => {
+  const h = harness();
+  const first = h.cache.refresh(); await tick();
+  h.requests[0].resolve(ledger({ leads: [{ id: 'lead', name: 'Before edit' }], cases: [{ id: 'case' }] }));
+  await first;
+  const warm = h.cache.getSnapshot(), older = h.cache.refresh(); await tick();
+  h.advance(5 * 60 * 1000 + 1);
+  const reloading = h.cache.invalidate({ preserve: true });
+  assert.equal(h.cache.getSnapshot(), warm, 'a save does not temporarily remove an open legacy drawer base row');
+  await tick();
+  assert.equal(h.requests[1].signal.aborted, true);
+  h.requests[2].resolve(ledger({ leads: [{ id: 'lead', name: 'Saved edit' }], cases: [{ id: 'case' }] }));
+  await reloading;
+  h.requests[1].resolve(ledger({ leads: [{ id: 'lead', name: 'Stale edit' }] })); await older; await tick();
+  assert.equal(h.cache.getSnapshot().ledger.leads[0].name, 'Saved edit');
+  assert.equal(h.cache.getSnapshot().ledger.cases[0].id, 'case');
+});
+
 test('subscribers share success, unsubscribe independently, and retain a warm read while refreshing', async () => {
   const h = harness(), first = [], second = [];
   const unsubscribe = h.cache.subscribe(() => first.push(h.cache.getSnapshot()));

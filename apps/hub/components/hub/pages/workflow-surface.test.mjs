@@ -17,12 +17,34 @@ function compileDeclaration(file, name) {
 const React = { createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity) } }) };
 const find = (node, predicate) => Array.isArray(node) ? node.flatMap(item => find(item, predicate)) : node && typeof node === 'object' ? [...(predicate(node) ? [node] : []), ...find(node.props?.children, predicate)] : [];
 
-test('secondary disclosure preserves the same child after collapse, including an unsaved draft', () => {
-  const values = []; let cursor = 0;
-  const runtime = { ...React, useState(initial) { const key = cursor++; if (!(key in values)) values[key] = initial; return [values[key], value => { values[key] = typeof value === 'function' ? value(values[key]) : value; }]; } };
-  const Component = new Function('React', 'Iconed', `${compileDeclaration('./daily-brief.jsx', 'MoreDetail')}; return MoreDetail;`)(runtime, 'Iconed');
+function disclosure(query = '') {
+  const values = [], effects = new Map(), frames = [], focused = [];
+  let cursor = 0, dirty = false;
+  const runtime = { ...React,
+    useState(initial) { const key = cursor++; if (!(key in values)) values[key] = initial;
+      return [values[key], value => { const next = typeof value === 'function' ? value(values[key]) : value; dirty ||= !Object.is(values[key], next); values[key] = next; }]; },
+    useEffect(callback, dependencies) { const key = cursor++, previous = effects.get(key);
+      if (!previous || dependencies.some((value, index) => !Object.is(value, previous.dependencies[index]))) effects.set(key, { callback, dependencies, pending: true, cleanup: previous?.cleanup }); },
+  };
+  const dependencies = { React: runtime, Iconed: 'Iconed', useSearchParams: () => new URLSearchParams(query),
+    requestAnimationFrame: callback => { frames.push(callback); return frames.length; }, cancelAnimationFrame: id => { frames[id - 1] = null; },
+    document: { getElementById: id => ({ scrollIntoView() {}, focus: () => focused.push(id) }) } };
+  const Component = new Function(...Object.keys(dependencies), `${compileDeclaration('./daily-brief.jsx', 'MoreDetail')}; return MoreDetail;`)(...Object.values(dependencies));
   const child = { type: 'input', props: { value: '작성 중인 합성 초안' } };
-  const render = () => { cursor = 0; return Component({ title: '더보기', children: child }); };
+  const render = () => {
+    let tree;
+    for (let pass = 0; pass < 8; pass++) {
+      cursor = 0; dirty = false; tree = Component({ title: '더보기', children: child, revealPanel: 'briefing' });
+      for (const effect of effects.values()) if (effect.pending) { effect.pending = false; effect.cleanup?.(); effect.cleanup = effect.callback(); }
+      if (!dirty) return tree;
+    }
+    throw Error('Disclosure effects did not settle');
+  };
+  return { render, child, focused, flush: () => { frames.splice(0).forEach(frame => frame?.()); } };
+}
+
+test('secondary disclosure preserves the same child after collapse, including an unsaved draft', () => {
+  const { render, child } = disclosure();
   let tree = render();
   assert.equal(find(tree, node => node.type === 'input').length, 0, 'secondary data stays lazy before first use');
   find(tree, node => node.type === 'button')[0].props.onClick();
@@ -33,6 +55,13 @@ test('secondary disclosure preserves the same child after collapse, including an
   assert.equal(find(tree, node => node.type === 'input')[0], child, 'closing must not unmount or clear the draft');
   assert.equal(find(tree, node => node.props.hidden === true).length, 1);
   assert.equal(find(tree, node => node.type === 'button')[0].props['aria-expanded'], false);
+});
+
+test('an explicit briefing query reveals the same existing child and focuses its panel without a write', () => {
+  const view = disclosure('panel=briefing'), tree = view.render();
+  assert.equal(find(tree, node => node.type === 'button')[0].props['aria-expanded'], true);
+  assert.equal(find(tree, node => node.type === 'input')[0], view.child);
+  view.flush(); assert.deepEqual(view.focused, ['daily-brief-briefing']);
 });
 
 function glance(model, onRecord) {

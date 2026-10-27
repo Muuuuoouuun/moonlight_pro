@@ -47,6 +47,7 @@ function harness(write = async () => response({ status: 'saved', campaign: saved
   return { cache, reads, writes, render, button,
     route: () => params,
     selected: () => find(tree, node => node.type === 'CampaignTabPanel')?.props.campaign.id,
+    element: predicate => find(tree, predicate),
     create: () => find(tree, node => node.type === 'Button' && node.props.icon === 'plus'),
     contains: text => JSON.stringify(tree).includes(text),
     override(value) { override = value; render(); render(); },
@@ -63,6 +64,22 @@ test('creating a campaign from an older explicit campaign selects the saved reco
   assert.equal(h.selected(), saved.id);
   const afterSave = h.cache.refresh(); h.reads[1].resolve(live([previous, saved])); await afterSave;
   h.render(); h.render(); assert.equal(h.selected(), saved.id);
+});
+
+test('manual campaign selection and focus update the explicit query and survive a later refresh', async () => {
+  const previous = { ...saved, id: 'previous-campaign', name: '이전에 연 캠페인' };
+  const h = harness(undefined, 'campaign=previous-campaign&view=details');
+  const initial = h.cache.refresh(); await tick(); h.reads[0].resolve(live([previous, saved])); await initial; h.render(); h.render();
+  h.element(node => node.props?.role === 'button' && JSON.stringify(node).includes(saved.name)).props.onClick(); h.render(); h.render();
+  assert.equal(h.route().get('campaign'), saved.id); assert.equal(h.selected(), saved.id);
+  h.element(node => node.props?.role === 'button' && JSON.stringify(node).includes(previous.name)).props.onClick(); h.render(); h.render();
+  assert.equal(h.route().get('campaign'), previous.id);
+  h.element(node => node.props?.['aria-label'] === `${saved.name} 상세 확대`).props.onClick({ stopPropagation() {} }); h.render(); h.render();
+  assert.equal(h.route().get('campaign'), saved.id); assert.equal(h.route().get('view'), 'details'); assert.equal(h.selected(), saved.id);
+  const checking = h.button('목록 새로고침').props.onClick(); await tick(); h.reads[1].resolve(live([previous, saved])); await checking;
+  h.render(); h.render(); assert.equal(h.selected(), saved.id);
+  const decision = h.button('캠페인 결정 연결 준비 중');
+  assert.equal(decision.props.disabled, true); assert.equal(decision.props.onClick, undefined);
 });
 
 test('confirmed campaign survives an older initial read, loading and then an authoritative post-save read', async () => {
