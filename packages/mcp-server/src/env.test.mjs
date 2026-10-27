@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {mkdtempSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
-import {loadMcpEnv,REPO_ROOT,DEFAULT_ENV_FILE} from './env.js';
+import {isAbsolute,join} from 'node:path';
+import {loadMcpEnv,mcpChildEnv,REPO_ROOT,DEFAULT_ENV_FILE} from './env.js';
 
 const envFile=content=>{const dir=mkdtempSync(join(tmpdir(),'moonlight-env-'));const file=join(dir,'.env.local');writeFileSync(file,content);return file;};
 
@@ -36,5 +36,14 @@ test('COM_MOON_MCP_ENV_FILE overrides the default location, which is resolved fr
   const env={COM_MOON_MCP_ENV_FILE:file};
   assert.equal(loadMcpEnv({env}).file,file);
   assert.equal(DEFAULT_ENV_FILE,`${REPO_ROOT}/apps/hub/.env.local`);
-  assert.match(REPO_ROOT,/^\/.+[^/]$/);
+  assert.ok(isAbsolute(REPO_ROOT));
+});
+
+test('diagnostic subprocesses inherit MCP credentials and runtime paths only',()=>{
+  const env=mcpChildEnv({COM_MOON_HUB_URL:'https://hub.example',COM_MOON_AGENT_API_TOKEN:'private-agent',COM_MOON_HUB_WRITE_SECRET:'private-write',
+    COM_MOON_MCP_ENV_FILE:'/private/client.env',Path:'runtime-path',SystemRoot:'runtime-root',HOME:'runtime-home',
+    COM_MOON_SHARED_WEBHOOK_SECRET:'private-engine',COM_MOON_OPERATOR_SESSION_SECRET:'private-session',SUPABASE_SERVICE_ROLE_KEY:'private-db',
+    GOOGLE_CLIENT_SECRET:'private-provider',NODE_OPTIONS:'--import /untrusted.js'});
+  assert.deepEqual(Object.keys(env).sort(),['COM_MOON_AGENT_API_TOKEN','COM_MOON_HUB_URL','COM_MOON_HUB_WRITE_SECRET','COM_MOON_MCP_ENV_FILE','HOME','Path','SystemRoot']);
+  assert.doesNotMatch(JSON.stringify(env),/private-engine|private-session|private-db|private-provider|untrusted/);
 });

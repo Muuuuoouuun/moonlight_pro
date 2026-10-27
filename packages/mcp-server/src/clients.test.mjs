@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {mkdtempSync,readFileSync,statSync} from 'node:fs';
+import {mkdtempSync,readFileSync,statSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {createClient,findClient,readClients,revokeClient} from './clients.js';
@@ -41,4 +41,18 @@ test('revocation removes exactly one client',()=>{
   const clients=readClients(file);
   assert.equal(findClient(clients,a.token),null);
   assert.equal(findClient(clients,b.token)?.name,'b');
+});
+
+test('malformed registry grants and duplicate identities fail closed',()=>{
+  const file=registry();const {client}=createClient(file,{name:'safe'});
+  for(const clients of [
+    [{...client,readOnly:'true'}],[{...client,profile:'unknown'}],
+    [{...client,allowUrl:true,readOnly:false}],[{...client,name:'forged\nadmin'}],
+    [{...client,tokenSha256:client.tokenSha256+'junk'}],[client,{...client,name:'duplicate-hash'}],
+    [client,{...client,tokenSha256:'a'.repeat(64)}],
+  ]){
+    writeFileSync(file,JSON.stringify({version:1,clients}));assert.throws(()=>readClients(file),/Invalid client registry/);
+  }
+  writeFileSync(file,'{"private-registry-value":');
+  assert.throws(()=>readClients(file),error=>!error.message.includes('private-registry-value'));
 });

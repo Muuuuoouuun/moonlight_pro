@@ -291,6 +291,36 @@ test('readinessSql runs read-only on PostgreSQL and tells old and new versions a
           raise exception 'invalid app identity accepted'; exception when check_violation then null; end;
       end $$;`);
     assert.equal(sql('select count(*) from public.social_oauth_flows'), '4');
+    const brandApps = DATABASE_FEATURES.filter(f => f.migration === '20261026_0071_brand_social_oauth_apps.sql');
+    assert.equal(check(brandApps)[0].ready, false);
+    sql(await migration('20261026_0071_brand_social_oauth_apps.sql'));
+    assert.equal(check(brandApps)[0].ready, true);
+    sql(`insert into public.social_oauth_flows(app_key, app_id) values
+      ('22nomad','synthetic-nomad'),('holyfuncollector','synthetic-holy'),('sinabro','synthetic-sinabro');
+      do $$ begin
+        begin insert into public.social_oauth_flows values ('unknown','synthetic-app');
+          raise exception 'unknown app accepted'; exception when check_violation then null; end;
+        begin insert into public.social_oauth_flows values ('22nomad',null);
+          raise exception 'incomplete app identity accepted'; exception when check_violation then null; end;
+        begin insert into public.social_oauth_flows values ('sinabro','invalid app id');
+          raise exception 'invalid app identity accepted'; exception when check_violation then null; end;
+      end $$;`);
+    assert.equal(sql('select count(*) from public.social_oauth_flows'), '7');
+    const study = DATABASE_FEATURES.filter(f => f.migration === '20261027_0072_study_seagull_instagram_oauth.sql');
+    assert.equal(check(study)[0].ready, false);
+    sql(await migration('20261027_0072_study_seagull_instagram_oauth.sql'));
+    assert.equal(check(study)[0].ready, true);
+    assert.equal(check(brandApps)[0].ready, true);
+    sql(`insert into public.social_oauth_flows(app_key, app_id) values ('studyseagull','synthetic-study');
+      do $$ begin
+        begin insert into public.social_oauth_flows values ('unknown','synthetic-app');
+          raise exception 'unknown app accepted'; exception when check_violation then null; end;
+        begin insert into public.social_oauth_flows values ('studyseagull',null);
+          raise exception 'incomplete app identity accepted'; exception when check_violation then null; end;
+        begin insert into public.social_oauth_flows values ('studyseagull','invalid app id');
+          raise exception 'invalid app identity accepted'; exception when check_violation then null; end;
+      end $$;`);
+    assert.equal(sql('select count(*) from public.social_oauth_flows'), '8');
   } finally {
     if (running) spawnSync(join(bin, 'pg_ctl'), ['-D', join(root, 'data'), '-m', 'fast', '-w', 'stop'], { encoding: 'utf8', timeout: 30000, env });
     await rm(root, { recursive: true, force: true });

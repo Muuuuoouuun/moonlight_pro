@@ -166,6 +166,11 @@ export const DATABASE_FEATURES = [
   // 확인할 것 영수증 — 끝내기·보류·시간 잡기 한 번이 한 줄(2026-09-30 확인할 것 스펙 §8.1).
   { name: '확인할 것 영수증', migration: '20261007_0070_signal_outcomes.sql', tables: ['signal_outcomes'], functions: [],
     indexIncludes: [['signal_outcomes', 'signal_outcomes_request_idx', '(workspace_id, request_id)']] },
+  { name: '브랜드별 소셜 OAuth 앱', migration: '20261026_0071_brand_social_oauth_apps.sql', tables: [], functions: [],
+    constraintIncludes: ['22nomad', 'holyfuncollector', 'sinabro']
+      .map(key => ['social_oauth_flows', 'social_oauth_flows_app_key_check', `'${key}'`]) },
+  { name: 'Study.Seagull Instagram OAuth 앱', migration: '20261027_0072_study_seagull_instagram_oauth.sql', tables: [], functions: [],
+    constraintIncludes: [['social_oauth_flows', 'social_oauth_flows_app_key_check', "'studyseagull'"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

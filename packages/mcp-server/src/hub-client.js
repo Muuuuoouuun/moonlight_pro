@@ -8,12 +8,9 @@
 // surfaced as a successful tool result. Both are failures the tool layer must be able to
 // tell apart from a route's honest `preview`.
 
+import {boundedJson,hubEndpoint} from './transport-security.js';
 const DEFAULT_TIMEOUT_MS = 90_000;
-
-function resolveHubUrl() {
-  const url = process.env.COM_MOON_HUB_URL?.trim() || "http://localhost:3000";
-  return url.replace(/\/$/, "");
-}
+const MAX_RESPONSE_BYTES = 512 * 1024;
 
 function resolveWriteSecret() {
   return process.env.COM_MOON_HUB_WRITE_SECRET?.trim() || "";
@@ -97,8 +94,9 @@ function describeRouteError({ base, method, path, data }) {
 }
 
 async function hubFetch(path, { method = "GET", body, query } = {}) {
-  const base = resolveHubUrl();
-  const url = new URL(path, `${base}/`);
+  let base,url;
+  try { ({base,url}=hubEndpoint(path)); }
+  catch { return {ok:false,kind:'configuration-error',httpStatus:0,data:null,error:'Invalid Hub URL or API path. Use an HTTPS Hub origin (HTTP is allowed only on loopback).'}; }
   const timeoutMs = resolveTimeoutMs();
 
   if (query) {
@@ -138,15 +136,15 @@ async function hubFetch(path, { method = "GET", body, query } = {}) {
     };
   }
 
-  const text = await response.text();
   let data = null;
   let parseFailed = false;
 
   try {
-    data = text ? JSON.parse(text) : { status: "error", error: "empty-response" };
-  } catch {
+    data = await boundedJson(response,MAX_RESPONSE_BYTES);
+    if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('invalid-hub-response');
+  } catch (error) {
     parseFailed = true;
-    data = { status: "error", error: "non-json-response", httpStatus: response.status };
+    data = { status: "error", error: ['response-too-large','empty-response','non-json-response','invalid-hub-response'].includes(error.message)?error.message:'response-read-failed', httpStatus: response.status };
   }
 
   if (!response.ok) {

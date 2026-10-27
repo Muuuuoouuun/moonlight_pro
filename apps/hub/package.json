@@ -15,7 +15,7 @@
     "@com-moon/guru-guidance": "*",
     "@com-moon/supabase-rest": "*",
     "@com-moon/ui": "*",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "iconv-lite": "^0.7.3",
     "next": "16.4.2",
     "node-ical": "^0.26.1",

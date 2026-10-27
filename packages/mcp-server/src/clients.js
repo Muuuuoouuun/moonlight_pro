@@ -1,5 +1,5 @@
 import {createHash,randomBytes,timingSafeEqual} from 'node:crypto';
-import {existsSync,mkdirSync,readFileSync,renameSync,writeFileSync} from 'node:fs';
+import {existsSync,mkdirSync,readFileSync,renameSync,statSync,writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {PROFILE_NAMES} from './tools.js';
@@ -12,8 +12,21 @@ const digest=token=>createHash('sha256').update(token).digest();
 
 export function readClients(file){
   if(!existsSync(file))return [];
-  const data=JSON.parse(readFileSync(file,'utf8'));
-  if(!Array.isArray(data?.clients))throw new Error(`Invalid client registry: ${file}`);
+  let data;
+  try{
+    if(statSync(file).size>256*1024)throw Error();
+    data=JSON.parse(readFileSync(file,'utf8'));
+  }catch{throw new Error('Invalid client registry. Check its JSON format and size.');}
+  if(data?.version!==1||!Array.isArray(data.clients)||data.clients.length>256)throw new Error('Invalid client registry version or client list.');
+  const names=new Set(),digests=new Set();
+  for(const client of data.clients){
+    if(!client||typeof client!=='object'||typeof client.name!=='string'||!NAME.test(client.name)||!PROFILE_NAMES.includes(client.profile)||
+      typeof client.readOnly!=='boolean'||typeof client.allowUrl!=='boolean'||client.allowUrl&&!client.readOnly||
+      !/^[0-9a-f]{64}$/.test(client.tokenSha256||'')||names.has(client.name)||digests.has(client.tokenSha256)){
+      throw new Error('Invalid client registry grant. Rejecting all clients.');
+    }
+    names.add(client.name);digests.add(client.tokenSha256);
+  }
   return data.clients;
 }
 
