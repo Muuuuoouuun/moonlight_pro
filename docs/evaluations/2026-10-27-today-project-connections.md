@@ -88,7 +88,7 @@
 | Desktop 별도 시험 | **471/471 pass**, skipped 0. 이후 Desktop 소스 변경 없음 |
 | `git diff --check` | 통과 |
 
-루트의 20개 실패는 모두 임시 PostgreSQL `initdb`/서버 기동 중 `could not create shared memory segment: No space left on device`, `shmget(size=56)`다. 디스크 부족이 아니라 macOS 공유 메모리 ID/한계 문제다. 앱 assertion 실패는 남지 않았지만 DB 계약 20개는 실행 환경 때문에 **미검증**이며 전체 suite가 green은 아니다. 커널 한계 변경·타 세션 shared memory 삭제로 우회하지 않았다. 이 상태는 환경 차단이며 승인 거부나 진행 중 테스트가 아니다.
+루트의 20개 실패는 모두 임시 PostgreSQL `initdb`/서버 기동 중 `could not create shared memory segment: No space left on device`, `shmget(size=56)`다. 디스크 부족이 아니라 macOS 공유 메모리 ID/한계 문제다. 앱 assertion 실패는 남지 않았지만 DB 계약 20개는 실행 환경 때문에 **미검증**이며 전체 suite가 green은 아니다. 커널 한계 변경·타 세션 shared memory 삭제로 우회하지 않았다. 이 상태는 환경 차단이며 승인 거부나 진행 중 테스트가 아니다. 추가 순차 재검증은 41개 중 21 pass / 동일한 20 fail / skipped 0이었다. 설치 바이너리 17.11과 shared memory 32/32 한계, 20개 시험 이름·실행 전제·복구 제한은 [PostgreSQL 환경 차단 근거](2026-10-27-postgres-test-blocker.md)에 기록했다.
 
 첫 최종 실행에서 남았던 4개 시험은 바뀐 컴포넌트/경로의 기존 하네스 불일치였다. 실제 callback의 목적지·scope·query 재소비를 검사하도록 고친 뒤 위 최종 전체 실행에서 비 DB 실패 0을 확인했다. 시험을 삭제하거나 실패를 skip으로 바꾸지 않았다. 새 원격 CI는 실행하지 않았다.
 
