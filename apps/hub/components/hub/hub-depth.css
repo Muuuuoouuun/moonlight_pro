@@ -500,7 +500,5 @@
   .hub-app[data-visual-system="depth-c"] .brand-log-chip[aria-pressed="true"] {
     outline: 1px solid Highlight;
     outline-offset: -2px;
-    color: HighlightText;
-    background: Highlight;
   }
 }

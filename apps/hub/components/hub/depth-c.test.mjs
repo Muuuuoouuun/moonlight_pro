@@ -9,6 +9,9 @@ const depth = read('hub-depth.css');
 const tokens = read('hub-tokens.css');
 const marker = '.hub-app[data-visual-system="depth-c"]';
 const strip = css => css.replace(/\/\*[\s\S]*?\*\//g, '');
+// 고대비 선택 윤곽은 그림자가 없는 매체에서만 필요하다. 일반 테마의 포커스 계약과 분리한다.
+const forcedColorsBlock = /@media \(forced-colors: active\)\s*\{([\s\S]*?)\n\}/;
+const normalDepth = strip(depth).replace(forcedColorsBlock, '');
 const rules = [...strip(depth).matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap(([, selectors, body]) => selectors.split(',').map(selector => ({
   selector: selector.replace(/@media[^{]*$/, '').trim(),
   props: Object.fromEntries([...body.matchAll(/(?:^|;)\s*([\w-]+)\s*:\s*([^;]+)/g)].map(([, name, value]) => [name, value.replace(/\s+/g, ' ').trim()])),
@@ -97,7 +100,17 @@ test('inputs and tracks are wells that keep the 3:1 control edge and the focus r
   assert.equal(rule(`${marker} .hub-input[aria-invalid="true"]`)['border-color'], 'var(--danger)');
   assert.equal(rule(`${marker} .hub-seg`)['box-shadow'], 'var(--shadow-inset)');
   assert.match(rule(`${marker} .hub-field:focus-within`)['box-shadow'], /^0 0 0 1px var\(--moon-300\), var\(--shadow-inset-edge\)$/);
-  assert.doesNotMatch(strip(depth), /(?<![\w-])outline\s*:|!important|font-size\s*:|font-weight\s*:/);
+  assert.doesNotMatch(normalDepth, /(?<![\w-])outline\s*:|!important|font-size\s*:|font-weight\s*:/);
+});
+
+test('high contrast preserves a system-color selection outline without overriding readable text or backgrounds', () => {
+  const fallback = strip(depth).match(forcedColorsBlock)?.[1];
+  assert.ok(fallback, 'forced-colors selection remains visible when browser removes shadows');
+  assert.match(fallback, /\.hub-nav-item\[aria-current="page"\]/);
+  assert.match(fallback, /\.hub-tabs__tab\[aria-selected="true"\]/);
+  assert.match(fallback, /\.hub-seg__btn\[aria-pressed="true"\]/);
+  assert.match(fallback, /outline:\s*1px solid Highlight;/);
+  assert.doesNotMatch(fallback, /(?:^|[;{])\s*(?:color|background|forced-color-adjust)\s*:|!important/);
 });
 
 test('the shell paints the glow; topbar and sidebar chrome moved from inline style into CSS', () => {
