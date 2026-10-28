@@ -22,7 +22,7 @@ const indexOf = (marker) => {
 };
 
 test("오늘 할 일이 빠른 입력 바로 다음에 온다", () => {
-  const capture = indexOf("<QuickCaptureForm");
+  const capture = indexOf("<TodayTaskCapture");
   const tasks = indexOf("<TaskToday");
   const focus = indexOf("<FocusSlots");
   const nav = indexOf("<BriefNavigation");
@@ -41,7 +41,7 @@ test("긴급 KA·집중 고객 슬롯은 그대로 남아 있다", () => {
 test("할 일 목록은 한 벌만 렌더된다", () => {
   // 옮기다 두 벌이 남으면 같은 목록이 화면에 두 번 나온다.
   assert.equal((code.match(/<TaskToday\s/g) || []).length, 1, "TaskToday 렌더가 1개가 아니다");
-  assert.equal((code.match(/<QuickCaptureForm\s/g) || []).length, 1, "QuickCaptureForm 렌더가 1개가 아니다");
+  assert.equal((code.match(/<TodayTaskCapture\s/g) || []).length, 1, "TodayTaskCapture 렌더가 1개가 아니다");
 });
 
 // 오늘 3개 별 토글의 활성 색은 CSS가 소유한다(DESIGN.md §15 2026-09-15의 cascade 함정).

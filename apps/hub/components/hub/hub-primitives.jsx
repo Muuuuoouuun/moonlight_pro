@@ -1331,7 +1331,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
         if (continueCreating && onContinue && ['saved', 'duplicate'].includes(r.status)) onContinue();
         else onClose();
       }
-      else if (r?.status === 'preview') setSaveState('preview');
+      else if (r?.status === 'preview') { setSaveFeedback(r?.message || ''); setSaveState('preview'); }
       else if (r?.status === 'conflict') {
         setSaveFeedback(r?.message || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 기록을 확인한 뒤 다시 시도하세요.');
         setSaveState('conflict');
@@ -1528,7 +1528,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
           )}
           <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
             {saveState === 'preview' && (
-              <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
+              <span style={{ color: 'var(--fg-muted)' }}>{saveFeedback || '저장 위치가 연결되지 않아 저장되지 않았습니다. 입력을 유지했으니 연결 후 다시 시도하세요.'}</span>
             )}
             {saveState === 'conflict' && (
               <span style={{ color: 'var(--danger)' }}>{saveFeedback || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 기록을 확인한 뒤 다시 시도하세요.'}</span>

@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { ContactRecordDrawer, ContactRecordForm, RecordAwayBar, RecordPrimarySlot, RecordSaveLine, RecordSheetFields, recordDraftStore, createRawNoteRecoveryStore } from "./contact-record-form.jsx";
 import { RecordQueueStrip } from "./record-queue-strip.jsx";
-import { Button, TextField, TextAreaField } from "./hub-primitives.jsx";
+import { Button, CheckboxRow, TextField, TextAreaField } from "./hub-primitives.jsx";
 import { RECORD_DRAWER_WIDTH, RECORD_TOUCH_QUERY, recordSaveButtons, recordSaveLine } from "../../lib/sales-os/contact-record.js";
 import { applyTrailEvent, recordNextStop, trailItems } from "../../lib/sales-os/record-queue.js";
 
@@ -379,7 +379,7 @@ test("토스트 되돌리기는 '기록 중'이라고만 말한다 — 서버 sa
   // 탭을 닫아도 3.5초 창 안의 기록은 보낸다(use-undoable-action과 같은 최선 노력).
   assert.match(source, /window\.addEventListener\("pagehide", flushDetached\)/);
   // preview는 실패다 — 입력을 복원하고 저장되지 않았다고 말한다.
-  assert.match(source, /data\.status === "preview" \? "Preview · 연결 필요 — 저장되지 않았습니다"/);
+  assert.match(source, /data\?\.status === "preview" \? "Preview · 연결 필요 — 저장되지 않았습니다"/);
 });
 
 test("저장된 기록에만 기록 소요·실제 연락 시각을 단다", () => {
@@ -587,7 +587,7 @@ test("넓은 배치의 실패는 글을 지우지 않고 원인을 1px 레일 + 
   assert.doesNotMatch(compact, /inset 1px 0 0/);
 
   // 일부 저장(요약은 됐고 자세히는 아직) — 제목이 달라지고, 다시 저장 · 건너뛰기는 기존 재시도 길 그대로.
-  assert.match(source, /errorTitle: wide \? \(pendingRawNote \? "일부 저장" : "저장 못 함"\) : "",/);
+  assert.match(source, /errorTitle: wide \? \(pendingRawNote \? "일부 저장" : unknownSummary \? "저장 여부 미확인" : "저장 못 함"\) : "",/);
   const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
   assert.match(persist, /onPartial\?\.\(\{ activityId: data\.activityId \|\| null, optimisticId: snapshot\.optimisticId \}, target\);/);
   assert.ok(persist.indexOf("onPartial?.") > persist.indexOf("onSummaryPersisted?."), "요약이 확인된 뒤에만 일부 저장");
@@ -972,7 +972,7 @@ test("빠진 칸이 접혀 있거나 가려져 있으면 저장이 그 칸을 �
   const warn = save.slice(save.indexOf("if ((promiseEmpty"), save.indexOf("const optimisticId"));
   assert.match(warn, /setState\("warn"\);[\s\S]*?onAttention\?\.\(\);\s*return;/);
   // 늦은 실패 · 일부 저장도 같다 — 가려진 탭에서 실패가 조용히 묻히지 않는다.
-  const fail = source.slice(source.indexOf("const fail = (snapshot, message) => {"), source.indexOf("const save = ("));
+  const fail = source.slice(source.indexOf("const fail = (snapshot, message, unknown = false) => {"), source.indexOf("const save = ("));
   // 단, '저장하고 다음'으로 보낸 기록(snapshot.queued)은 돌리지 않는다 — 창은 이미 다른 사람의 것이고 그 실패는
   // 창 머리의 '이전' 줄이 말한다. 앞 사람의 늦은 실패가 지금 사람이 읽던 '이 고객' 탭을 쓰기로 바꾸지 않는다.
   assert.match(fail, /setErrorMsg\(message\);[\s\S]*?if \(!snapshot\.queued\) onAttention\?\.\(\);/);
@@ -981,7 +981,7 @@ test("빠진 칸이 접혀 있거나 가려져 있으면 저장이 그 칸을 �
   assert.ok(persist.indexOf("if (!snapshot.queued) onAttention?.();") > persist.indexOf("setErrorMsg(noteCopy.failed);"));
   assert.doesNotMatch(persist.replace(/if \(!snapshot\.queued\) onAttention\?\.\(\);/, ""), /onAttention\?\.\(\)/);
   // 저장이 잘 나가면 돌리지 않는다 — 읽던 '이 고객' 탭에 그대로 머문다.
-  assert.equal((save.match(/onAttention\?\.\(\)/g) || []).length, 2);
+  assert.equal((save.match(/onAttention\?\.\(\)/g) || []).length, 3, "missing fields, empty promise and uncertain retry all reveal the writing pane");
   // 일부 저장 뒤 머리의 '자세히 다시 저장'도 같다 — '이 고객' 탭에서 눌렀는데 또 실패했거나(서버) 보낼 글이
   // 없으면(빈 자세히) 원인은 가려진 기록 칸에 선다. 쓰기로 돌리지 않으면 눌러도 아무 일 없는 버튼이 된다.
   const retry = source.slice(source.indexOf("const retryRawNote = async () => {"), source.indexOf("const skipRawNote"));
@@ -1035,7 +1035,7 @@ test("휴대폰 시트와 넓은 기록창은 한 나무다 — 쓰는 중에 60
   assert.doesNotMatch(wide, /if \(sheet\) \{\s*(?:const [^\n]*\n\s*)*return \(/);
   assert.equal((wide.match(/className="record-wide__scroll"/g) || []).length, 1);
   // 자리 순서 — 전환 칸은 넓은 기록창에서는 뿌리에, 시트에서는 흐르는 칸 맨 위에(둘 다 자리는 늘 있다).
-  assert.match(wide, /\{!sheet && modeBar\}\s*<div className="record-wide__scroll">\s*\{\/\*[^*]*\*\/\}\s*\{sheet && modeBar\}\s*\{restoredLine\}\s*\{captureNote\}\s*\{summaryField\}\s*\{folded && \(/);
+  assert.match(wide, /\{!sheet && modeBar\}\s*<div className="record-wide__scroll">\s*\{\/\*[^*]*\*\/\}\s*\{sheet && modeBar\}\s*\{restoredLine\}\s*\{summaryRecoveryPanel\}\s*\{captureNote\}\s*\{summaryField\}\s*\{folded && \(/);
   assert.match(wide, /\)\}\s*\{detailField\}\s*\{folded && \(\s*<RecordSheetFields/);
   assert.match(wide, /\{autofill\}\s*\{slotted\}\s*<\/div>\s*\{bottom\}/);
   // 아래 제자리는 배치마다 다른 것이라 이름(key)으로 갈아 끼운다 — 띠가 칩 줄로 '변하지' 않는다.
@@ -1302,10 +1302,10 @@ test("저장하고 다음은 같은 3.5초 되돌리기 창이다 — 토스트 
 });
 
 test("늦은 실패는 쓰던 글을 그 고객의 초안으로도 남긴다 — 창이 이미 다음 사람으로 넘어갔어도 잃지 않는다", () => {
-  const fail = source.slice(source.indexOf("const fail = (snapshot, message) => {"), source.indexOf("// advance: '저장하고 다음'으로 눌렀는가"));
+  const fail = source.slice(source.indexOf("const fail = (snapshot, message, unknown = false) => {"), source.indexOf("// advance: '저장하고 다음'으로 눌렀는가"));
   assert.ok(fail.length > 0);
   assert.match(fail, /onUndone\?\.\(snapshot\.optimisticId, target\);[\s\S]*?writeDraft\(target, snapshot\.form, draftScope\);\s*restore\(snapshot\);/);
-  assert.match(fail, /onFailed\?\.\(\{ optimisticId: snapshot\.optimisticId, message, form: snapshot\.form, target \}\);/);
+  assert.match(fail, /onFailed\?\.\(\{ optimisticId: snapshot\.optimisticId, message, form: snapshot\.form, target, preservedDraft: Boolean\(hasNewDraft\) \}\);/);
   // '저장하고 다음'으로 보낸 기록의 일부 저장은 '이전' 줄이 말한다 — 폼이 토스트를 겹치지 않는다(그 밖은 지금 그대로).
   const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
   assert.match(persist, /if \(undoMode === "toast" && !snapshot\.queued\) toast\.error\(RAW_NOTE_ERROR_REOPEN\);/);
@@ -1715,6 +1715,72 @@ function mountRecordForm(props) {
   return { render, find, field, primary, unmount };
 }
 const settleRecordRequests = async () => { for (let i = 0; i < 12; i += 1) await Promise.resolve(); };
+
+for (const reopen of [false, true]) test(`late summary failure preserves the next draft and an independent recovery · reopen ${reopen}`, async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const before = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  const storage = tabStorage();
+  globalThis.window = { sessionStorage: storage, addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { activeElement: null, body: {} };
+  let release, app, reopened;
+  const target = { kind: "lead", id: `summary-next-${reopen}` };
+  const initial = { kind: "note", summary: "Earlier summary", body: "Earlier detail", followup: "dormant" };
+  globalThis.fetch = () => new Promise(resolve => { release = resolve; });
+  try {
+    app = mountRecordForm({ target, preset: initial });
+    app.primary().props.onClick(); app.render();
+    t.mock.timers.tick(3500); await settleRecordRequests();
+    if (reopen) { app.unmount(); reopened = mountRecordForm({ target, preset: { kind: "note", followup: "dormant" } }); }
+    const current = reopened || app;
+    current.field("요약 · 한 줄").props.onChange({ target: { value: "Next summary" } });
+    current.render();
+    current.field("자세히").props.onChange({ target: { value: "Next detail" } });
+    current.render();
+    release({ ok: false, status: 400, json: async () => ({ status: "invalid-input", error: "synthetic rejection" }) });
+    await settleRecordRequests(); current.render();
+    assert.equal(current.field("요약 · 한 줄").props.value, "Next summary");
+    assert.equal(current.field("자세히").props.value, "Next detail");
+    const draft = JSON.parse(storage.getItem(`crm-record:lead:${target.id}`));
+    assert.equal(draft.summary, "Next summary"); assert.equal(draft.body, "Next detail");
+    const recovered = JSON.parse(storage.getItem(`crm-record:lead:${target.id}:summary-recoveries`));
+    assert.equal(recovered[0].form.summary, "Earlier summary"); assert.equal(recovered[0].form.body, "Earlier detail");
+    assert.ok(current.find(n => n.type === TextAreaField && n.props.label === "저장하지 못한 입력").length, "the failed input remains accessible without replacing the next draft");
+  } finally {
+    app?.unmount(); reopened?.unmount(); Object.assign(globalThis, before); t.mock.timers.reset();
+  }
+});
+
+for (const responseStatus of [400, 401, 403, "401-malformed", 500, "transport"]) test(`summary retry distinguishes rejection from an uncertain result · ${responseStatus}`, async t => {
+  const unknown = responseStatus === 500 || responseStatus === "transport";
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const before = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = { sessionStorage: tabStorage(), addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { activeElement: null, body: {} };
+  let posts = 0, app;
+  globalThis.fetch = async () => {
+    posts++;
+    if (posts === 1) {
+      if (responseStatus === "transport") throw Error("synthetic reply lost after commit");
+      if (responseStatus === "401-malformed") return { ok: false, status: 401, json: async () => { throw Error("synthetic non-JSON login response"); } };
+      return { ok: false, status: responseStatus, json: async () => ({ status: responseStatus === 400 ? "invalid-input" : "error", error: "synthetic rejection" }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ status: "saved", activityId: "saved-retry" }) };
+  };
+  try {
+    app = mountRecordForm({ target: { kind: "lead", id: `summary-uncertain-${unknown}` }, preset: { kind: "note", summary: "Retry input", followup: "dormant" } });
+    app.primary().props.onClick(); app.render(); t.mock.timers.tick(3500); await settleRecordRequests(); app.render();
+    assert.equal(posts, 1);
+    const check = () => app.find(n => n.type === CheckboxRow && n.props.text?.includes("최근 기록에 없는"))[0];
+    assert.equal(Boolean(check()), unknown);
+    app.primary().props.onClick(); app.render(); t.mock.timers.tick(3500); await settleRecordRequests();
+    if (unknown) {
+      assert.equal(posts, 1, "an uncertain write cannot be retried by clicking Save alone");
+      check().props.onChange(true); app.render(); app.primary().props.onClick(); app.render();
+      t.mock.timers.tick(3500); await settleRecordRequests();
+    }
+    assert.equal(posts, 2, "definitive rejection and explicit confirmation both retain a usable retry");
+  } finally { app?.unmount(); Object.assign(globalThis, before); t.mock.timers.reset(); }
+});
 
 for (const { succeeds, editWhilePending } of [{ succeeds: true, editWhilePending: false }, { succeeds: true, editWhilePending: true }, { succeeds: false, editWhilePending: false }, { succeeds: false, editWhilePending: true }]) test(`원문 전송 중 닫고 다시 열면 기다리고 원래 요청 ${succeeds ? "성공" : "실패"}를 반영한다 · 새 입력 ${editWhilePending}`, async () => {
   const before = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };

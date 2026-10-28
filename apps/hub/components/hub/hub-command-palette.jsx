@@ -24,6 +24,7 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
   }, [open, reload]);
 
   const items = React.useMemo(() => {
+    const revenueScopeQuery = scope === 'personal' || scope === 'classin' ? `&scope=${scope}` : '';
     // 생성 액션은 팔레트의 발견 경로다 — 단축키(C·⌘K)를 모르는 상태에서도 도달해야 한다.
     const flat = [
       { kind: 'Action', label: '빠른 입력 — 할 일·정리 전', action: 'quick-capture', icon: 'plus', keywords: ['할 일', '할일', '태스크', '작업', '추가', '생성', '캡처', 'task', 'todo', 'capture', 'add', 'new'] },
@@ -38,10 +39,10 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
     flat.push({ kind: 'Action', label: 'New Project', path: 'dashboard/work/projects?new=project', icon: 'projects' });
     flat.push({ kind: 'Action', label: 'New Content draft', path: 'dashboard/content/studio?new=draft', icon: 'studio' });
     // Revenue 생성 딥링크(22차) — TopBar New와 같은 ?new= 착지를 팔레트에서도 잇는다.
-    flat.push({ kind: 'Action', label: 'New Lead', path: 'dashboard/revenue/leads?new=lead', icon: 'leads', keywords: ['리드', '고객'] });
-    flat.push({ kind: 'Action', label: 'New Deal', path: 'dashboard/revenue/deals?new=deal', icon: 'deals', keywords: ['딜', '영업'] });
-    flat.push({ kind: 'Action', label: '고객사·거래처 계정 추가', path: 'dashboard/revenue/accounts?new=account', icon: 'accounts', keywords: ['New Account', '계정', '고객사', '거래처'] });
-    flat.push({ kind: 'Action', label: 'New Case', path: 'dashboard/revenue/cases?new=case', icon: 'cases', keywords: ['케이스', '이슈'] });
+    flat.push({ kind: 'Action', label: 'New Lead', path: `dashboard/revenue/leads?new=lead${revenueScopeQuery}`, icon: 'leads', keywords: ['리드', '고객'] });
+    flat.push({ kind: 'Action', label: 'New Deal', path: `dashboard/revenue/deals?new=deal${revenueScopeQuery}`, icon: 'deals', keywords: ['딜', '영업'] });
+    flat.push({ kind: 'Action', label: '고객사·거래처 계정 추가', path: `dashboard/revenue/accounts?new=account${revenueScopeQuery}`, icon: 'accounts', keywords: ['New Account', '계정', '고객사', '거래처'] });
+    flat.push({ kind: 'Action', label: 'New Case', path: `dashboard/revenue/cases?new=case${revenueScopeQuery}`, icon: 'cases', keywords: ['케이스', '이슈'] });
     // 하루 리뷰 팝업 직행(2026-09-23 지속 루프 설계 §4.2) — 셸 Provider가 ?review=를 1회 소비한다.
     flat.push({ kind: 'Action', label: '하루 리뷰 쓰기', path: 'dashboard/work/daily-review?review=today', icon: 'brief', keywords: ['하루', '리뷰', '회고', '에너지', '마무리', 'daily review'] });
     flat.push({ kind: 'Action', label: 'Start 15m focus timer', path: 'dashboard/work/calendar?focus=15', icon: 'clock' });

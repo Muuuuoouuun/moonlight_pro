@@ -41,23 +41,23 @@ test('a real unauthorized read renders login recovery instead of empty signals a
   const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
   assert.match(html, /로그인이 필요합니다/);
   assert.match(html, /다시 로그인/);
-  assert.doesNotMatch(html, /오늘 확인할 것을 다 봤습니다|확인할 것을 다 봤습니다|오늘 잡힌 일정이 없습니다|아침 브리핑/);
+  assert.doesNotMatch(html, /지금 확인할 항목이 없습니다|확인할 것을 다 봤습니다|오늘 잡힌 일정이 없습니다|오늘의 할 일/);
 });
 
 test('unauthorized calendar alone suppresses stale events and morning interpretation', () => {
   const { Home } = surface({status:'live',signals:[]}, {status:'unauthorized',events:[{title:'stale',start:'2026-10-02T00:00:00Z'}]});
   const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
   assert.match(html, /로그인이 필요합니다/);
-  assert.doesNotMatch(html, /stale|오늘 잡힌 일정이 없습니다|아침 브리핑/);
+  assert.doesNotMatch(html, /stale|오늘 잡힌 일정이 없습니다|오늘의 할 일/);
 });
 
 test('confirmed empty reads retain their real empty state', () => {
   const { Home } = surface({status:'live',signals:[]}, {status:'live',events:[]});
   const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
-  assert.match(html, /오늘 확인할 것을 다 봤습니다/);
+  assert.match(html, /지금 확인할 항목이 없습니다/);
   assert.match(html, /새로 확인할 것이 생기면/);
   assert.match(html, /오늘 잡힌 일정이 없습니다/);
-  assert.match(html, /아침 브리핑/);
+  assert.match(html, /오늘의 할 일/);
   assert.doesNotMatch(html, /로그인이 필요합니다/);
 });
 
@@ -87,13 +87,13 @@ test('partial empty signal deck never reports all checks finished and retains ex
   assert.match(html, /확인할 것을 모두 읽지 못했습니다/);
   assert.match(html, /실제로 확인할 일이 있을 수 있습니다/);
   assert.match(html, /다시 불러오기/);
-  assert.doesNotMatch(html, /오늘 확인할 것을 다 봤습니다|확인할 것을 다 봤습니다/);
+  assert.doesNotMatch(html, /지금 확인할 항목이 없습니다|확인할 것을 다 봤습니다/);
 });
 
 test('loading, preview and error signal reads stay distinct from verified empty', () => {
   for (const status of ['loading', 'preview', 'error']) {
     const { Home } = surface({status,signals:[],reload:()=>{}}, {status:'live',events:[]});
     const html = renderToStaticMarkup(React.createElement(Home, {onNavigate:()=>{}}));
-    assert.doesNotMatch(html, /오늘 확인할 것을 다 봤습니다|확인할 것을 다 봤습니다/);
+    assert.doesNotMatch(html, /지금 확인할 항목이 없습니다|확인할 것을 다 봤습니다/);
   }
 });

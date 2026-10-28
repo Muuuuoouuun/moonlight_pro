@@ -9,6 +9,7 @@ import { PublishLogView } from './publish-log-view';
 import { createFollowUpStarter } from '@/lib/content-follow-up';
 import { postStudio } from './content-studio-api';
 import { buildPublishLog, countLog, filterLog, weekStrip } from '@/lib/content-publish-log';
+import { seoulDate } from '@/lib/content-performance';
 import './content-publish-log.css';
 
 // 발행 로그 — 예약·놓침·발행을 시간 순 한 목록으로. 수치는 성과 화면이 소유하고 여기서는 읽기만 한다(기록·수정은 성과에서).
@@ -66,6 +67,14 @@ export function ContentPublishLog() {
   const partial = !failed && (schedules.status === 'preview' || ledger.syncState === 'partial' || ledger.syncState === 'preview');
   const retry = () => { schedules.reload(); window.dispatchEvent(new Event('moonlight:content-saved')); };
   const openDraft = (row) => router.push(`/dashboard/content/studio?item=${encodeURIComponent(row.contentId)}&variant=${encodeURIComponent(row.variantId)}`);
+  const openPerformance = (row) => {
+    const date = seoulDate(row.at);
+    const query = new URLSearchParams({ view: 'monthly', year: date.slice(0, 4), month: date.slice(5, 7), variant: row.variantId });
+    const brandId = ledger.items?.find((item) => item.id === row.contentId)?.brandId;
+    if (brandId) query.set('brand', brandId);
+    if (row.channel) query.set('channel', row.channel);
+    router.push(`/dashboard/content/performance?${query}`);
+  };
 
   const [followUp, setFollowUp] = React.useState({ busy: false, message: '' });
   const followUpStarter = React.useRef(null);
@@ -103,7 +112,7 @@ export function ContentPublishLog() {
         : preview ? <EmptyState icon="content" title="저장소 연결이 필요합니다" description="연결되면 예약과 발행 기록이 여기에 시간 순으로 쌓입니다." />
         : !allRows.length ? <EmptyState icon="content" title="아직 예약·발행 기록이 없습니다" description="원고 작성에서 예약하거나 발행했음을 기록하면 여기에 남습니다." action={<Button variant="outline" onClick={() => router.push('/dashboard/content/studio')}>원고 작성으로</Button>} />
         : <PublishLogView rows={rows} allRows={allRows} counts={counts} filter={filter} onFilter={setFilter} week={week}
-            selectedId={selectedId} onSelect={setSelectedId} onOpenDraft={openDraft} onOpenPerformance={() => router.push('/dashboard/content/performance')} onFollowUp={startFollowUp} followUpBusy={followUp.busy} />}
+            selectedId={selectedId} onSelect={setSelectedId} onOpenDraft={openDraft} onOpenPerformance={openPerformance} onFollowUp={startFollowUp} followUpBusy={followUp.busy} />}
         {followUp.message && <p role="alert" className="pl-muted">{followUp.message}</p>}
     </div>
   );

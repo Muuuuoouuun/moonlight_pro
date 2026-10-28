@@ -521,6 +521,7 @@ export function DealsMoney({
   onCreate,
   canCreate = true,
   onNavigate,
+  scope = null,
   onReload,
   onUpdatePayments,
   onUpdateRecurring,
@@ -696,7 +697,7 @@ export function DealsMoney({
             onMoveDate(selectedItem.deal.id, iso, `${org} · 예상일 ${iso ? `→ ${dateLabel}` : "미정으로"}`);
           }}
           onEdit={() => onEdit(selectedItem.deal.id)}
-          onOpenCustomer={() => onNavigate?.(`dashboard/revenue/customers?customer=${encodeURIComponent(customerKey)}`)}
+          onOpenCustomer={() => onNavigate?.(`dashboard/revenue/customers?customer=${encodeURIComponent(customerKey)}${['personal', 'classin'].includes(scope) ? `&scope=${scope}` : ''}`)}
           onUpdatePayments={(next, label) => onUpdatePayments?.(selectedItem.deal.id, next, label)}
           onUpdateRecurring={(next, label) => onUpdateRecurring?.(selectedItem.deal.id, next, label)}
         />

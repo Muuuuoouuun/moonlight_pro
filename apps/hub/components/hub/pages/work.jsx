@@ -450,9 +450,11 @@ export function Calendar({ onNavigate }) {
   const [outcomeSaving, setOutcomeSaving] = React.useState(false);
   const [createError, setCreateError] = React.useState('');
   const focusAppliedRef = React.useRef(false);
+  const creatingRef = React.useRef(false);
   const { days: fetchDays } = buildCalendarWeek(selectedDate);
   const calendarData = useCalendarEvents(fetchDays);
   const taskData = useCalendarTasks(fetchDays);
+  const [createUnknown, setCreateUnknown] = React.useState(false);
   const calendarCapabilities = resolveCalendarCapabilities(calendarData);
   const isLive = calendarCapabilities.isLive;
   const isReadOnly = isLive && calendarData.readOnly;
@@ -460,6 +462,7 @@ export function Calendar({ onNavigate }) {
   // Creates a real Google Calendar event when connected; otherwise falls back to a
   // clear read-only/disconnected message without fabricating a local event.
   const createEvent = React.useCallback(async ({ date, startHour, endHour, title }) => {
+    if (creatingRef.current) return;
     const targetDay = date || fetchDays[0];
     if (!calendarCapabilities.canCreate) {
       // 원인별로 다른 문장을 준다 — 읽기 실패·확인 중을 "연결하세요"로 뭉개면 이미 연결한
@@ -477,29 +480,36 @@ export function Calendar({ onNavigate }) {
     }
     const startAt = new Date(targetDay); startAt.setHours(Math.floor(startHour), (startHour % 1) * 60, 0, 0);
     const endAt = new Date(targetDay); endAt.setHours(Math.floor(endHour), (endHour % 1) * 60, 0, 0);
+    creatingRef.current = true;
     setCreating(true);
     setCreateError('');
+    setCreateUnknown(false);
+    const unknownResult = () => {
+      setCreateUnknown(true);
+      setCreateError('일정 저장 여부를 확인하지 못했습니다. 일정 다시 불러오기로 캘린더를 확인한 뒤, 일정이 없을 때만 다시 시도하세요.');
+    };
     try {
       const res = await fetch('/api/calendar/google/event', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title, startAt: startAt.toISOString(), endAt: endAt.toISOString() }),
+        signal: AbortSignal.timeout(20000),
       });
       const data = await res.json().catch(() => null);
-      if (data?.status === 'saved' || data?.status === 'updated') {
+      if ([401, 403].includes(res.status)) {
+        setCreateError(`일정 생성이 거부되었습니다 (${res.status}). 로그인과 캘린더 편집 권한을 확인하세요.`);
+      } else if ([400, 422].includes(res.status) || (res.status < 500 && data?.status === 'invalid-input')) {
+        setCreateError(`일정 입력을 확인하세요 — ${data?.message || data?.error || '제목과 시작·종료 시간을 확인한 뒤 다시 시도하세요.'}`);
+      } else if (res.status >= 500 || !data) {
+        unknownResult();
+      } else if (res.ok && (data.status === 'saved' || data.status === 'updated')) {
         calendarData.refetch();
-      } else {
-        // 무음 실패 금지 — 만료 토큰(401)·미연결이면 블록이 그냥 안 생겨서 드래그 실수처럼
-        // 보였다. ?focus= 딥링크의 자동 생성도 이 경로를 타므로 원인을 반드시 표시한다.
-        setCreateError(
-          data?.message || data?.error
-            ? `일정 생성 실패 — ${data.message || data.error}`
-            : `일정 생성 실패 (${res.status}) — Google Calendar 연결 상태를 확인하세요.`,
-        );
-      }
+      } else if (data.status === 'preview') setCreateError('캘린더가 연결되지 않아 일정을 저장하지 않았습니다. Google Calendar 연결 상태를 확인하세요.');
+      else unknownResult();
     } catch {
-      setCreateError('일정 생성 실패 — 네트워크 오류. 다시 시도하세요.');
+      unknownResult();
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   }, [fetchDays, calendarCapabilities.canCreate, isReadOnly, calendarData]);
@@ -679,9 +689,9 @@ export function Calendar({ onNavigate }) {
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
             <Button variant="ghost" size="xs"
-              onClick={calendarData.status === 'error' ? calendarData.refetch : connectGoogleCalendar}
-              disabled={calendarData.status === 'loading' || (calendarData.status !== 'error' && gcalStatus === 'connecting')}>
-              {calendarData.status === 'error'
+              onClick={calendarData.status === 'error' || createUnknown ? calendarData.refetch : connectGoogleCalendar}
+              disabled={calendarData.status === 'loading' || (!createUnknown && calendarData.status !== 'error' && gcalStatus === 'connecting')}>
+              {calendarData.status === 'error' || (createUnknown && calendarData.status !== 'loading')
                 ? '일정 다시 불러오기'
                 : calendarData.status === 'loading'
                 ? '일정 확인 중'
@@ -895,6 +905,13 @@ function buildRhythmDraft(defaultProjectId) {
 // 이기지 못한다(§15 2026-09-15) — primitive가 열어 둔 style passthrough가 유일한 경로다.
 const FX_CERTAINTY_CHROME = { fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', padding: '3px 10px' };
 
+function withoutRecordEdit(edits, id) {
+  if (!Object.prototype.hasOwnProperty.call(edits, id)) return edits;
+  const next = { ...edits };
+  delete next[id];
+  return next;
+}
+
 export function Decisions({ onNavigate, scope }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -913,6 +930,12 @@ export function Decisions({ onNavigate, scope }) {
   const [sourceFilter, setSourceFilter] = React.useState('all');
   const [createdFollowups, setCreatedFollowups] = React.useState({}); // { [decisionId]: task[] } until the ledger re-reads
   const createdFromQueryRef = React.useRef(false);
+  const savedDecisionCloseRef = React.useRef(null);
+  const savedDecisionReadsRef = React.useRef(new Map());
+  const decisionEditorBaselineRef = React.useRef(null);
+  React.useEffect(() => {
+    if (editDecisionId) decisionEditorBaselineRef.current = { id: editDecisionId, edit: decisionEdits[editDecisionId] };
+  }, [editDecisionId]);
 
   // 저장한 새 결정은 다시 읽으면 기록에도 생긴다 — 같은 id는 기록 쪽 하나만 둔다.
   const liveList = Array.isArray(liveDecisions) ? liveDecisions : [];
@@ -934,13 +957,24 @@ export function Decisions({ onNavigate, scope }) {
   }, []);
 
   React.useEffect(() => {
-    if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
+    if (searchParams.get('new') !== 'decision') { createdFromQueryRef.current = false; return; }
+    if (createdFromQueryRef.current) return;
     createDecision(DECISION_JOURNAL ? decisionPrefillFromQuery(searchParams) : null);
     createdFromQueryRef.current = true;
     router.replace(pathname);
   }, [createDecision, searchParams, router, pathname]);
   const decisionSyncState = decisionsState?.state || 'error';
   const decisionComplete = decisionSyncState === 'live' || decisionSyncState === 'live-empty';
+  // A confirmed save may stay visible while its read fails. Retire that overlay
+  // after a newer complete read, without clearing an editor's ongoing changes.
+  React.useEffect(() => {
+    if (!decisionComplete) return;
+    for (const [id, previousRead] of savedDecisionReadsRef.current) {
+      if (id === editDecisionId || previousRead === liveDecisions) continue;
+      savedDecisionReadsRef.current.delete(id);
+      setDecisionEdits(prev => withoutRecordEdit(prev, id));
+    }
+  }, [liveDecisions, decisionComplete, editDecisionId]);
   const decisionLabel = decisionSyncState === 'live' || decisionSyncState === 'live-empty'
     ? 'live'
     : decisionSyncState === 'loading'
@@ -985,6 +1019,21 @@ export function Decisions({ onNavigate, scope }) {
   // 새 결정은 결정 → 그래서 할 일 순서로 한 번에(decision-actions.js) — 할 일만 실패하면 결정은 남았다고 말하고,
   // 다시 저장하면 할 일부터 이어 간다. 기존 결정 편집은 지금처럼 PATCH 한 번.
   const saveProgressRef = React.useRef({});
+  const closeDecisionEditor = () => {
+    const id = editDecisionId;
+    const saved = savedDecisionCloseRef.current === id;
+    savedDecisionCloseRef.current = null;
+    if (!saved) {
+      const baseline = decisionEditorBaselineRef.current?.id === id ? decisionEditorBaselineRef.current.edit : null;
+      setDecisionEdits(prev => baseline ? { ...prev, [id]: baseline } : withoutRecordEdit(prev, id));
+      setLocalDecisions(prev => prev.filter(d => d.id !== id || !d.isNew));
+      if (!baseline) savedDecisionReadsRef.current.delete(id);
+      // A decision can already exist when only its follow-up failed.
+      if (saveProgressRef.current[id]?.decision) retry();
+      delete saveProgressRef.current[id];
+    }
+    setEditDecisionId(null);
+  };
   const persistDecision = React.useCallback(async () => {
     if (!editingDecision?.title?.trim()) return { ok: false, status: 'invalid-input', message: '무엇을 정했는지 적어 주세요.' };
     if (editingDecision.isNew) {
@@ -1007,8 +1056,11 @@ export function Decisions({ onNavigate, scope }) {
         await linkDecision(globalThis.fetch, result.decisionId, { nextTaskId: result.taskId });
         setCreatedFollowups(prev => ({ ...prev, [result.decisionId]: [{ id: result.taskId, title: editingDecision.taskTitle.trim(), status: 'todo', dueAt: editingDecision.taskDueAt || null }] }));
       }
-      setLocalDecisions(prev => prev.map(d => (d.id === editDecisionId ? { ...d, isNew: false, followups: [] } : d)));
+      setLocalDecisions(prev => prev.map(d => (d.id === editDecisionId ? { ...editingDecision, isNew: false, followups: [] } : d)));
+      setDecisionEdits(prev => withoutRecordEdit(prev, editDecisionId));
+      savedDecisionCloseRef.current = editDecisionId;
       delete saveProgressRef.current[editingDecision.id];
+      await retry();
       return { ok: true, status: 'saved' };
     }
     try {
@@ -1027,11 +1079,14 @@ export function Decisions({ onNavigate, scope }) {
       if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
         return { ok: false, status: data.status || 'error' };
       }
+      savedDecisionCloseRef.current = editDecisionId;
+      savedDecisionReadsRef.current.set(editDecisionId, liveDecisions);
+      await retry();
       return { ok: true, status: data.status };
     } catch (error) {
       return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
     }
-  }, [editingDecision, editDecisionId]);
+  }, [editingDecision, editDecisionId, liveDecisions, retry]);
 
   const sourceOptions = decisionSourceOptions(mergedDecisions.filter(d => !d.isNew));
   const activeSource = sourceOptions.some(option => option.key === sourceFilter) ? sourceFilter : 'all';
@@ -1241,7 +1296,7 @@ export function Decisions({ onNavigate, scope }) {
             { key: 'projectId', label: '연결된 프로젝트', type: 'select', row: 'meta', options: projectOptions },
           ]}
           onChange={updateDraft}
-          onClose={() => setEditDecisionId(null)}
+          onClose={closeDecisionEditor}
           onSave={persistDecision}
           // onDelete 없음은 의도: 결정 기록은 append-only 저널이다 — 번복은 지우는 게 아니라
           // 새 결정으로 기록한다 (Rhythm의 deleteRitual과 달리 이력 자체가 가치라서).
@@ -1535,6 +1590,32 @@ export function Rhythm() {
   const [ritualEdits, setRitualEdits] = React.useState({});
   const [editRitualId, setEditRitualId] = React.useState(null);
   const createdRitualFromQueryRef = React.useRef(false);
+  const savedRitualCloseRef = React.useRef(null);
+  const savedRitualReadsRef = React.useRef(new Map());
+  const ritualEditorBaselineRef = React.useRef(null);
+  React.useEffect(() => {
+    if (editRitualId) ritualEditorBaselineRef.current = { id: editRitualId, edit: ritualEdits[editRitualId] };
+  }, [editRitualId]);
+  React.useEffect(() => {
+    if (rhythmState !== 'live' && rhythmState !== 'live-empty') return;
+    for (const [id, previousRead] of savedRitualReadsRef.current) {
+      if (id === editRitualId || previousRead === liveRituals) continue;
+      savedRitualReadsRef.current.delete(id);
+      setRitualEdits(prev => withoutRecordEdit(prev, id));
+    }
+  }, [liveRituals, rhythmState, editRitualId]);
+  const closeRitualEditor = () => {
+    const id = editRitualId;
+    const saved = savedRitualCloseRef.current === id;
+    savedRitualCloseRef.current = null;
+    if (!saved) {
+      const baseline = ritualEditorBaselineRef.current?.id === id ? ritualEditorBaselineRef.current.edit : null;
+      setRitualEdits(prev => baseline ? { ...prev, [id]: baseline } : withoutRecordEdit(prev, id));
+      setLocalRituals(prev => prev.filter(r => r.id !== id || !r.isNew));
+      if (!baseline) savedRitualReadsRef.current.delete(id);
+    }
+    setEditRitualId(null);
+  };
   // 삭제된 (projectId, ritualKey) tombstone — revenue.jsx의 deleteLead와 동일한 낙관적
   // 삭제 패턴: 클릭 즉시 목록에서 숨기고, 실패하면 tombstone을 지워 되돌린다.
   const [deletedRitualIdentities, setDeletedRitualIdentities] = React.useState(() => new Set());
@@ -1577,7 +1658,8 @@ export function Rhythm() {
   }, [selectedProjectId]);
 
   React.useEffect(() => {
-    if (searchParams.get('new') !== 'rhythm' || createdRitualFromQueryRef.current) return;
+    if (searchParams.get('new') !== 'rhythm') { createdRitualFromQueryRef.current = false; return; }
+    if (createdRitualFromQueryRef.current) return;
     createRitual();
     createdRitualFromQueryRef.current = true;
     router.replace(pathname);
@@ -1634,6 +1716,7 @@ export function Rhythm() {
         if (!response.ok || data.status !== 'saved') {
           return { ok: false, status: data.status || 'error' };
         }
+        savedRitualCloseRef.current = editRitualId;
         await retry();
         // 라이브 기록이 이 루틴을 반영했으니 로컬 초안은 완전히 제거한다. render-time
         // dedup(identity 비교)만으로는 불충분하다 — 이후 이 루틴을 다시 편집해 연결
@@ -1670,12 +1753,14 @@ export function Rhythm() {
       if (!response.ok || data.status !== 'saved') {
         return { ok: false, status: data.status || 'error' };
       }
+      savedRitualCloseRef.current = editRitualId;
+      savedRitualReadsRef.current.set(editRitualId, liveRituals);
       await retry();
       return { ok: true, status: data.status };
     } catch (error) {
       return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
     }
-  }, [editingRitual, editRitualId, baseRituals, retry]);
+  }, [editingRitual, editRitualId, baseRituals, liveRituals, retry]);
 
   // 삭제 = 그 루틴의 정의(씨앗) 행 + 모든 체크인 이력을 함께 지운다. EditDrawer가 삭제
   // 전에 푸터 인라인 확인(22차 스타일드 플로)을 받으므로 여기서 다시 묻지 않는다.
@@ -1948,7 +2033,7 @@ export function Rhythm() {
             { key: 'projectId', label: '연결 프로젝트', type: 'select', row: 'target', options: projectOptions },
           ]}
           onChange={updateRitualDraft}
-          onClose={() => setEditRitualId(null)}
+          onClose={closeRitualEditor}
           onSave={persistRitual}
           onDelete={deleteRitual}
         />

@@ -51,7 +51,8 @@ test('record-first view retains KPI, objectives, attention and the weekly memo',
 test('cross-tab and intra-tab connections: attention items, KPI tiles, weekly memo, and GoalLinks route cleanly', () => {
   // 이번 주 챙길 것: 마일스톤은 연결된 할 일/업무 탭으로, 기록 공백은 체크인 뷰로, KPI·KR은 목표 상세로 연결.
   assert.match(goalsSource, /const entityHref = goalLinkedEntityHref\(next\)/);
-  assert.match(goalsSource, /checkHref=\{goalHref\(null, scope, \{ check: true, base: routeBase \}\)\}/);
+  assert.match(goalsSource, /checkHref=\{pageHref\(null, scope, \{ check: true \}\)\}/);
+  assert.match(goalsSource, /goalRecordHref\(goalHref\(id, nextScope/);
   assert.match(glanceSource, /className="hub-row goal-attention__link"/);
   assert.match(glanceSource, /className="(?:hub-row goal-kpi-tile__name|goal-kpi-tile__name hub-row)"/);
   assert.match(glanceSource, /href="\/dashboard\/work\/memos"/);

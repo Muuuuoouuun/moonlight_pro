@@ -289,6 +289,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], contacts = 
   // 전역 인덱스 하나로는 React처럼 인스턴스별 상태를 흉내 낼 수 없다.
   const slots = new Map();
   const saves = [];
+  const replacements = [];
   // 효과는 저절로 돌지 않는다(읽기 · 창 리스너가 섞여 있다) — 그린 뒤 runEffects로 골라 돌린다.
   let effects = [];
   let path = "root";
@@ -313,7 +314,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], contacts = 
   const deps = {
     React,
     useSearchParams: () => new URLSearchParams(params),
-    useRouter: () => ({ replace() {} }),
+    useRouter: () => ({ replace(url) { replacements.push(url); } }),
     usePathname: () => "/dashboard/revenue/customers",
     useToast: () => Object.assign(() => {}, { success() {}, error() {}, info() {} }),
     useUndoableAction: () => ({ schedule() {}, cancel: () => true }),
@@ -321,6 +322,9 @@ function mountCustomers({ state = "live", leads = [], accounts = [], contacts = 
     useCrmSelection: () => ({ selectedId: null, moveSelection() {}, setSelectedId() {}, clearSelected() {} }),
     useRevenueLedger: () => ({ ledger, syncState: state, reload() {} }),
     saveRevenueRecord: async (...args) => { saves.push(args); return { ok: true, status: "saved" }; },
+    newRevenueCreateId: () => "00000000-0000-4000-8000-000000000001",
+    pendingRevenueCreates: () => [],
+    rememberRevenueDraft() {},
     useMemoSearch: memoSearch || (() => ({ status: "live", entries: [], refresh() {} })),
     // 페이지 안의 fetch(드로어의 활동 읽기)를 가린다 — 시험이 네트워크로 나가지 않는다.
     fetch: fetchImpl || (async () => { throw new Error("no network in tests"); }),
@@ -398,11 +402,57 @@ function mountCustomers({ state = "live", leads = [], accounts = [], contacts = 
   render();
   // 기록 타임라인은 활동 읽기(effect)가 끝나야 드로어에 보인다 — 그리기 계약은 따로 세워 본다.
   const renderTimeline = (props) => expand({ type: ActivityTimeline, props }, "timeline");
-  return { render, findAll, text, saves, renderTimeline, runEffects, toRows };
+  return { render, findAll, text, saves, renderTimeline, runEffects, toRows, replacements,
+    setParams(value) { params = value; render(); },
+    setReadState(value) { state = value; render(); },
+  };
 }
 
 const joinContact = (index, extra = {}) => ({ id: `contact-${index}`, companyId: `company-${index}`, name: `contact name ${index}`, ...extra });
 const joinLead = (index, extra = {}) => ({ id: `lead-${index}`, name: `lead name ${index}`, contactId: `contact-${index}`, ...extra });
+
+const isCustomerEntryEffect = fn => fn.toString().includes('const q = searchParams?.get("q")');
+const isCustomerLinkEffect = fn => fn.toString().includes('const target = searchParams?.get("customer")');
+
+test("query-only New requests open and reopen the customer creator on the mounted page", () => {
+  const app = mountCustomers({ params: "scope=personal" });
+  app.runEffects(isCustomerEntryEffect);
+  app.setParams("scope=personal&new=customer&q=first&phone=010-0000-0000");
+  app.runEffects(isCustomerEntryEffect); app.render();
+  const creator = () => app.findAll(n => n.type === "Drawer" && n.props.title === "새 고객")[0];
+  assert.ok(creator());
+  assert.equal(app.findAll(n => n.type === "TextField" && n.props.label === "고객 / 학원명")[0].props.value, "first");
+  assert.equal(app.replacements.at(-1), "/dashboard/revenue/customers?scope=personal");
+  const count = app.replacements.length;
+  app.runEffects(isCustomerEntryEffect);
+  assert.equal(app.replacements.length, count, "the URL awaiting replacement is consumed once");
+  creator().props.onClose();
+  app.setParams("scope=personal"); app.runEffects(isCustomerEntryEffect);
+  app.setParams("scope=personal&new=customer&q=first&phone=010-0000-0000");
+  app.runEffects(isCustomerEntryEffect); app.render();
+  assert.ok(creator(), "the same command works again after its query was cleared");
+});
+
+test("query-only customer links and searches are handled after the first plain visit", () => {
+  const app = mountCustomers({ leads: [joinLead(1, { type: "company", workspace: "classin" }), joinLead(2, { type: "company", workspace: "classin" })] });
+  app.runEffects(isCustomerEntryEffect); app.runEffects(isCustomerLinkEffect);
+  app.setParams("scope=classin&q=lead&customer=lead:lead-1");
+  app.runEffects(isCustomerEntryEffect); app.runEffects(isCustomerLinkEffect); app.render();
+  assert.ok(app.findAll(n => n.type === "Drawer" && n.props.title === "lead name 1").length);
+  assert.equal(app.replacements.at(-1), "/dashboard/revenue/customers?scope=classin");
+  app.setParams(""); app.runEffects(isCustomerEntryEffect); app.runEffects(isCustomerLinkEffect);
+  app.setParams("customer=lead:lead-2"); app.runEffects(isCustomerLinkEffect); app.render();
+  assert.ok(app.findAll(n => n.type === "Drawer" && n.props.title === "lead name 2").length);
+});
+
+test("a customer link survives a read failure and opens after retry succeeds", () => {
+  const app = mountCustomers({ state: "error", params: "scope=personal&customer=lead:lead-1", leads: [joinLead(1, { type: "personal" })] });
+  app.runEffects(isCustomerLinkEffect);
+  assert.equal(app.replacements.length, 0);
+  app.setReadState("live"); app.runEffects(isCustomerLinkEffect); app.render();
+  assert.ok(app.findAll(n => n.type === "Drawer" && n.props.title === "lead name 1").length);
+  assert.equal(app.replacements.at(-1), "/dashboard/revenue/customers?scope=personal");
+});
 
 test("customer joins preserve the first contact, explicit-id precedence, and lead fallback fields", () => {
   const { toRows } = mountCustomers();

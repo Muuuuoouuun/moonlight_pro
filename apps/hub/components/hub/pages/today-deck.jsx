@@ -76,7 +76,7 @@ async function patchTask(body) {
 
 const fmtLeft = (sec) => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 
-export function TodaySlots({ taskToday, onChanged }) {
+export function TodaySlots({ taskToday, onChanged, actions, onEdit }) {
   const now = useMinuteClock();
   const toast = useToast();
   const { schedule, cancel } = useUndoableAction();
@@ -85,7 +85,17 @@ export function TodaySlots({ taskToday, onChanged }) {
   const [doneIds, setDoneIds] = React.useState(() => new Set());
   const [busyId, setBusyId] = React.useState(null);
   const [timer, setTimer] = React.useState(null); // { id, endsAt }
+  const completionRef = React.useRef(new Set());
+  const mutationRef = React.useRef(false);
   const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    setDoneIds(new Set()); setTimer(null); completionRef.current.clear();
+  }, [taskToday?.focus?.date]);
+  React.useEffect(() => {
+    const open = new Set((taskToday?.focusItems || taskToday?.items || []).filter(task => task.focusToday).map(task => task.id));
+    setDoneIds(previous => new Set([...previous].filter(id => open.has(id))));
+    for (const id of completionRef.current) if (!open.has(id)) completionRef.current.delete(id);
+  }, [taskToday]);
 
   React.useEffect(() => {
     if (!timer) return undefined;
@@ -116,24 +126,32 @@ export function TodaySlots({ taskToday, onChanged }) {
 
   const open = deck.focusOpen.filter((task) => !doneIds.has(task.id));
   const localDone = deck.focusOpen.filter((task) => doneIds.has(task.id));
-  const serverDone = deck.done ?? 0;
+  const completedItems = Array.isArray(taskToday?.focusCompletedItems) ? taskToday.focusCompletedItems : [];
+  const serverDone = Math.max(0, (deck.done ?? 0) - completedItems.length);
   const slots = [
     ...open.map((task) => ({ task })),
     ...localDone.map((task) => ({ task, done: true })),
+    ...completedItems.map(task => ({ task, done: true, persisted: true })),
     ...Array.from({ length: serverDone }, () => ({ done: true })),
   ].slice(0, MAX_FOCUS_PER_DAY);
   const anyPicked = slots.length > 0;
   while (slots.length < MAX_FOCUS_PER_DAY) slots.push(null);
 
   function complete(task) {
+    if (completionRef.current.has(task.id) || mutationRef.current) return;
+    completionRef.current.add(task.id);
     setDoneIds((ids) => new Set(ids).add(task.id));
     if (timer?.id === task.id) setTimer(null);
     toast.success(`끝냄 · ${task.title}`, { action: { label: "되돌리기", onClick: () => undo(task) } });
     schedule(task.id, async () => {
       try {
-        await patchTask({ id: task.id, status: "done" });
-        onChanged?.();
+        if (actions) {
+          const result = await actions.run(task, { status: 'done' });
+          if (!result.ok) throw new Error(result.message);
+        } else await patchTask({ id: task.id, status: "done" });
+        if (!actions) onChanged?.();
       } catch (error) {
+        completionRef.current.delete(task.id);
         setDoneIds((ids) => { const next = new Set(ids); next.delete(task.id); return next; });
         toast.error(`끝냄을 저장하지 못했습니다 · ${task.title} — ${error.message}`);
       }
@@ -141,17 +159,24 @@ export function TodaySlots({ taskToday, onChanged }) {
   }
   function undo(task) {
     if (!cancel(task.id)) return;
+    completionRef.current.delete(task.id);
     setDoneIds((ids) => { const next = new Set(ids); next.delete(task.id); return next; });
   }
   async function run(task, body, message) {
+    if (mutationRef.current) return;
+    mutationRef.current = true;
     setBusyId(task.id);
     try {
-      await patchTask({ id: task.id, ...body });
+      if (actions) {
+        const result = await actions.run(task, body);
+        if (!result.ok) throw new Error(result.message);
+      } else await patchTask({ id: task.id, ...body });
       toast.success(message);
-      onChanged?.();
+      if (!actions) onChanged?.();
     } catch (error) {
       toast.error(`${task.title} — ${error.message}`);
     } finally {
+      mutationRef.current = false;
       setBusyId(null);
     }
   }
@@ -188,10 +213,10 @@ export function TodaySlots({ taskToday, onChanged }) {
         const running = timer?.id === task.id && !slot.done;
         const hasDue = task.due && task.due !== "미정";
         const meta = [task.projectName, hasDue ? `기한 ${task.due}${overdue ? " 지남" : ""}` : overdue ? "기한 지남" : null].filter(Boolean).join(" · ");
-        const busy = busyId === task.id;
+        const busy = Boolean(busyId) || Boolean(actions?.pendingIds.length);
         let foot;
         if (slot.done) {
-          foot = <span className="today-slot__state"><Iconed name="check" size={15} />끝냄<Button variant="ghost" size="xs" onClick={() => undo(task)}>되돌리기</Button></span>;
+          foot = <span className="today-slot__state"><Iconed name="check" size={15} />끝냄{!slot.persisted && <Button variant="ghost" size="xs" onClick={() => undo(task)}>되돌리기</Button>}</span>;
         } else if (deck.mode === "evening") {
           foot = carried
             ? <span className="today-slot__state"><Iconed name="arrowRight" size={14} />내일로 넘김</span>
@@ -206,14 +231,14 @@ export function TodaySlots({ taskToday, onChanged }) {
             <span className="today-slot__meta">집중 중</span>
             <span className="today-slot__push" />
             <Button variant="secondary" size="sm" icon="pause" onClick={() => setTimer(null)}>멈춤</Button>
-            <Button variant="primary" size="sm" icon="check" onClick={() => complete(task)}>끝</Button>
+            <Button variant="primary" size="sm" icon="check" disabled={busy} onClick={() => complete(task)}>끝</Button>
           </div>;
         } else {
           foot = <div className="today-slot__actions">
             {carried && <span className="today-slot__meta">내일로 넘김</span>}
             <span className="today-slot__push" />
-            <Button variant="secondary" size="sm" icon="play" onClick={() => setTimer({ id: task.id, endsAt: Date.now() + FOCUS_SECONDS * 1000 })}>15분</Button>
-            <Button variant="secondary" size="sm" icon="check" onClick={() => complete(task)}>끝</Button>
+            <Button variant="secondary" size="sm" icon="play" disabled={busy} onClick={() => setTimer({ id: task.id, endsAt: Date.now() + FOCUS_SECONDS * 1000 })}>15분</Button>
+            <Button variant="secondary" size="sm" icon="check" disabled={busy} onClick={() => complete(task)}>끝</Button>
           </div>;
         }
         return (
@@ -222,7 +247,8 @@ export function TodaySlots({ taskToday, onChanged }) {
               {n}
               <span className="today-slot__chip">할 일</span>
               <span className="today-slot__push" />
-              {deck.mode === "morning" && !slot.done && <IconButton icon="x" size={32} iconSize={13} tooltip={`${task.title} 오늘 3개에서 빼기`} disabled={busy} onClick={() => release(task)} />}
+              {onEdit && (!slot.done || slot.persisted) && <Button variant="ghost" size="sm" aria-label={`편집·삭제: ${task.title}`} disabled={busy} onClick={() => onEdit(task)}>편집</Button>}
+              {(!slot.done || slot.persisted) && <IconButton icon="x" size={32} iconSize={13} tooltip={`${task.title} 오늘 3개에서 빼기`} disabled={busy} onClick={() => release(task)} />}
             </div>
             <span className="today-slot__title">{task.title}</span>
             {meta && <span className="today-slot__meta" data-urgent={overdue || undefined}>{overdue && <Iconed name="alert" size={11} />}{meta}</span>}

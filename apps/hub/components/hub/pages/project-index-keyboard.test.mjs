@@ -29,6 +29,7 @@ function displayedIds(projects, doneCollapsed) {
 function mount(initial) {
   const slots = [], pending = [], listeners = new Set(), opened = [], edited = [];
   let cursor = 0, dirty = false, output;
+  const searchRequests = []; let searchFocusCount = 0;
   let props = { view: 'tree', visibleProjects: [], indexKeyboardOrder: [], listSections: [], brandSectionsCollapsed: {}, visibleColumns: [], todos: [], drawerOpen: false, ...initial };
   const same = (a, b) => a && b && a.length === b.length && a.every((value, index) => Object.is(value, b[index]));
   const React = {
@@ -50,7 +51,8 @@ function mount(initial) {
   const window = { addEventListener: (_name, callback) => listeners.add(callback), removeEventListener: (_name, callback) => listeners.delete(callback) };
   const document = { activeElement: { tagName: 'BODY' }, querySelector: () => null };
   const hooks = new Function('React', 'window', 'document', `${keyboard}\nreturn { useCrmSelection, useCrmKeyboard };`)(React, window, document);
-  const scope = { React, ...hooks, document, CSS: { escape: String }, searchInputRef: { current: null },
+  const scope = { React, ...hooks, document, CSS: { escape: String }, searchInputRef: { current: { focus() { searchFocusCount++; } } },
+    setProjectSearchRequest: next => searchRequests.push(next(searchRequests.length)),
     openProjectDetail: id => opened.push(id), editTodo: task => edited.push(task.id),
   };
   const runParent = new Function(...Object.keys(scope), ...Object.keys(props), `${parentCode}\nreturn { rows: kbRows, selection: kbSelection };`);
@@ -68,11 +70,20 @@ function mount(initial) {
     throw new Error('Parent keyboard hooks did not settle');
   }
   render();
-  return { render, opened, edited, document, get output() { return output; },
+  return { render, opened, edited, document, searchRequests, get searchFocusCount() { return searchFocusCount; }, get output() { return output; },
     press(key) { for (const listener of [...listeners]) listener({ key, preventDefault() {} }); return render().selection.selectedId; },
     unmount() { for (const slot of slots) slot?.cleanup?.(); assert.equal(listeners.size, 0); },
   };
 }
+
+test('slash requests the tree index before focus and retains direct search in the table', () => {
+  const view = mount({ visibleProjects: [project('a')], indexKeyboardOrder: ['a'] });
+  view.press('/'); assert.deepEqual(view.searchRequests, [1]); assert.equal(view.searchFocusCount, 0);
+  view.render({ view: 'table' }); view.press('/'); assert.equal(view.searchFocusCount, 1);
+  view.document.activeElement = { tagName: 'INPUT' }; view.press('/');
+  assert.equal(view.searchFocusCount, 1); assert.deepEqual(view.searchRequests, [1]);
+  view.unmount();
+});
 
 test('collapsed workspace publication restricts actual parent j/k/e to displayed rows', () => {
   const projects = [project('open'), project('done', 2), project('rounded', 200, 201), { id: 'reported', displayProgress: { source: 'reported', value: 100 } }];

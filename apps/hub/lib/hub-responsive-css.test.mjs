@@ -20,6 +20,10 @@ const quickCaptureSource = await readFile(
   new URL("../components/hub/quick-capture.jsx", import.meta.url),
   "utf8",
 );
+const todayCaptureSource = await readFile(
+  new URL('../components/hub/pages/today-task-capture.jsx', import.meta.url),
+  'utf8',
+);
 const primitivesSource = await readFile(
   new URL("../components/hub/hub-primitives.jsx", import.meta.url),
   "utf8",
@@ -98,9 +102,14 @@ test("Daily Brief quick capture has a real label and announced save state", asyn
   // 저장 왕복은 데스크톱 위젯과 공유하는 submitQuickCapture가 소유한다(lib/quick-task-capture.js).
   assert.match(quickCaptureSource, /submitQuickCapture\(session\)/);
   assert.match(await readFile(new URL("./quick-task-capture.js", import.meta.url), "utf8"), /QUICK_CAPTURE_ENDPOINT = "\/api\/hub\/inbox"/);
-  // 첫 화면은 기존 id·클래스를 그대로 넘겨 라벨 연결과 CSS 훅을 유지한다.
-  assert.match(dailyBriefSource, /inputId="daily-brief-quick-task"/);
-  assert.match(dailyBriefSource, /inputClassName="daily-brief__quick-input"/);
+  // The today wrapper adds selection intent; its real input still comes from
+  // the shared labelled form, retaining the existing id and responsive class.
+  assert.match(dailyBriefSource, /import \{ TodayTaskCapture \} from ['"]\.\/today-task-capture['"]/);
+  assert.match(dailyBriefSource, /<TodayTaskCapture\b/);
+  assert.match(todayCaptureSource, /import \{ QuickCaptureForm \} from ['"]\.\.\/quick-capture['"]/);
+  assert.match(todayCaptureSource, /<QuickCaptureForm\b[^>]*taskOnly/);
+  assert.match(todayCaptureSource, /inputId="daily-brief-quick-task"/);
+  assert.match(todayCaptureSource, /inputClassName="daily-brief__quick-input"/);
 });
 
 test("Daily Brief quick navigation activates the core operating tabs", () => {

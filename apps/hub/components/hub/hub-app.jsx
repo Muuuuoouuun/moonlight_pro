@@ -563,15 +563,17 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
+    const revenueScopeQuery = queryScope ? `&scope=${encodeURIComponent(normalizeScope(queryScope))}` : '';
     if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', kpi: goalView(searchParams) === 'kpi', create: true }).slice(1);
     if (p === 'dashboard/reports') { const params = new URLSearchParams(searchParams.toString()); params.set('new', 'report'); return `dashboard/reports?${params}`; }
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
-    if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
-    if (p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/customers?new=customer';
-    if (p.startsWith('dashboard/revenue/leads')) return 'dashboard/revenue/leads?new=lead';
-    if (p.startsWith('dashboard/revenue/deals')) return 'dashboard/revenue/deals?new=deal';
-    if (p.startsWith('dashboard/revenue/accounts')) return 'dashboard/revenue/accounts?new=account';
-    if (p.startsWith('dashboard/revenue/cases')) return 'dashboard/revenue/cases?new=case';
+    if (p.startsWith('dashboard/revenue/inquiries')) return `dashboard/revenue/inquiries?new=inquiry${revenueScopeQuery}`;
+    if (p.startsWith('dashboard/revenue/customers')) return `dashboard/revenue/customers?new=customer${revenueScopeQuery}`;
+    if (p.startsWith('dashboard/revenue/leads')) return `dashboard/revenue/leads?new=lead${revenueScopeQuery}`;
+    if (p.startsWith('dashboard/revenue/deals')) return `dashboard/revenue/deals?new=deal${revenueScopeQuery}`;
+    if (p === 'dashboard/classin/pipeline') return `dashboard/classin/pipeline?new=deal${revenueScopeQuery}`;
+    if (p.startsWith('dashboard/revenue/accounts')) return `dashboard/revenue/accounts?new=account${revenueScopeQuery}`;
+    if (p.startsWith('dashboard/revenue/cases')) return `dashboard/revenue/cases?new=case${revenueScopeQuery}`;
     if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
     if (p.startsWith('dashboard/products')) return 'dashboard/products?new=product';
     if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';

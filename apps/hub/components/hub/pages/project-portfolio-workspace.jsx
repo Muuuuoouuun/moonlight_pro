@@ -240,6 +240,7 @@ export function ProjectPortfolioWorkspace({
   query,
   onQueryChange,
   searchInputRef,
+  searchRequest = 0,
   onOpenProject,
   onSelectProject,
   onOpenCustomer,
@@ -315,6 +316,29 @@ export function ProjectPortfolioWorkspace({
   const [focusProjectId, setFocusProjectId] = React.useState(null);
   const [showFilterPicker, setShowFilterPicker] = React.useState(false);
   const [showMobilePicker, setShowMobilePicker] = React.useState(false);
+  const mobilePickerButtonRef = React.useRef(null);
+  const handledSearchRequest = React.useRef(0);
+  const createOpen = Boolean(createSurface);
+  const closeProjectPicker = () => {
+    setShowMobilePicker(false);
+    requestAnimationFrame(() => mobilePickerButtonRef.current?.focus());
+  };
+  React.useEffect(() => {
+    if (createOpen) setShowMobilePicker(false);
+  }, [createOpen]);
+  React.useEffect(() => {
+    if (!searchRequest || handledSearchRequest.current === searchRequest) return;
+    handledSearchRequest.current = searchRequest;
+    if (createOpen) return;
+    if (globalThis.window?.matchMedia?.('(max-width: 900px)').matches) setShowMobilePicker(true);
+    const frame = requestAnimationFrame(() => searchInputRef?.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [searchRequest, searchInputRef, createOpen]);
+  React.useEffect(() => {
+    if (!showMobilePicker || createOpen) return;
+    const frame = requestAnimationFrame(() => searchInputRef?.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [showMobilePicker, searchInputRef, createOpen]);
   const [showMonthlyPreview, setShowMonthlyPreview] = React.useState(false);
   const workListRef = React.useRef(null);
   const [workDrafts, setWorkDrafts] = React.useState({});
@@ -390,7 +414,7 @@ export function ProjectPortfolioWorkspace({
 
   const selectProject = (projectId) => {
     setFocusProjectId(projectId);
-    setShowMobilePicker(false);
+    if (showMobilePicker) closeProjectPicker();
     onSelectProject?.(projectId);
   };
   const nextActionTarget = resolveProjectNextAction(project, projectTasks, nextTask);
@@ -441,8 +465,13 @@ export function ProjectPortfolioWorkspace({
       className={`hub-project-portfolio-workspace ${workStyles.workspace}`}
       data-detail-open={openDetailId ? "true" : "false"}
       data-create-open={createSurface ? "true" : "false"}
-      data-mobile-picker={showMobilePicker ? "true" : "false"}
+      data-mobile-picker={showMobilePicker && !createOpen ? "true" : "false"}
       data-has-project={project ? "true" : "false"}
+      onKeyDown={event => {
+        if (event.key === 'Escape' && !event.defaultPrevented && showMobilePicker) {
+          event.preventDefault(); event.stopPropagation(); closeProjectPicker();
+        }
+      }}
     >
       <ProjectIndexMenu controls={indexControls} onEdit={onEditProject} onDelete={onRemoveProject}
         canWrite={['live', 'partial'].includes(sourceState) && !failedSources.includes('projects')}
@@ -457,7 +486,7 @@ export function ProjectPortfolioWorkspace({
             </span>
             <Button className={indexStyles.sort} variant="ghost" size="xs" iconRight="chevronD" aria-label={`프로젝트 정렬: ${indexControls.sortLabel}`}
               aria-haspopup="menu" aria-expanded={indexControls.menu?.kind === 'sort'} onClick={event => indexControls.openMenu(event, 'sort')}>{indexControls.sortLabel}</Button>
-            <button type="button" className="hub-project-portfolio-index__close" onClick={() => setShowMobilePicker(false)}>닫기</button>
+            <button type="button" className="hub-project-portfolio-index__close" onClick={closeProjectPicker}>닫기</button>
           </div>
           <Input
             ref={searchInputRef}
@@ -465,8 +494,18 @@ export function ProjectPortfolioWorkspace({
             placeholder="프로젝트 검색"
             ariaLabel="프로젝트 검색"
             clearable
+            kbd="/"
             value={query}
             onChange={onQueryChange}
+            onKeyDown={event => {
+              if (event.isComposing || event.nativeEvent?.isComposing || !visibleProjects.length) return;
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                indexControls.listRef.current?.querySelector('[data-project-index-id] button.hub-project-portfolio-index-row')?.focus();
+              } else if (event.key === 'Enter') {
+                event.preventDefault(); selectProject(visibleProjects[0].id);
+              }
+            }}
           />
           <div className={indexStyles.filterBar}>
             <SegmentedControl label="프로젝트 필터" value={activeFilter || 'all'}
@@ -627,7 +666,7 @@ export function ProjectPortfolioWorkspace({
                       )}
                     </div>
                     <div className="hub-project-portfolio-stage__actions">
-                      <span className={workStyles.mobileOnly}><Button variant="outline" size="sm" onClick={() => setShowMobilePicker(true)}>프로젝트 바꾸기</Button></span>
+                      <span className={workStyles.mobileOnly}><Button ref={mobilePickerButtonRef} variant="outline" size="sm" aria-expanded={showMobilePicker} onClick={() => setShowMobilePicker(true)}>프로젝트 바꾸기</Button></span>
                       <Button variant="outline" size="sm" icon="pencil" onClick={() => onEditProject?.(project)}>편집</Button>
                       <Button variant="ghost" size="sm" iconRight="chevronD" aria-label="프로젝트 관리"
                         aria-haspopup="menu" aria-expanded={indexControls.menu?.kind === 'manage'}

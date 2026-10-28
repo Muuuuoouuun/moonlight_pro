@@ -385,7 +385,7 @@ function ProjectCreateSurface({
           </Button>
         </header>
         <div className="project-create-inline__body">{form}</div>
-        <footer className="project-create-actions">{actions}</footer>
+        <footer className="project-create-actions" data-hub-bottom-actions="true">{actions}</footer>
       </section>
     );
   }

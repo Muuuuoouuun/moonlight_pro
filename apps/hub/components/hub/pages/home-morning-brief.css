@@ -1,84 +1,46 @@
-.hub-app .home-morning-stack {
-  display: grid;
-  gap: 24px;
-  min-width: 0;
-}
-
-.hub-app .home-morning {
-  min-width: 0;
-}
-
-.hub-app .home-morning__heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.hub-app .home-morning__heading h3 {
-  margin: 0;
-  color: var(--fg);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-}
-
-.hub-app .home-morning__card {
-  padding: 0;
-  overflow: hidden;
-}
-
-.hub-app .home-morning__intro {
-  padding: 20px var(--fx-card-pad) 14px;
-}
-
-.hub-app .home-morning__intro h4 {
-  margin: 8px 0 0;
-  color: var(--fg);
-  font-size: 21px;
-  font-weight: 400;
-  letter-spacing: -0.02em;
-}
-
-.hub-app .home-morning__loading,
-.hub-app .home-morning__rows {
-  margin: 0 var(--fx-card-pad);
-  border-top: 1px solid var(--line-soft);
-}
-
-.hub-app .home-morning__loading { padding: 14px 0; }
-
-.hub-app .home-morning__row {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 14px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.hub-app .home-morning__row:last-child { border-bottom: 0; }
-.hub-app .home-morning__row dt { color: var(--fg-dim); font-size: 11px; }
-.hub-app .home-morning__row dd { margin: 0; color: var(--fg); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
-
-.hub-app .home-morning__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px var(--fx-card-pad);
-  background: var(--surface-2);
-}
-
-.hub-app .home-morning__source { color: var(--fg-dim); font-size: 10.5px; line-height: 1.5; }
-.hub-app .home-morning__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-
+.hub-app .home-purpose { margin: 10px 0 0; font-size: 13px; line-height: 1.6; color: var(--fg-muted); }
+.hub-app .home-handoff { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.hub-app .home-handoff__summary { flex: 1; min-width: 200px; }
+.hub-app .home-handoff__summary p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: var(--fg-muted); overflow-wrap: anywhere; }
+.hub-app .home-handoff__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hub-app .home-support-disclosure { border-bottom: 1px solid var(--line-soft); }
+.hub-app .home-support-disclosure > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 44px; padding: 12px 0; font-size: 12px; line-height: 1.6; color: var(--fg-muted); cursor: pointer; list-style: none; }
+.hub-app .home-support-disclosure > summary::-webkit-details-marker { display: none; }
+.hub-app .home-support-disclosure > summary > svg { margin-left: auto; flex-shrink: 0; }
+.hub-app .home-support-disclosure__context { color: var(--fg-dim); overflow-wrap: anywhere; min-width: 0; flex: 1; }
+.hub-app .home-support-disclosure__body { display: flex; flex-direction: column; gap: 16px; padding: 12px 0 20px; }
 @media (max-width: 600px) {
-  .hub-app .home-morning-stack { gap: 20px; }
-  .hub-app .home-morning__heading { align-items: flex-start; flex-wrap: wrap; }
-  .hub-app .home-morning__row { grid-template-columns: 1fr; gap: 4px; }
-  .hub-app .home-morning__footer { align-items: stretch; flex-direction: column; }
-  .hub-app .home-morning__actions { flex-wrap: nowrap; }
-  .hub-app .home-morning__actions .hub-btn { flex: 1; min-height: 44px; min-width: 0; }
+  .hub-app .home-handoff { align-items: stretch; gap: 12px; }
+  .hub-app .home-handoff__summary { flex-basis: 100%; }
+  .hub-app .home-handoff__actions { width: 100%; }
+  .hub-app .home-handoff__actions .hub-btn { flex: 1; min-width: 0; min-height: 44px; }
+  .hub-app .home-support-disclosure__context { flex-basis: calc(100% - 24px); }
+}
+
+/* Home is a start screen. Only its own mobile surface gets this tighter rhythm. */
+.hub-app .home-start-page .fx-head { flex-direction: column; align-items: stretch; gap: 18px; }
+.hub-app .home-records { display: grid; gap: 16px; min-width: 0; }
+.hub-app .home-records-heading h3 { margin: 0; font-size: 16px; font-weight: 500; color: var(--fg); }
+.hub-app .home-records-heading p { margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: var(--fg-dim); }
+.hub-app .ci-source-reason { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--fg-muted); overflow-wrap: anywhere; }
+.hub-app .ci-source-reason > span { color: var(--fg-dim); }
+.hub-app .ci-remaining__toggle { display: none; }
+@media (max-width: 600px) {
+  .hub-app .home-start-page { padding-top: 16px; gap: 24px; }
+  .hub-app .home-start-page .fx-hero { font-size: 26px; }
+  .hub-app .home-start-page .home-purpose { margin-top: 8px; font-size: 12px; }
+  .hub-app .home-start-page .home-handoff { gap: 10px; padding: 12px 0; }
+  .hub-app .home-start-page .home-handoff__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-app .home-start-page .home-handoff__actions > :last-child { grid-column: 1 / -1; justify-self: start; }
+  .hub-app .home-start-page .home-triage { gap: 12px; }
+  .hub-app .home-start-page .ci-card { padding: 16px; }
+  .hub-app .home-start-page .fx-card-title { margin-top: 12px; font-size: 21px; overflow-wrap: anywhere; }
+  .hub-app .home-start-page .ci-source-reason + .fx-card-body { margin-top: 8px; }
+  .hub-app .home-start-page footer.fx-eyebrow { display: none !important; }
+  .hub-app .ci-remaining--mobile-collapse > .fx-eyebrow { display: none; }
+  .hub-app .ci-remaining--mobile-collapse > ol { display: none; }
+  .hub-app .ci-remaining--mobile-collapse[data-expanded="true"] > ol { display: flex; }
+  .hub-app .ci-remaining--mobile-collapse .ci-remaining__toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--fg-muted); font: inherit; font-size: 12px; text-align: left; }
+  .hub-app .home-start-page .ci-panel__row > div { flex-basis: 100% !important; min-width: 0; }
+  .hub-app .home-start-page .ci-panel__actions > button { min-height: 44px; flex: 1; }
 }

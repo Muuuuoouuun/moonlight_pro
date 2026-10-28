@@ -21,6 +21,7 @@ function fixture(code, initialId = 'synthetic-deal') {
     cancelUndoable: key => state.pending.delete(key),
     toast: Object.fromEntries(['info', 'success', 'error'].map(kind => [kind, (text, options) => state.notices.push({ kind, text, options })])),
     showDealConflict: () => false,
+    reloadLedger() {},
     saveRevenueRecord: (...args) => {
       state.sends.push(args);
       return new Promise(resolve => { state.resolve = resolve; });

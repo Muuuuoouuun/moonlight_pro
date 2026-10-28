@@ -70,16 +70,20 @@ export function CheckItemProgress({ finished = [], remaining = 0, scheduled = 0,
 // 한 장씩이 기본이지만, 무엇이 남았는지 한눈에 보고 바로 고를 수 있어야 한다(§13). 접힌 채로 둔다 — 표면 예산.
 // 고르면 그 카드가 맨 앞에 온다(차례를 바꾸는 것뿐, 아무것도 저장하지 않는다).
 // layout="side"는 홈 7g(2026-10-19 운영자 선택)의 왼쪽 목록이다 — 접지 않고 결정 카드 옆에 펼쳐 둔다.
-export function RemainingList({ deck = [], currentKey = null, onFocus, layout = 'collapsed' }) {
+export function RemainingList({ deck = [], currentKey = null, onFocus, layout = 'collapsed', mobileCollapsed = false }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const listId = React.useId();
+  const toggleRef = React.useRef(null);
   if (deck.length < 2) return null;
   const side = layout === 'side';
   const Wrap = side ? 'nav' : 'details';
   return (
-    <Wrap className={side ? 'ci-remaining ci-remaining--side' : 'ci-remaining'} aria-label={side ? '남은 확인할 것' : undefined}>
+    <Wrap className={`${side ? 'ci-remaining ci-remaining--side' : 'ci-remaining'}${mobileCollapsed ? ' ci-remaining--mobile-collapse' : ''}`} data-expanded={expanded ? 'true' : undefined} aria-label={side ? '남은 확인할 것' : undefined}>
       {side
         ? <span className="fx-eyebrow">남은 <span className="mono">{deck.length}</span>건 · 골라서 먼저 보기</span>
         : <summary>남은 <span className="mono">{deck.length}</span>건 한눈에 보기 · 골라서 먼저 보기</summary>}
-      <ol>
+      {side && mobileCollapsed ? <button type="button" ref={toggleRef} className="ci-remaining__toggle" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded(value => !value)}>다른 항목 고르기 · {deck.length}건 <Iconed name="chevronD" size={14} /></button> : null}
+      <ol id={listId}>
         {deck.map((item) => {
           const key = item.signalKey || item.id;
           const current = key === currentKey;
@@ -90,7 +94,7 @@ export function RemainingList({ deck = [], currentKey = null, onFocus, layout = 
           ].filter(Boolean);
           return (
             <li key={key}>
-              <button type="button" className="ci-remaining__row hub-row" aria-current={current ? 'true' : undefined} disabled={current} onClick={() => onFocus?.(key)}>
+              <button type="button" className="ci-remaining__row hub-row" aria-current={current ? 'true' : undefined} disabled={current} onClick={() => { onFocus?.(key); setExpanded(false); if (mobileCollapsed && toggleRef.current?.getClientRects().length) toggleRef.current.focus(); }}>
                 {item.tone === 'danger'
                   ? <span role="img" aria-label="긴급" style={{ display: 'inline-flex', color: 'var(--danger)' }}><Iconed name="flag" size={12} /></span>
                   : <span aria-hidden="true" className="ci-remaining__dot" />}
@@ -376,6 +380,8 @@ export function FocusCard({
   calendar = null,
   blocks = [],
   recommendation = null,
+  actionHeading = '어떻게 끝낼까요',
+  navigationNote = '화면을 엽니다 · 대상이 바뀌면 빠집니다',
   fetchImpl = globalThis.fetch,
 }) {
   if (!item) return null;
@@ -416,12 +422,13 @@ export function FocusCard({
         <p className="ci-note">오늘 기록은 남았지만 규칙이 여전히 이 항목을 잡아 다시 보여 드립니다.</p>
       ) : null}
       <h3 className="fx-card-title">{item.title}</h3>
+      {item.homeReason ? <p className="ci-source-reason"><span>표시 이유</span> {item.homeReason}</p> : null}
       {item.summary ? <p className="fx-card-body">{item.summary}</p> : null}
       {recommendation}
 
       {outcomes.length ? (
         <>
-          <div className="fx-eyebrow" style={{ marginTop: 24 }}>어떻게 끝낼까요</div>
+          <div className="fx-eyebrow" style={{ marginTop: 24 }}>{actionHeading}</div>
           <div className="ci-outcomes">
             {outcomes.map((outcome, index) => {
               const isPanel = outcomeIsPanel(outcome);
@@ -442,7 +449,7 @@ export function FocusCard({
                     <span className="ci-outcome__record">
                       {/* 권장 표시는 글과 마름모로 — 줄 색을 물려받아 primary 채움 위에서도 읽힌다(§5.3 recommended). */}
                       {outcome.recommended ? <span data-certainty="recommended">◇ 병목에 맞춘 권장 · </span> : null}
-                      {outcome.kind === 'write' ? `남는 기록 · ${outcome.record}` : '화면을 엽니다 · 대상이 바뀌면 빠집니다'}
+                      {outcome.kind === 'write' ? `남는 기록 · ${outcome.record}` : navigationNote}
                     </span>
                   </button>
                   {isPanel && panel === outcome.key ? renderPanel(outcome.key) : null}
