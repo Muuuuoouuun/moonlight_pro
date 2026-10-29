@@ -190,13 +190,20 @@ function OfficeUsageLine({ refreshKey }) {
     {' · '}실패 <span className="mono">{usage.failed}</span>{failures ? ' (' + failures + ')' : ''}</p>;
 }
 
+// 2026-10-29 운영자 확정 A안(docs/superpowers/specs/2026-10-29-office-tab-improvement-plan.md §3 P1): 오피스 탭은 저장 회의실 한 장이다.
+// 비저장 `관점 대화·회의`는 저장 회의가 흡수했고, `이브이 업무 분담`(Shadow 커맨더)은 운영 화면에서 뺐다.
+// 두 면의 코드는 운영자 결정 D3 방식대로 남겨 두고, 게이트(officeCommander·officeWorkBreakdown)가 열릴 때만 세그먼트로 돌아온다.
 export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const meetingParam = useSearchParams().get('meeting');
-  const [surface,setSurface]=React.useState(() => meetingParam ? 'meeting' : 'commander');
+  const legacy = FEATURE_GATES.officeCommander || FEATURE_GATES.officeWorkBreakdown;
+  const [surface,setSurface]=React.useState(() => meetingParam || !legacy ? 'meeting' : FEATURE_GATES.officeCommander ? 'commander' : 'discussion');
   const [discussionVisited,setDiscussionVisited]=React.useState(false);
-  const [meetingVisited,setMeetingVisited]=React.useState(Boolean(meetingParam));
+  const [meetingVisited,setMeetingVisited]=React.useState(Boolean(meetingParam) || !legacy);
   React.useEffect(() => { if (meetingParam) { setSurface('meeting'); setMeetingVisited(true); } }, [meetingParam]);
-  return <section className={styles.shell}><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="오피스 업무 화면" options={[{key:'commander',label:'이브이 업무 분담'},{key:'discussion',label:'관점 대화·회의'},{key:'meeting',label:'저장 회의'}]} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);if(next==='meeting')setMeetingVisited(true);}}/></div><div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} active={surface === 'discussion'} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}{meetingVisited?<div hidden={surface!=='meeting'}><OfficeMeetingSessionProvider><OfficeMeetingRoom scope={scope} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></OfficeMeetingSessionProvider></div>:null}</section>;
+  const meeting = <OfficeMeetingSessionProvider><OfficeMeetingRoom scope={scope} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></OfficeMeetingSessionProvider>;
+  if (!legacy) return <section className={styles.shell}>{meeting}</section>;
+  const options=[FEATURE_GATES.officeCommander?{key:'commander',label:'이브이 업무 분담'}:null,FEATURE_GATES.officeWorkBreakdown?{key:'discussion',label:'관점 대화·회의'}:null,{key:'meeting',label:'저장 회의'}].filter(Boolean);
+  return <section className={styles.shell}><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="오피스 업무 화면" options={options} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);if(next==='meeting')setMeetingVisited(true);}}/></div>{FEATURE_GATES.officeCommander?<div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>:null}{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} active={surface === 'discussion'} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}{meetingVisited?<div hidden={surface!=='meeting'}>{meeting}</div>:null}</section>;
 }
 function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, onNavigate }) {
   const { session, store, update } = useOfficeSession(scope);

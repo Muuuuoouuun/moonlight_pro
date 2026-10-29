@@ -132,6 +132,7 @@ export async function sendOfficeMeeting(store, scope, { requestId, meetingId = c
     requestId, expectedRevision: current.revision,
     message: (initial.minimumOnly ? OFFICE_MINIMUM_INSTRUCTION : '') + pending.rawDraft.trim(),
     mode: pending.request.mode, includeProjects: initial.includeProjects,
+    ...(pending.request.brandId ? { brandId: pending.request.brandId } : {}),
     ...(pending.request.mode === 'council' ? { deliberation: pending.request.deliberation } : {}),
   } });
   const submittedTurn = result.turns?.find(turn => turn.id === requestId && turn.state === 'generated');

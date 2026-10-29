@@ -4,6 +4,9 @@
 export const FEATURE_GATES = Object.freeze({
   // 오피스 업무 나누기(H1)와 자동 진행 — docs/superpowers/specs/2026-10-01-office-harness-work-breakdown-design.md (권장)
   officeWorkBreakdown: false,
+  // 오피스 착지면의 `이브이 업무 분담`(Shadow 커맨더, 모델 호출 0 수동 폼) — 2026-10-29 운영자 A안(회의실 한 장) 확정으로 운영 화면에서 뺀다.
+  // 코드·테스트는 그대로다(docs/superpowers/specs/2026-10-29-office-tab-improvement-plan.md §3 P1 · Q-OF2 권장안).
+  officeCommander: false,
   // 확인할 것 단계 3 막힘 풀기 — 카드 끝내기 2종과 프로젝트 상세의 막힘 풀기 섹션
   // (docs/superpowers/specs/2026-09-30-check-items-finish-and-unblock-design.md §5, 방향만 운영자 선택)
   checkItemUnblock: false,

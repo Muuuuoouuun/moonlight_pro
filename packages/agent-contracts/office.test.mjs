@@ -42,3 +42,9 @@ test('office failures are an allow-listed phase/category pair with an operator m
  assert.match(officeFailureMessage(null),/한 번 더 보내/);
  assert.equal(OFFICE_FAILURE_LABELS.deadline,'시간 초과');
 });
+test('brand context must state what was read: attached needs a name, failed ones carry no text',()=>{
+ const base={source:'provided',scope:'personal',projects:[],note:'입력만 참고'};
+ const live={status:'live',name:'브랜드',lines:2,truncated:false,text:'브랜드: 브랜드'};
+ assert.deepEqual(parseOfficeContext({...base,brand:live},'personal').brand,live);
+ for(const brand of [{...live,text:'x'.repeat(2001)},{...live,status:'partial'},{...live,truncated:true},{status:'rejected',name:'타 레인',lines:0,truncated:false,reason:'scope'},{status:'error',name:null,lines:0,truncated:false},{...live,extra:1}]) assert.throws(()=>parseOfficeContext({...base,brand},'personal'));
+});
