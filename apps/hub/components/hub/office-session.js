@@ -187,6 +187,8 @@ export function createOfficeSessionStore() {
         message: durable ? (session.minimumOnly ? OFFICE_MINIMUM_INSTRUCTION : '') + session.draft.trim() : officeRequestMessage(session),
         participants: requestMode === 'council' ? [session.ownerId, ...session.reviewers.filter(id => id !== session.ownerId)] : [],
         history: durable ? [] : officeHistory(session.turns), includeProjects: session.includeProjects,
+        // 읽기 전용 브랜드 기록 부착. 범위 '전체'에는 브랜드 레인이 없다(Engine·Hub 계약도 null로 만든다).
+        brandId: scope !== 'all' ? session.brandId : null,
       };
       if (request.message.length > 6000) {
         update(scope, { error: { status: 'error', error: '요청이 깁니다. 안건과 최소 업무 지침을 포함해 6,000자 안으로 줄여 주세요.' } });

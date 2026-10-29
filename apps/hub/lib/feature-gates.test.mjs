@@ -8,8 +8,8 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 // 운영자 결정 D3(2026-10-07): 운영자 확정 전에 들어온 세 기능은 10/14·11월 판정까지 운영 화면에서 닫는다.
 // 판정이 나면 feature-gates.js의 값과 이 단언을 같은 커밋에서 바꾼다.
-test('운영 제외 게이트는 셋 다 닫혀 있다 — 운영자 판정 전', () => {
-  assert.deepEqual(FEATURE_GATES, { officeWorkBreakdown: false, checkItemUnblock: false, decisionJournal: false });
+test('운영 제외 게이트는 넷 다 닫혀 있다 — 운영자 판정 전(officeCommander는 2026-10-29 A안)', () => {
+  assert.deepEqual(FEATURE_GATES, { officeWorkBreakdown: false, officeCommander: false, checkItemUnblock: false, decisionJournal: false });
   assert.ok(Object.isFrozen(FEATURE_GATES));
 });
 

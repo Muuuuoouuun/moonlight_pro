@@ -40,14 +40,14 @@ export function OfficeConnectionBrandPicker({ scope, value, onChange, disabled =
   const available = ['live', 'partial'].includes(read.status);
   const selectedExists = !value || read.brands.some(brand => brand.id === value);
   return <div style={stack}>
-    <strong>입력 공유에 사용할 브랜드</strong>
+    <strong>안건에 붙일 브랜드 기록</strong>
     <BrandReadNotice read={read} onRetry={reload} />
-    {available ? <SelectField label={`${SCOPE_LABEL[scope]} 결과의 출처 브랜드`} value={selectedExists ? value || '' : ''} disabled={disabled}
+    {available ? <SelectField label={`${SCOPE_LABEL[scope]} 범위의 브랜드`} value={selectedExists ? value || '' : ''} disabled={disabled}
       onChange={event => { const brand = read.brands.find(item => item.id === event.target.value); onChange?.({ brandId: brand?.id || null }); }}
       options={[{ value: '', label: scope === 'classin' ? '회사 공통 · 브랜드 없음' : '브랜드 선택 필요' }, ...read.brands.map(brand => ({ value: brand.id, label: brand.name }))]} /> : null}
     {available && !read.brands.length ? <p style={note}>이 범위에서 확인한 브랜드가 없습니다.</p> : null}
     {available && !selectedExists ? <p role="status" style={note}>선택했던 브랜드를 현재 목록에서 확인하지 못했습니다. 새 요청 전에 브랜드를 다시 골라 주세요.</p> : null}
-    <p style={note}>선택은 다음 요청을 시작할 때 출처 표식으로 남습니다. 브랜드 사실 자료를 모델에 제공하거나 기존 결과의 브랜드를 바꾸지는 않습니다. 개인 결과의 입력 공유에는 브랜드 선택이 필요합니다.</p>
+    <p style={note}>다음 요청부터 이 브랜드의 기록(설명·운영 상태·집중점·최근 로그 5줄)을 읽기 전용으로 붙여 보내고, 결과 공유의 출처 표식으로도 남습니다. 기록을 바꾸지는 않습니다.</p>
   </div>;
 }
 

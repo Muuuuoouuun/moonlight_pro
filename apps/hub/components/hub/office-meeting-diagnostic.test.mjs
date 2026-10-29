@@ -8,6 +8,7 @@ import ts from 'typescript';
 import * as officeSession from './office-session.js';
 import * as meetingsClient from './office-meetings-client.js';
 import * as officeContracts from '@com-moon/agent-contracts/office';
+import * as officeJobs from '@com-moon/agent-contracts/office-jobs';
 
 const componentSource = readFileSync(new URL('./office-meeting-diagnostic.jsx', import.meta.url), 'utf8');
 const componentCode = ts.transpileModule(componentSource, { compilerOptions: { jsx: ts.JsxEmit.React, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
@@ -128,6 +129,7 @@ function mountRoom() {
     react: hooks,
     'next/navigation': { useRouter: () => ({ replace() {} }), useSearchParams: () => new URLSearchParams({ meeting: selected }) },
     '@com-moon/agent-contracts/office': officeContracts,
+    '@com-moon/agent-contracts/office-jobs': officeJobs,
     '../hub-primitives': primitives,
     '../office-session': { ...officeSession, loadOfficeTasks: async () => ({ status: 'live', tasks: [] }) },
     '../use-office-session': { useOfficeSession: value => ({ session: store.get(value), store, update: patch => store.update(value, patch) }) },

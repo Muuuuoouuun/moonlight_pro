@@ -9,9 +9,11 @@ export interface OfficeDiscussionTurn {ownerId:OfficeId;round:'position'|'respon
 export interface OfficeDiscussionResolution {turnRef:string;disposition:'addressed'|'open'|'not_applicable';rationale:string}
 export interface OfficeDiscussion {version:string;settings:OfficeDeliberation;turns:OfficeDiscussionTurn[];modelCalls:number;artifactReviewCalls?:1;resolutions?:OfficeDiscussionResolution[]}
 export interface OfficeDiscussionEvaluation {kind:'structural-only';version:string;participants:number;rounds:number;turns:number;modelCalls:number;artifactReviewCalls?:1;reviewRequired:boolean;peerReviews:number|null;reviewedRoleIds:OfficeId[];unreviewedRoleIds:OfficeId[];changedPositions:number;source:{selected:number|null;traced:number|null;untraced:number|null;untrackedTurns:number};objections:{total:number;addressed:number|null;open:number|null;notApplicable:number|null}}
-export interface OfficeRequest {ownerId:OfficeId;mode:OfficeMode;scope:OfficeScope;message:string;participants:OfficeId[];lens:null;history:{role:'user'|'assistant';text:string}[];includeProjects:boolean;deliberation?:OfficeDeliberation}
+export interface OfficeRequest {ownerId:OfficeId;mode:OfficeMode;scope:OfficeScope;message:string;participants:OfficeId[];lens:null;history:{role:'user'|'assistant';text:string}[];includeProjects:boolean;brandId?:string;deliberation?:OfficeDeliberation}
 export interface OfficeAnswer {answer:string;nextAction:string;recommendation?:string;evidence?:string[];dissent?:string[]}
-export interface OfficeContext {source:'provided'|'live'|'partial'|'preview'|'error';scope:OfficeScope;projects:{id:string;name:string;status:string;scope:'classin'|'personal'|'unknown'}[];note:string}
+export interface OfficeContext {source:'provided'|'live'|'partial'|'preview'|'error';scope:OfficeScope;projects:{id:string;name:string;status:string;scope:'classin'|'personal'|'unknown'}[];note:string;brand?:OfficeBrandContext}
+export interface OfficeBrandContext {status:'live'|'partial'|'error'|'rejected';name:string|null;lines:number;truncated:boolean;reason?:'scope'|'not-found'|'read-failed'|'not-configured';logUnread?:true;text?:string}
+export const OFFICE_BRAND_CONTEXT_MAX:number;
 export const OFFICE_VERSION:string;
 export const OFFICE_ROSTER:readonly {id:OfficeId;name:string;role:string;character:string;quote:string;pitch:string}[];
 export const OFFICE_IDS:readonly OfficeId[];

@@ -63,7 +63,7 @@ test('a pending and completed turn keeps the scope and brand captured at begin, 
   const pending = store.begin('personal', 'brand-a');
   assert.deepEqual(pending.officeBoundary, { scope: 'personal', brandId: firstBrand });
   assert.ok(Object.isFrozen(pending.officeBoundary));
-  assert.equal(pending.request.brandId, undefined);
+  assert.equal(pending.request.brandId, firstBrand);
   store.update('personal', { brandId: secondBrand });
   store.update('classin', { draft: '회사에서 편집한 별도 원문' });
   store.complete('personal', pending.id, generated(pending.request));
@@ -72,7 +72,9 @@ test('a pending and completed turn keeps the scope and brand captured at begin, 
   store.update('personal', { draft: '새 브랜드의 요청' });
   assert.deepEqual(store.begin('personal', 'brand-b').officeBoundary, { scope: 'personal', brandId: secondBrand });
   store.update('all', { draft: '전체 범위의 원문' });
-  assert.deepEqual(store.begin('all', 'all-turn').officeBoundary, { scope: 'all', brandId: null });
+  const allTurn = store.begin('all', 'all-turn');
+  assert.deepEqual(allTurn.officeBoundary, { scope: 'all', brandId: null });
+  assert.equal(allTurn.request.brandId, null);
 });
 
 test('one editor preserves original text across owner, mode, participants and preset changes', () => {

@@ -11,7 +11,7 @@ const javascript = ts.transpileModule(component.replace('export function EditDra
   compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete, initialRecord = { id: 'drawer-keyboard', note: '' } } = {}) {
+function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete, initialRecord = { id: 'drawer-keyboard', note: '' }, props = {} } = {}) {
   const slots = [], effects = [], listeners = new Set();
   let index = 0, tree, closed = 0, record = initialRecord;
   const React = {
@@ -31,7 +31,7 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
     },
   };
   const dependencies = {
-    React, DRAWER_INPUT_STYLE: {}, Drawer: 'Drawer', Button: 'Button', Tabs: 'Tabs', ChipToggle: 'ChipToggle',
+    React, DRAWER_INPUT_STYLE: {}, Drawer: 'Drawer', Button: 'Button', Tabs: 'Tabs', ChipToggle: 'ChipToggle', SegmentedControl: 'SegmentedControl', Kbd: 'Kbd',
     requestAnimationFrame: () => 1, cancelAnimationFrame() {},
     window: { addEventListener: (_, listener) => listeners.add(listener), removeEventListener: (_, listener) => listeners.delete(listener) },
     isTopEscLayer,
@@ -43,7 +43,7 @@ function mount({ onSave = async () => ({ ok: false, status: 'error' }), onDelete
     tree = EditDrawer({
       title: '기준 편집', record, fields: [{ key: 'note', label: '내용', type: 'textarea', rows: 3 }],
       onChange: (key, value) => { record = { ...record, [key]: value }; },
-      onClose: () => { closed++; }, onSave, onDelete,
+      onClose: () => { closed++; }, onSave, onDelete, ...props,
     });
     effects.splice(0).forEach(effect => effect());
     if (tree?.props.keyboardLayerRef) tree.props.keyboardLayerRef.current = layer;
@@ -167,4 +167,31 @@ test('save shortcut still ignores IME composition and duplicate in-flight submis
   app.render();
   assert.equal(app.findAll(node => node.type === 'textarea')[0].props.disabled, false);
   assert.equal(app.closed(), 0);
+});
+
+test('sheet layout: one-line title, segmented choice, and 취소 still guards a changed draft', t => {
+  const app = mount({
+    initialRecord: { id: 'sheet-1', title: '이름', status: 'draft' },
+    props: {
+      layout: 'sheet',
+      fields: [
+        { key: 'title', label: '프로젝트명', variant: 'title' },
+        { key: 'status', label: '상태', type: 'segmented', options: [{ value: 'draft', label: '계획' }, { value: 'active', label: '진행 중' }] },
+      ],
+    },
+  });
+  t.after(() => app.unmount());
+  const title = app.findAll(node => node.type === 'textarea')[0];
+  assert.equal(title.props['aria-label'], '프로젝트명');
+  let prevented = false;
+  title.props.onKeyDown({ key: 'Enter', preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, true, 'Enter must not add a line to the name');
+  const segment = app.findAll(node => node.type === 'SegmentedControl')[0];
+  assert.deepEqual(segment.props.options.map(option => option.key), ['draft', 'active']);
+  segment.props.onChange('active');
+  app.render();
+  button(app, '취소').props.onClick();
+  app.render();
+  assert.equal(app.closed(), 0);
+  assert.ok(button(app, '버리고 닫기'));
 });

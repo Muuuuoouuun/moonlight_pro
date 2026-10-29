@@ -4,6 +4,8 @@ import { loadOfficeUsage } from '../office-client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { OFFICE_FAILURE_LABELS, OFFICE_ROSTER, officeDiscussionRounds } from '@com-moon/agent-contracts/office';
 import { parseOfficeRoutingRequest, parseOfficeRoutingResult } from '@com-moon/agent-contracts/office-routing';
+import { OFFICE_LINK_JOBS, OFFICE_ROOM_JOBS, officeActiveJob, officeJobPatch } from '@com-moon/agent-contracts/office-jobs';
+import { OFFICE_VERDICT_REASONS, OFFICE_VERDICT_VALUES, saveOfficeVerdict } from '../office-verdict-client';
 import { Button, CheckboxRow, Drawer, EmptyState, SectionTitle, SegmentedControl, Skeleton, TextAreaField, TextField, TruthBadge, CertaintyBadge } from '../hub-primitives';
 import { applyOfficeMeetingTaskAction, readOfficeMeetingTask, listOfficeMeetings, officeMeetingHref, officeMeetingScope, readOfficeMeeting, saveOfficeMeetingSettings, sendOfficeMeeting } from '../office-meetings-client';
 import { copyOfficeText, loadOfficeTasks, officeAssignmentInput, officeMessageLength, officeRailTasks, officeTaskAgendaBlock, officeTasksForScope, shouldSubmitOfficeKey } from '../office-session';
@@ -17,6 +19,7 @@ import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-
 import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
 import { OfficeMeetingDiagnostic } from '../office-meeting-diagnostic.jsx';
+import { OfficeConnectionBrandPicker } from '../office-connection-source';
 import { beginOfficeMeetingRead, finishOfficeMeetingRead, guardOfficeMeetingRead } from '../office-meeting-diagnostic.js';
 import { officeMentorSessions } from '../office-mentor-session';
 import { requestOfficeMentor } from '../office-mentor-client';
@@ -114,6 +117,49 @@ function OfficeAgendaGuidance({ text, scope, onGuidanceAsk, onNavigate }) {
   </details>;
 }
 
+// 2026-10-29 A안 P3: 한 판에 한 번 `그대로 · 고쳐 · 버림(이유)` — agent_runs.recommendation.verdict에 남는 11월 판정 원천.
+// 서버 봉투를 받기 전엔 `기록 중`, 실패는 `기록 못 함`(이 화면의 유일한 빨강). 같은 세션에서 다른 판을 보고 돌아와도
+// 남도록 runId별 메모리에 둔다. ponytail: 저장된 회의를 다시 열면 판정이 안 보인다(읽기 경로가 agent_runs를 조인하지 않음) —
+// 회의 읽기에 verdict를 실으면 여기 초기값만 바꾸면 된다.
+const verdictMemory = new Map();
+function OfficeVerdictRow({ turn }) {
+  const runId = turn.result.log?.runId || null;
+  const [state, setState] = React.useState(() => (runId && verdictMemory.get(runId)) || { status: 'idle', value: null, reason: null });
+  const readRef = React.useRef(0);
+  React.useEffect(() => () => { readRef.current += 1; }, []);
+  const timeLabel = at => new Date(at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  async function save(value, reason) {
+    if (!runId) return;
+    const readId = ++readRef.current;
+    setState({ status: 'saving', value, reason });
+    const result = await saveOfficeVerdict({ runId, value, reason });
+    if (readId !== readRef.current) return;
+    const next = result.status === 'saved' ? { status: 'saved', value, reason, at: new Date().toISOString() }
+      : result.status === 'preview' ? { status: 'preview', value, reason }
+        : { status: 'error', value, reason, error: result.error };
+    if (next.status === 'saved') verdictMemory.set(runId, next);
+    setState(next);
+  }
+  function choose(value) {
+    if (value === 'dropped') { setState({ status: 'reason', value, reason: null }); return; }
+    save(value, null);
+  }
+  if (!runId) return <p className={styles.verdict}><span>호출 로그가 저장되지 않아 이 답의 판정은 남길 수 없습니다.</span></p>;
+  const valueLabel = OFFICE_VERDICT_VALUES.find(item => item.id === state.value)?.label;
+  const reasonLabel = OFFICE_VERDICT_REASONS.find(item => item.id === state.reason)?.label;
+  return <div className={styles.verdict} role="group" aria-label="이 답의 판정">
+    <span>이 답, 어떻게 썼나요?</span>
+    <SegmentedControl label="답변 판정" options={OFFICE_VERDICT_VALUES.map(item => ({ key: item.id, label: item.label }))} value={state.value || ''} onChange={choose} />
+    {state.value === 'dropped' ? <SegmentedControl label="버림 이유" options={OFFICE_VERDICT_REASONS.map(item => ({ key: item.id, label: item.label }))} value={state.reason || ''} onChange={reason => save('dropped', reason)} /> : null}
+    {state.status === 'reason' ? <span className={styles.note}>이유를 하나 골라 주세요</span> : null}
+    {state.status === 'saving' ? <span className={styles.note} role="status">기록 중</span> : null}
+    {state.status === 'saved' ? <span className="mono" role="status">{valueLabel}{reasonLabel ? ' · ' + reasonLabel : ''} · {timeLabel(state.at)}</span> : null}
+    {state.status === 'preview' ? <span className={styles.note}><TruthBadge state="preview" /> 저장 연결 후 기록됩니다</span> : null}
+    {state.status === 'error' ? <span className={styles.verdictError} role="alert">기록 못 함 <Button variant="ghost" size="xs" onClick={() => save(state.value, state.reason)}>다시</Button></span> : null}
+    <span className={styles.verdictHint}>한 판에 한 번 · 다시 누르면 바뀝니다</span>
+  </div>;
+}
+
 // V4(2026-09-26 운영자 선택 "2-3 섞어서"): 한 판은 결론 먼저 — 요청 한 줄 → 결론·다음 행동 → 역할별 발언 비교.
 function ResultTurn({ turn, index, onRevise, onCopy, onSkill, onOpenMentor, onGuidanceAsk, onNavigate, skillAvailable, copyStatus, latestRef }) {
   const result = turn.result;
@@ -147,12 +193,14 @@ function ResultTurn({ turn, index, onRevise, onCopy, onSkill, onOpenMentor, onGu
         <div className={styles.receipt}><span>{result.log?.persisted === true ? '호출 로그 저장됨' : '답변 생성됨 · 호출 로그 미저장'}</span><span>업무 변경 없음</span></div>
         {result.context?.source && result.context.source !== 'provided' ? <div className={styles.contextState}><TruthBadge state={result.context.source} /></div> : null}
         <p className={styles.note}>{result.context?.note}</p>
+        {result.context?.brand ? <p className={styles.note}>{result.context.brand.status === 'rejected' ? '브랜드 기록 제외 · 범위가 다른 브랜드' : result.context.brand.status === 'error' ? <><TruthBadge state="error" /> 브랜드 기록 못 읽음 · 안건만 보냈습니다</> : <>{result.context.brand.status === 'partial' ? <TruthBadge state="partial" /> : null}참고 · 브랜드 {result.context.brand.name} 기록 <span className="mono">{result.context.brand.lines}</span>줄{result.context.brand.truncated ? ' · 2,000자에서 잘림' : ''}</>}</p> : null}
         {result.context?.projects?.length ? <details className={styles.request}><summary>참고한 프로젝트 ({result.context.projects.length})</summary><ul className={styles.note}>{result.context.projects.map(project => <li key={project.id}>{project.name} · {project.status}</li>)}</ul></details> : null}
         {skillAvailable ? <details className={styles.request}><summary>더보기</summary><div className={styles.answerActions}>
           <Button variant="outline" size="sm" onClick={() => onSkill(turn)}>로컬 스킬 요청서</Button>
         </div></details> : null}
       </div>
     </div>
+    <OfficeVerdictRow turn={turn} />
     <ThreadDiscussion result={result} request={turn.request} />
   </article>;
 }
@@ -187,7 +235,9 @@ function OfficeUsageLine({ refreshKey }) {
   const failures = Object.entries(usage.failureCategories || {}).map(([key, n]) => (OFFICE_FAILURE_LABELS[key] || key) + ' ' + n).join(' · ');
   return <p className={styles.usage}>{usage.status === 'partial' ? <TruthBadge state="partial" /> : null}최근 <span className="mono">{usage.windowDays}</span>일 · 요청 <span className="mono">{usage.requests}</span> · 할 일 연결 <span className="mono">{usage.applied}</span>
     {usage.averageElapsedMs != null ? <> · 평균 <span className="mono">{Math.round(usage.averageElapsedMs / 1000)}</span>초</> : null}
-    {' · '}실패 <span className="mono">{usage.failed}</span>{failures ? ' (' + failures + ')' : ''}</p>;
+    {' · '}실패 <span className="mono">{usage.failed}</span>{failures ? ' (' + failures + ')' : ''}
+    {usage.verdicts ? <> · 그대로+고쳐 <span className="mono">{usage.verdicts.total ? `${usage.verdicts.kept + usage.verdicts.edited}/${usage.verdicts.total}` : '—'}</span>{usage.verdicts.topDropReason ? <> · 버림 사유 {({ context: '맥락부족', wrong: '틀림', useless: '쓸모없음' })[usage.verdicts.topDropReason] || usage.verdicts.topDropReason}</> : null}</> : null}
+    {usage.tokens != null ? <> · 토큰 <span className="mono">{usage.tokens.toLocaleString('ko-KR')}</span></> : null}</p>;
 }
 
 export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) {
@@ -239,6 +289,7 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
   const owner = OFFICE_ROSTER.find(person => person.id === ownerId) || OFFICE_ROSTER[0];
   const participants = mode === 'council' ? [ownerId, ...reviewers] : [];
   const preset = COMPARISON_PRESETS.find(item => item.id === session.presetId);
+  const activeJob = officeActiveJob(session);
   const assignmentInput = officeAssignmentInput(session);
   const assignmentMessage = assignmentInput.message;
   const tooLong = officeMessageLength(session, { durable: true }) > 6000;
@@ -434,6 +485,18 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
     update({ ownerId: selected.ownerId, mode: 'council', reviewers: [selected.reviewerId], presetId: selected.id });
     setMoreOpen(false);
   }
+  // 일감 칩(2026-10-29 A안 P2): 고정표가 범위·참석자·방식·템플릿을 채운다 — 모델 호출 없음. 참석자 레일이 정본이라
+  // 칩은 세션이 표와 정확히 같을 때만 켜지고(officeActiveJob), 레일을 바꾸면 저절로 꺼진다.
+  function applyJob(job) {
+    if (busy) return;
+    const target = job.scope || (scope === 'all' ? null : scope);
+    if (!target) { setInputNotice('이 일감은 범위가 필요합니다 · 위에서 개인 또는 회사를 먼저 골라 주세요'); return; }
+    invalidateAssignment(); setInputNotice(''); setMobileView('meet');
+    const patch = officeJobPatch(job, store.get(target).draft);
+    if (target !== scope) { store.update(target, patch); router.replace(`?scope=${target}`, { scroll: false }); return; }
+    update(patch);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
   // Clearing a meeting also drops its mentor consultations: they are unreachable afterwards.
   function clearMeeting() {
     applyReadRef.current += 1;
@@ -515,7 +578,7 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
   const otherTurns = busy ? session.turns : session.turns.filter(turn => turn !== shownTurn);
   const railStatus = taskState.status;
   return <section className={styles.page + ' fade-up'}>
-    <header className={styles.header}><div><div className={styles.eyebrow}>AI·자동화 / 오피스</div><h2>이브이 오피스</h2><p>안건 하나를 올리고, 필요한 관점을 불러 함께 검토하세요.</p></div>
+    <header className={styles.header}><div><div className={styles.eyebrow}>AI·자동화 / 오피스</div><h2>이브이 오피스</h2><p>일감을 고르거나 안건을 바로 적으세요. 답변은 업무를 바꾸지 않습니다.</p></div>
       {scope === 'all' ? <SegmentedControl label="회의 저장 범위" options={[{ key: 'personal', label: '개인' }, { key: 'classin', label: '회사' }]} value="" onChange={chooseScope} /> : <span className={styles.scope}>{SCOPE_LABEL[scope]} 업무</span>}</header>
     <div className={styles.mobileTabs}><SegmentedControl label="회의실 보기" fill options={[{ key: 'agenda', label: '안건' }, { key: 'meet', label: '회의' }, { key: 'people', label: '참석자' }]} value={mobileView} onChange={setMobileView} /></div>
     <div className={styles.room} data-view={mobileView}>
@@ -540,6 +603,12 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
         </section>
       </aside>
       <div className={styles.main}>
+        <div className={styles.jobs} role="group" aria-label="일감">
+          <span className={styles.jobsLabel}>일감</span>
+          <SegmentedControl label="회의실 일감" options={OFFICE_ROOM_JOBS.map(job => ({ key: job.id, label: job.label }))} value={activeJob?.id || ''} onChange={id => applyJob(OFFICE_ROOM_JOBS.find(job => job.id === id))} />
+          {OFFICE_LINK_JOBS.map(job => <Button key={job.id} variant="outline" size="sm" className={styles.jobLink} title={job.hint} aria-label={`${job.label} · ${job.hint}`} onClick={() => onNavigate?.(job.link)}>{job.label} ↗</Button>)}
+          <Button variant="ghost" size="sm" className={styles.jobsMore} disabled={busy} onClick={openMeetingTools}>더 보기 ▸</Button>
+        </div>
         <div className={styles.agendaBar}>{agenda ? <>
           <div className={styles.agendaMain}><strong title={agenda.title}>안건: {agenda.title}</strong><span className={styles.sourceChip}>{agenda.source === 'task' ? '할 일에서 가져옴 · 복사본 · ' + importedAt : '직접 입력'}</span><span className={styles.mobileCount}>참석 {1 + reviewers.length}명</span></div>
           <div className={styles.agendaTools}><span className={styles.attendees}>참석: {personName(ownerId)}{reviewers.map(id => ' · ' + personName(id)).join('')}</span>
@@ -572,7 +641,7 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
             onPaste={handlePaste} onDrop={handleDrop} onDragOver={event => { if (event.dataTransfer?.types?.includes('text/plain') || event.dataTransfer?.types?.includes('Files')) event.preventDefault(); }}
             onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
             onKeyDown={event => { if (!composing.current && shouldSubmitOfficeKey(event)) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}
-            placeholder={preset?.hint || '막힌 일이나 판단할 내용을 적어 주세요. 텍스트를 붙여 넣어도 됩니다.'} />
+            placeholder={preset?.hint || activeJob?.placeholder || '막힌 일이나 판단할 내용을 적어 주세요. 텍스트를 붙여 넣어도 됩니다.'} />
           {inputNotice ? <p role="status" className={styles.note}>{inputNotice}</p> : null}
           {session.error ? <div role={session.error.status === 'error' ? 'alert' : 'status'} className={styles.notice + (session.error.status === 'error' ? ' ' + styles.error : '')}><TruthBadge state={session.error.status === 'preview' ? 'preview' : 'error'} /><p>{session.error.error}</p></div> : null}
           {needsMeetingCheck ? <OfficeMeetingDiagnostic state={meetingDiagnostic} scope={scope} meetingId={meetingParam || session.meetingId}
@@ -589,6 +658,11 @@ export function OfficeMeetingRoom({ scope = 'all', onGuidanceAsk, onNavigate }) 
             <OfficeAvatar agentId={id} /><span><strong>{personName(id)}{id === ownerId ? ' · 주관' : ''}</strong><small>{OFFICE_ROSTER.find(person => person.id === id)?.pitch}</small></span></div>)}</div>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRosterOpen(true)}>{reviewers.length < 2 && !['draft', 'review'].includes(mode) ? '+ 관점 더하기' : '참석자 바꾸기'}</Button>
         </section>
+        {officeMeetingScope(scope) ? <section className={styles.railSection}><SectionTitle>브랜드 기록</SectionTitle>
+          {/* A안 P4: 고른 브랜드의 기록(설명·운영 상태·집중점·최근 로그)을 읽기 전용 context로 안건과 같이 보낸다. 범위의 레인 안 브랜드만 */}
+          <OfficeConnectionBrandPicker scope={scope} value={session.brandId} disabled={busy} onChange={({ brandId }) => { invalidateAssignment(); update({ brandId }); }} />
+          <p className={styles.note}>{session.brandId ? '이 브랜드의 기록을 읽기 전용으로 붙여 보냅니다. 기록은 바뀌지 않습니다.' : '브랜드 맥락이 필요하면 골라 주세요 · 선택 사항'}</p>
+        </section> : null}
         <section className={styles.railSection}><SectionTitle>{session.pending ? '진행' : '진행 방식'}</SectionTitle>
           {session.pending ? <><ol className={styles.orderList}>{[...speakingOrder(session.pending.request), '종합'].map((step, index) => <li key={index}>{step}</li>)}</ol><p className={styles.note}>순서 예고 · 실제 진행률 아님</p></>
             : <dl className={styles.settings}>
