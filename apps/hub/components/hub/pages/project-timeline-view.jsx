@@ -80,7 +80,7 @@ export function ProjectTimelineView({
                     {weekTicks.map((tick, i) => (
                       <span key={i} className="mono" style={{ position: 'absolute', left: `${tick.offsetPct}%`, fontSize: 10.5, color: 'var(--fg-faint)', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>{tick.label}</span>
                     ))}
-                    <span className="mono" style={{ position: 'absolute', left: `${timeline.todayPct}%`, top: 0, fontSize: 10.5, color: 'var(--moon-300)', transform: 'translateX(-50%)', fontWeight: 600, whiteSpace: 'nowrap' }}>오늘</span>
+                    <span style={{ position: 'absolute', left: `${timeline.todayPct}%`, top: 0, fontSize: 10.5, color: 'var(--moon-300)', transform: 'translateX(-50%)', fontWeight: 600, whiteSpace: 'nowrap' }}>오늘</span>
                   </div>
                 </div>
                 {timeline.items.map((item, i) => {

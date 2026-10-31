@@ -393,7 +393,7 @@ function DealPipelineSection({ deals }) {
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
             <div className="num customer-money">{fmtMoney(d.value)}</div>
-            <div className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2 }}>마감 {d.close}</div>
+            <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2 }}>마감 <span className="mono">{d.close}</span></div>
           </div>
         </div>
       ))}

@@ -2376,10 +2376,10 @@ export function Projects({ workspace }) {
                         <BrandMark brand={section.brand} size={18} />
                         <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.brand.name}</span>
                         {rollupActive > 0 && (
-                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>진행 중 {rollupActive}</span>
+                          <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>진행 중 <span className="mono">{rollupActive}</span></span>
                         )}
                         {rollupRisk > 0 && (
-                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--danger)' }}>막힘·지연 {rollupRisk}</span>
+                          <span style={{ fontSize: 10.5, color: 'var(--danger)' }}>막힘·지연 <span className="mono">{rollupRisk}</span></span>
                         )}
                         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{items.length}</span>
                       </button>

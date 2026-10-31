@@ -3266,7 +3266,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                     <span style={{ display: 'block', fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{deal.name}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
                       <Badge tone="neutral" size="xs" variant="outline">{stage?.label || deal.stage}</Badge>
-                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>마감 {deal.close || '미정'}</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>마감 {deal.close ? <span className="mono">{deal.close}</span> : '미정'}</span>
                     </span>
                   </span>
                   <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(deal.value)}</span>

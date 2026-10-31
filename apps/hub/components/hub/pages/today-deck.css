@@ -5,7 +5,9 @@
 .hub-app .today-deck__title { margin: 10px 0 0; font-size: 40px; font-weight: 200; letter-spacing: -0.035em; line-height: 1.08; text-wrap: balance; }
 
 /* 빠른 입력 | 하루 띠 */
-.hub-app .today-deck__bar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; align-items: center; }
+/* 빠른 입력 줄과 아래 두 칸이 같은 열 경계를 쓴다 — 1fr:1.3fr·20px와 1fr:1.25fr·16px로 달라 1440px에서 세로선이
+   763·775·783·790px로 넷이었다(2026-10-31 검토 §1.1). 아래 줄(.today-deck__below)과 같은 값이다. */
+.hub-app .today-deck__bar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; align-items: center; }
 
 .hub-app .today-strip { position: relative; height: 52px; min-width: 0; }
 .hub-app .today-strip__track {

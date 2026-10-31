@@ -168,7 +168,7 @@ function ChecklistSection({ product, onEdit, onTab, onSaved }) {
                         <li key={feature.id} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 32, fontSize: 13 }}>
                           <Checkbox checked={Boolean(feature.verifiedAt)} disabled={saving !== null} label={`${feature.text} 점검`} onChange={(checked) => toggle(feature, checked)} />
                           <span style={{ flex: 1, minWidth: 0, color: feature.verifiedAt ? "var(--fg-muted)" : "var(--fg)" }}>{feature.text}</span>
-                          {feature.verifiedAt && <span className="mono" style={{ fontSize: 11, color: "var(--fg-dim)" }}>점검 {feature.verifiedAt.slice(5)}</span>}
+                          {feature.verifiedAt && <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>점검 <span className="mono">{feature.verifiedAt.slice(5)}</span></span>}
                         </li>
                       ))}
                     </ul>
