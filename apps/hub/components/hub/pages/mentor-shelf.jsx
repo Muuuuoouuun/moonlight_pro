@@ -211,7 +211,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
     <section className="mentor-shelf__section" aria-labelledby="mentor-shelf-today">
       <div className="mentor-shelf__section-head">
         <h3 id="mentor-shelf-today">지금의 서가</h3>
-        <span className="mono">{dailyWindow.date} · 서울 기준 09·14·19시 교체</span>
+        <span><span className="mono">{dailyWindow.date}</span> · 서울 기준 09·14·19시 교체</span>
       </div>
 
       {hidden ? <div className="mentor-shelf__collapsed">
@@ -254,7 +254,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
           <Card role="article" aria-label="이번 주 Legend 카드" className="mentor-shelf__legend">
             <div className="mentor-shelf__card-head">
               <strong>LEGEND / 판단 관점</strong>
-              <span className="mono">매주 한 장</span>
+              <span>매주 한 장</span>
             </div>
             <div role="button" tabIndex={0} className="mentor-shelf__reading mentor-shelf__reading--legend hub-card-link" aria-label={`${legendCard.person} Moonlight 글 읽기`}
               onClick={() => setDetailCard(legendCard)} onKeyDown={event => openWithKeyboard(event, () => setDetailCard(legendCard))}>

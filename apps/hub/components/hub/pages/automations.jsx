@@ -132,7 +132,8 @@ export function AutomationsIndex({ onNavigate }) {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        // 390px(본문 약 366px)에서도 두 칸 — 180px 바닥이면 한 줄에 하나씩 쌓여 표가 약 800px 아래로 밀렸다.
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))',
         gap: 'var(--gap)',
       }}>
         <Card pad style={{ padding: '12px 16px' }}>
@@ -570,7 +571,8 @@ export function Runs({ onNavigate } = {}) {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        // 390px(본문 약 366px)에서도 두 칸 — 180px 바닥이면 한 줄에 하나씩 쌓여 표가 약 800px 아래로 밀렸다.
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))',
         gap: 'var(--gap)',
       }}>
         <Card pad style={{ padding: '12px 16px' }}>
@@ -607,7 +609,8 @@ export function Runs({ onNavigate } = {}) {
           <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>엔진 헬스 상태</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
             <Dot tone={syncState === 'error' ? 'danger' : 'neutral'} />
-            <span className="mono" style={{ fontSize: 15, fontWeight: 500, color: 'var(--fg)' }}>
+            {/* 상태는 늘 한글 낱말(`연결 전`·`핑 기록 확인됨`)이라 sans — Mono는 숫자·시각 전용(§6). */}
+            <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--fg)' }}>
               {syncState === 'live' ? (latestHeartbeat ? '핑 기록 확인됨' : '핑 기록 없음')
                 : ({ loading: '확인 중', partial: '일부 확인', preview: '연결 전', error: '확인 불가' }[syncState] || '확인 필요')}
             </span>

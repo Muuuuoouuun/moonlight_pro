@@ -1094,7 +1094,8 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         {/* §9: urgent 인디케이터는 루프 금지 — red+glow가 이미 충분한 강조 */}
         <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, flexShrink: 0 }} />
-        <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-dim)', fontWeight: 600 }}>지금 가장 급한 것</span>
+        {/* 한글 라벨은 sans — Mono는 한글 글리프가 없어 SUIT로 대체되며 어절이 벌어진다(§6). */}
+        <span style={{ fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-dim)', fontWeight: 600 }}>지금 가장 급한 것</span>
         <Badge tone="neutral" size="xs">{s.kind}</Badge>
         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>
         <div style={{ flex: 1 }} />
@@ -1137,7 +1138,7 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
         )}
         {hasRecord && <Button variant="outline" size="md" iconRight="arrowRight" onClick={openRecord}>레코드 열기</Button>}
         <div style={{ flex: 1 }} />
-        {remaining > 0 && <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>확인할 것 {remaining}건 더 ↓</span>}
+        {remaining > 0 && <span className="num" style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>확인할 것 {remaining}건 더 ↓</span>}
       </div>
     </div>
   );

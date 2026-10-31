@@ -416,7 +416,7 @@ function ZeroKeepCells({ metric, objective, observations, today }) {
   const glyph = { kept: '✓', broken: '▲', unknown: '·', pending: '·', future: '·' };
   return <div className="goal-zero-weeks-wrap">
     <ol className="goal-zero-weeks" aria-label={`${metric.name} 주별 유지`}>{cells.map(cell => <li key={cell.start} className={`goal-zero-weeks__cell goal-zero-weeks__cell--${cell.state}${cell.phase === 'now' ? ' goal-zero-weeks__cell--now' : ''}`} aria-label={`${cell.label} 주 ${ZERO_KEEP_MARK[cell.state] || '앞으로'}`}>{glyph[cell.state]}</li>)}</ol>
-    <span className="mono goal-muted">{streak ? `${streak}주째 유지` : '유지 기록 없음'}{cells.some(cell => cell.phase === 'now' && cell.state === 'pending') ? ' · 이번 주 확인 전' : ''}</span>
+    <span className="num goal-muted">{streak ? `${streak}주째 유지` : '유지 기록 없음'}{cells.some(cell => cell.phase === 'now' && cell.state === 'pending') ? ' · 이번 주 확인 전' : ''}</span>
   </div>;
 }
 
@@ -588,9 +588,9 @@ export function Goals() {
         <div className="goal-header__title-row">
           <h2 className="goal-page-title">{onWorkTab ? 'OKR·KPI' : '목표·성과'}</h2>
           {!weekly && <TruthBadge state={model.status} />}
-          {model.refreshing && <span className="mono goal-muted">갱신 중…</span>}
+          {model.refreshing && <span className="goal-muted">갱신 중…</span>}
         </div>
-        <p className="goal-header-sub"><b>{shortDate(today)}</b><span className="mono">이번 주 {weekRange(today)}</span></p>
+        <p className="goal-header-sub"><b>{shortDate(today)}</b><span>이번 주 <span className="mono">{weekRange(today)}</span></span></p>
         {view !== 'okr' && <p className="goal-header-desc"><strong>OKR</strong>은 이 기간에 이루려는 변화와 그것을 재는 핵심 결과(KR)입니다. <strong>KPI</strong>는 지킬 건강 지표이며, 현재는 목표 기간 단위로 기록하고 집계합니다.</p>}
       </div>
       <div className="goal-actions">

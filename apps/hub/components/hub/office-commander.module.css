@@ -6,6 +6,8 @@
 /* 입력 칸 폭은 내용 길이에 맞춘다 — 본문 영역 전체(1440px에서 약 1,140px)로 늘린 한 줄 입력·셀렉트는 눈이 줄 끝까지 가야 했다(2026-10-31 검토). */
 .intake { display:grid; gap:12px; max-width:720px; }
 .scopePick { max-width:320px; }
+/* 휴대폰에서는 아래 입력 칸과 같은 폭으로 — 320px만 짧게 끊기면 입력 묶음 왼쪽 끝만 맞고 오른쪽 끝이 어긋난다. */
+@media (max-width:600px) { .scopePick { max-width:none; } }
 .summary { display:grid; gap:4px; padding:12px 0; border-block:1px solid var(--line-soft); }
 .tasks { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); }
 .task { display:flex; flex-direction:column; gap:12px; border:1px solid var(--line); border-radius:var(--r-lg); padding:16px; min-width:0; }
