@@ -1991,6 +1991,9 @@
   .hub-page-shell {
     max-width: none !important;
     padding: var(--section-gap) !important;
+    /* 우하단 빠른 메모 버튼(48px + 아래 16px, quick-memo.module.css)이 마지막 줄을 덮지 않게 스크롤 끝에
+       그만큼 더 비운다 — 390px에서 빈 상태 설명·`다음 순서` 안내가 버튼 밑에 깔렸다(2026-10-31 실측). */
+    padding-bottom: calc(var(--section-gap) + 64px) !important;
   }
 
   .hub-page-header {

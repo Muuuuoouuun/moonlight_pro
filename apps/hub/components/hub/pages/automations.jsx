@@ -16,6 +16,11 @@ const EMPTY_AUTOMATION_SUMMARY = {
 // 모듈 스코프 stale-while-revalidate — 개요↔Flows↔Webhooks↔Runs 탭 전환마다 기록을 다시
 // 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
 const AUTOMATIONS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+// 자동화 표의 열 — 고정 열 합이 660px라 `1fr`만 두면 좁은 화면(표 최소 720px)에서 첫 열이 약 28px로 줄어
+// `자동화`와 `실행 방식`이 붙었다(390px 실측 2026-10-31). 첫 열에 바닥을 주고 행 최소 폭을 그 합으로 맞춰
+// 카드(.hub-table-card) 안에서 가로로 넘기게 한다.
+const AUTOMATION_TABLE_GRID = 'minmax(180px, 1fr) 200px 110px 130px 140px 80px';
+const AUTOMATION_TABLE_MIN_WIDTH = 180 + 660 + 32;
 const AUTOMATIONS_READ_TIMEOUT_MS = 15000;
 let automationsLedgerCache = null; // { at, state }
 
@@ -184,7 +189,7 @@ export function AutomationsIndex({ onNavigate }) {
       </div>
 
       <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: AUTOMATION_TABLE_GRID, minWidth: AUTOMATION_TABLE_MIN_WIDTH, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)' }}>
           <span>자동화</span><span>실행 방식</span><span>상태</span><span>마지막 실행</span><span>성공 / 실행 (24h)</span><span style={{ textAlign: 'right' }} />
         </div>
         {automations.length === 0 && syncState === 'loading' && (
@@ -202,7 +207,7 @@ export function AutomationsIndex({ onNavigate }) {
         )}
         {rows.map((a, i) => (
           <div key={a.id} style={{
-            display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px',
+            display: 'grid', gridTemplateColumns: AUTOMATION_TABLE_GRID, minWidth: AUTOMATION_TABLE_MIN_WIDTH,
             padding: '12px 16px', alignItems: 'center',
             borderBottom: i < automations.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}>
@@ -675,7 +680,8 @@ export function Runs({ onNavigate } = {}) {
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
-        <div className="mono" style={{ padding: '12px 14px', fontSize: 12, minWidth: displayRows.length === 0 ? 0 : undefined }}>
+        {/* Mono는 로그 줄에만 — 빈 상태·로딩 문장은 한글이라 Mono를 물려받으면 어절이 벌어진다(§6). */}
+        <div className={displayRows.length > 0 ? 'mono' : undefined} style={{ padding: '12px 14px', fontSize: 12, minWidth: displayRows.length === 0 ? 0 : undefined }}>
           {displayRows.length === 0 && syncState === 'loading' && <Skeleton lines={3} label="실행 로그 읽는 중" />}
           {displayRows.length === 0 && syncState !== 'loading' && (
             <EmptyState

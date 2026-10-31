@@ -292,7 +292,10 @@ test("the anchor count badge moved from 고객 연락 to 영업·매출 and read
 
 test("the top bar title uses the screen's own name when it only borrows a tab", () => {
   assert.match(topbarSource, /const pageLabel = navigation\.routeLabel\s*\n?\s*\|\| navigation\.activeTab\?\.label/);
-  assert.match(topbarSource, /\(navigation\.activeTab \|\| navigation\.routeLabel\) \? navigation\.anchor\?\.label : 'Moonlight'/);
+  assert.match(topbarSource, /\(navigation\.activeTab \|\| navigation\.routeLabel\) \? navigation\.anchor\?\.label : null/);
+  // 탭이 없는 화면은 윗줄을 그리지 않는다 — `Moonlight` 자리 채우기도, `오늘 / 오늘` 반복도 없다.
+  assert.doesNotMatch(topbarSource, /navigation\.anchor\?\.label : 'Moonlight'/);
+  assert.match(topbarSource, /\{sectionLabel \? <span className="hub-topbar__section">\{sectionLabel\}<\/span> : null\}/);
 });
 
 test("the projects surface splits between 할 일 and 프로젝트·기획 by view", () => {

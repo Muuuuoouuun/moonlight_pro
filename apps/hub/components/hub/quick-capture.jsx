@@ -12,7 +12,7 @@
 
 import React from "react";
 import { Iconed } from "./hub-icons";
-import { Button, Card, Drawer, Kbd, TruthBadge } from "./hub-primitives";
+import { Button, Card, Drawer, TruthBadge } from "./hub-primitives";
 import { createClientId } from "@/lib/pms-ui";
 import { createQuickCaptureSession, shouldSubmitQuickTask, submitQuickCapture } from "@/lib/quick-task-capture";
 
@@ -89,15 +89,13 @@ export function QuickCaptureForm({
       >
         <div style={{ display: "flex", flex: compact ? "0 0 auto" : "1 1 360px", minWidth: 0, flexDirection: "column", gap: 8 }}>
           <div className="hub-stackable-row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* 라벨은 한글 한 줄 — Mono·대문자·자간을 걸면 한글 음절이 벌어지고(§6 Mono는 숫자·ID 전용),
+                Enter 안내는 아래 상태 줄(HINTS.idle)이 저장 위치까지 말하므로 여기서 다시 하지 않는다. */}
             <label
               htmlFor={inputId}
-              className="mono"
-              style={{ flex: 1, fontSize: 10.5, color: "var(--fg-dim)", letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}
+              style={{ flex: 1, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", display: "flex", alignItems: "center", gap: 6 }}
             >
-              <span>Quick Capture</span>
-              <span style={{ fontSize: 10.5, color: "var(--fg-faint)", textTransform: "none", letterSpacing: 0, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                (Enter로 저장 <Kbd style={{ fontSize: 10.5, minWidth: 14, height: 16, padding: "0 4px", lineHeight: "14px" }}>↵</Kbd>)
-              </span>
+              빠른 입력
             </label>
             <div role="group" aria-label="저장 위치" style={{ display: "flex", gap: 4 }}>
               <Button type="button" variant={hint === "task" ? "secondary" : "ghost"} size="xs" aria-pressed={hint === "task"} disabled={saving} onClick={() => changeHint("task")}>할 일</Button>

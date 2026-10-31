@@ -41,7 +41,9 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
     || navigation.anchor?.label
     || LABELS[segments[segments.length - 1]]
     || segments[segments.length - 1];
-  const sectionLabel = (navigation.activeTab || navigation.routeLabel) ? navigation.anchor?.label : 'Moonlight';
+  // 탭이 없는 화면(오늘·제품·기회 탐색)은 제목 한 줄만 둔다 — 윗줄에 앵커 이름을 넣으면 `오늘 / 오늘`로
+  // 같은 말을 두 번 하고, `Moonlight`를 넣으면 다른 화면과 달리 위치를 말하지 않는다.
+  const sectionLabel = (navigation.activeTab || navigation.routeLabel) ? navigation.anchor?.label : null;
   React.useEffect(() => {
     const updateClock = () => setClock(formatHubClock(new Date()));
     updateClock();
@@ -123,7 +125,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
         />
 
         <div className="hub-topbar__crumbs" style={{ minWidth: 0 }}>
-          <span className="hub-topbar__section">{sectionLabel}</span>
+          {sectionLabel ? <span className="hub-topbar__section">{sectionLabel}</span> : null}
           <strong className="hub-topbar__title">{pageLabel}</strong>
         </div>
 

@@ -235,6 +235,25 @@
 
 ---
 
+## 7. 후속 조치 — §5의 9건 처리 (2026-11-01 KST)
+
+| # | 처리 | 확인 |
+| --- | --- | --- |
+| 1 | `TruthBadge`·`CertaintyBadge`·`LifecycleBadge` 세 상태 배지 모두 `textTransform: 'none', letterSpacing: 0` — 같은 스타일 블록이라 셋을 함께 고쳤다 | 고객·거래·오늘 배지 computed `none`/`normal`, 글자 `Preview · 연결 필요` |
+| 2 | 탭이 없는 화면의 탑바 윗줄을 **숨긴다**(`Moonlight` 대신 앵커 이름을 넣으면 `오늘 / 오늘`이 되어 §5의 원안을 바꿨다). `hub-nav.test.mjs` 단언을 새 계약으로 갱신 | 오늘·제품·기회 탐색 탑바에 `.hub-topbar__section` 없음 |
+| 3 | Mono·대문자를 한글에서 걷음 — 빠른 입력 머리(`Quick Capture` → `빠른 입력`, SUIT), 오늘 상태 줄 라벨(`.mono` → `.num`), 제품 화면 `.eyebrow` 전체(`product-room.module.css` — `진행 중인 프로젝트`·`지금 볼 것` 등 10여 곳), Runs 로그 영역은 로그 줄이 있을 때만 `.mono` | 각 요소 computed font `SUIT Variable` |
+| 4 | 빠른 입력 머리의 `(Enter로 저장 ↵)` 제거 — 아래 상태 줄(`Enter로 할 일 저장`/`Enter로 정리 전에 보관`)이 저장 위치까지 말한다 | 오늘 화면의 `Enter로` 1회 |
+| 5 | 하루 띠 지금 시각 글자를 양 끝(≤8%·≥92%)에서 띠 안쪽으로 붙임(`data-edge`). ≤900px에서 `.hub-page`·`.hub-page-shell` 하단 패딩을 `section-gap + 64px`로 — 메모 버튼(48+16px) 자리 | 390px 시각 글자 10~42px(화면 안), 하단 패딩 76px. `.hub-page` 루트가 아닌 화면(오피스·제품·프로젝트·기회 탐색·OKR)은 이번에 닿지 않는다 |
+| 6 | 자동화 표 열을 `minmax(180px, 1fr) …`, 행 최소 폭 872px로 — 카드 안에서 가로로 넘긴다. 한글 머리의 대문자·자간도 걷음 | 390px 첫 열 180px, `자동화`·`실행 방식` 분리 |
+| 7 | 레일이 있는 화면은 >900px에서 본문 스크롤 영역 오른쪽을 58px 비움(`.hub-content:has(.context-mentor-rail)`) | 고객 표 카드 오른쪽 1334px, 레일 1382px |
+| 8 | 문의 필터 셀렉트 220px·왼쪽 정렬, 오피스 입력 묶음 `max-width: 720px`·업무 범위 셀렉트 320px | 실측 220×3, 720, 320 |
+| 9 | OKR 채점 공식 범례를 `막대 읽는 법` 펼침(`<details>`)으로 | 기본 접힘 |
+
+- 테스트: `npm test` 6,434건 중 통과 6,400 · 실패 6 · skip 28. 실패 6건은 모두 실제 PostgreSQL을 띄우는 시험으로, 이 컨테이너가 root라 `initdb`가 실행을 거부한 환경 문제다(변경 파일과 무관). 이후 자동화 페이지 수정 뒤 해당 시험 4파일 20건 재통과, `npm run lint` 0건.
+- §4 운영자 안건(A1~A3·B1~B5)은 손대지 않았다.
+
+---
+
 ## 부록 A. 측정 방법
 
 - 캡처: `apps/hub`에서 `next dev`(loopback 개발 통과, Supabase 미설정), Playwright Chromium, `mlp.theme`을 light/dark로 고정, 1440×900 / 390×844(isMobile·hasTouch, DPR 2), 로케일 ko-KR·Asia/Seoul. 로딩 문구·Skeleton이 사라질 때까지 기다린 뒤 캡처했고, Next 개발 표시기는 숨겼다.

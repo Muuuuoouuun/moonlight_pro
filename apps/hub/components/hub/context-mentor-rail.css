@@ -126,3 +126,9 @@
 @media (max-width: 720px), (pointer: coarse) {
   .context-mentor-rail__content .hub-seg__btn { min-height: 44px; }
 }
+
+/* 넓은 화면의 레일은 화면 오른쪽에 고정돼 본문 위에 뜬다 — 레일이 있는 화면은 본문 스크롤 영역 오른쪽을 레일 폭만큼
+   비워 표·카드 끝(고객 표의 `금액` 열 카드 경계)이 레일에 붙지 않게 한다(1440px 실측 2026-10-31). */
+@media (min-width: 901px) {
+  .hub-app .hub-content:has(.context-mentor-rail) { padding-right: 58px; }
+}

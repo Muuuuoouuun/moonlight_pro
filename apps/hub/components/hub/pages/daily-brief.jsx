@@ -988,7 +988,8 @@ function StatusLine({ state, onRetry }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--fg-faint)', padding: '0 2px' }}>
       <Dot tone={syncTone(state.syncState)} size={6} />
-      <span className="mono" style={{ color: 'var(--fg-dim)', letterSpacing: 0 }}>{label}</span>
+      {/* 라벨은 `연결 필요`·`3/6 실시간`처럼 한글이 섞인다 — Mono는 한글 글리프가 없어 어절이 벌어지므로 sans 표 숫자(.num)로. */}
+      <span className="num" style={{ color: 'var(--fg-dim)', letterSpacing: 0 }}>{label}</span>
       <span style={{ color: 'var(--fg-faint)' }}>· {detail}</span>
       {onRetry && ['error', 'partial'].includes(state.syncState) && (
         <Button variant="ghost" size="xs" onClick={onRetry}>다시 읽기</Button>

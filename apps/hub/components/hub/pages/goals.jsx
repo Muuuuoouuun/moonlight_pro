@@ -624,7 +624,13 @@ export function Goals() {
         />
       </div>
       <span className="goal-toolbar-caption">
-        {weekly ? '지난 주들의 실제 기록을 같은 정의로 비교하세요.' : kpi ? '점수 없이 선 안·밖과 추이로 봅니다. 선 밖인 것부터 보입니다.' : checking ? '숫자와 근거를 훑고 바로 실제값을 기록하세요. KR과 KPI를 함께 봅니다.' : <><i className="goal-legend-marker" aria-hidden="true" />세로선 = 기대(기간 경과) · 막대 끝 = 바닥(약속) · 점수 = 0.7 × 진행률</>}
+        {weekly ? '지난 주들의 실제 기록을 같은 정의로 비교하세요.' : kpi ? '점수 없이 선 안·밖과 추이로 봅니다. 선 밖인 것부터 보입니다.' : checking ? '숫자와 근거를 훑고 바로 실제값을 기록하세요. KR과 KPI를 함께 봅니다.' : (
+          // 채점 공식은 늘 보이는 문장이 아니라 필요할 때 펼치는 도움말 — 화면에는 운영자에게 하는 말만 둔다(§15 2026-10-21 현황 피드백).
+          <details className="goal-legend-help">
+            <summary>막대 읽는 법</summary>
+            <span><i className="goal-legend-marker" aria-hidden="true" />세로선 = 기대(기간 경과) · 막대 끝 = 바닥(약속) · 점수 = 0.7 × 진행률</span>
+          </details>
+        )}
       </span>
     </div>
 

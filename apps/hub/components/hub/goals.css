@@ -45,6 +45,10 @@
   font-size:12px;
   color:var(--fg-muted);
 }
+.goal-legend-help { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.goal-legend-help > summary { cursor:pointer; color:var(--fg-dim); list-style:none; text-decoration:underline; text-decoration-color:var(--line-strong); text-underline-offset:3px; }
+.goal-legend-help > summary::-webkit-details-marker { display:none; }
+.goal-legend-help[open] > summary { color:var(--fg-muted); }
 .goal-filters {
   display:flex;
   align-items:flex-end;

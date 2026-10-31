@@ -48,6 +48,8 @@ const PHASES = [
   ["evening", REVIEW_EVENING_HOUR * 60, DAY_END, "저녁 · 닫기"],
 ];
 
+const nowEdge = (pos) => (pos >= 92 ? "end" : pos <= 8 ? "start" : undefined);
+
 export function DayStrip({ agenda }) {
   const now = useMinuteClock();
   const deck = buildTodayDeck({ agenda, now });
@@ -63,7 +65,8 @@ export function DayStrip({ agenda }) {
         <span key={event.id} className="today-strip__ev" data-past={event.e <= deck.minute || undefined}
           style={{ left: `${dayPos(event.s)}%`, width: `calc(${dayPos(event.e) - dayPos(event.s)}% - 2px)` }} title={`${hm(event.s)} ${event.title}`} />
       ))}
-      <span className="today-strip__now" style={{ left: `${dayPos(deck.minute)}%` }}><b className="mono">{hm(deck.minute)}</b></span>
+      {/* 지금 시각 글자는 표식 가운데에 걸리지만, 띠 양 끝에서는 띠 안쪽으로 붙여 화면 밖으로 나가지 않게 한다(390px 실측 2026-10-31). */}
+      <span className="today-strip__now" data-edge={nowEdge(dayPos(deck.minute))} style={{ left: `${dayPos(deck.minute)}%` }}><b className="mono">{hm(deck.minute)}</b></span>
     </div>
   );
 }

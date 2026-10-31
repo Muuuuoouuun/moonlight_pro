@@ -1,6 +1,7 @@
 .inquiries-page { padding: var(--section-gap); max-width: 1120px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
 .inquiry-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.inquiry-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+/* 필터 값은 `전체`·`모든 경로`처럼 짧다 — 한 칸 360px로 늘리지 않고 내용 폭에 맞춰 왼쪽에 모은다(2026-10-31 검토). */
+.inquiry-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 220px)); justify-content: start; gap: 10px; }
 .inquiry-list { border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
 .hub-app .inquiry-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 110px; gap: 16px; width: 100%; padding: 16px; text-align: left; border-bottom: 1px solid var(--line-soft); align-items: center; }
 .hub-app .inquiry-row:last-child { border-bottom: 0; }

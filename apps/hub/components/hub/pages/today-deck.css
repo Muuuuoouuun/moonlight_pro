@@ -18,7 +18,9 @@
 .hub-app .today-strip__ev { position: absolute; top: 24px; height: 8px; min-width: 4px; border-radius: 3px; background: var(--fg-faint); opacity: .55; }
 .hub-app .today-strip__ev[data-past] { opacity: .3; }
 .hub-app .today-strip__now { position: absolute; top: 18px; width: 2px; height: 20px; margin-left: -1px; border-radius: 2px; background: var(--moon-300); }
-.hub-app .today-strip__now b { position: absolute; top: 22px; left: -18px; font-size: 10.5px; font-weight: 500; color: var(--moon-300); }
+.hub-app .today-strip__now b { position: absolute; top: 22px; left: -18px; font-size: 10.5px; font-weight: 500; color: var(--moon-300); white-space: nowrap; }
+.hub-app .today-strip__now[data-edge="end"] b { left: auto; right: -1px; }
+.hub-app .today-strip__now[data-edge="start"] b { left: -1px; }
 
 /* 세 자리 */
 .hub-app .today-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
