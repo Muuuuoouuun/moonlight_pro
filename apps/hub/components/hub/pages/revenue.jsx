@@ -60,6 +60,8 @@ const SCOPE_OPTIONS = [
   { key: 'personal', label: 'Personal', dot: 'personal' },
   { key: 'company', label: 'Company', dot: 'company' },
 ];
+// 빈 상태 문구는 화면의 필터 칩과 같은 이름을 쓴다 — 내부 키(`all`)를 그대로 내보내면 `필터: all`이 된다.
+const scopeFilterLabel = (key) => SCOPE_OPTIONS.find((option) => option.key === key)?.label || key;
 
 function isClassInGuruRecord(record) {
   if (!record || record.type !== 'company') return false;
@@ -866,7 +868,7 @@ export function Leads({ workspace }) {
           <EmptyState
             icon="search"
             title={LEADS.length === 0 ? '리드가 없습니다' : '일치하는 리드가 없습니다'}
-            description={term ? `"${search}" 검색 결과 0건 · 필터: ${filter}` : `필터: ${filter} · ${LEADS.length}건 중 0건`}
+            description={term ? `"${search}" 검색 결과 0건 · 필터: ${scopeFilterLabel(filter)}` : `필터: ${scopeFilterLabel(filter)} · ${LEADS.length}건 중 0건`}
             action={(
               <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
                 {labelFiltersActive && <Button variant="ghost" size="sm" onClick={clearLabelFilters}>필터 해제</Button>}
@@ -3419,7 +3421,7 @@ export function Accounts({ workspace, onNavigate }) {
   const scopeFilteredEmpty = filter !== 'all' && ACCOUNTS.length > 0;
   const emptyTitle = scopeFilteredEmpty ? '해당 범위에 계정이 없습니다' : '계정이 없습니다';
   const emptyDescription = (liveCopy) => (
-    scopeFilteredEmpty ? `필터: ${filter} · ${ACCOUNTS.length}건 중 0건`
+    scopeFilteredEmpty ? `필터: ${scopeFilterLabel(filter)} · ${ACCOUNTS.length}건 중 0건`
       : syncState === 'live' ? liveCopy
       : '필터를 조정하거나 첫 계정을 등록하세요.'
   );

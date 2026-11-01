@@ -424,7 +424,8 @@ export function Projects({ workspace }) {
         ? '프로젝트 기록 확인 중'
         : syncState === 'error'
           ? '프로젝트 기록 읽기 실패'
-          : 'preview · 실제 기록 미연결';
+          // 옆의 TruthBadge가 이미 `Preview · 연결 필요`라고 말한다 — 소문자 상태 키(`preview`)를 한 번 더 붙이지 않는다.
+          : '실제 기록 미연결';
   })();
 
   // selectedProjectId를 deps에 넣으면 상세 열기/닫기(URL param 변경)마다 loadLedger가
