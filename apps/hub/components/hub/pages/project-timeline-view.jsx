@@ -29,7 +29,7 @@ export function ProjectTimelineView({
               icon="projects"
               title="타임라인에 표시할 프로젝트가 없습니다"
               description="실제 시작일이 있는 프로젝트는 기간으로, 마감일만 있으면 마감 지점으로 표시됩니다."
-              action={<Button variant="primary" size="sm" icon="plus" onClick={onCreateProject}>Project</Button>}
+              action={<Button variant="secondary" size="sm" icon="plus" onClick={onCreateProject}>Project</Button>}
             />
           </Card>
         </div>
@@ -80,7 +80,7 @@ export function ProjectTimelineView({
                     {weekTicks.map((tick, i) => (
                       <span key={i} className="mono" style={{ position: 'absolute', left: `${tick.offsetPct}%`, fontSize: 10.5, color: 'var(--fg-faint)', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>{tick.label}</span>
                     ))}
-                    <span className="mono" style={{ position: 'absolute', left: `${timeline.todayPct}%`, top: 0, fontSize: 10.5, color: 'var(--moon-300)', transform: 'translateX(-50%)', fontWeight: 600, whiteSpace: 'nowrap' }}>오늘</span>
+                    <span style={{ position: 'absolute', left: `${timeline.todayPct}%`, top: 0, fontSize: 10.5, color: 'var(--moon-300)', transform: 'translateX(-50%)', fontWeight: 600, whiteSpace: 'nowrap' }}>오늘</span>
                   </div>
                 </div>
                 {timeline.items.map((item, i) => {

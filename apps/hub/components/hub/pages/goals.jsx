@@ -312,7 +312,7 @@ function GoalObjectiveCard({ objective, model, hrefFor, onOpen, onRecord, onAddM
 function MilestoneItem({ row }) {
   const href = goalLinkedEntityHref(row);
   const date = shortDate(row.dueKey);
-  const when = row.done ? null : row.daysLeft < 0 ? <span className="goal-milestone__late">기한 지남 {-row.daysLeft}일</span> : <span className="mono goal-dday">{row.daysLeft === 0 ? '오늘' : `D-${row.daysLeft}`}</span>;
+  const when = row.done ? null : row.daysLeft < 0 ? <span className="goal-milestone__late">기한 지남 {-row.daysLeft}일</span> : <span className={`goal-dday${row.daysLeft === 0 ? '' : ' mono'}`}>{row.daysLeft === 0 ? '오늘' : `D-${row.daysLeft}`}</span>;
   const body = <><span aria-hidden="true">{row.done ? '✓' : '◔'}</span> <span className="mono">{date}</span> {row.entityTitle || '할 일'}</>;
   return <span className={`goal-milestone${row.done ? ' goal-milestone--done' : ''}`}>{href ? <Link className="hub-row" href={href}>{body}</Link> : body}{when && <> {when}</>}</span>;
 }
@@ -416,7 +416,7 @@ function ZeroKeepCells({ metric, objective, observations, today }) {
   const glyph = { kept: '✓', broken: '▲', unknown: '·', pending: '·', future: '·' };
   return <div className="goal-zero-weeks-wrap">
     <ol className="goal-zero-weeks" aria-label={`${metric.name} 주별 유지`}>{cells.map(cell => <li key={cell.start} className={`goal-zero-weeks__cell goal-zero-weeks__cell--${cell.state}${cell.phase === 'now' ? ' goal-zero-weeks__cell--now' : ''}`} aria-label={`${cell.label} 주 ${ZERO_KEEP_MARK[cell.state] || '앞으로'}`}>{glyph[cell.state]}</li>)}</ol>
-    <span className="mono goal-muted">{streak ? `${streak}주째 유지` : '유지 기록 없음'}{cells.some(cell => cell.phase === 'now' && cell.state === 'pending') ? ' · 이번 주 확인 전' : ''}</span>
+    <span className="num goal-muted">{streak ? `${streak}주째 유지` : '유지 기록 없음'}{cells.some(cell => cell.phase === 'now' && cell.state === 'pending') ? ' · 이번 주 확인 전' : ''}</span>
   </div>;
 }
 
@@ -628,9 +628,9 @@ export function Goals() {
         <div className="goal-header__title-row">
           <h2 className="goal-page-title">{onWorkTab ? 'OKR·KPI' : '목표·성과'}</h2>
           {!weekly && <TruthBadge state={model.status} />}
-          {model.refreshing && <span className="mono goal-muted">갱신 중…</span>}
+          {model.refreshing && <span className="goal-muted">갱신 중…</span>}
         </div>
-        {showRecords ? <p className="goal-header-sub"><b>{shortDate(today)}</b><span className="mono">이번 주 {weekRange(today)}</span></p> : <p className="goal-header-desc">목표·기간·기준값을 직접 정해주세요.</p>}
+        {showRecords ? <p className="goal-header-sub"><b>{shortDate(today)}</b><span>이번 주 <span className="mono">{weekRange(today)}</span></span></p> : <p className="goal-header-desc">목표·기간·기준값을 직접 정해주세요.</p>}
         {showRecords && view !== 'okr' && <p className="goal-header-desc"><strong>OKR</strong>은 이 기간에 이루려는 변화와 그것을 재는 핵심 결과(KR)입니다. <strong>KPI</strong>는 지킬 건강 지표이며, 현재는 목표 기간 단위로 기록하고 집계합니다.</p>}
       </div>
       <div className="goal-actions">
@@ -667,7 +667,13 @@ export function Goals() {
         />
       </div>
       <span className="goal-toolbar-caption">
-        {!showRecords ? '입력 구조만 준비했습니다. 새 목표의 값은 직접 정합니다.' : weekly ? '지난 주들의 실제 기록을 같은 정의로 비교하세요.' : kpi ? '점수 없이 선 안·밖과 추이로 봅니다. 선 밖인 것부터 보입니다.' : checking ? '숫자와 근거를 훑고 바로 실제값을 기록하세요. KR과 KPI를 함께 봅니다.' : <><i className="goal-legend-marker" aria-hidden="true" />세로선 = 기대(기간 경과) · 막대 끝 = 바닥(약속) · 점수 = 0.7 × 진행률</>}
+        {!showRecords ? '입력 구조만 준비했습니다. 새 목표의 값은 직접 정합니다.' : weekly ? '지난 주들의 실제 기록을 같은 정의로 비교하세요.' : kpi ? '점수 없이 선 안·밖과 추이로 봅니다. 선 밖인 것부터 보입니다.' : checking ? '숫자와 근거를 훑고 바로 실제값을 기록하세요. KR과 KPI를 함께 봅니다.' : (
+          // 채점 공식은 늘 보이는 문장이 아니라 필요할 때 펼치는 도움말 — 화면에는 운영자에게 하는 말만 둔다(§15 2026-10-21 현황 피드백).
+          <details className="goal-legend-help">
+            <summary>막대 읽는 법</summary>
+            <span><i className="goal-legend-marker" aria-hidden="true" />세로선 = 기대(기간 경과) · 막대 끝 = 바닥(약속) · 점수 = 0.7 × 진행률</span>
+          </details>
+        )}
       </span>
     </div>
 

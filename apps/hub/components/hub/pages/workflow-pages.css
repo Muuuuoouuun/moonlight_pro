@@ -19,6 +19,9 @@
 .workflow-disclosure > summary:hover { background: var(--surface-2); }
 .workflow-disclosure > summary:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
 .workflow-disclosure__body { display: flex; flex-direction: column; gap: var(--section-gap); min-width: 0; padding: 16px; }
+/* 현황 › 집계는 펼침 상자 없이 늘 열린 본문이라 안쪽 16px이 남으면 위의 팁 줄·머리보다 한 칸 들어가 시작한다
+   (1440px에서 271px ↔ 288px, 2026-10-31 검토 §1.1). 이 본문만 페이지 가장자리에 맞춘다. */
+.workflow-disclosure__body.overview-sum { padding: 0; }
 .workflow-goal-lens { min-width: 0; }
 .workflow-goal-lens__intro { margin: 0 0 12px; color: var(--fg-muted); font-size: 13px; line-height: 1.6; }
 .workflow-goal-priority { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }

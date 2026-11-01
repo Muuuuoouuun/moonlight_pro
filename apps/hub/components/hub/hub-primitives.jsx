@@ -872,6 +872,8 @@ export function CertaintyBadge({ state = 'unknown', label, style }) {
         background: 'transparent',
         borderWidth: 1, borderColor: 'var(--line-strong)', borderStyle: config.borderStyle,
         fontSize: 10.5, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        // eyebrow(대문자 · 0.1~0.14em) 안에 놓여도 같은 글자로 읽히게 — 물려받으면 `PREVIEW · 연결 필요`가 된다.
+        textTransform: 'none', letterSpacing: 0,
         ...style,
       }}
     >
@@ -905,6 +907,8 @@ export function LifecycleBadge({ state = 'queued', label, reason, style }) {
         background: config.danger ? 'var(--danger-bg)' : 'transparent',
         border: `1px solid ${config.danger ? 'var(--danger-line)' : 'var(--line)'}`,
         fontSize: 10.5, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        // eyebrow(대문자 · 0.1~0.14em) 안에 놓여도 같은 글자로 읽히게 — 물려받으면 `PREVIEW · 연결 필요`가 된다.
+        textTransform: 'none', letterSpacing: 0,
         ...style,
       }}
     >
@@ -948,6 +952,8 @@ export function TruthBadge({ state = 'error', label, reason, style }) {
         borderColor: danger ? 'var(--danger-line)' : 'var(--line)',
         borderStyle: config.borderStyle || 'solid',
         fontSize: 10.5, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        // eyebrow(대문자 · 0.1~0.14em) 안에 놓여도 같은 글자로 읽히게 — 물려받으면 `PREVIEW · 연결 필요`가 된다.
+        textTransform: 'none', letterSpacing: 0,
         ...style,
       }}
     >

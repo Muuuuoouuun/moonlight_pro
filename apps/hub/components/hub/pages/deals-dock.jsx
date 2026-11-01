@@ -401,7 +401,7 @@ export function DealDock({ item, stages, describe, customerKey, primaryRef, open
         {promise?.dueLabel && (
           <span className={promise.overdue ? "deals-tl-dock__late" : "mono deals-tl-dock__due"}> {promise.dueLabel}</span>
         )}
-        <span className="deals-tl-dock__close"> · 예상일 <span className="mono">{item.closeLabel || "미정"}</span></span>
+        <span className="deals-tl-dock__close"> · 예상일 <span className={item.closeLabel ? "mono" : undefined}>{item.closeLabel || "미정"}</span></span>
       </p>
       <div className="deals-tl-dock__acts">
         <Button ref={primaryRef} variant="primary" size="sm" disabled={local} title={local ? "거래를 저장한 뒤 기록할 수 있어요" : undefined} onClick={onRecord}>

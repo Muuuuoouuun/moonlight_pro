@@ -26,7 +26,7 @@ function SkillRequestRow({ item }) {
       {receipt.evidence.length ? <ul className={styles.evidence}>{receipt.evidence.map((evidence, index) => <li key={index}>
         <span className={styles.evidenceKind}>{OFFICE_SKILL_EVIDENCE_LABELS[evidence.kind]}</span> <span className="mono">{evidence.value}</span></li>)}</ul>
         : <p className={styles.hint}>기록된 증거 없음</p>}
-      <p className={styles.hint}>기록 <span className="mono">{item.receiptActorId || '확인 안 됨'}</span>
+      <p className={styles.hint}>기록 <span className={item.receiptActorId ? 'mono' : undefined}>{item.receiptActorId || '확인 안 됨'}</span>
         {item.receiptAt ? <> · <span className="mono">{formatOfficeSkillTime(item.receiptAt)}</span></> : null}
         {item.state === 'completed' ? (receipt.commandReceiptVerified ? ' · 할 일 완료 명령 확인됨' : ' · 할 일 완료 명령 연결 없음') : null}</p>
     </div> : <p className={styles.hint}>아직 실행 결과가 기록되지 않았습니다.</p>}

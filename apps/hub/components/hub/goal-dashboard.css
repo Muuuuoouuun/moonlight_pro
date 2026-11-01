@@ -140,7 +140,8 @@
   .goal-dash-recent__list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
-  .hub-app .goals-page--reference { padding: 18px 14px 30px; gap: 16px; }
+  /* 하단 80px = 16px + 빠른 메모 버튼 자리(48px + 아래 16px, quick-memo.module.css) — .hub-page 화면과 같은 처리(검토 §7). */
+  .hub-app .goals-page--reference { padding: 18px 14px 80px; gap: 16px; }
   .goal-dashboard { gap: 20px; }
   .goal-dash-overview { padding: 18px 14px; }
   .goal-dash-objectives { grid-template-columns: minmax(0, 1fr); }

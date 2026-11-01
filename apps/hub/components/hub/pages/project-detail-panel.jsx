@@ -154,7 +154,7 @@ export function ProjectDetailPanel({
         <h3 className="project-focus-heading">{project.name}</h3>
         <div className="project-focus-actions">
           <span className="project-focus-muted">프로젝트 상태</span><ProjectStatusBadge status={project.status} />
-          <span className="project-focus-due"><Iconed name="calendar" size={12} /><span className="mono project-focus-muted">{project.due || '기한 없음'}</span></span>
+          <span className="project-focus-due"><Iconed name="calendar" size={12} /><span className={`project-focus-muted${project.due ? ' mono' : ''}`}>{project.due || '기한 없음'}</span></span>
         </div>
         <div className="project-focus-customers">
           <span className="project-focus-muted">관련 고객</span>

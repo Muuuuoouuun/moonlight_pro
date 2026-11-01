@@ -208,7 +208,7 @@ function MonthlyProjectRow({ project, onOpen }) {
   return (
     <button type="button" className="hub-project-monthly-row hub-row" onClick={() => onOpen(project.id)}>
       <span><strong>{project.name}</strong><small>{project.entityLabel || '고객 연결 없음'}</small></span>
-      <span className="mono">{progress === null ? '진척 미집계' : `${progress}%`}</span>
+      <span className={progress === null ? undefined : 'mono'}>{progress === null ? '진척 미집계' : `${progress}%`}</span>
       <Iconed name="arrowRight" size={13} />
     </button>
   );
@@ -795,7 +795,7 @@ export function ProjectPortfolioWorkspace({
                       <summary className="hub-row"><Iconed name="clock" size={14} /><strong>최근 업데이트 기록</strong><span>{projectUpdates[0].happenedAtLabel || "최근"}</span><Iconed name="chevronD" size={14} /></summary>
                       <div className="hub-project-portfolio-support__updates">
                         {projectUpdates.slice(0, 4).map((item) => (
-                          <div key={item.id}><span className="mono">{item.happenedAtLabel || "최근"}</span><span><strong>{item.title}</strong>{item.summary && <> · {item.summary}</>}</span></div>
+                          <div key={item.id}><span className={item.happenedAtLabel ? "mono" : undefined}>{item.happenedAtLabel || "최근"}</span><span><strong>{item.title}</strong>{item.summary && <> · {item.summary}</>}</span></div>
                         ))}
                       </div>
                     </details>
