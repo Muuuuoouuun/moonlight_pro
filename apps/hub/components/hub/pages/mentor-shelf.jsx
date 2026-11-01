@@ -222,7 +222,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
           <Card role="article" aria-label="오늘의 Guru 카드" className="mentor-shelf__guru">
             <div className="mentor-shelf__card-head">
               <strong>GURU / 실무 관점</strong>
-              <span className="mono">{dailyWindow.label} · {newWindowReady ? '새 관점 준비됨' : `다음 ${nextTime}`}</span>
+              <span>{dailyWindow.label} · {newWindowReady ? '새 관점 준비됨' : <>다음 <span className="mono">{nextTime}</span></>}</span>
             </div>
             <SegmentedControl label="Guru 분야" options={DOMAINS} value={domain} onChange={chooseDomain} className="mentor-shelf__domains" />
             <div role="button" tabIndex={0} className="mentor-shelf__reading hub-card-link" aria-label={`${guruCard.person} Moonlight 글 읽기`}
