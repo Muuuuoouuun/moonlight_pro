@@ -437,6 +437,9 @@
   align-items: center;
   min-height: 0;
   margin: 2px 16px 10px;
+  /* 좌우 margin만큼 상한을 줄인다 — 공용 규칙의 max-width: 100%에 margin 16px×2가 더해져 좁은 화면에서
+     트랙이 오른쪽으로 32px 넘쳐 화면 끝에 붙고 마지막 탭이 잘렸다(390px 실측 2026-11-01). */
+  max-width: calc(100% - 32px);
   scroll-padding: 0 4px;
 }
 .hub-app[data-visual-system="depth-c"] .hub-tabs__tab,

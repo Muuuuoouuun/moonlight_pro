@@ -260,7 +260,7 @@ export function BrandContentLog({ onNavigate }) {
                   ? "선택한 범위의 content_items/content_variants 기록에 표시할 콘텐츠가 없습니다."
                   : "콘텐츠가 쌓이면 여기에 모입니다."
           }
-          action={<Button variant="primary" size="sm" icon="plus" onClick={createContent}>새 콘텐츠 <Kbd>N</Kbd></Button>}
+          action={<Button variant="secondary" size="sm" icon="plus" onClick={createContent}>새 콘텐츠</Button>}
         />
       ) : isFilteredEmpty ? (
         <EmptyState

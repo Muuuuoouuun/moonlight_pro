@@ -2325,7 +2325,7 @@ export function Projects({ workspace }) {
                       description={syncState === 'preview'
                         ? "Supabase가 연결되지 않았습니다. 예시 데이터를 섞지 않으며, 연결 후 실제 프로젝트만 표시합니다."
                         : "Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."}
-                      action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
+                      action={<Button variant="secondary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
                     />
                   </Card>
                 )}

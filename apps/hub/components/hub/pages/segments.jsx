@@ -137,7 +137,8 @@ export function Segments({ workspace, onNavigate }) {
           value={dimension}
           onChange={(key) => { setDimension(key); setExpanded(clearExpandedSegments()); }}
         />
-        <Input ref={searchRef} className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
+        {/* .hub-toolbar는 감싸는 칸에 — Input 자신에 붙이면 휴대폰 규칙(.hub-toolbar > * 줄바꿈)이 아이콘과 입력을 두 줄로 나눠 30px 칸 밖으로 밀어냈다(390px 실측 2026-11-01). */}
+        <div className="hub-toolbar" style={{ display: 'flex' }}><Input ref={searchRef} placeholder="리드 이름 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} /></div>
       </div>
 
       {ledgerLoading ? (

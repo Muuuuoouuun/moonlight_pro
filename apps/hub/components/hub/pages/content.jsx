@@ -807,7 +807,7 @@ export function Campaigns() {
           icon="campaigns"
           title="캠페인이 없습니다"
           description={ledger.syncState === 'live' ? 'Supabase campaigns 기록이 비어 있습니다.' : '캠페인을 만들면 war room에 표시됩니다.'}
-          action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>}
+          action={<Button variant="secondary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>}
         />
       )}
 

@@ -453,7 +453,8 @@ export function Webhooks({ onNavigate }) {
               : 'Project webhook smoke test가 들어오면 endpoint별 활동이 집계됩니다.'}
             action={
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <Button variant="primary" size="sm" icon="play" onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>
+                {/* 머리의 `+ Endpoint`가 이 화면의 primary다 — 빈 상태 시험 전송은 보조(§5.2 primary 하나). */}
+                <Button variant="secondary" size="sm" icon="play" onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>
                   {testState[0]?.pending ? '전송 중…' : 'Send test'}
                 </Button>
                 {/* 목록이 비어 hooks.map이 결과를 못 그린다 — 여기서 직접 표시(무언 no-op 방지, 5차 재감사 S) */}

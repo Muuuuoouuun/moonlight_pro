@@ -1810,6 +1810,11 @@
      터치 플로어보다 한 단계 더 여유를 줘서 한 손 입력이 편하게. */
   .hub-app .hub-input { min-height: 48px; }
   .hub-app textarea.hub-input { min-height: 112px; }
+
+  /* Input 프리미티브의 바깥 칸(.hub-field)은 인라인 height(30px)를 가진다 — 안의 input이 위의 44px 플로어로
+     커지면 칸 밖으로 삐져나와 아래 테두리가 잘렸다(세그먼트·Leads·프로젝트 검색, 390px 실측 2026-11-01).
+     칸은 안의 input 높이를 따라간다. */
+  .hub-app .hub-field { height: auto !important; }
 }
 
 /* 브랜드 목록 행 (2026-08-29 브랜드 탭). 계기 값이 세로로 정렬되도록 고정 폭 컬럼. */

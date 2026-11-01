@@ -29,7 +29,7 @@ export function ProjectTimelineView({
               icon="projects"
               title="타임라인에 표시할 프로젝트가 없습니다"
               description="실제 시작일이 있는 프로젝트는 기간으로, 마감일만 있으면 마감 지점으로 표시됩니다."
-              action={<Button variant="primary" size="sm" icon="plus" onClick={onCreateProject}>Project</Button>}
+              action={<Button variant="secondary" size="sm" icon="plus" onClick={onCreateProject}>Project</Button>}
             />
           </Card>
         </div>
