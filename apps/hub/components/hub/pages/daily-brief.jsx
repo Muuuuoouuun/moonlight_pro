@@ -1968,7 +1968,7 @@ export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onT
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <SectionTitle style={{ margin: 0 }}>{title}</SectionTitle>
           <TruthBadge state={syncState} />
-          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{report?.periodStart && report?.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : '지난 7일'}</span>
+          <span className={report?.periodStart && report?.periodEnd ? 'mono' : undefined} style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{report?.periodStart && report?.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : '지난 7일'}</span>
         </div>
 
       </div>

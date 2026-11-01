@@ -962,7 +962,10 @@ test('mobile back overlay bridge closes topmost ESC layer before mobile sidebar 
 test("mobile topbar tabs support active auto-scroll, touch scrolling, and unclipped deferred menu without JS hover", async () => {
   const css = await readFile(new URL("./hub-tokens.css", import.meta.url), "utf8");
   // 1. 활성 탭 자동 시야 정렬 및 ref 연결
-  assert.match(topbarSource, /activeTabRef\.current\.scrollIntoView/);
+  // 탭 줄만 스크롤한다 — scrollIntoView는 overflow: hidden 셸까지 밀어 마지막 탭 화면 전체가 왼쪽으로 밀렸다.
+  assert.match(topbarSource, /const tab = activeTabRef\.current;/);
+  assert.match(topbarSource, /strip\.scrollBy\(\{ left: delta/);
+  assert.doesNotMatch(topbarSource, /activeTabRef\.current\.scrollIntoView/);
   assert.match(topbarSource, /ref=\{selected \? activeTabRef : undefined\}/);
   assert.match(topbarSource, /prefers-reduced-motion/);
 

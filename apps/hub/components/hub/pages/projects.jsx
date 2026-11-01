@@ -2455,7 +2455,7 @@ export function Projects({ workspace }) {
                                   </div>
                                   <div className="hub-project-due-risk">
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                      <span className="mono">{p.due || '기한 없음'}</span>
+                                      <span className={p.due ? 'mono' : undefined}>{p.due || '기한 없음'}</span>
                                       {pDDay && (
                                         <span className={`hub-project-dday-badge hub-project-dday-badge--${pDDay.tone}`}>
                                           {pDDay.text}
@@ -2517,7 +2517,7 @@ export function Projects({ workspace }) {
                                         <TaskChecklistGauge task={t} emptyLabel="체크리스트 추가" />
                                       </button>
                                       <span className="hub-project-subtask__assignee">{t.assignee}</span>
-                                      <span className="mono hub-project-subtask__due">{t.due || '기한 없음'}</span>
+                                      <span className={`hub-project-subtask__due${t.due ? ' mono' : ''}`}>{t.due || '기한 없음'}</span>
                                     </div>
                                   ))}
                                   {inlineAddingProjectId === p.id ? (

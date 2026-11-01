@@ -51,17 +51,21 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
     return () => clearInterval(interval);
   }, []);
 
-  // 모바일/좁은 화면에서 선택된 탭이 우측으로 숨어 있으면 시야 안으로 자동 정렬
+  // 모바일/좁은 화면에서 선택된 탭이 우측으로 숨어 있으면 시야 안으로 자동 정렬.
+  // 탭 줄만 움직인다 — scrollIntoView는 overflow: hidden인 셸(.hub-app)까지 가로로 밀어, 마지막 탭(Rhythm·
+  // 현금 흐름·Webhooks)이 켜진 390px 화면 전체가 약 12px 왼쪽으로 밀리고 왼쪽 여백이 0이 됐다(2026-11-01 실측).
   React.useEffect(() => {
-    if (activeTabRef.current) {
-      const prefersReduced = typeof window !== 'undefined'
-        && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-      activeTabRef.current.scrollIntoView({
-        behavior: prefersReduced ? 'auto' : 'smooth',
-        block: 'nearest',
-        inline: 'nearest',
-      });
-    }
+    const tab = activeTabRef.current;
+    const strip = tab?.closest('.hub-topbar__tabs');
+    if (!tab || !strip) return;
+    const prefersReduced = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const stripBox = strip.getBoundingClientRect();
+    const tabBox = tab.getBoundingClientRect();
+    const delta = tabBox.left < stripBox.left ? tabBox.left - stripBox.left - 8
+      : tabBox.right > stripBox.right ? tabBox.right - stripBox.right + 8
+      : 0;
+    if (delta) strip.scrollBy({ left: delta, behavior: prefersReduced ? 'auto' : 'smooth' });
   }, [navigation.activeTab?.key]);
 
   const toggleDeferredMenu = React.useCallback(() => {

@@ -312,7 +312,7 @@ function GoalObjectiveCard({ objective, model, hrefFor, onOpen, onRecord, onAddM
 function MilestoneItem({ row }) {
   const href = goalLinkedEntityHref(row);
   const date = shortDate(row.dueKey);
-  const when = row.done ? null : row.daysLeft < 0 ? <span className="goal-milestone__late">기한 지남 {-row.daysLeft}일</span> : <span className="mono goal-dday">{row.daysLeft === 0 ? '오늘' : `D-${row.daysLeft}`}</span>;
+  const when = row.done ? null : row.daysLeft < 0 ? <span className="goal-milestone__late">기한 지남 {-row.daysLeft}일</span> : <span className={`goal-dday${row.daysLeft === 0 ? '' : ' mono'}`}>{row.daysLeft === 0 ? '오늘' : `D-${row.daysLeft}`}</span>;
   const body = <><span aria-hidden="true">{row.done ? '✓' : '◔'}</span> <span className="mono">{date}</span> {row.entityTitle || '할 일'}</>;
   return <span className={`goal-milestone${row.done ? ' goal-milestone--done' : ''}`}>{href ? <Link className="hub-row" href={href}>{body}</Link> : body}{when && <> {when}</>}</span>;
 }

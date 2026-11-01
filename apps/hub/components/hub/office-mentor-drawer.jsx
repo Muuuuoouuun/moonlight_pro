@@ -78,7 +78,7 @@ function OfficeResultSource({ session, summaryRef }) {
     <summary ref={summaryRef} tabIndex={0}>오피스 원문과 출처</summary>
     <div className="office-mentor__source-body">
       <div className="office-mentor__source-ids">요청 <span className="mono">{session.officeSource.requestId}</span>
-        {' · '}실행 기록 <span className="mono">{session.officeSource.runId || '없음'}</span></div>
+        {' · '}실행 기록 <span className={session.officeSource.runId ? 'mono' : undefined}>{session.officeSource.runId || '없음'}</span></div>
       <p>{result.answer}</p>
       {result.recommendation ? <p><strong>주관 추천</strong> {result.recommendation}</p> : null}
       <div><strong>근거</strong><ul>{result.evidence?.length ? result.evidence.map((item, index) => <li key={index}>{item}</li>) : <li>제공된 근거 없음</li>}</ul></div>
