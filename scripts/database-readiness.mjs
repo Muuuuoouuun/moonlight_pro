@@ -171,6 +171,13 @@ export const DATABASE_FEATURES = [
       .map(key => ['social_oauth_flows', 'social_oauth_flows_app_key_check', `'${key}'`]) },
   { name: 'Study.Seagull Instagram OAuth 앱', migration: '20261027_0072_study_seagull_instagram_oauth.sql', tables: [], functions: [],
     constraintIncludes: [['social_oauth_flows', 'social_oauth_flows_app_key_check', "'studyseagull'"]] },
+  // 브랜드 Threads 글 올리기 — 운영자가 누른 한 번 = 작업 하나, 확인됨 전이가 발행 기록·상태를 같이 남긴다(2026-11-02).
+  { name: '브랜드 Threads 올리기', migration: '20261102_0073_threads_publish_jobs.sql',
+    tables: ['threads_publish_jobs'], functions: ['threads_publish_job_v1(uuid,text,jsonb)'],
+    tableNoWrite: [['threads_publish_jobs', 'service_role']],
+    indexIncludes: [['threads_publish_jobs', 'threads_publish_jobs_open_variant_idx', '(workspace_id, variant_id)']],
+    bodyIncludes: [['threads_publish_job_v1(uuid,text,jsonb)', "'api_published'"],
+      ['threads_publish_job_v1(uuid,text,jsonb)', "'already-published'"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

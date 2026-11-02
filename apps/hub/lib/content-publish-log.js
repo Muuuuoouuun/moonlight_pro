@@ -10,6 +10,9 @@ export const LOG_FILTERS = [
   { key: 'all', label: '전체' }, { key: 'action', label: '올릴 차례' }, { key: 'scheduled', label: '예약' }, { key: 'published', label: '발행됨' },
 ];
 const timeOf = (value) => { const t = Date.parse(value); return Number.isFinite(t) ? t : null; };
+// 발행됨으로 인정하는 기록 둘 — 운영자가 링크로 확인한 것, Moonlight가 Threads에 올리고 다시 읽어 확인한 것(2026-11-02).
+const isOperatorConfirmed = (log) => log.provider === 'manual' && log.event === 'operator_published' && log.provenance === 'operator_confirmed';
+const isProviderVerified = (log) => log.provider === 'meta_threads' && log.event === 'api_published' && log.provenance === 'provider_verified';
 
 /** KST 날짜 키 'YYYY-MM-DD'. */
 export const kstDateKey = (ms) => new Date(ms + KST_OFFSET_MS).toISOString().slice(0, 10);
@@ -18,8 +21,8 @@ export const kstDateKey = (ms) => new Date(ms + KST_OFFSET_MS).toISOString().sli
 export function buildPublishLog({ schedules = [], publishLogs = [], metricsById = {} } = {}, now = Date.now()) {
   const published = new Map();
   for (const log of publishLogs) {
-    if (log?.status !== 'published' || log.provider !== 'manual' || log.event !== 'operator_published'
-      || log.provenance !== 'operator_confirmed' || !log.variantId || timeOf(log.publishedAt) === null) continue;
+    if (log?.status !== 'published' || !(isOperatorConfirmed(log) || isProviderVerified(log))
+      || !log.variantId || timeOf(log.publishedAt) === null) continue;
     const previous = published.get(log.variantId);
     if (!previous || timeOf(log.publishedAt) > timeOf(previous.publishedAt)) published.set(log.variantId, log);
   }
@@ -41,7 +44,7 @@ export function buildPublishLog({ schedules = [], publishLogs = [], metricsById 
     if (schedule?.createdAt && timeOf(schedule.createdAt) !== null) events.push({ atMs: timeOf(schedule.createdAt), kind: 'created', label: `예약 만듦 · ${formatKstShort(schedule.scheduledAt)}에 올리기` });
     if (schedule?.missedAt && timeOf(schedule.missedAt) !== null) events.push({ atMs: timeOf(schedule.missedAt), kind: 'missed', label: '놓침으로 정리됨 (밤 정리)' });
     if (schedule?.status === 'cancelled' && timeOf(schedule.updatedAt) !== null) events.push({ atMs: timeOf(schedule.updatedAt), kind: 'cancelled', label: '예약 해제' });
-    if (publish) events.push({ atMs: publishedMs, kind: 'published', label: publish.provenance === 'operator_confirmed' ? '발행 기록 · 운영자 확인' : '발행 기록', url: publish.targetUrl || null });
+    if (publish) events.push({ atMs: publishedMs, kind: 'published', label: publish.provenance === 'operator_confirmed' ? '발행 기록 · 운영자 확인' : publish.provenance === 'provider_verified' ? 'Threads에 올림 · Moonlight 확인' : '발행 기록', url: publish.targetUrl || null });
     events.sort((a, b) => a.atMs - b.atMs);
     rows.push({
       variantId, contentId: schedule?.contentId || publish?.contentId || null,
