@@ -3,6 +3,10 @@
 import React from 'react';
 import { Button, TextField, TextAreaField, SegmentedControl } from '../hub-primitives';
 import { parseStudioStructure } from '@/lib/content-workflow-client';
+import {
+  THREADS_MAX_POSTS, THREADS_POST_LIMIT, joinThreadBlocks, mergeThreadBlockWithPrevious, postLength, replaceThreadBlock,
+  threadBlockOffsets, threadBlocks,
+} from '@/lib/thread-posts';
 
 export function StructuredEditor({ draft, onChange, disabled }) {
   let data, error;
@@ -75,8 +79,72 @@ export function ResultPreview({ body, type }) {
   })}</article>;
 }
 
-export function DraftEditor({ draft, edit, disabled, onSelect }) {
+/** Threads 연결 글 편집기 — 블록마다 번호와 `n / 500`. Enter 두 번 = 다음 연결 글, 블록 맨 앞 Backspace = 앞 글과 잇기. */
+export function ThreadPostsEditor({ body, onChange, disabled, onSelect, navRef, onFocusPost }) {
+  const [blocks, setBlocks] = React.useState(() => threadBlocks(body));
+  const emitted = React.useRef(body);
+  const fields = React.useRef([]);
+  const pendingFocus = React.useRef(null);
+  // 밖에서 본문이 바뀌면(AI 적용 · 복원 · 다른 결과물) 블록을 다시 나눈다. 가운데 빈 블록은 편집기 안에만 산다.
+  React.useEffect(() => { if (body !== emitted.current) { emitted.current = body; setBlocks(threadBlocks(body)); } }, [body]);
+  // 커서 이동은 그 블록 상태가 실제로 그려진 렌더에서만 — studio.edit이 부모를 먼저 다시 그리면
+  // 새 블록이 아직 없는 렌더가 끼어든다.
+  React.useEffect(() => {
+    const focus = pendingFocus.current;
+    if (!focus || focus.blocks !== blocks) return;
+    pendingFocus.current = null;
+    const el = fields.current[focus.index]?.current;
+    if (el) { el.focus(); el.setSelectionRange(focus.caret, focus.caret); }
+  });
+  // 객체 ref여야 TextAreaField의 자동 높이가 동작한다(함수 ref에는 .current가 없다).
+  const fieldRef = (index) => (fields.current[index] ||= React.createRef());
+  if (navRef) navRef.current = { focus(index) { const el = fields.current[index]?.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } };
+  const commit = (next, focus) => {
+    const text = joinThreadBlocks(next);
+    emitted.current = text;
+    pendingFocus.current = focus ? { ...focus, blocks: next } : null;
+    setBlocks(next);
+    onChange(text);
+  };
+  const offsets = threadBlockOffsets(blocks);
+  const count = blocks.parts.length;
+  return <div className="studio-posts" aria-label="연결 글">
+    {blocks.parts.map((part, index) => {
+      const length = postLength(part.trim());
+      const over = length > THREADS_POST_LIMIT;
+      return <div key={index} className="studio-post" data-over={over ? 'true' : undefined} data-last={index === count - 1 ? 'true' : undefined}>
+        <span className="studio-post__no mono" aria-hidden="true">{index + 1}</span>
+        <TextAreaField ref={fieldRef(index)} aria-label={`연결 글 ${index + 1} / ${count}`}
+          aria-describedby={`studio-post-count-${index}`} className="studio-post-input" rows={1} autoResize value={part} disabled={disabled}
+          placeholder={index === 0 ? '첫 줄 — 여기서 멈추게 할 한 문장' : '이어서 쓰기…'}
+          onFocus={() => onFocusPost?.(index)}
+          onChange={(event) => {
+            const result = replaceThreadBlock(blocks, index, event.target.value, event.target.selectionStart);
+            commit(result.blocks, result.split ? { index: result.focusIndex, caret: result.focusCaret } : null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Backspace' || event.nativeEvent?.isComposing || index === 0) return;
+            if (event.target.selectionStart !== 0 || event.target.selectionEnd !== 0) return;
+            event.preventDefault();
+            const merged = mergeThreadBlockWithPrevious(blocks, index);
+            commit(merged.blocks, { index: merged.focusIndex, caret: merged.focusCaret });
+          }}
+          onSelect={(event) => onSelect?.({ start: offsets[index] + event.target.selectionStart, end: offsets[index] + event.target.selectionEnd, body: joinThreadBlocks(blocks) })} />
+        <span id={`studio-post-count-${index}`} className="studio-post__count mono">{over ? `${length} / ${THREADS_POST_LIMIT} · 나눠야 올라가요` : `${length} / ${THREADS_POST_LIMIT}`}</span>
+      </div>;
+    })}
+    <button type="button" className="studio-post-add" disabled={disabled || count >= THREADS_MAX_POSTS}
+      onClick={() => commit({ parts: [...blocks.parts, ''], seps: [...blocks.seps, '\n\n'] }, { index: count, caret: 0 })}>
+      + 연결 글 <span className="mono">Enter</span> 두 번
+    </button>
+  </div>;
+}
+
+export function DraftEditor({ draft, edit, disabled, onSelect, navRef, onFocusPost }) {
   const [view, setView] = React.useState('edit');
+  // Threads 글은 연결 글 블록이 곧 미리보기라 편집/미리보기 전환을 두지 않는다(16a 원고 책상).
+  if (draft.variantType === 'threads_post') return <ThreadPostsEditor body={draft.body} disabled={disabled}
+    onChange={(body) => edit({ body })} onSelect={onSelect} navRef={navRef} onFocusPost={onFocusPost} />;
   const structured = ['card_news', 'reels_script'].includes(draft.variantType);
   const supported = ['base_text', 'threads_post', 'x_thread', 'social_post', 'blog', 'blog_insight', 'landing_copy', 'newsletter', 'card_news', 'reels_script'].includes(draft.variantType);
   const chars = [...draft.body].length;
