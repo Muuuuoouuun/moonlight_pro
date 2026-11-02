@@ -1,6 +1,7 @@
-// Studio 기본 화면 예산 — docs/superpowers/specs/2026-09-23-studio-simplification.md §3.
+// Studio 기본 화면 예산 — docs/superpowers/specs/2026-11-02-studio-desk-threads-publish.md §3
+// (2026-09-23 Studio 단순화 §3을 대체: 원고 책상 여백 칸 두 개와 올리기 창, 운영자 확정 2026-11-02).
 // 새 기능이 올 때마다 본문에 패널이 붙어 화면이 무거워졌다(2026-09-12 → 09-22 사이 7종 추가).
-// 기본 화면은 "Threads 글 한 편 끝내기"만 담고, 나머지는 '더보기' 드로어로 간다.
+// 원고지는 "글 한 편 쓰고 올리기"만 담고, 나머지는 '더보기' 드로어나 올리기 창으로 간다.
 // 예산을 늘려야 한다면 이 테스트가 아니라 스펙 §3을 먼저 고친다.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -9,6 +10,7 @@ import { readFile } from "node:fs/promises";
 const studio = await readFile(new URL("./content-studio.jsx", import.meta.url), "utf8");
 const ai = await readFile(new URL("./content-studio-ai.jsx", import.meta.url), "utf8");
 const editors = await readFile(new URL("./content-studio-editors.jsx", import.meta.url), "utf8");
+const desk = await readFile(new URL("./content-studio-desk.jsx", import.meta.url), "utf8");
 
 const between = (source, start, end) => {
   const from = source.indexOf(start);
@@ -27,19 +29,33 @@ test("Studio header keeps only 새 글 + 더보기 (plus a save retry that appea
   assert.doesNotMatch(header, /버전 저장|버전 기록/, "버전 관련 동작은 더보기 드로어에 둔다");
 });
 
-test("Studio main surface stays within its control budget", () => {
-  const main = between(studio, '<section className="studio-main"', "</section>");
-  // 제목 · 원문 메모 · (채널 2개 이상일 때) 결과물 전환 · 복사 · 예약 · 발행했음 — 예약은 2026-09-29 확정으로 +1
-  assert.ok(count(main, CONTROLS) <= 6, `main surface controls ${count(main, CONTROLS)} > 6`);
+test("Studio paper stays within its control budget and keeps one primary action", () => {
+  const main = between(studio, '<section className="studio-main', "</section>");
+  // 브랜드 · 형식 탭 · 제목 · 원문 메모 · 복사 · 예약 · 올리기 — 결과물 전환은 왼쪽 여백, 발행했음은 올리기 창(직접 올리기)으로 갔다.
+  assert.ok(count(main, CONTROLS) <= 7, `paper controls ${count(main, CONTROLS)} > 7`);
+  assert.equal(count(main, /variant="primary"/g), 1, "원고지의 주 행동은 올리기 하나");
+  assert.match(main, /올리기<\/Button>/);
+  assert.doesNotMatch(main, /발행했음/, "발행 기록은 올리기 창의 직접 올리기에서");
   for (const moved of ["GoalLinks", "JournalSources", "BRIEF_FIELDS", "BLOCKERS", "다음 행동", "검수 게이트", "내보내기"]) {
     assert.ok(!main.includes(moved), `${moved} belongs in the 더보기 drawer, not the main surface`);
   }
-  assert.doesNotMatch(studio, /<aside\b/, "Studio has no side panel — secondary tools live in the 더보기 drawer");
+  assert.doesNotMatch(studio, /<aside\b/, "여백 칸은 원고 책상 구성 요소가 그린다");
 });
 
-test("Studio format tabs are one SegmentedControl above the card, defaulting to the channel list of 3", () => {
+test("Studio margins: the outline only navigates and the assist margin holds no form fields", () => {
+  const outline = between(desk, "export function StudioOutline", "\n}\n");
+  assert.equal(count(outline, CONTROLS), 0, "왼쪽 여백은 목차 · 결과물 · 기록 이동 버튼뿐");
+  const assist = between(desk, "export function StudioAssist", "\n}\n");
+  assert.equal(count(assist, CONTROLS), 0, "오른쪽 여백은 읽기만");
+  assert.doesNotMatch(assist, /<(input|textarea|select)\b/);
+  assert.match(assist, /<aside className="studio-assist" aria-label="도움">/);
+});
+
+test("Studio format tabs are one SegmentedControl in the paper head, defaulting to the channel list of 3", () => {
   assert.equal(count(studio, /<SegmentedControl\b/g), 1, "형식 탭 하나");
-  assert.ok(studio.indexOf("<SegmentedControl") < studio.indexOf('<section className="studio-main"'), "탭은 본문 카드 밖(내비)에 둔다");
+  const head = between(studio, '<div className="studio-paper__head">', '<div className="studio-paper__body">');
+  assert.match(head, /<SegmentedControl label="형식"/, "형식 탭은 브랜드와 함께 원고지 머리에");
+  assert.match(head, /올릴 브랜드/, "브랜드 = 올릴 계정, 원고지 맨 위에서 고른다");
   assert.match(studio, /FORMAT_TABS = \[[^\]]*threads[^\]]*instagram[^\]]*youtube_shorts/);
 });
 

@@ -79,3 +79,11 @@ test('week strip runs Monday to Sunday in KST and places rows on their local day
   assert.equal(week[0].items.length, 0, 'the Sunday 27th post is last week');
   assert.equal(kstDateKey(kst(9, 30, 0, 30)), '2026-09-30');
 });
+
+test('a Threads post Moonlight sent and read back counts as published; unverified API logs do not', () => {
+  const api = pub('api', { provider: 'meta_threads', event: 'api_published', provenance: 'provider_verified' });
+  const unverified = pub('raw', { provider: 'meta_threads', event: 'api_published', provenance: null });
+  const rows = buildPublishLog({ publishLogs: [api, unverified] }, kst(9, 30, 9, 0));
+  assert.deepEqual(rows.map((row) => [row.variantId, row.state]), [['api', 'published']]);
+  assert.equal(rows[0].events.at(-1).label, 'Threads에 올림 · Moonlight 확인');
+});
