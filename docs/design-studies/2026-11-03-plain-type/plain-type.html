@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Moonlight Plain</title>
+<style>
+/* 글꼴 하나(SUIT), 색 셋(글자 · 보조 · 흐림). 선·면·그림자·아이콘 없음. 위계는 크기 · 굵기 · 간격 · 정렬로만. */
+@font-face {
+  font-family: 'SUIT Variable';
+  src: url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+:root {
+  --bg: oklch(0.992 0.002 250);
+  --fg: oklch(0.19 0.008 250);
+  --fg-2: oklch(0.42 0.008 250);
+  --fg-3: oklch(0.52 0.007 250);
+  --danger: oklch(0.53 0.19 27);
+  --input: oklch(0.70 0.006 250);
+
+  --font: 'SUIT Variable', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+
+  /* 위계 6단 — 이 여섯 개 밖의 크기는 쓰지 않는다 */
+  --t1: 44px;  /* 페이지 제목 · 200 */
+  --t2: 30px;  /* 큰 숫자 · 250 */
+  --t3: 17px;  /* 섹션 제목 · 700 */
+  --t4: 15px;  /* 항목 · 500 */
+  --t5: 13px;  /* 보조 · 400 */
+  --t6: 12px;  /* 라벨 · 600 */
+
+  /* 간격 4단 */
+  --s1: 8px; --s2: 16px; --s3: 32px; --s4: 56px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: oklch(0.165 0.004 250); --fg: oklch(0.94 0.004 250); --fg-2: oklch(0.76 0.007 250);
+    --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: oklch(0.165 0.004 250); --fg: oklch(0.94 0.004 250); --fg-2: oklch(0.76 0.007 250);
+  --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font); font-size: var(--t4); line-height: 1.55;
+  font-feature-settings: 'tnum';
+  word-break: keep-all; -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+:focus-visible { outline: 1px solid var(--fg); outline-offset: 3px; }
+
+.shell {
+  display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: var(--s4);
+  max-width: 1120px; margin: 0 auto;
+  padding-block: var(--s4);
+  padding-left: max(40px, env(safe-area-inset-left, 0px));
+  padding-right: max(40px, env(safe-area-inset-right, 0px));
+}
+
+/* 내비 — 글자만. 현재 위치는 굵기와 진하기 */
+.nav { display: flex; flex-direction: column; gap: var(--s3); position: sticky; top: calc(var(--s4) + env(safe-area-inset-top, 0px)); align-self: start; }
+.brand { font-size: var(--t4); font-weight: 700; letter-spacing: -0.01em; }
+.nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.nav a { display: block; padding-block: 5px; color: var(--fg-3); text-decoration: none; font-size: var(--t4); font-weight: 400; }
+.nav a:hover { color: var(--fg); }
+.nav a[aria-current="page"] { color: var(--fg); font-weight: 700; }
+.nav .meta { display: flex; flex-direction: column; gap: 6px; font-size: var(--t5); color: var(--fg-3); }
+.nav .meta button { color: var(--fg-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+/* 본문 */
+main { min-width: 0; max-width: 720px; }
+.view { display: flex; flex-direction: column; gap: var(--s4); }
+.head { display: flex; flex-direction: column; gap: var(--s1); }
+.label { font-size: var(--t6); font-weight: 600; color: var(--fg-3); letter-spacing: 0.02em; }
+h1 { margin: 0; font-size: var(--t1); font-weight: 200; letter-spacing: -0.035em; line-height: 1.15; text-wrap: balance; }
+.lead { margin: 0; font-size: var(--t4); color: var(--fg-2); }
+.lead b { color: var(--fg); font-weight: 600; }
+
+.capture { display: block; width: 100%; font: inherit; font-size: 16px; color: var(--fg);
+  background: none; border: 0; border-bottom: 1px solid var(--input); border-radius: 0;
+  padding: 10px 0; }
+.capture::placeholder { color: var(--fg-3); }
+.capture:focus-visible { outline: none; border-bottom-color: var(--fg); }
+
+section { display: flex; flex-direction: column; gap: var(--s1); }
+h2 { margin: 0 0 var(--s1); font-size: var(--t3); font-weight: 700; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: baseline; }
+h2 .n { font-weight: 400; color: var(--fg-3); font-size: var(--t4); }
+
+/* 행: 왼쪽 고정 칸 · 본문 · 오른쪽 값 — 정렬이 표의 선을 대신한다 */
+.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; column-gap: var(--s2); align-items: baseline; padding-block: 9px; }
+.row .k { font-size: var(--t5); color: var(--fg-3); }
+.row .t { font-weight: 500; min-width: 0; }
+.row .sub { display: block; font-size: var(--t5); font-weight: 400; color: var(--fg-2); margin-top: 2px; }
+.row .v { font-size: var(--t5); color: var(--fg-2); text-align: right; white-space: nowrap; }
+.row.past .t, .row.past .k, .row.past .v { color: var(--fg-3); font-weight: 400; }
+.late { color: var(--danger) !important; font-weight: 600; }
+.row.done .t { color: var(--fg-3); font-weight: 400; }
+
+.check { font-size: var(--t4); color: var(--fg-2); width: 100%; min-height: 24px; }
+.row.done .check { color: var(--fg); font-weight: 700; }
+.act { font-size: var(--t5); color: var(--fg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+/* 큰 숫자 */
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3) var(--s2); }
+.stat { display: flex; flex-direction: column; gap: 4px; }
+.stat .num { font-size: var(--t2); font-weight: 250; letter-spacing: -0.02em; line-height: 1.1; }
+.stat .of { font-size: var(--t5); color: var(--fg-2); }
+
+.pct { font-size: var(--t4); font-weight: 600; color: var(--fg); }
+.note { margin: 0; font-size: var(--t5); color: var(--fg-3); }
+
+/* 위계표 */
+.spec { display: flex; flex-direction: column; gap: var(--s3); }
+.spec-row { display: grid; grid-template-columns: 140px minmax(0, 1fr); column-gap: var(--s2); align-items: baseline; }
+.spec-row .k { font-size: var(--t5); color: var(--fg-3); }
+
+@media (max-width: 760px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: var(--s3); padding-block: var(--s3);
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .nav { position: static; gap: var(--s2); }
+  .nav ul { flex-direction: row; gap: var(--s2); overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .nav ul a { white-space: nowrap; padding-block: 10px; }
+  .nav .meta { flex-direction: row; flex-wrap: wrap; gap: var(--s2); }
+  h1 { font-size: 32px; }
+  .view { gap: var(--s3); }
+  .row { grid-template-columns: 44px minmax(0, 1fr) auto; column-gap: 12px; padding-block: 11px; }
+  .stats { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+  .spec-row { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <nav class="nav" aria-label="주요 메뉴">
+    <div class="brand">Moonlight</div>
+    <ul id="primary"></ul>
+    <ul id="utility"></ul>
+    <div class="meta">
+      <span>예시 값 · 목업</span>
+      <button type="button" id="theme">다크로 보기</button>
+    </div>
+  </nav>
+  <main id="main" aria-live="polite"></main>
+</div>
+
+<script>
+(() => {
+  const PRIMARY = [
+    ['home', '홈'], ['today', '오늘'], ['overview', '현황'], ['work', '내 작업'], ['followups', '영업·매출'],
+    ['discovery', '기회 탐색'], ['projects', '프로젝트'], ['products', '제품'], ['brands', '브랜드'], ['content', '콘텐츠'],
+  ];
+  const UTILITY = [['ai', 'AI·자동화'], ['settings', '설정'], ['type', '위계표']];
+  const BUILT = new Set(['today', 'overview', 'work', 'followups', 'projects', 'type']);
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const head = (label, title, lead) => `<header class="head"><span class="label">${label}</span><h1>${title}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</header>`;
+  const sec = (title, n, body) => `<section><h2>${title}${n != null ? `<span class="n">${n}</span>` : ''}</h2>${body}</section>`;
+  const row = ({ k = '', t, sub, v = '', cls = '', vcls = '' }) =>
+    `<li class="row ${cls}"><span class="k">${k}</span><span class="t">${t}${sub ? `<span class="sub">${sub}</span>` : ''}</span><span class="v ${vcls}">${v}</span></li>`;
+  const rows = (items) => `<ul class="rows">${items.map(row).join('')}</ul>`;
+
+  const tasks = [
+    { id: 'a', t: '제안서 초안 보내기', sub: '프로젝트 · 고객 A 제안', done: true },
+    { id: 'b', t: '고객 C 회신 내용 정리', sub: '오늘까지' },
+    { id: 'c', t: '11월 발행 계획 확정', sub: '프로젝트 · 콘텐츠 운영' },
+  ];
+  const taskRows = () => `<ul class="rows">${tasks.map((x, i) => `
+    <li class="row ${x.done ? 'done' : ''}">
+      <button type="button" class="check k" data-task="${x.id}" aria-pressed="${!!x.done}" aria-label="${esc(x.t)} ${x.done ? '끝냄, 되돌리기' : '끝내기'}">${x.done ? '✓' : i + 1}</button>
+      <span class="t">${esc(x.t)}<span class="sub">${esc(x.sub)}</span></span>
+      <span class="v">${x.done ? '끝' : ''}</span>
+    </li>`).join('')}</ul>`;
+
+  const VIEWS = {
+    today: () => {
+      const done = tasks.filter((x) => x.done).length;
+      return head('11월 3일 화요일 · 14:20', `오늘 3개 중 ${done}개 끝냈어요`, '다음 일정은 <b>15:00 고객 B 미팅</b>, 40분 남았어요')
+        + `<input id="cap" class="capture" placeholder="무엇이든 적고 Enter" autocomplete="off" aria-label="빠른 입력">`
+        + sec('오늘 3개', `${done}/3`, taskRows())
+        + sec('일정', 3, rows([
+          { k: '10:00', t: '주간 정리', v: '지남', cls: 'past' },
+          { k: '15:00', t: '고객 B 미팅', sub: '지난 기록 2건 · 견적 논의', v: '40분 후' },
+          { k: '17:30', t: '원고 검토', v: '1시간' },
+        ]))
+        + sec('남은 할 일', 4, rows([
+          { k: '', t: '세금계산서 발행', v: '3일 지남', vcls: 'late' },
+          { k: '', t: '강의 자료 정리', v: '내일까지' },
+          { k: '', t: '제품 소개 페이지 문구', v: '11/7까지' },
+          { k: '', t: '분기 회고 메모', v: '기한 없음' },
+        ]))
+        + sec('오늘 연락', 2, rows([
+          { t: '고객 C', sub: '회신 기다린 지 5일', v: '<button class="act" type="button">기록</button>' },
+          { t: '고객 D', sub: '계약 갱신 D-7', v: '<button class="act" type="button">기록</button>' },
+        ]));
+    },
+    work: () => head('내 작업', '열린 할 일 12', '기한 지남 <b>1</b> · 오늘 <b>3</b> · 이번 주 <b>4</b>')
+      + `<input id="cap-work" class="capture" placeholder="할 일 추가 — Enter" autocomplete="off" aria-label="할 일 추가">`
+      + sec('기한 지남', 1, rows([{ t: '세금계산서 발행', sub: '회사 · 회계', v: '3일 지남', vcls: 'late' }]))
+      + sec('오늘', 3, rows([
+        { t: '고객 C 회신 내용 정리', sub: '영업 · 고객 C', v: '오늘' },
+        { t: '11월 발행 계획 확정', sub: '프로젝트 · 콘텐츠 운영', v: '오늘' },
+        { t: '제안서 초안 보내기', sub: '프로젝트 · 고객 A 제안', v: '끝', cls: 'done' },
+      ]))
+      + sec('이번 주', 4, rows([
+        { t: '강의 자료 정리', v: '수' },
+        { t: '제품 소개 페이지 문구', v: '금' },
+        { t: '월말 정산 준비', v: '금' },
+        { t: '브랜드 로그 정리', v: '토' },
+      ]))
+      + sec('나중', 4, rows([
+        { t: '분기 회고 메모', v: '기한 없음' },
+        { t: '랜딩 문구 실험', v: '기한 없음' },
+        { t: '도구 정리', v: '기한 없음' },
+        { t: '읽을거리 정리', v: '기한 없음' },
+      ])),
+    followups: () => head('영업·매출 · 오늘 연락', '오늘 연락할 사람 3', '놓친 약속 <b>1</b>')
+      + sec('놓친 약속', 1, rows([{ t: '고객 A', sub: '견적 다시 보내기로 함', v: '어제였음', vcls: 'late' }]))
+      + sec('오늘', 2, rows([
+        { t: '고객 C', sub: '회신 기다린 지 5일 · 마지막 연락 10/29', v: '<button class="act" type="button">기록</button>' },
+        { t: '고객 D', sub: '계약 갱신 D-7 · 월 120만원', v: '<button class="act" type="button">기록</button>' },
+      ]))
+      + sec('이번 주', 3, rows([
+        { k: '수', t: '고객 E', sub: '도입 문의 후속' },
+        { k: '목', t: '고객 F', sub: '미팅 일정 잡기' },
+        { k: '금', t: '고객 G', sub: '사례 공유' },
+      ])),
+    projects: () => head('프로젝트', '진행 중 5', '이번 주 마감 <b>1</b> · 막힘 <b>1</b>')
+      + sec('진행 중', 5, rows([
+        { k: '62%', t: '콘텐츠 운영 11월', sub: '다음 · 11월 발행 계획 확정', v: 'D-12' },
+        { k: '40%', t: '고객 A 제안', sub: '다음 · 견적 다시 보내기', v: 'D-3' },
+        { k: '85%', t: '강의 리뉴얼', sub: '다음 · 자료 최종 검토', v: '11/30' },
+        { k: '15%', t: '제품 소개 페이지', sub: '막힘 · 가격 정책 결정 필요', v: '12/15', vcls: '' },
+        { k: '—', t: '분기 회고', sub: '다음 · 아직 정하지 않음', v: '기한 없음' },
+      ]))
+      + sec('끝남', 2, rows([
+        { k: '✓', t: '10월 뉴스레터', v: '10/31', cls: 'past' },
+        { k: '✓', t: '세미나 준비', v: '10/24', cls: 'past' },
+      ])),
+    overview: () => head('현황 · 11월', '이번 달은 어디쯤', '기간 <b>10%</b> 지남')
+      + `<div class="stats">
+          <div class="stat"><span class="label">이번 달 매출</span><span class="num">240만원</span><span class="of">목표 2,000만원</span></div>
+          <div class="stat"><span class="label">열린 거래</span><span class="num">7</span><span class="of">이번 달 마감 2</span></div>
+          <div class="stat"><span class="label">이번 주 발행</span><span class="num">1/3</span><span class="of">다음 발행 목</span></div>
+        </div>`
+      + sec('핵심 결과', 3, rows([
+        { k: '12%', t: '월 매출 2,000만원', sub: '비슷함 · 마지막 기록 어제', v: '' },
+        { k: '33%', t: '주 3회 발행', sub: '비슷함 · 마지막 기록 11/1', v: '' },
+        { k: '0%', t: '신규 고객 5곳', sub: '늦음 · 7일째 기록 없음', v: '<button class="act" type="button">체크인</button>' },
+      ]))
+      + sec('지키는 선', 2, rows([
+        { k: '✓', t: '응답 시간 24시간 안', sub: '선 안 · 평균 9시간' },
+        { k: '▲', t: '환불 0건', sub: '선 밖 · 이번 달 1건', vcls: 'late', v: '<span class="late">선 밖</span>' },
+      ])),
+    type: () => head('위계표', '여섯 단계로 끝낸다', '글꼴은 SUIT 하나, 색은 글자 · 보조 · 흐림 셋. 선 · 면 · 그림자 · 아이콘은 쓰지 않는다.')
+      + `<div class="spec">
+        <div class="spec-row"><span class="k">1 · 44 / 200</span><span style="font-size:var(--t1);font-weight:200;letter-spacing:-0.035em;line-height:1.15">페이지 제목</span></div>
+        <div class="spec-row"><span class="k">2 · 30 / 250</span><span style="font-size:var(--t2);font-weight:250;letter-spacing:-0.02em">1,240만원</span></div>
+        <div class="spec-row"><span class="k">3 · 17 / 700</span><span style="font-size:var(--t3);font-weight:700">섹션 제목 <span style="font-weight:400;color:var(--fg-3);font-size:var(--t4)">4</span></span></div>
+        <div class="spec-row"><span class="k">4 · 15 / 500</span><span style="font-weight:500">항목 이름</span></div>
+        <div class="spec-row"><span class="k">5 · 13 / 400</span><span style="font-size:var(--t5);color:var(--fg-2)">보조 설명 · 날짜 · 다음 단계</span></div>
+        <div class="spec-row"><span class="k">6 · 12 / 600</span><span class="label">라벨 · 위치</span></div>
+      </div>`
+      + sec('규칙', null, rows([
+        { k: '크기', t: '이 여섯 개 밖의 글자 크기는 없다', sub: '휴대폰에서만 1단계가 32px로 줄어든다' },
+        { k: '굵기', t: '제목은 가늘게, 섹션은 굵게', sub: '큰 글자는 가볍고 작은 머리말이 무게를 진다' },
+        { k: '간격', t: '8 · 16 · 32 · 56 네 단계', sub: '행 사이 8, 섹션 사이 56 — 선 대신 간격으로 묶는다' },
+        { k: '정렬', t: '왼쪽 칸 · 본문 · 오른쪽 값', sub: '시각 · 진척 · 기한이 같은 세로줄에 선다' },
+        { k: '색', t: '빨강은 기한 지남 · 놓친 약속 · 선 밖 글자에만', sub: '면을 칠하지 않는다' },
+        { k: '행동', t: '밑줄 친 글자가 버튼이다', sub: '굵은 밑줄 글자 하나가 그 줄의 행동' },
+      ])),
+  };
+
+  const placeholder = (label) => head(label, label, '이 시안에는 오늘 · 현황 · 내 작업 · 영업·매출 · 프로젝트 다섯 화면과 위계표만 있어요.');
+
+  const navList = (el, items) => {
+    el.innerHTML = items.map(([k, l]) => `<li><a href="#${k}" data-k="${k}">${l}</a></li>`).join('');
+  };
+  navList(document.getElementById('primary'), PRIMARY);
+  navList(document.getElementById('utility'), UTILITY);
+
+  const main = document.getElementById('main');
+  let current = 'today';
+  const render = () => {
+    const k = (location.hash || '#today').slice(1);
+    current = [...PRIMARY, ...UTILITY].some(([x]) => x === k) ? k : 'today';
+    const label = [...PRIMARY, ...UTILITY].find(([x]) => x === current)[1];
+    main.innerHTML = `<div class="view">${BUILT.has(current) ? VIEWS[current]() : placeholder(label)}</div>`;
+    document.querySelectorAll('.nav a').forEach((a) => {
+      if (a.dataset.k === current) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+  };
+  window.addEventListener('hashchange', render);
+
+  main.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-task]');
+    if (!b) return;
+    const x = tasks.find((t) => t.id === b.dataset.task);
+    x.done = !x.done;
+    render();
+    main.querySelector(`[data-task="${x.id}"]`)?.focus();
+  });
+  main.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.classList.contains('capture')) return;
+    const v = e.target.value.trim();
+    if (!v) return;
+    e.target.value = '';
+    e.target.placeholder = `“${v}” 적어 뒀어요 (목업 — 저장하지 않음)`;
+  });
+
+  const root = document.documentElement;
+  const themeBtn = document.getElementById('theme');
+  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const syncBtn = () => { themeBtn.textContent = isDark() ? '라이트로 보기' : '다크로 보기'; };
+  themeBtn.addEventListener('click', () => { root.dataset.theme = isDark() ? 'light' : 'dark'; syncBtn(); });
+  syncBtn();
+  render();
+})();
+</script>
+</body>
+</html>
