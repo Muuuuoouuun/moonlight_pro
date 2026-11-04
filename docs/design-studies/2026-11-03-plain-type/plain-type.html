@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Moonlight Plain</title>
 <style>
-/* 글꼴 하나(SUIT), 색 셋(글자 · 보조 · 흐림). 선·면·그림자·아이콘 없음. 위계는 크기 · 굵기 · 간격 · 정렬로만. */
+/* 글꼴 하나(SUIT), 색 셋(글자 · 보조 · 흐림). 구역 선 하나 말고는 면·그림자·아이콘 없음. 위계는 크기 · 굵기 · 간격 · 정렬로만. */
 @font-face {
   font-family: 'SUIT Variable';
   src: url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2');
@@ -19,16 +19,17 @@
   --fg-3: oklch(0.52 0.007 250);
   --danger: oklch(0.53 0.19 27);
   --input: oklch(0.70 0.006 250);
+  --line: oklch(0.905 0.004 250);   /* 구역 선 — 아주 옅게 */
 
   --font: 'SUIT Variable', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
 
   /* 위계 6단 — 이 여섯 개 밖의 크기는 쓰지 않는다 */
-  --t1: 44px;  /* 페이지 제목 · 200 */
-  --t2: 30px;  /* 큰 숫자 · 250 */
-  --t3: 17px;  /* 섹션 제목 · 700 */
-  --t4: 15px;  /* 항목 · 500 */
-  --t5: 13px;  /* 보조 · 400 */
-  --t6: 12px;  /* 라벨 · 600 */
+  --t1: 56px;  /* 페이지 제목 · 200 */
+  --t2: 40px;  /* 큰 숫자 · 250 */
+  --t3: 22px;  /* 섹션 제목 · 700 */
+  --t4: 17px;  /* 항목 · 500 */
+  --t5: 14px;  /* 보조 · 400 */
+  --t6: 13px;  /* 라벨 · 600 */
 
   /* 간격 4단 */
   --s1: 8px; --s2: 16px; --s3: 32px; --s4: 56px;
@@ -36,13 +37,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: oklch(0.165 0.004 250); --fg: oklch(0.94 0.004 250); --fg-2: oklch(0.76 0.007 250);
-    --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250);
+    --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250); --line: oklch(0.29 0.006 250);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: oklch(0.165 0.004 250); --fg: oklch(0.94 0.004 250); --fg-2: oklch(0.76 0.007 250);
-  --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250);
+  --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250); --line: oklch(0.29 0.006 250);
   color-scheme: dark;
 }
 
@@ -89,13 +90,13 @@ h1 { margin: 0; font-size: var(--t1); font-weight: 200; letter-spacing: -0.035em
 .capture::placeholder { color: var(--fg-3); }
 .capture:focus-visible { outline: none; border-bottom-color: var(--fg); }
 
-section { display: flex; flex-direction: column; gap: var(--s1); }
+section { display: flex; flex-direction: column; gap: var(--s1); border-top: 1px solid var(--line); padding-top: 20px; }
 h2 { margin: 0 0 var(--s1); font-size: var(--t3); font-weight: 700; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: baseline; }
 h2 .n { font-weight: 400; color: var(--fg-3); font-size: var(--t4); }
 
 /* 행: 왼쪽 고정 칸 · 본문 · 오른쪽 값 — 정렬이 표의 선을 대신한다 */
 .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; column-gap: var(--s2); align-items: baseline; padding-block: 9px; }
+.row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; column-gap: var(--s2); align-items: baseline; padding-block: 9px; }
 .row .k { font-size: var(--t5); color: var(--fg-3); }
 .row .t { font-weight: 500; min-width: 0; }
 .row .sub { display: block; font-size: var(--t5); font-weight: 400; color: var(--fg-2); margin-top: 2px; }
@@ -129,7 +130,8 @@ h2 .n { font-weight: 400; color: var(--fg-3); font-size: var(--t4); }
   .nav ul { flex-direction: row; gap: var(--s2); overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
   .nav ul a { white-space: nowrap; padding-block: 10px; }
   .nav .meta { flex-direction: row; flex-wrap: wrap; gap: var(--s2); }
-  h1 { font-size: 32px; }
+  h1 { font-size: 38px; }
+  :root { --t2: 34px; --t3: 20px; }
   .view { gap: var(--s3); }
   .row { grid-template-columns: 44px minmax(0, 1fr) auto; column-gap: 12px; padding-block: 11px; }
   .stats { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
@@ -261,19 +263,20 @@ h2 .n { font-weight: 400; color: var(--fg-3); font-size: var(--t4); }
         { k: '✓', t: '응답 시간 24시간 안', sub: '선 안 · 평균 9시간' },
         { k: '▲', t: '환불 0건', sub: '선 밖 · 이번 달 1건', vcls: 'late', v: '<span class="late">선 밖</span>' },
       ])),
-    type: () => head('위계표', '여섯 단계로 끝낸다', '글꼴은 SUIT 하나, 색은 글자 · 보조 · 흐림 셋. 선 · 면 · 그림자 · 아이콘은 쓰지 않는다.')
+    type: () => head('위계표', '여섯 단계로 끝낸다', '글꼴은 SUIT 하나, 색은 글자 · 보조 · 흐림 셋. 구역 선 하나 말고는 면 · 그림자 · 아이콘을 쓰지 않는다.')
       + `<div class="spec">
-        <div class="spec-row"><span class="k">1 · 44 / 200</span><span style="font-size:var(--t1);font-weight:200;letter-spacing:-0.035em;line-height:1.15">페이지 제목</span></div>
-        <div class="spec-row"><span class="k">2 · 30 / 250</span><span style="font-size:var(--t2);font-weight:250;letter-spacing:-0.02em">1,240만원</span></div>
-        <div class="spec-row"><span class="k">3 · 17 / 700</span><span style="font-size:var(--t3);font-weight:700">섹션 제목 <span style="font-weight:400;color:var(--fg-3);font-size:var(--t4)">4</span></span></div>
-        <div class="spec-row"><span class="k">4 · 15 / 500</span><span style="font-weight:500">항목 이름</span></div>
-        <div class="spec-row"><span class="k">5 · 13 / 400</span><span style="font-size:var(--t5);color:var(--fg-2)">보조 설명 · 날짜 · 다음 단계</span></div>
-        <div class="spec-row"><span class="k">6 · 12 / 600</span><span class="label">라벨 · 위치</span></div>
+        <div class="spec-row"><span class="k">1 · 56 / 200</span><span style="font-size:var(--t1);font-weight:200;letter-spacing:-0.035em;line-height:1.15">페이지 제목</span></div>
+        <div class="spec-row"><span class="k">2 · 40 / 250</span><span style="font-size:var(--t2);font-weight:250;letter-spacing:-0.02em">1,240만원</span></div>
+        <div class="spec-row"><span class="k">3 · 22 / 700</span><span style="font-size:var(--t3);font-weight:700">섹션 제목 <span style="font-weight:400;color:var(--fg-3);font-size:var(--t4)">4</span></span></div>
+        <div class="spec-row"><span class="k">4 · 17 / 500</span><span style="font-weight:500">항목 이름</span></div>
+        <div class="spec-row"><span class="k">5 · 14 / 400</span><span style="font-size:var(--t5);color:var(--fg-2)">보조 설명 · 날짜 · 다음 단계</span></div>
+        <div class="spec-row"><span class="k">6 · 13 / 600</span><span class="label">라벨 · 위치</span></div>
       </div>`
       + sec('규칙', null, rows([
-        { k: '크기', t: '이 여섯 개 밖의 글자 크기는 없다', sub: '휴대폰에서만 1단계가 32px로 줄어든다' },
+        { k: '크기', t: '이 여섯 개 밖의 글자 크기는 없다', sub: '휴대폰에서는 1단계 38 · 2단계 34 · 3단계 20으로 줄어든다' },
         { k: '굵기', t: '제목은 가늘게, 섹션은 굵게', sub: '큰 글자는 가볍고 작은 머리말이 무게를 진다' },
-        { k: '간격', t: '8 · 16 · 32 · 56 네 단계', sub: '행 사이 8, 섹션 사이 56 — 선 대신 간격으로 묶는다' },
+        { k: '간격', t: '8 · 16 · 32 · 56 네 단계', sub: '행 사이 8, 섹션 사이 56' },
+        { k: '선', t: '구역 머리 위에만 옅은 1px', sub: '행 사이에는 선이 없다 — 구역만 나눈다' },
         { k: '정렬', t: '왼쪽 칸 · 본문 · 오른쪽 값', sub: '시각 · 진척 · 기한이 같은 세로줄에 선다' },
         { k: '색', t: '빨강은 기한 지남 · 놓친 약속 · 선 밖 글자에만', sub: '면을 칠하지 않는다' },
         { k: '행동', t: '밑줄 친 글자가 버튼이다', sub: '굵은 밑줄 글자 하나가 그 줄의 행동' },
