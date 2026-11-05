@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Moonlight Plain</title>
 <style>
-/* 글꼴 하나(SUIT), 색 셋(글자 · 보조 · 흐림). 선·면·그림자·아이콘 없음. 위계는 크기 · 굵기 · 간격 · 정렬로만. */
+/* Moonlight Plain — A안(영역 구역) 확정 뒤 전체 목업.
+   글꼴 하나(SUIT), 색 셋(글자 · 보조 · 흐림), 구역 선 하나. 면 · 그림자 · 아이콘 · 배지 없음.
+   레이아웃: 왼쪽 글자 내비 168px | 본문 최대 760px. 위계는 크기 · 굵기 · 간격 · 정렬로만. */
 @font-face {
   font-family: 'SUIT Variable';
   src: url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2');
@@ -19,16 +21,17 @@
   --fg-3: oklch(0.52 0.007 250);
   --danger: oklch(0.53 0.19 27);
   --input: oklch(0.70 0.006 250);
+  --line: oklch(0.905 0.004 250);
 
   --font: 'SUIT Variable', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
 
-  /* 위계 6단 — 이 여섯 개 밖의 크기는 쓰지 않는다 */
-  --t1: 44px;  /* 페이지 제목 · 200 */
-  --t2: 30px;  /* 큰 숫자 · 250 */
-  --t3: 17px;  /* 섹션 제목 · 700 */
-  --t4: 15px;  /* 항목 · 500 */
-  --t5: 13px;  /* 보조 · 400 */
-  --t6: 12px;  /* 라벨 · 600 */
+  /* 위계 6단 */
+  --t1: 56px;  /* 페이지 제목 · 200 */
+  --t2: 40px;  /* 큰 숫자 · 250 */
+  --t3: 22px;  /* 구역 · 영역 이름 · 700 */
+  --t4: 17px;  /* 항목 · 500 */
+  --t5: 14px;  /* 보조 · 400 */
+  --t6: 13px;  /* 라벨 · 600 */
 
   /* 간격 4단 */
   --s1: 8px; --s2: 16px; --s3: 32px; --s4: 56px;
@@ -36,13 +39,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: oklch(0.165 0.004 250); --fg: oklch(0.94 0.004 250); --fg-2: oklch(0.76 0.007 250);
-    --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250);
+    --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250); --line: oklch(0.29 0.006 250);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: oklch(0.165 0.004 250); --fg: oklch(0.94 0.004 250); --fg-2: oklch(0.76 0.007 250);
-  --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250);
+  --fg-3: oklch(0.65 0.008 250); --danger: oklch(0.72 0.15 27); --input: oklch(0.48 0.008 250); --line: oklch(0.29 0.006 250);
   color-scheme: dark;
 }
 
@@ -50,72 +53,114 @@
 body {
   margin: 0; background: var(--bg); color: var(--fg);
   font-family: var(--font); font-size: var(--t4); line-height: 1.55;
-  font-feature-settings: 'tnum';
-  word-break: keep-all; -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum'; word-break: keep-all; -webkit-font-smoothing: antialiased;
 }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+a { color: inherit; }
 :focus-visible { outline: 1px solid var(--fg); outline-offset: 3px; }
 
 .shell {
   display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: var(--s4);
-  max-width: 1120px; margin: 0 auto;
-  padding-block: var(--s4);
+  max-width: 1160px; margin: 0 auto; padding-block: var(--s4);
   padding-left: max(40px, env(safe-area-inset-left, 0px));
   padding-right: max(40px, env(safe-area-inset-right, 0px));
 }
 
 /* 내비 — 글자만. 현재 위치는 굵기와 진하기 */
 .nav { display: flex; flex-direction: column; gap: var(--s3); position: sticky; top: calc(var(--s4) + env(safe-area-inset-top, 0px)); align-self: start; }
-.brand { font-size: var(--t4); font-weight: 700; letter-spacing: -0.01em; }
+.brand { font-weight: 700; letter-spacing: -0.01em; text-decoration: none; }
 .nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.nav a { display: block; padding-block: 5px; color: var(--fg-3); text-decoration: none; font-size: var(--t4); font-weight: 400; }
-.nav a:hover { color: var(--fg); }
-.nav a[aria-current="page"] { color: var(--fg); font-weight: 700; }
+.nav ul a { display: block; padding-block: 5px; color: var(--fg-3); text-decoration: none; }
+.nav ul a:hover { color: var(--fg); }
+.nav ul a[aria-current="page"] { color: var(--fg); font-weight: 700; }
 .nav .meta { display: flex; flex-direction: column; gap: 6px; font-size: var(--t5); color: var(--fg-3); }
-.nav .meta button { color: var(--fg-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.link { font-size: var(--t5); color: var(--fg-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 
-/* 본문 */
-main { min-width: 0; max-width: 720px; }
+main { min-width: 0; max-width: 760px; }
 .view { display: flex; flex-direction: column; gap: var(--s4); }
+.view > .top { display: flex; flex-direction: column; gap: var(--s3); }
+
+/* 탭 — 하위 목적지. 굵기로만 현재를 말한다 */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px var(--s3); }
+.tabs a { font-size: var(--t4); color: var(--fg-3); text-decoration: none; padding-block: 4px; }
+.tabs a:hover { color: var(--fg); }
+.tabs a[aria-current="page"] { color: var(--fg); font-weight: 700; }
+
 .head { display: flex; flex-direction: column; gap: var(--s1); }
 .label { font-size: var(--t6); font-weight: 600; color: var(--fg-3); letter-spacing: 0.02em; }
 h1 { margin: 0; font-size: var(--t1); font-weight: 200; letter-spacing: -0.035em; line-height: 1.15; text-wrap: balance; }
-.lead { margin: 0; font-size: var(--t4); color: var(--fg-2); }
+.lead { margin: 0; color: var(--fg-2); }
 .lead b { color: var(--fg); font-weight: 600; }
+.back { font-size: var(--t5); color: var(--fg-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; align-self: flex-start; }
 
-.capture { display: block; width: 100%; font: inherit; font-size: 16px; color: var(--fg);
-  background: none; border: 0; border-bottom: 1px solid var(--input); border-radius: 0;
-  padding: 10px 0; }
+/* 입력 — 밑줄 하나 */
+.capture { display: block; width: 100%; font: inherit; font-size: 17px; color: var(--fg);
+  background: none; border: 0; border-bottom: 1px solid var(--input); border-radius: 0; padding: 10px 0; }
 .capture::placeholder { color: var(--fg-3); }
 .capture:focus-visible { outline: none; border-bottom-color: var(--fg); }
+.capture.title { font-size: var(--t3); font-weight: 700; }
+.writer { display: block; width: 100%; min-height: 320px; resize: vertical; font: inherit; font-size: 17px; line-height: 1.8;
+  color: var(--fg); background: none; border: 0; padding: 0; }
+.writer::placeholder { color: var(--fg-3); }
+.writer:focus-visible { outline: none; }
+.add { display: flex; flex-direction: column; gap: 6px; }
+.parse, .status { min-height: 22px; font-size: var(--t5); color: var(--fg-2); display: flex; flex-wrap: wrap; gap: var(--s1); align-items: baseline; }
+.parse b { color: var(--fg); font-weight: 700; }
+.status button { font-weight: 600; color: var(--fg); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.keys { font-size: var(--t6); color: var(--fg-3); font-weight: 600; letter-spacing: 0.02em; }
 
-section { display: flex; flex-direction: column; gap: var(--s1); }
-h2 { margin: 0 0 var(--s1); font-size: var(--t3); font-weight: 700; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: baseline; }
+/* 구역 — 머리 위 옅은 1px 하나. 구역 이름은 굵게 */
+section { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 20px; }
+.groups { display: flex; flex-direction: column; gap: 40px; }
+h2 { margin: 0 0 var(--s1); font-size: var(--t3); font-weight: 700; letter-spacing: -0.01em; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 h2 .n { font-weight: 400; color: var(--fg-3); font-size: var(--t4); }
+h2 .hint { font-size: var(--t5); font-weight: 400; color: var(--fg-2); }
+h2 .right { margin-left: auto; font-size: var(--t5); font-weight: 400; }
 
-/* 행: 왼쪽 고정 칸 · 본문 · 오른쪽 값 — 정렬이 표의 선을 대신한다 */
+/* 행: 왼쪽 칸 · 본문 · 오른쪽 값 */
 .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; column-gap: var(--s2); align-items: baseline; padding-block: 9px; }
+.row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; column-gap: var(--s2); align-items: baseline; padding-block: 9px; }
+.rows.tight .row { grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: 14px; }
+.rows.flat .row { grid-template-columns: minmax(0, 1fr) auto; }
+.rows.flat .row .k { display: none; }
 .row .k { font-size: var(--t5); color: var(--fg-3); }
 .row .t { font-weight: 500; min-width: 0; }
 .row .sub { display: block; font-size: var(--t5); font-weight: 400; color: var(--fg-2); margin-top: 2px; }
-.row .v { font-size: var(--t5); color: var(--fg-2); text-align: right; white-space: nowrap; }
+.sub b, .area-in { color: var(--fg); font-weight: 700; }
+.row .v { font-size: var(--t5); color: var(--fg-2); text-align: right; white-space: nowrap; display: flex; gap: 12px; justify-content: flex-end; align-items: baseline; }
+.row .v strong { font-size: var(--t4); font-weight: 600; color: var(--fg); }
 .row.past .t, .row.past .k, .row.past .v { color: var(--fg-3); font-weight: 400; }
+.row.done .t, .row.done .sub { color: var(--fg-3); font-weight: 400; }
+.row.done .chk { color: var(--fg); font-weight: 700; }
 .late { color: var(--danger) !important; font-weight: 600; }
-.row.done .t { color: var(--fg-3); font-weight: 400; }
+a.row { text-decoration: none; color: inherit; }
+a.row:hover .t { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
 
-.check { font-size: var(--t4); color: var(--fg-2); width: 100%; min-height: 24px; }
-.row.done .check { color: var(--fg); font-weight: 700; }
-.act { font-size: var(--t5); color: var(--fg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.chk { font-size: var(--t4); color: var(--fg-2); width: 32px; min-height: 26px; }
+.act { font-size: var(--t5); color: var(--fg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; white-space: nowrap; }
+.more { font-size: var(--t5); color: var(--fg-2); padding-block: 8px; }
+.more b { color: var(--fg); }
 
 /* 큰 숫자 */
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3) var(--s2); }
-.stat { display: flex; flex-direction: column; gap: 4px; }
+.stats.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .stat .num { font-size: var(--t2); font-weight: 250; letter-spacing: -0.02em; line-height: 1.1; }
 .stat .of { font-size: var(--t5); color: var(--fg-2); }
 
-.pct { font-size: var(--t4); font-weight: 600; color: var(--fg); }
-.note { margin: 0; font-size: var(--t5); color: var(--fg-3); }
+/* 이름 — 값 줄 (설정 · 상세 요약) */
+.kv { display: grid; grid-template-columns: 160px minmax(0, 1fr); column-gap: var(--s2); row-gap: 12px; margin: 0; }
+.kv dt { font-size: var(--t5); color: var(--fg-3); }
+.kv dd { margin: 0; font-weight: 500; }
+.kv dd .sub { display: block; font-size: var(--t5); color: var(--fg-2); font-weight: 400; }
+
+/* 글자 고르기 (에너지 · 보기) */
+.choices { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); }
+.choices button { color: var(--fg-3); font-size: var(--t4); padding-block: 6px; }
+.choices button[aria-pressed="true"] { color: var(--fg); font-weight: 700; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 1px; }
+.p { margin: 0; max-width: 62ch; }
+.p.dim { color: var(--fg-2); font-size: var(--t5); }
+.quote { margin: 0; font-size: var(--t3); font-weight: 300; letter-spacing: -0.01em; line-height: 1.5; max-width: 34ch; }
 
 /* 위계표 */
 .spec { display: flex; flex-direction: column; gap: var(--s3); }
@@ -123,18 +168,25 @@ h2 .n { font-weight: 400; color: var(--fg-3); font-size: var(--t4); }
 .spec-row .k { font-size: var(--t5); color: var(--fg-3); }
 
 @media (max-width: 760px) {
+  :root { --t2: 34px; --t3: 20px; }
   .shell { grid-template-columns: minmax(0, 1fr); gap: var(--s3); padding-block: var(--s3);
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .nav { position: static; gap: var(--s2); }
-  .nav ul { flex-direction: row; gap: var(--s2); overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .nav ul { flex-direction: row; gap: var(--s2); overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
   .nav ul a { white-space: nowrap; padding-block: 10px; }
   .nav .meta { flex-direction: row; flex-wrap: wrap; gap: var(--s2); }
-  h1 { font-size: 32px; }
+  h1 { font-size: 38px; }
   .view { gap: var(--s3); }
-  .row { grid-template-columns: 44px minmax(0, 1fr) auto; column-gap: 12px; padding-block: 11px; }
-  .stats { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
-  .spec-row { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .row { grid-template-columns: 48px minmax(0, 1fr) auto; column-gap: 12px; padding-block: 10px; }
+  .rows.tight .row { grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; padding-block: 2px; }
+  .chk { min-height: 44px; width: 44px; margin-left: -8px; padding-left: 8px; }
+  .stats, .stats.four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+  .kv, .spec-row { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .kv dd { margin-bottom: 10px; }
+  .tabs a { padding-block: 10px; }
+  .keys { display: none; }
 }
+@media (hover: none) and (pointer: coarse) { .keys { display: none; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -142,180 +194,604 @@ h2 .n { font-weight: 400; color: var(--fg-3); font-size: var(--t4); }
 <body>
 <div class="shell">
   <nav class="nav" aria-label="주요 메뉴">
-    <div class="brand">Moonlight</div>
+    <a class="brand" href="#home">Moonlight</a>
     <ul id="primary"></ul>
     <ul id="utility"></ul>
     <div class="meta">
       <span>예시 값 · 목업</span>
-      <button type="button" id="theme">다크로 보기</button>
+      <button type="button" class="link" id="theme">다크로 보기</button>
     </div>
   </nav>
-  <main id="main" aria-live="polite"></main>
+  <main id="main"></main>
 </div>
 
 <script>
 (() => {
-  const PRIMARY = [
-    ['home', '홈'], ['today', '오늘'], ['overview', '현황'], ['work', '내 작업'], ['followups', '영업·매출'],
-    ['discovery', '기회 탐색'], ['projects', '프로젝트'], ['products', '제품'], ['brands', '브랜드'], ['content', '콘텐츠'],
-  ];
-  const UTILITY = [['ai', 'AI·자동화'], ['settings', '설정'], ['type', '위계표']];
-  const BUILT = new Set(['today', 'overview', 'work', 'followups', 'projects', 'type']);
+  // ───────────────── 공통 ─────────────────
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const AREAS = ['회사', '영업', '콘텐츠', '제품', '개인', '분류 전'];
+  const DAY = ['일', '월', '화', '수', '목', '금', '토'];
+  const TODAY_DOW = 3;                    // 11월 4일 수요일
+  const WEEK_END = 4;                     // 일요일 11/8까지가 이번 주
 
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const head = (label, title, lead) => `<header class="head"><span class="label">${label}</span><h1>${title}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</header>`;
-  const sec = (title, n, body) => `<section><h2>${title}${n != null ? `<span class="n">${n}</span>` : ''}</h2>${body}</section>`;
-  const row = ({ k = '', t, sub, v = '', cls = '', vcls = '' }) =>
-    `<li class="row ${cls}"><span class="k">${k}</span><span class="t">${t}${sub ? `<span class="sub">${sub}</span>` : ''}</span><span class="v ${vcls}">${v}</span></li>`;
-  const rows = (items) => `<ul class="rows">${items.map(row).join('')}</ul>`;
+  const head = (label, title, lead) =>
+    `<header class="head"><span class="label">${label}</span><h1>${title}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</header>`;
+  const sec = (title, n, body, extra = '') =>
+    `<section><h2>${title}${n != null ? `<span class="n">${n}</span>` : ''}${extra}</h2>${body}</section>`;
+  const row = ({ k = '', t, sub, v = '', cls = '', vcls = '', href }) => {
+    const inner = `<span class="k">${k}</span><span class="t">${t}${sub ? `<span class="sub">${sub}</span>` : ''}</span><span class="v ${vcls}">${v}</span>`;
+    return href ? `<li><a class="row ${cls}" href="${href}">${inner}</a></li>` : `<li class="row ${cls}">${inner}</li>`;
+  };
+  const rows = (items, cls = '') => `<ul class="rows ${cls}">${items.map(row).join('')}</ul>`;
+  // A안: 영역마다 한 구역 — 구역 이름 굵게, 머리 위 옅은 선
+  const byArea = (xs) => AREAS.map((a) => [a, xs.filter((x) => x.a === a)]).filter(([, g]) => g.length);
+  const areaSections = (xs, toRow, hint, cls = '') => `<div class="groups">${byArea(xs).map(([a, g]) =>
+    sec(a, g.length, rows(g.map(toRow), cls), hint ? `<span class="hint">${hint(g) || ''}</span>` : '')).join('')}</div>`;
+  const stats = (items, four) => `<div class="stats ${four ? 'four' : ''}">${items.map(([l, n, of]) =>
+    `<div class="stat"><span class="label">${l}</span><span class="num">${n}</span>${of ? `<span class="of">${of}</span>` : ''}</div>`).join('')}</div>`;
+  const kv = (items) => `<dl class="kv">${items.map(([k, v, sub]) => `<dt>${k}</dt><dd>${v}${sub ? `<span class="sub">${sub}</span>` : ''}</dd>`).join('')}</dl>`;
+  const act = (label) => `<button type="button" class="act" data-mock="${esc(label)}">${label}</button>`;
+  const dueLabel = (d) => {
+    if (d == null) return '기한 없음';
+    if (d < 0) return `${-d}일 지남`;
+    if (d === 0) return '오늘';
+    if (d === 1) return '내일';
+    if (d <= WEEK_END) return `${DAY[(TODAY_DOW + d) % 7]}요일`;
+    const x = new Date(2026, 10, 4 + d);
+    return `${x.getMonth() + 1}/${x.getDate()} ${DAY[x.getDay()]}`;
+  };
+  const dueSpan = (d) => `<span class="${d != null && d < 0 ? 'late' : ''}">${dueLabel(d)}</span>`;
 
-  const tasks = [
-    { id: 'a', t: '제안서 초안 보내기', sub: '프로젝트 · 고객 A 제안', done: true },
-    { id: 'b', t: '고객 C 회신 내용 정리', sub: '오늘까지' },
-    { id: 'c', t: '11월 발행 계획 확정', sub: '프로젝트 · 콘텐츠 운영' },
-  ];
-  const taskRows = () => `<ul class="rows">${tasks.map((x, i) => `
-    <li class="row ${x.done ? 'done' : ''}">
-      <button type="button" class="check k" data-task="${x.id}" aria-pressed="${!!x.done}" aria-label="${esc(x.t)} ${x.done ? '끝냄, 되돌리기' : '끝내기'}">${x.done ? '✓' : i + 1}</button>
-      <span class="t">${esc(x.t)}<span class="sub">${esc(x.sub)}</span></span>
-      <span class="v">${x.done ? '끝' : ''}</span>
-    </li>`).join('')}</ul>`;
+  // ───────────────── 할 일 (A안) ─────────────────
+  const SEED = () => ([
+    { id: 1, t: '세금계산서 발행', a: '회사', p: '회계', due: -3 },
+    { id: 2, t: '고객 C 회신 내용 정리', a: '영업', p: '고객 C', due: 0, imp: true, focus: 2 },
+    { id: 3, t: '11월 발행 계획 확정', a: '콘텐츠', p: '콘텐츠 운영', due: 0, focus: 3 },
+    { id: 4, t: '제안서 초안 보내기', a: '영업', p: '고객 A 제안', due: 0, done: true, focus: 1 },
+    { id: 5, t: '강의 자료 정리', a: '콘텐츠', p: '강의 리뉴얼', due: 1 },
+    { id: 6, t: '제품 소개 페이지 문구', a: '제품', p: '제품 소개 페이지', due: 2, imp: true },
+    { id: 7, t: '월말 정산 준비', a: '회사', p: '회계', due: 2 },
+    { id: 8, t: '브랜드 로그 정리', a: '콘텐츠', p: '브랜드', due: 3 },
+    { id: 9, t: '세미나 후기 쓰기', a: '콘텐츠', p: '콘텐츠 운영', due: 5 },
+    { id: 10, t: '분기 회고 메모', a: '개인', p: '', due: null },
+    { id: 11, t: '랜딩 문구 실험', a: '제품', p: '제품 소개 페이지', due: null },
+    { id: 12, t: '읽을거리 정리', a: '개인', p: '', due: null },
+  ]);
+  let tasks = SEED();
+  let nextId = 100, cur = null, showDone = false, lastDone = null, statusTimer = 0, statusHtml = '';
+  const lane = (x) => x.due == null ? 'later' : x.due < 0 ? 'late' : x.due === 0 ? 'today' : x.due <= WEEK_END ? 'week' : 'later';
+  const open = () => tasks.filter((x) => !x.done);
+  const byDue = (a, b) => (a.due ?? 999) - (b.due ?? 999) || (b.imp ? 1 : 0) - (a.imp ? 1 : 0) || a.id - b.id;
 
-  const VIEWS = {
-    today: () => {
-      const done = tasks.filter((x) => x.done).length;
-      return head('11월 3일 화요일 · 14:20', `오늘 3개 중 ${done}개 끝냈어요`, '다음 일정은 <b>15:00 고객 B 미팅</b>, 40분 남았어요')
-        + `<input id="cap" class="capture" placeholder="무엇이든 적고 Enter" autocomplete="off" aria-label="빠른 입력">`
-        + sec('오늘 3개', `${done}/3`, taskRows())
-        + sec('일정', 3, rows([
-          { k: '10:00', t: '주간 정리', v: '지남', cls: 'past' },
-          { k: '15:00', t: '고객 B 미팅', sub: '지난 기록 2건 · 견적 논의', v: '40분 후' },
-          { k: '17:30', t: '원고 검토', v: '1시간' },
-        ]))
-        + sec('남은 할 일', 4, rows([
-          { k: '', t: '세금계산서 발행', v: '3일 지남', vcls: 'late' },
-          { k: '', t: '강의 자료 정리', v: '내일까지' },
-          { k: '', t: '제품 소개 페이지 문구', v: '11/7까지' },
-          { k: '', t: '분기 회고 메모', v: '기한 없음' },
-        ]))
-        + sec('오늘 연락', 2, rows([
-          { t: '고객 C', sub: '회신 기다린 지 5일', v: '<button class="act" type="button">기록</button>' },
-          { t: '고객 D', sub: '계약 갱신 D-7', v: '<button class="act" type="button">기록</button>' },
-        ]));
-    },
-    work: () => head('내 작업', '열린 할 일 12', '기한 지남 <b>1</b> · 오늘 <b>3</b> · 이번 주 <b>4</b>')
-      + `<input id="cap-work" class="capture" placeholder="할 일 추가 — Enter" autocomplete="off" aria-label="할 일 추가">`
-      + sec('기한 지남', 1, rows([{ t: '세금계산서 발행', sub: '회사 · 회계', v: '3일 지남', vcls: 'late' }]))
-      + sec('오늘', 3, rows([
-        { t: '고객 C 회신 내용 정리', sub: '영업 · 고객 C', v: '오늘' },
-        { t: '11월 발행 계획 확정', sub: '프로젝트 · 콘텐츠 운영', v: '오늘' },
-        { t: '제안서 초안 보내기', sub: '프로젝트 · 고객 A 제안', v: '끝', cls: 'done' },
+  const parse = (raw) => {
+    let s = ' ' + raw.trim() + ' ';
+    let due, p = '', imp = false;
+    const take = (re, fn) => { const m = s.match(re); if (m) { fn(m); s = s.replace(m[0], ' '); } };
+    take(/\s!\s/, () => { imp = true; });
+    take(/\s#(\S+)/, (m) => { p = m[1].trim(); });
+    take(/\s(오늘)\s/, () => { due = 0; });
+    take(/\s(내일)\s/, () => { due = 1; });
+    take(/\s(모레)\s/, () => { due = 2; });
+    take(/\s(다음 ?주)\s/, () => { due = 5; });
+    take(/\s(\d{1,2})\/(\d{1,2})\s/, (m) => { due = Math.round((new Date(2026, +m[1] - 1, +m[2]) - new Date(2026, 10, 4)) / 864e5); });
+    take(/\s([월화수목금토일])(요일)?\s/, (m) => { due = ((DAY.indexOf(m[1]) - TODAY_DOW + 7) % 7) || 7; });
+    let a = '분류 전';
+    if (AREAS.includes(p)) { a = p; p = ''; }
+    else if (p) { const hit = tasks.find((x) => x.p === p); a = hit ? hit.a : '분류 전'; }
+    return { t: s.replace(/\s+/g, ' ').trim(), due, a, p, imp };
+  };
+  const chk = (x) => `<button type="button" class="chk" data-task="${x.id}" aria-pressed="${!!x.done}" aria-label="${esc(x.t)} ${x.done ? '끝냄, 되돌리기' : '끝내기'}">${x.done ? '✓' : '○'}</button>`;
+  const taskSub = (x, withArea) => {
+    const bits = [];
+    if (x.imp) bits.push('<b>중요</b>');
+    if (withArea) bits.push(`<b>${esc(x.a)}</b>`);
+    if (x.p) bits.push(esc(x.p));
+    return bits.length ? `<span class="sub">${bits.join(' · ')}</span>` : '';
+  };
+  const taskLi = (x, right, withArea) =>
+    `<li class="row ${x.done ? 'done' : ''}" data-row="${x.id}">${chk(x)}<span class="t">${esc(x.t)}${taskSub(x, withArea)}</span><span class="v">${right ?? (x.done ? '끝' : dueSpan(x.due))}</span></li>`;
+  const say = (html, undo) => {
+    clearTimeout(statusTimer);
+    statusHtml = `<span>${html}</span>${undo ? '<button type="button" id="undo">되돌리기</button>' : ''}`;
+    const el = document.getElementById('status'); if (el) el.innerHTML = statusHtml;
+    statusTimer = setTimeout(() => { statusHtml = ''; lastDone = null; const e = document.getElementById('status'); if (e) e.innerHTML = ''; }, 5000);
+  };
+  const toggleTask = (id) => {
+    const x = tasks.find((t) => t.id === id);
+    x.done = !x.done; cur = id;
+    if (x.done) { lastDone = x; say(`‘${esc(x.t)}’ 끝`, true); } else { statusHtml = ''; }
+    render(true);
+  };
+
+  // ───────────────── 화면 ─────────────────
+  const V = {};
+
+  // 홈
+  V.home = () => head('홈 · 11월 4일 수요일', '확인할 것 3', '오늘 3개 중 <b>1</b>개 끝 · 다음 일정 <b>15:00</b>')
+    + sec('확인할 것', 3, rows([
+      { k: '실패', t: '뉴스레터 발송 자동화', sub: '어제 22:00 · 받는 사람 목록을 읽지 못함', v: act('다시 실행'), vcls: '' , cls: '' },
+      { k: '승인', t: '고객 D 갱신 안내 초안', sub: '오피스가 쓴 초안 · 운영자가 요청함', v: act('읽기') },
+      { k: '문의', t: '도입 문의 2건', sub: '어제 저녁에 들어옴', v: act('문의 보기') },
+    ]).replace('<span class="k">실패</span>', '<span class="k late">실패</span>'))
+    + sec('오늘', null, rows([
+      { k: '10:00', t: '주간 정리', v: '지남', cls: 'past' },
+      { k: '15:00', t: '고객 B 미팅', sub: '지난 기록 2건 · 견적 논의', v: '40분 후' },
+      { k: '17:30', t: '원고 검토', v: '1시간' },
+    ]))
+    + sec('바로 가기', null, rows([
+      { t: '오늘 할 일', sub: '남은 3개', href: '#today' },
+      { t: '오늘 연락', sub: '3명 · 놓친 약속 1', href: '#revenue' },
+      { t: '이번 달 목표', sub: '기간 10% 지남', href: '#overview' },
+    ], 'flat'));
+
+  V.reports = () => head('홈 · 보고서', '보고서 3', '주간 · 월간 정리')
+    + sec('주간', 2, rows([
+      { k: '11/2', t: '10월 5주 주간 정리', sub: '끝낸 할 일 18 · 발행 3 · 새 고객 1', v: act('열기') },
+      { k: '10/26', t: '10월 4주 주간 정리', sub: '끝낸 할 일 22 · 발행 4', v: act('열기') },
+    ]))
+    + sec('월간', 1, rows([{ k: '11/1', t: '10월 정리', sub: '매출 1,820만원 · 목표 91%', v: act('열기') }]));
+
+  // 오늘
+  V.today = () => {
+    const focus = tasks.filter((x) => x.focus).sort((a, b) => a.focus - b.focus);
+    const done = focus.filter((x) => x.done).length;
+    const rest = open().filter((x) => !x.focus && ['late', 'today', 'week'].includes(lane(x))).sort(byDue);
+    return head('오늘 · 11월 4일 수요일 · 14:20', `오늘 3개 중 ${done}개 끝냈어요`, '다음 일정은 <b>15:00 고객 B 미팅</b>, 40분 남았어요')
+      + `<div class="add"><input id="cap-today" class="capture" placeholder="무엇이든 적고 Enter" autocomplete="off" aria-label="빠른 입력"><div class="status" id="status">${statusHtml}</div></div>`
+      + sec('오늘 3개', `${done}/3`, `<ul class="rows tight">${focus.map((x) => taskLi(x, x.done ? '끝' : '', true)).join('')}</ul>`)
+      + sec('일정', 3, rows([
+        { k: '10:00', t: '주간 정리', v: '지남', cls: 'past' },
+        { k: '15:00', t: '고객 B 미팅', sub: '지난 기록 2건 · 견적 논의', v: '40분 후' },
+        { k: '17:30', t: '원고 검토', v: '1시간' },
       ]))
-      + sec('이번 주', 4, rows([
-        { t: '강의 자료 정리', v: '수' },
-        { t: '제품 소개 페이지 문구', v: '금' },
-        { t: '월말 정산 준비', v: '금' },
-        { t: '브랜드 로그 정리', v: '토' },
-      ]))
-      + sec('나중', 4, rows([
-        { t: '분기 회고 메모', v: '기한 없음' },
-        { t: '랜딩 문구 실험', v: '기한 없음' },
-        { t: '도구 정리', v: '기한 없음' },
-        { t: '읽을거리 정리', v: '기한 없음' },
-      ])),
-    followups: () => head('영업·매출 · 오늘 연락', '오늘 연락할 사람 3', '놓친 약속 <b>1</b>')
-      + sec('놓친 약속', 1, rows([{ t: '고객 A', sub: '견적 다시 보내기로 함', v: '어제였음', vcls: 'late' }]))
-      + sec('오늘', 2, rows([
-        { t: '고객 C', sub: '회신 기다린 지 5일 · 마지막 연락 10/29', v: '<button class="act" type="button">기록</button>' },
-        { t: '고객 D', sub: '계약 갱신 D-7 · 월 120만원', v: '<button class="act" type="button">기록</button>' },
-      ]))
-      + sec('이번 주', 3, rows([
-        { k: '수', t: '고객 E', sub: '도입 문의 후속' },
-        { k: '목', t: '고객 F', sub: '미팅 일정 잡기' },
-        { k: '금', t: '고객 G', sub: '사례 공유' },
-      ])),
-    projects: () => head('프로젝트', '진행 중 5', '이번 주 마감 <b>1</b> · 막힘 <b>1</b>')
-      + sec('진행 중', 5, rows([
-        { k: '62%', t: '콘텐츠 운영 11월', sub: '다음 · 11월 발행 계획 확정', v: 'D-12' },
-        { k: '40%', t: '고객 A 제안', sub: '다음 · 견적 다시 보내기', v: 'D-3' },
-        { k: '85%', t: '강의 리뉴얼', sub: '다음 · 자료 최종 검토', v: '11/30' },
-        { k: '15%', t: '제품 소개 페이지', sub: '막힘 · 가격 정책 결정 필요', v: '12/15', vcls: '' },
-        { k: '—', t: '분기 회고', sub: '다음 · 아직 정하지 않음', v: '기한 없음' },
-      ]))
-      + sec('끝남', 2, rows([
-        { k: '✓', t: '10월 뉴스레터', v: '10/31', cls: 'past' },
-        { k: '✓', t: '세미나 준비', v: '10/24', cls: 'past' },
-      ])),
-    overview: () => head('현황 · 11월', '이번 달은 어디쯤', '기간 <b>10%</b> 지남')
-      + `<div class="stats">
-          <div class="stat"><span class="label">이번 달 매출</span><span class="num">240만원</span><span class="of">목표 2,000만원</span></div>
-          <div class="stat"><span class="label">열린 거래</span><span class="num">7</span><span class="of">이번 달 마감 2</span></div>
-          <div class="stat"><span class="label">이번 주 발행</span><span class="num">1/3</span><span class="of">다음 발행 목</span></div>
+      + `<div class="groups"><div class="label">이번 주 남은 할 일 · 영역별</div>${byArea(rest).map(([a, g]) =>
+        sec(a, g.length, `<ul class="rows tight">${g.map((x) => taskLi(x)).join('')}</ul>`)).join('')}</div>`
+      + sec('오늘 연락', 2, rows([
+        { t: '고객 C', sub: '회신 기다린 지 5일', v: act('기록') },
+        { t: '고객 D', sub: '계약 갱신 D-7', v: act('기록') },
+      ], 'flat'));
+  };
+
+  // 현황
+  V.overview = () => head('현황 · 11월', '이번 달은 어디쯤', '기간 <b>10%</b> 지남')
+    + stats([['이번 달 매출', '240만원', '목표 2,000만원'], ['열린 거래', '7', '이번 달 마감 2'], ['이번 주 발행', '1/3', '다음 발행 목요일']])
+    + `<div class="groups">`
+    + sec('영업', 2, rows([
+      { k: '12%', t: '월 매출 2,000만원', sub: '비슷함 · 마지막 기록 어제' },
+      { k: '0%', t: '신규 고객 5곳', sub: '<span class="late">늦음</span> · 7일째 기록 없음', v: act('체크인') },
+    ]))
+    + sec('콘텐츠', 1, rows([{ k: '33%', t: '주 3회 발행', sub: '비슷함 · 마지막 기록 11/1' }]))
+    + sec('지키는 선', 2, rows([
+      { k: '✓', t: '응답 시간 24시간 안', sub: '선 안 · 평균 9시간' },
+      { k: '▲', t: '환불 0건', sub: '이번 달 1건', v: '<span class="late">선 밖</span>' },
+    ]))
+    + `</div>`;
+
+  V['overview-summary'] = () => head('현황 · 집계', '최근 7일', '끝낸 할 일 <b>21</b> · 결정 <b>4</b> · 발행 <b>3</b>')
+    + stats([['끝낸 할 일', '21', '지난주 18'], ['정한 결정', '4', '지난주 2'], ['발행', '3', '지난주 4'], ['새 고객', '1', '지난주 0']], true)
+    + areaSections([
+      { a: '회사', t: '할 일 6 끝', sub: '정산 · 계약서 정리' },
+      { a: '영업', t: '할 일 7 끝 · 연락 9', sub: '견적 2 · 미팅 3' },
+      { a: '콘텐츠', t: '할 일 5 끝 · 발행 3', sub: '뉴스레터 1 · 스레드 2' },
+      { a: '제품', t: '할 일 3 끝 · 배포 1', sub: 'PR 4 합침' },
+    ], (x) => ({ t: x.t, sub: x.sub }), null, 'flat');
+
+  V['overview-goals'] = () => head('현황 · OKR·KPI', '목표 2 · 지키는 선 2', '바닥 0.7까지 평균 <b>15%</b>')
+    + `<div class="groups">`
+    + sec('11월 매출 기반 다지기', '바닥까지 9%', rows([
+      { k: '12%', t: '월 매출 2,000만원', sub: '240만원 · 비슷함' },
+      { k: '0%', t: '신규 고객 5곳', sub: '0곳 · <span class="late">늦음</span>' },
+      { k: '—', t: '제안서 응답률 50%', sub: '미측정' },
+    ]))
+    + sec('콘텐츠 리듬 만들기', '바닥까지 33%', rows([
+      { k: '33%', t: '주 3회 발행', sub: '이번 주 1/3 · 비슷함' },
+      { k: '50%', t: '뉴스레터 구독 +100', sub: '+50 · 앞섬' },
+    ]))
+    + `</div>`;
+
+  // 내 작업 — A안
+  V.work = () => {
+    const o = open().sort(byDue);
+    const todayLeft = o.filter((x) => ['late', 'today'].includes(lane(x))).length;
+    const late = o.filter((x) => lane(x) === 'late').length;
+    const doneN = tasks.filter((x) => x.done).length;
+    return head('내 작업 · 11월 4일 수요일', todayLeft ? `오늘 ${todayLeft}개 남았어요` : '오늘 할 일을 다 끝냈어요',
+      `${late ? `<span class="late">기한 지남 ${late}</span> · ` : ''}이번 주 <b>${o.filter((x) => lane(x) === 'week').length}</b> · 나중 <b>${o.filter((x) => lane(x) === 'later').length}</b> · 끝 <b>${doneN}</b>`)
+      + `<div class="add">
+          <input id="cap-work" class="capture" autocomplete="off" aria-label="할 일 추가" aria-describedby="parse" placeholder="할 일 추가 — 예: 내일 견적 다시 보내기 #영업 !">
+          <div class="parse" id="parse" aria-live="polite"></div>
+          <div class="status" id="status" aria-live="polite">${statusHtml}</div>
+          <div class="keys">N 추가 · J/K 이동 · X 끝 · Enter 저장</div>
         </div>`
-      + sec('핵심 결과', 3, rows([
-        { k: '12%', t: '월 매출 2,000만원', sub: '비슷함 · 마지막 기록 어제', v: '' },
-        { k: '33%', t: '주 3회 발행', sub: '비슷함 · 마지막 기록 11/1', v: '' },
-        { k: '0%', t: '신규 고객 5곳', sub: '늦음 · 7일째 기록 없음', v: '<button class="act" type="button">체크인</button>' },
-      ]))
-      + sec('지키는 선', 2, rows([
-        { k: '✓', t: '응답 시간 24시간 안', sub: '선 안 · 평균 9시간' },
-        { k: '▲', t: '환불 0건', sub: '선 밖 · 이번 달 1건', vcls: 'late', v: '<span class="late">선 밖</span>' },
-      ])),
-    type: () => head('위계표', '여섯 단계로 끝낸다', '글꼴은 SUIT 하나, 색은 글자 · 보조 · 흐림 셋. 선 · 면 · 그림자 · 아이콘은 쓰지 않는다.')
-      + `<div class="spec">
-        <div class="spec-row"><span class="k">1 · 44 / 200</span><span style="font-size:var(--t1);font-weight:200;letter-spacing:-0.035em;line-height:1.15">페이지 제목</span></div>
-        <div class="spec-row"><span class="k">2 · 30 / 250</span><span style="font-size:var(--t2);font-weight:250;letter-spacing:-0.02em">1,240만원</span></div>
-        <div class="spec-row"><span class="k">3 · 17 / 700</span><span style="font-size:var(--t3);font-weight:700">섹션 제목 <span style="font-weight:400;color:var(--fg-3);font-size:var(--t4)">4</span></span></div>
-        <div class="spec-row"><span class="k">4 · 15 / 500</span><span style="font-weight:500">항목 이름</span></div>
-        <div class="spec-row"><span class="k">5 · 13 / 400</span><span style="font-size:var(--t5);color:var(--fg-2)">보조 설명 · 날짜 · 다음 단계</span></div>
-        <div class="spec-row"><span class="k">6 · 12 / 600</span><span class="label">라벨 · 위치</span></div>
-      </div>`
-      + sec('규칙', null, rows([
-        { k: '크기', t: '이 여섯 개 밖의 글자 크기는 없다', sub: '휴대폰에서만 1단계가 32px로 줄어든다' },
-        { k: '굵기', t: '제목은 가늘게, 섹션은 굵게', sub: '큰 글자는 가볍고 작은 머리말이 무게를 진다' },
-        { k: '간격', t: '8 · 16 · 32 · 56 네 단계', sub: '행 사이 8, 섹션 사이 56 — 선 대신 간격으로 묶는다' },
-        { k: '정렬', t: '왼쪽 칸 · 본문 · 오른쪽 값', sub: '시각 · 진척 · 기한이 같은 세로줄에 선다' },
-        { k: '색', t: '빨강은 기한 지남 · 놓친 약속 · 선 밖 글자에만', sub: '면을 칠하지 않는다' },
-        { k: '행동', t: '밑줄 친 글자가 버튼이다', sub: '굵은 밑줄 글자 하나가 그 줄의 행동' },
-      ])),
+      + `<div class="groups">${byArea(o).map(([a, xs]) => {
+        const l = xs.filter((x) => lane(x) === 'late').length, t = xs.filter((x) => lane(x) === 'today').length;
+        return sec(a, xs.length, `<ul class="rows tight">${xs.map((x) => taskLi(x)).join('')}</ul>`,
+          `<span class="hint">${[l ? `<span class="late">지남 ${l}</span>` : '', t ? `오늘 ${t}` : ''].filter(Boolean).join(' · ')}</span>`);
+      }).join('')}
+      ${doneN ? `<section><button type="button" class="more" id="toggleDone" aria-expanded="${showDone}">끝낸 것 <b>${doneN}</b> · ${showDone ? '접기' : '보기'}</button>
+        ${showDone ? `<ul class="rows tight">${tasks.filter((x) => x.done).map((x) => taskLi(x, '끝', true)).join('')}</ul>` : ''}</section>` : ''}
+      </div>`;
   };
 
-  const placeholder = (label) => head(label, label, '이 시안에는 오늘 · 현황 · 내 작업 · 영업·매출 · 프로젝트 다섯 화면과 위계표만 있어요.');
+  V['work-memos'] = () => head('내 작업 · 메모', '메모 6', '이번 주 <b>4</b> · 할 일로 바꾼 것 <b>1</b>')
+    + `<input id="cap-memo" class="capture" placeholder="메모 — Enter" autocomplete="off" aria-label="메모 추가">`
+    + areaSections([
+      { a: '영업', t: '고객 B는 가격보다 도입 일정이 걸림', sub: '11/3 · 미팅 메모', v: act('할 일로') },
+      { a: '영업', t: '갱신 안내는 2주 전에 보내야 반응이 좋다', sub: '10/30 · 배운 것' },
+      { a: '콘텐츠', t: '스레드는 첫 줄에 숫자가 있으면 저장이 많다', sub: '11/2 · 배운 것' },
+      { a: '콘텐츠', t: '12월 뉴스레터 주제 후보 셋', sub: '11/1', v: act('할 일로') },
+      { a: '제품', t: '가격 정책은 강의 수 기준이 단순하다', sub: '11/1 · 결정 후보' },
+      { a: '개인', t: '오후 3시 이후 집중이 떨어짐', sub: '10/31 · 하루 리뷰' },
+    ], (x) => ({ t: x.t, sub: x.sub, v: x.v || '' }), null, 'flat');
 
-  const navList = (el, items) => {
-    el.innerHTML = items.map(([k, l]) => `<li><a href="#${k}" data-k="${k}">${l}</a></li>`).join('');
+  let energy = 3, reviewSaved = false;
+  V['work-review'] = () => head('내 작업 · 하루 리뷰', '오늘을 닫아요', '이번 주 <b>2</b>/5일 기록')
+    + sec('에너지', null, `<div class="choices" role="group" aria-label="에너지">${[1, 2, 3, 4, 5].map((n) =>
+      `<button type="button" data-energy="${n}" aria-pressed="${energy === n}">${n} ${['', '바닥', '낮음', '보통', '좋음', '최고'][n]}</button>`).join('')}</div>`)
+    + sec('잘된 것', null, `<input id="rv-1" class="capture" placeholder="한 줄" autocomplete="off" aria-label="잘된 것">`)
+    + sec('막힌 것', null, `<input id="rv-2" class="capture" placeholder="한 줄" autocomplete="off" aria-label="막힌 것">`)
+    + sec('내일 하나', null, `<input id="rv-3" class="capture" placeholder="내일 가장 먼저 할 것" autocomplete="off" aria-label="내일 하나">`)
+    + `<div class="status">${reviewSaved ? '목업이라 저장하지 않았어요' : ''}</div><div>${act('리뷰 닫기')}</div>`;
+
+  // 영업·매출
+  V.revenue = () => head('영업·매출 · 오늘 연락', '오늘 연락할 사람 3', '놓친 약속 <b>1</b>')
+    + sec('놓친 약속', 1, rows([{ t: '고객 A', sub: '견적 다시 보내기로 함', v: `<span class="late">어제였음</span>${act('기록')}` }], 'flat'))
+    + sec('오늘', 2, rows([
+      { t: '고객 C', sub: '회신 기다린 지 5일 · 마지막 연락 10/29', v: act('기록') },
+      { t: '고객 D', sub: '계약 갱신 D-7 · 월 120만원', v: act('기록') },
+    ], 'flat'))
+    + sec('이번 주', 3, rows([
+      { k: '목', t: '고객 E', sub: '도입 문의 후속' },
+      { k: '금', t: '고객 F', sub: '미팅 일정 잡기' },
+      { k: '금', t: '고객 G', sub: '사례 공유' },
+    ]));
+
+  V['revenue-customers'] = () => head('영업·매출 · 고객', '고객 24', '이번 달 연락 <b>11</b> · 30일 넘게 연락 없음 <b>5</b>')
+    + `<input id="cap-cust" class="capture" placeholder="고객 찾기" autocomplete="off" aria-label="고객 찾기">`
+    + `<div class="groups">`
+    + sec('거래 중', 4, rows([
+      { t: '고객 D', sub: '갱신 D-7 · 마지막 연락 10/28', v: '<strong>월 120만원</strong>' },
+      { t: '고객 H', sub: '마지막 연락 11/2', v: '<strong>월 80만원</strong>' },
+      { t: '고객 I', sub: '마지막 연락 10/20', v: '<strong>월 60만원</strong>' },
+      { t: '고객 J', sub: '마지막 연락 10/15', v: '<strong>월 40만원</strong>' },
+    ], 'flat'))
+    + sec('논의 중', 3, rows([
+      { t: '고객 A', sub: '견적 · <span class="late">약속 어제</span>', v: '<strong>900만원</strong>' },
+      { t: '고객 B', sub: '미팅 오늘 15:00', v: '<strong>600만원</strong>' },
+      { t: '고객 C', sub: '회신 기다린 지 5일', v: '<strong>300만원</strong>' },
+    ], 'flat'))
+    + sec('처음 연락', 2, rows([
+      { t: '고객 E', sub: '도입 문의 · 10/31' },
+      { t: '고객 F', sub: '소개 · 11/1' },
+    ], 'flat'))
+    + `</div>`;
+
+  V['revenue-deals'] = () => head('영업·매출 · 거래', '이번 달 들어올 돈 1,940만원', '확실 <b>440만원</b> · 가능 <b>1,500만원</b>')
+    + stats([['이번 달 매출', '240만원', '목표 2,000만원'], ['확실', '440만원', '계약됨'], ['가능', '1,500만원', '계약 전']])
+    + `<div class="groups">`
+    + sec('확실', 3, rows([
+      { k: '11/10', t: '고객 D 11월분', sub: '계약 · 매달', v: '<strong>120만원</strong>' },
+      { k: '11/15', t: '고객 H 11월분', sub: '계약 · 매달', v: '<strong>80만원</strong>' },
+      { k: '11/2', t: '고객 K 잔금', sub: '계약 · 한 번', v: '<span class="late">2일 늦음</span><strong>240만원</strong>' },
+    ]))
+    + sec('가능', 2, rows([
+      { k: '11/20', t: '고객 B 도입', sub: '미팅 오늘 · 견적 전', v: '<strong>600만원</strong>' },
+      { k: '11월 말', t: '고객 A 제안', sub: '견적 다시 보내기', v: '<strong>900만원</strong>' },
+    ]))
+    + `</div>`;
+
+  V['revenue-inquiries'] = () => head('영업·매출 · 문의', '새 문의 2', '답변 기다리는 것 <b>1</b>')
+    + `<div class="groups">`
+    + sec('새로 들어옴', 2, rows([
+      { k: '어제', t: '도입 비용 문의', sub: '홈페이지 · 학원 3곳 운영', v: act('답하기') },
+      { k: '어제', t: '세미나 일정 문의', sub: '이메일', v: act('답하기') },
+    ]))
+    + sec('답변 대기', 1, rows([{ k: '11/1', t: '단체 할인 문의', sub: '견적 보냄 · 회신 기다림' }]))
+    + sec('끝남', 3, rows([
+      { k: '10/30', t: '자료 요청', cls: 'past' }, { k: '10/28', t: '데모 요청', sub: '고객 E로 넘김', cls: 'past' }, { k: '10/25', t: '환불 문의', cls: 'past' },
+    ]))
+    + `</div>`;
+
+  // 기회 탐색
+  V.discovery = () => head('기회 탐색', '어디에서 시작할까요?', '지난 탐색 <b>3</b>')
+    + `<input id="cap-disc" class="capture" placeholder="궁금한 시장 · 고객 · 문제를 한 줄로" autocomplete="off" aria-label="탐색 시작">`
+    + sec('다시 볼 기회', 3, rows([
+      { k: '10/29', t: '학원 원장용 주간 리포트 자동화', sub: '<b>제품</b> · 근거 4 · 다음 질문 2', v: act('이어서') },
+      { k: '10/22', t: '교사 연수 콘텐츠 묶음 판매', sub: '<b>콘텐츠</b> · 근거 2', v: act('이어서') },
+      { k: '10/15', t: '지역 학원 연합 세미나', sub: '<b>영업</b> · 보류', v: act('이어서') },
+    ]));
+
+  // 프로젝트
+  const PROJECTS = [
+    { id: 'p1', a: '콘텐츠', t: '콘텐츠 운영 11월', pct: 14, next: '11월 발행 계획 확정', due: 12 },
+    { id: 'p2', a: '영업', t: '고객 A 제안', pct: 40, next: '견적 다시 보내기', due: 3 },
+    { id: 'p3', a: '콘텐츠', t: '강의 리뉴얼', pct: 85, next: '자료 최종 검토', due: 26 },
+    { id: 'p4', a: '제품', t: '제품 소개 페이지', pct: 15, next: '가격 정책 결정 필요', due: 41, blocked: true },
+    { id: 'p5', a: '개인', t: '분기 회고', pct: null, next: '아직 정하지 않음', due: null },
+  ];
+  V.projects = () => head('프로젝트', '진행 중 5', '이번 주 마감 <b>1</b> · <span class="late">막힘 1</span>')
+    + areaSections(PROJECTS, (x) => ({
+      k: x.pct == null ? '—' : `${x.pct}%`, t: x.t, href: `#project-${x.id}`,
+      sub: x.blocked ? `<span class="late">막힘</span> · ${x.next}` : `다음 · ${x.next}`,
+      v: x.due == null ? '기한 없음' : x.due <= 7 ? `D-${x.due}` : dueLabel(x.due),
+    }))
+    + sec('끝남', 2, rows([{ k: '✓', t: '10월 뉴스레터', v: '10/31', cls: 'past' }, { k: '✓', t: '세미나 준비', v: '10/24', cls: 'past' }]));
+
+  const STEPS = { p1: [
+    { g: '기획', items: [['주제 후보 정리', true], ['11월 발행 계획 확정', false, 0]] },
+    { g: '제작', items: [['뉴스레터 원고', false, 3], ['스레드 3편', false, 5], ['카드뉴스 1편', false, 8]] },
+    { g: '발행', items: [['예약 걸기', false, 10], ['성과 기록', false, 12]] },
+  ] };
+  let stepState = {};
+  V.project = (id) => {
+    const x = PROJECTS.find((p) => p.id === id) || PROJECTS[0];
+    const groups = STEPS[x.id] || [{ g: '할 일', items: [[x.next, false, x.due]] }];
+    const all = groups.flatMap((g) => g.items);
+    const doneN = all.filter((it) => stepState[x.id + it[0]] ?? it[1]).length;
+    return `<a class="back" href="#projects">← 프로젝트</a>`
+      + head(`프로젝트 · <b class="area-in">${x.a}</b>`, esc(x.t), `진척 <b>${x.pct ?? '—'}${x.pct == null ? '' : '%'}</b> · 항목 <b>${doneN}/${all.length}</b> · 마감 <b>${x.due == null ? '없음' : `D-${x.due}`}</b>`)
+      + sec('다음', null, rows([{ t: esc(x.next), sub: x.blocked ? '<span class="late">막힘</span> · 정하기 전에는 다음으로 갈 수 없어요' : '이 걸음이 끝나면 제작으로 넘어가요', v: act('처리 완료') }], 'flat'))
+      + `<div class="groups">${groups.map((g) => {
+        const n = g.items.filter((it) => stepState[x.id + it[0]] ?? it[1]).length;
+        return sec(g.g, `${n}/${g.items.length}`, `<ul class="rows tight">${g.items.map(([t, d0, due]) => {
+          const d = stepState[x.id + t] ?? d0;
+          return `<li class="row ${d ? 'done' : ''}"><button type="button" class="chk" data-step="${esc(x.id + t)}" aria-pressed="${d}" aria-label="${esc(t)} ${d ? '끝냄, 되돌리기' : '끝내기'}">${d ? '✓' : '○'}</button><span class="t">${esc(t)}</span><span class="v">${d ? '끝' : dueSpan(due)}</span></li>`;
+        }).join('')}</ul>`);
+      }).join('')}</div>`
+      + sec('결과 · 완료 기준', null, kv([['결과', '11월에 12편 발행'], ['완료 기준', '발행 12 · 성과 기록 12'], ['연결 목표', '콘텐츠 리듬 만들기', 'KR 주 3회 발행']]));
   };
-  navList(document.getElementById('primary'), PRIMARY);
-  navList(document.getElementById('utility'), UTILITY);
+
+  // 제품
+  V.products = () => head('제품 · 개발', '제품 6', '저장소 연결 <b>4</b> · <span class="late">CI 실패 1</span>')
+    + stats([['저장소', '4/6', '연결됨'], ['기본 브랜치 CI', '3/4', '통과'], ['열린 PR', '5', ''], ['열린 이슈', '12', '막힘 1']], true)
+    + `<div class="groups">`
+    + sec('운영중', 3, rows([
+      { t: '학원 리포트', sub: '<b>성장</b> · v2.4 · 최근 push 2시간 전', v: '<span class="late">CI 실패</span>PR 2 · 이슈 5' },
+      { t: '수업 노트', sub: '<b>출시</b> · v1.2 · 최근 push 어제', v: 'PR 1 · 이슈 3' },
+      { t: '출결 알림', sub: '<b>운영</b> · v3.0 · 최근 push 10/28', v: 'PR 0 · 이슈 2' },
+    ], 'flat'))
+    + sec('제작중', 2, rows([
+      { t: '제품 소개 페이지', sub: '<b>MVP</b> · 최근 push 11/2', v: 'PR 2 · 이슈 2' },
+      { t: '상담 기록 도우미', sub: '<b>아이디어</b> · 저장소 연결 전', v: '—' },
+    ], 'flat'))
+    + sec('중지', 1, rows([{ t: '교재 주문', sub: '<b>중지</b> · 저장소 연결 전', v: '—', cls: 'past' }], 'flat'))
+    + `</div>`;
+
+  V['products-portfolio'] = () => head('제품 · 포트폴리오', '이번 달 순이익 310만원', '주간 사용자 <b>1,240</b> · 열린 문의 <b>4</b>')
+    + stats([['주간 사용자', '1,240', '지난달 1,110'], ['이번 달 순이익', '310만원', '매출 420 · 비용 110'], ['집중 칸', '2/3', 'MVP · 출시 · 성장']])
+    + sec('제품별', 3, rows([
+      { t: '학원 리포트', sub: '사용자 820 · 문의 2', v: '<strong>240만원</strong>' },
+      { t: '수업 노트', sub: '사용자 310 · 문의 1', v: '<strong>60만원</strong>' },
+      { t: '출결 알림', sub: '사용자 110 · 문의 1', v: '<strong>10만원</strong>' },
+    ], 'flat'));
+
+  // 브랜드
+  V.brands = () => head('브랜드', '브랜드 5', '이번 주 발행 <b>3</b> · 운영 방향을 정하지 않은 브랜드 <b>1</b>')
+    + `<div class="groups">`
+    + sec('운영 중', 4, rows([
+      { t: 'Class.Moon', sub: '교사용 수업 운영 · 이번 주 2편', v: act('로그') },
+      { t: 'BridgeMaker', sub: '교회 사역 콘텐츠 · 이번 주 1편', v: act('로그') },
+      { t: 'Study.Seagull', sub: '학습 습관 · 이번 주 0편', v: act('로그') },
+      { t: '시나브로', sub: '글쓰기 · 이번 주 0편', v: act('로그') },
+    ], 'flat'))
+    + sec('방향 정하기 전', 1, rows([{ t: '고래', sub: '운영 상태 · 집중점이 비어 있어요', v: act('운영 방향 정하기') }], 'flat'))
+    + `</div>`;
+
+  V['brands-log'] = () => head('브랜드 · 콘텐츠 로그', '이번 주 발행 3', '11월 2일 – 11월 8일')
+    + `<div class="groups">`
+    + sec('Class.Moon', 2, rows([{ k: '11/3', t: '숙제 확인을 5분 안에 끝내는 법', sub: '스레드' }, { k: '11/2', t: '11월 수업 운영 체크리스트', sub: '뉴스레터' }]))
+    + sec('BridgeMaker', 1, rows([{ k: '11/2', t: '청년부 모임 준비 세 가지', sub: '카드뉴스' }]))
+    + `</div>`;
+
+  // 콘텐츠 — 단계가 구역이다
+  V.content = () => head('콘텐츠 · 소재·제작', '오늘 하나 만들기', '계획 <b>3</b> · 제작 <b>2</b> · 다듬기 <b>1</b> · 발행 대기 <b>2</b>')
+    + `<input id="cap-content" class="capture" placeholder="소재 한 줄 담기 — Enter" autocomplete="off" aria-label="소재 담기">`
+    + `<div class="groups">`
+    + sec('발행 대기', 2, rows([
+      { k: '목', t: '스레드 · 숙제 확인 루틴', sub: '<b>Class.Moon</b> · 예약됨 09:00' },
+      { k: '토', t: '뉴스레터 11월 2호', sub: '<b>Class.Moon</b> · 예약됨 08:00' },
+    ]))
+    + sec('다듬기', 1, rows([{ t: '카드뉴스 · 상담 기록 남기는 법', sub: '<b>Class.Moon</b> · 검토 1회', v: act('원고 열기') }], 'flat'))
+    + sec('제작', 2, rows([
+      { t: '쇼츠 · 교실 정리 30초', sub: '<b>Study.Seagull</b> · 대본 3/5', v: act('원고 열기') },
+      { t: '스레드 · 기도 모임 준비', sub: '<b>BridgeMaker</b> · 첫 줄 씀', v: act('원고 열기') },
+    ], 'flat'))
+    + sec('계획', 3, rows([
+      { t: '12월 뉴스레터 주제', sub: '<b>Class.Moon</b> · 핵심 메시지 있음', v: act('만들기') },
+      { t: '학습 습관 30일 챌린지', sub: '<b>Study.Seagull</b> · 참고 링크 2', v: act('만들기') },
+      { t: '글쓰기 첫 문장 모음', sub: '<b>시나브로</b>', v: act('만들기') },
+    ], 'flat'))
+    + sec('아이디어', 4, rows([
+      { t: '원장님 인터뷰 시리즈', sub: '메모만 있음' }, { t: '교사 번아웃 체크', sub: '메모만 있음' },
+      { t: '학부모 상담 문장', sub: '메모만 있음' }, { t: '겨울방학 계획표', sub: '메모만 있음' },
+    ], 'flat'))
+    + `</div>`;
+
+  let draft = '';
+  V['content-write'] = () => head('콘텐츠 · 원고 작성', '쇼츠 · 교실 정리 30초', '<b>Study.Seagull</b> · 제작 · 마지막 저장 11:42')
+    + `<div class="choices" role="group" aria-label="형식"><button type="button" aria-pressed="true">쇼츠</button><button type="button" aria-pressed="false">스레드</button><button type="button" aria-pressed="false">카드뉴스</button></div>`
+    + sec('대본', null, `<textarea id="writer" class="writer" aria-label="대본" placeholder="훅 — 첫 3초에 할 말">${esc(draft || '훅  책상 위가 3분 만에 비는 걸 보여줄게요.\n문제  쉬는 시간마다 정리가 밀리죠.\n전환  규칙은 하나, 손이 닿는 칸만 씁니다.\n')}</textarea>`)
+    + `<p class="p dim" id="count"></p>`
+    + sec('다음', null, rows([{ t: '해결 · 마무리 두 칸 남음', sub: '60초 안에 끝내기', v: act('검토로 보내기') }], 'flat'));
+
+  V['content-publish'] = () => head('콘텐츠 · 발행', '이번 주 발행 1/3', '<span class="late">놓친 예약 1</span>')
+    + `<div class="groups">`
+    + sec('놓침', 1, rows([{ k: '11/3', t: '스레드 · 시험 기간 학습 계획', sub: '<b>Study.Seagull</b> · 예약 시간에 올리지 못함', v: act('지금 올리기') }]).replace('<span class="k">11/3</span>', '<span class="k late">11/3</span>'))
+    + sec('예약됨', 2, rows([{ k: '목', t: '스레드 · 숙제 확인 루틴', sub: '<b>Class.Moon</b> · 09:00' }, { k: '토', t: '뉴스레터 11월 2호', sub: '<b>Class.Moon</b> · 08:00' }]))
+    + sec('올림', 1, rows([{ k: '11/3', t: '숙제 확인을 5분 안에 끝내는 법', sub: '<b>Class.Moon</b> · 스레드', cls: 'past' }]))
+    + `</div>`;
+
+  V['content-results'] = () => head('콘텐츠 · 성과', '지난 30일 발행 11', '저장 <b>1,320</b> · 구독 <b>+50</b>')
+    + stats([['조회', '18,400', '지난 30일 15,200'], ['저장', '1,320', '발행당 120'], ['구독', '+50', '뉴스레터']])
+    + sec('많이 저장된 것', 3, rows([
+      { k: '1', t: '숙제 확인을 5분 안에 끝내는 법', sub: '<b>Class.Moon</b> · 스레드', v: '<strong>410</strong>' },
+      { k: '2', t: '11월 수업 운영 체크리스트', sub: '<b>Class.Moon</b> · 뉴스레터', v: '<strong>280</strong>' },
+      { k: '3', t: '청년부 모임 준비 세 가지', sub: '<b>BridgeMaker</b> · 카드뉴스', v: '<strong>190</strong>' },
+    ]));
+
+  // AI·자동화
+  V.ai = () => head('AI·자동화 · 오피스', '오피스', '판단 · 초안 · 검토만 해요. 밖으로 보내거나 일을 만들지 않아요.')
+    + `<input id="cap-office" class="capture" placeholder="오피스에 물어보기 — 예: 고객 D 갱신 안내 초안" autocomplete="off" aria-label="오피스에 물어보기">`
+    + sec('승인 기다림', 1, rows([{ t: '고객 D 갱신 안내 초안', sub: '11/4 09:10 · 운영자가 요청함', v: act('읽기') }], 'flat'))
+    + sec('최근 대화', 3, rows([
+      { k: '어제', t: '견적서 문장 다듬기', sub: '초안 1 · 고침 2' },
+      { k: '11/2', t: '12월 콘텐츠 방향', sub: '선택지 3' },
+      { k: '11/1', t: '가격 정책 검토', sub: '결정 후보 1' },
+    ]));
+
+  V['ai-chat'] = () => head('AI·자동화 · 코칭·대화', '오늘 읽을 것', '고른 카드 <b>1</b>')
+    + sec('오늘의 카드', null, `<p class="quote">“가장 중요한 일을 먼저 하고, 두 번째 일은 하지 않는다.”</p><p class="p dim">Moonlight 재구성 · 집중 · 원문 인용 아님</p>`)
+    + sec('이어서 읽기', 3, rows([
+      { t: '일을 줄이는 질문 세 가지', sub: '분야 · 집중', v: act('읽기') },
+      { t: '고객이 말하지 않는 이유', sub: '분야 · 영업', v: act('읽기') },
+      { t: '매일 쓰는 사람의 규칙', sub: '분야 · 글쓰기', v: act('읽기') },
+    ], 'flat'));
+
+  V['ai-automations'] = () => head('AI·자동화 · 자동화', '자동화 6', '<span class="late">실패 1</span> · 켜짐 5')
+    + `<div class="groups">`
+    + sec('실패', 1, rows([{ k: '어제', t: '뉴스레터 발송', sub: '받는 사람 목록을 읽지 못함 · 22:00', v: act('다시 실행') }]).replace('<span class="k">어제</span>', '<span class="k late">어제</span>'))
+    + sec('켜짐', 4, rows([
+      { k: '매일', t: '아침 브리프', sub: '07:30 · 마지막 실행 오늘' },
+      { k: '매일', t: '문의 모으기', sub: '1시간마다 · 마지막 실행 14:00' },
+      { k: '매주', t: '주간 정리', sub: '월 08:00' },
+      { k: '매주', t: 'GitHub 신호', sub: '월 09:00' },
+    ]))
+    + sec('꺼짐', 1, rows([{ k: '—', t: '시트 동기화', sub: '연결 전', cls: 'past' }]))
+    + `</div>`;
+
+  V['ai-runs'] = () => head('AI·자동화 · 실행 기록', '오늘 실행 14', '실패 0 · 어제 <span class="late">실패 1</span>')
+    + sec('오늘', 4, rows([
+      { k: '14:00', t: '문의 모으기', sub: '새 문의 0', v: '끝' },
+      { k: '13:00', t: '문의 모으기', sub: '새 문의 1', v: '끝' },
+      { k: '09:00', t: 'GitHub 신호', sub: 'CI 실패 1 감지', v: '끝' },
+      { k: '07:30', t: '아침 브리프', sub: '확인할 것 3', v: '끝' },
+    ]))
+    + sec('어제', 1, rows([{ k: '22:00', t: '뉴스레터 발송', sub: '받는 사람 목록을 읽지 못함', v: '<span class="late">실패</span>' }]));
+
+  // 설정
+  V.prefs = () => head('설정', '설정', '운영자 1명 · 연결 4')
+    + sec('계정', null, kv([['아이디', '운영자'], ['로그인', '아이디 · 비밀번호', '마지막 로그인 오늘 08:12']]))
+    + sec('연결', 4, kv([['Supabase', '연결됨', '서울 리전'], ['Google 캘린더', '연결됨', '마지막 동기화 14:05'], ['GitHub', '연결됨', '저장소 4'], ['ClassIn', '연결 전', '공식 활동 요약만 가져옴']]))
+    + sec('화면', null, kv([['테마', '자동', '07:00–18:00 라이트, 그 밖 다크'], ['글꼴', 'SUIT', '이 시안은 글꼴 하나만 쓴다']]));
+
+  // 위계표
+  V.type = () => head('위계표', '여섯 단계로 끝낸다', '글꼴은 SUIT 하나, 색은 글자 · 보조 · 흐림 셋. 구역 선 하나 말고는 면 · 그림자 · 아이콘을 쓰지 않는다.')
+    + `<div class="spec">
+      <div class="spec-row"><span class="k">1 · 56 / 200</span><span style="font-size:var(--t1);font-weight:200;letter-spacing:-0.035em;line-height:1.15">페이지 제목</span></div>
+      <div class="spec-row"><span class="k">2 · 40 / 250</span><span style="font-size:var(--t2);font-weight:250;letter-spacing:-0.02em">1,240만원</span></div>
+      <div class="spec-row"><span class="k">3 · 22 / 700</span><span style="font-size:var(--t3);font-weight:700">영역 이름 <span style="font-weight:400;color:var(--fg-3);font-size:var(--t4)">4</span></span></div>
+      <div class="spec-row"><span class="k">4 · 17 / 500</span><span style="font-weight:500">항목 이름</span></div>
+      <div class="spec-row"><span class="k">5 · 14 / 400</span><span style="font-size:var(--t5);color:var(--fg-2)"><b style="color:var(--fg)">영업</b> · 보조 설명 · 날짜</span></div>
+      <div class="spec-row"><span class="k">6 · 13 / 600</span><span class="label">라벨 · 위치</span></div>
+    </div>`
+    + sec('규칙', null, rows([
+      { k: '크기', t: '이 여섯 개 밖의 글자 크기는 없다', sub: '휴대폰에서는 1단계 38 · 2단계 34 · 3단계 20' },
+      { k: '구역', t: '목록은 영역(또는 단계)마다 구역 하나', sub: '구역 이름은 굵게, 머리 위에 옅은 1px 선' },
+      { k: '굵기', t: '제목은 가늘게, 구역 이름은 굵게', sub: '보조 줄의 영역 · 단계 이름도 굵게' },
+      { k: '정렬', t: '왼쪽 칸 · 본문 · 오른쪽 값', sub: '시각 · 진척 · 기한 · 금액이 같은 세로줄에 선다' },
+      { k: '색', t: '빨강은 지남 · 놓침 · 실패 · 막힘 · 선 밖 글자에만', sub: '면을 칠하지 않는다' },
+      { k: '행동', t: '밑줄 친 굵은 글자가 버튼이다', sub: '한 줄에 행동 하나' },
+    ]));
+
+  // ───────────────── 경로 ─────────────────
+  const NAV = [
+    { k: 'home', l: '홈', tabs: [['home', '홈'], ['reports', '보고서']] },
+    { k: 'today', l: '오늘' },
+    { k: 'overview', l: '현황', tabs: [['overview', '목표'], ['overview-summary', '집계'], ['overview-goals', 'OKR·KPI']] },
+    { k: 'work', l: '내 작업', tabs: [['work', '실행 목록'], ['work-memos', '메모'], ['work-review', '하루 리뷰']] },
+    { k: 'revenue', l: '영업·매출', tabs: [['revenue', '오늘 연락'], ['revenue-customers', '고객'], ['revenue-deals', '거래'], ['revenue-inquiries', '문의']] },
+    { k: 'discovery', l: '기회 탐색' },
+    { k: 'projects', l: '프로젝트' },
+    { k: 'products', l: '제품', tabs: [['products', '개발'], ['products-portfolio', '포트폴리오']] },
+    { k: 'brands', l: '브랜드', tabs: [['brands', '브랜드 목록'], ['brands-log', '콘텐츠 로그']] },
+    { k: 'content', l: '콘텐츠', tabs: [['content', '소재·제작'], ['content-write', '원고 작성'], ['content-publish', '발행'], ['content-results', '성과']] },
+  ];
+  const UTIL = [
+    { k: 'ai', l: 'AI·자동화', tabs: [['ai', '오피스'], ['ai-chat', '코칭·대화'], ['ai-automations', '자동화'], ['ai-runs', '실행 기록']] },
+    { k: 'prefs', l: '설정' },
+    { k: 'type', l: '위계표' },
+  ];
+  const ALL = [...NAV, ...UTIL];
+  const ownerOf = (route) => route.startsWith('project-') ? ALL.find((a) => a.k === 'projects')
+    : ALL.find((a) => a.k === route || (a.tabs || []).some(([t]) => t === route));
+
+  const navHtml = (items) => items.map((a) => `<li><a href="#${a.k}" data-k="${a.k}">${a.l}</a></li>`).join('');
+  document.getElementById('primary').innerHTML = navHtml(NAV);
+  document.getElementById('utility').innerHTML = navHtml(UTIL);
 
   const main = document.getElementById('main');
-  let current = 'today';
-  const render = () => {
-    const k = (location.hash || '#today').slice(1);
-    current = [...PRIMARY, ...UTILITY].some(([x]) => x === k) ? k : 'today';
-    const label = [...PRIMARY, ...UTILITY].find(([x]) => x === current)[1];
-    main.innerHTML = `<div class="view">${BUILT.has(current) ? VIEWS[current]() : placeholder(label)}</div>`;
-    document.querySelectorAll('.nav a').forEach((a) => {
-      if (a.dataset.k === current) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
-    });
+  let route = 'today';
+  const render = (keepFocus) => {
+    const h = (location.hash || '#today').slice(1);
+    route = (V[h] || h.startsWith('project-')) ? h : 'today';
+    const owner = ownerOf(route);
+    const tabs = owner.tabs ? `<nav class="tabs" aria-label="${owner.l} 하위">${owner.tabs.map(([t, l]) =>
+      `<a href="#${t}" ${t === route ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>` : '';
+    const body = route.startsWith('project-') ? V.project(route.slice(8)) : V[route]();
+    main.innerHTML = `<div class="view">${tabs}${body}</div>`;
+    document.querySelectorAll('.nav ul a').forEach((a) => a.dataset.k === owner.k ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    const w = document.getElementById('writer'); if (w) updateCount(w);
+    if (keepFocus && cur != null) main.querySelector(`[data-task="${cur}"]`)?.focus({ preventScroll: true });
   };
-  window.addEventListener('hashchange', render);
+  const updateCount = (w) => { const c = document.getElementById('count'); if (c) c.textContent = `${w.value.replace(/\s/g, '').length}자 · 쇼츠 60초는 대략 250자`; };
+  window.addEventListener('hashchange', () => { cur = null; render(); window.scrollTo(0, 0); });
 
   main.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-task]');
-    if (!b) return;
-    const x = tasks.find((t) => t.id === b.dataset.task);
-    x.done = !x.done;
-    render();
-    main.querySelector(`[data-task="${x.id}"]`)?.focus();
+    const c = e.target.closest('[data-task]'); if (c) return toggleTask(+c.dataset.task);
+    const s = e.target.closest('[data-step]');
+    if (s) { const k = s.dataset.step; stepState[k] = s.getAttribute('aria-pressed') !== 'true'; render(); main.querySelector(`[data-step="${CSS.escape(k)}"]`)?.focus(); return; }
+    if (e.target.id === 'undo' && lastDone) { lastDone.done = false; lastDone = null; statusHtml = ''; render(); return; }
+    if (e.target.closest('#toggleDone')) { showDone = !showDone; render(); return; }
+    const en = e.target.closest('[data-energy]'); if (en) { energy = +en.dataset.energy; render(); return; }
+    const m = e.target.closest('[data-mock]');
+    if (m) {
+      if (m.dataset.mock === '리뷰 닫기') { reviewSaved = true; render(); return; }
+      const st = main.querySelector('.status');
+      m.textContent = `${m.dataset.mock} · 목업`;
+      if (st) st.textContent = '목업이라 아무것도 보내거나 저장하지 않아요';
+    }
+    const ch = e.target.closest('.choices button:not([data-energy])');
+    if (ch) { ch.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === ch))); }
+  });
+  main.addEventListener('input', (e) => {
+    if (e.target.id === 'writer') { draft = e.target.value; updateCount(e.target); }
+    if (e.target.id === 'cap-work') {
+      const p = document.getElementById('parse'); const v = e.target.value.trim();
+      if (!v) { p.innerHTML = ''; return; }
+      const r = parse(v);
+      p.innerHTML = `${esc(r.t || '제목 없음')} · ${esc(r.due === undefined ? '기한 없음' : dueLabel(r.due))} · <b>${esc(r.a)}</b>${r.p ? ` ${esc(r.p)}` : ''}${r.imp ? ' · <b>중요</b>' : ''}`;
+    }
   });
   main.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && e.target.classList.contains('capture')) { e.target.value = ''; e.target.blur(); return; }
     if (e.key !== 'Enter' || !e.target.classList.contains('capture')) return;
-    const v = e.target.value.trim();
-    if (!v) return;
-    e.target.value = '';
-    e.target.placeholder = `“${v}” 적어 뒀어요 (목업 — 저장하지 않음)`;
+    const v = e.target.value.trim(); if (!v) return;
+    if (e.target.id === 'cap-work' || e.target.id === 'cap-today') {
+      const r = parse(v); if (!r.t) return;
+      const due = r.due === undefined ? (e.target.id === 'cap-today' ? 0 : null) : r.due;
+      const x = { id: nextId++, t: r.t, a: r.a, p: r.p, due, imp: r.imp };
+      tasks.unshift(x);
+      say(`‘${esc(x.t)}’ 추가 · <b>${esc(x.a)}</b> · ${dueLabel(x.due)}`);
+      const id = e.target.id; render(); document.getElementById(id)?.focus();
+    } else {
+      e.target.value = '';
+      e.target.placeholder = `“${v}” — 목업이라 저장하지 않았어요`;
+    }
   });
+
+  // 키보드: N 추가 · J/K 이동 · X 끝 — 실행 목록에서, 입력 칸 밖에서만
+  document.addEventListener('keydown', (e) => {
+    if (route !== 'work' || e.target.matches('input, textarea, select, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;
+    const ids = [...main.querySelectorAll('[data-row]')].map((r) => +r.dataset.row);
+    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); document.getElementById('cap-work')?.focus(); return; }
+    if (!ids.length) return;
+    const i = ids.indexOf(cur);
+    const go = (n) => { cur = ids[n]; main.querySelector(`[data-task="${cur}"]`)?.focus(); };
+    if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); go(Math.min(ids.length - 1, i + 1)); }
+    else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); go(Math.max(0, i - 1)); }
+    else if ((e.key === 'x' || e.key === 'X') && cur != null) { e.preventDefault(); toggleTask(cur); }
+  });
+  main.addEventListener('focusin', (e) => { const t = e.target.closest('[data-task]'); if (t) cur = +t.dataset.task; });
 
   const root = document.documentElement;
   const themeBtn = document.getElementById('theme');
