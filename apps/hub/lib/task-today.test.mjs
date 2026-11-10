@@ -184,3 +184,56 @@ test("today's picks do not consume the display limit of the other lanes", () => 
   assert.equal(result.items.filter((t) => t.focusToday).length, 3);
   assert.equal(result.hiddenCount, 0);
 });
+
+test('full unfinished queue keeps every item beyond both compact previews and excludes the three choices and completed work', () => {
+  const now = new Date('2026-10-27T03:00:00Z'), date = '2026-10-27';
+  const todos = [
+    ...Array.from({ length: 3 }, (_, i) => ({ id: `pick-${i}`, status: 'todo', focusDates: [date] })),
+    ...Array.from({ length: 8 }, (_, i) => ({ id: `inbox-${i}`, status: 'inbox' })),
+    ...Array.from({ length: 7 }, (_, i) => ({ id: `later-${i}`, status: 'todo', dueAt: '2026-11-01' })),
+    { id: 'done', status: 'done', completedAt: now.toISOString() },
+  ];
+  const result = taskToday.buildTaskToday(todos, { now });
+  assert.equal(result.items.length, 8); assert.equal(result.later.length, 5);
+  assert.equal(result.queueCount, 15); assert.equal(result.queueItems.length, 15);
+  assert.deepEqual(new Set(result.queueItems.map(row => row.id)), new Set(todos.slice(3, -1).map(row => row.id)));
+  assert.equal(result.queueItems.some(row => row.focusToday || row.status === 'done'), false);
+  assert.deepEqual(result.queueItems.slice(0, 8).map(row => row.lane), Array(8).fill('inbox'));
+});
+
+test('edit and delete projections update the full queue, focus denominator and real completion streak without rereading', () => {
+  const now = new Date('2026-10-27T03:00:00Z'), date = '2026-10-27';
+  const open = Array.from({ length: 9 }, (_, i) => ({ id: `open-${i}`, title: `기록 ${i}`, status: 'inbox', dueAt: null, focusDates: [] }));
+  let model = { ...taskToday.buildTaskToday([
+    ...open,
+    { id: 'chosen', title: '선택', status: 'todo', focusDates: [date] },
+    { id: 'yesterday', status: 'done', completedAt: '2026-10-26T03:00:00Z' },
+    { id: 'before', status: 'done', completedAt: '2026-10-25T03:00:00Z' },
+  ], { now }), state: 'live' };
+  assert.equal(model.streak.streak, 2);
+  model = taskToday.applyTodayTaskRow(model, { ...open[8], title: '수정한 아홉 번째', due_at: date, priority: 'high', next_action: null }, { now });
+  assert.equal(model.queueItems.length, 9); assert.equal(model.queueItems.find(row => row.id === open[8].id).title, '수정한 아홉 번째');
+  assert.equal(model.queueItems.find(row => row.id === open[8].id).lane, 'today');
+  assert.equal(model.counts.today, 1); assert.equal(model.counts.inbox, 8);
+  model = taskToday.applyTodayTaskRow(model, { id: 'chosen', status: 'done', completed_at: now.toISOString(), focusDates: [date] }, { now });
+  assert.equal(model.focus.picked, 1); assert.equal(model.focus.done, 1);
+  assert.equal(model.streak.streak, 3); assert.equal(model.streak.todayDoneCount, 1); assert.deepEqual(model.streak.todayDoneIds, ['chosen']);
+  model = taskToday.applyTodayTaskDeletion(model, model.focusCompletedItems[0], { now });
+  assert.equal(model.focus.picked, 0); assert.equal(model.focus.done, 0); assert.equal(model.focus.remaining, 3);
+  assert.equal(model.streak.streak, 2); assert.equal(model.streak.todayDoneCount, 0); assert.deepEqual(model.streak.todayDoneIds, []);
+  assert.equal(model.focusCompletedItems.length, 0); assert.equal(model.queueCount, 9);
+  const removed = model.queueItems.find(row => row.id === open[8].id);
+  model = taskToday.applyTodayTaskDeletion(model, removed, { now });
+  assert.equal(model.queueCount, 8); assert.equal(model.queueItems.length, 8); assert.equal(model.counts.today, 0); assert.equal(model.counts.total, 8);
+  assert.equal(taskToday.applyTodayTaskDeletion(model, removed, { now }), model, 'cached partial rereads cannot subtract the tombstone twice');
+});
+
+test('legacy queue fallback deduplicates previews and preserves unobserved aggregates through removal', () => {
+  const now = new Date('2026-10-27T03:00:00Z');
+  const source = taskToday.buildTaskToday(Array.from({ length: 12 }, (_, i) => ({ id: `task-${i}`, status: 'inbox' })), { now });
+  delete source.queueItems; delete source.queueCount;
+  assert.equal(taskToday.todayTaskRows(source).length, 5);
+  const next = taskToday.applyTodayTaskDeletion(source, source.items[0], { now });
+  assert.equal(next.queueCount, 11); assert.equal(next.counts.total, 11); assert.equal(next.queueItems.length, 4);
+  assert.equal(next.items.some(row => row.id === source.items[0].id), false);
+});

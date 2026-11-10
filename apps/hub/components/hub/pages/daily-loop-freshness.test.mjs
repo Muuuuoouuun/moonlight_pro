@@ -79,7 +79,7 @@ test('the actual narrow task reread rejects an older response after newer comple
   assert.ok(helperStart >= 0 && helperEnd > helperStart, 'extract the real pending task helper');
   const helper = source.slice(helperStart, helperEnd);
   const h = hooks(), requests = [], initial = { taskToday: { ...taskModel.buildTaskToday([]), state: 'live' } };
-  const ctx = vm.createContext({ React: h.React, ...taskModel, Date,
+  const ctx = vm.createContext({ React: h.React, ...taskModel, Date, AbortSignal,
     servableBriefState: () => initial, EMPTY_DAILY_BRIEF_STATE: initial, dailyBriefCache: null,
     getDailyBriefAuthVersion: () => 0, readDailyBrief: () => new Promise(() => {}),
     fetch: () => { const d = deferred(); requests.push(d); return d.promise; },
@@ -91,6 +91,31 @@ test('the actual narrow task reread rejects an older response after newer comple
   assert.equal(await second, true); assert.equal(render().taskToday.streak.todayDoneCount, 1);
   requests[0].resolve({ ok: true, status: 200, json: async () => ({ status: 'live', tasks: [] }) });
   assert.equal(await first, false); assert.equal(render().taskToday.streak.todayDoneCount, 1);
+});
+
+test('the real Today ledger refreshes its narrow slice on KST rollover and window return, then removes listeners', async () => {
+  const source = read('./daily-brief.jsx'), start = source.indexOf('function useDailyBriefLedger(');
+  const code = source.slice(start, source.indexOf('\nfunction ', start + 1));
+  const helper = source.slice(source.indexOf('function pendingTaskState('), source.indexOf('\n// /api/hub/daily-brief'));
+  let clock = new Date('2026-10-27T14:59:00Z'), tick;
+  const listeners = new Map(), requests = [], h = hooks();
+  const build = tasks => taskModel.buildTaskToday(tasks, { now: clock });
+  const initial = { taskToday: { ...build([{ id: 'previous-day', title: '어제 고른 일', status: 'todo', focusDates: ['2026-10-27'] }]), state: 'live' } };
+  const browser = { setInterval(callback) { tick = callback; return 1; }, clearInterval() { tick = null; },
+    addEventListener(name, callback) { listeners.set(name, callback); }, removeEventListener(name) { listeners.delete(name); } };
+  const ctx = vm.createContext({ React: h.React, ...taskModel, buildTaskToday: build, Date, AbortSignal, window: browser,
+    servableBriefState: () => initial, EMPTY_DAILY_BRIEF_STATE: initial, dailyBriefCache: null,
+    getDailyBriefAuthVersion: () => 0, readDailyBrief: () => new Promise(() => {}),
+    fetch: (url, options) => { const request = deferred(); requests.push({ ...request, url, options }); return request.promise; },
+  });
+  const fn = vm.runInContext(`${helper}\n${code}; useDailyBriefLedger`, ctx), render = () => h.render(() => fn(0));
+  render(); tick(); assert.equal(requests.length, 0, 'ordinary minute ticks do not reread the ledger');
+  clock = new Date('2026-10-27T15:01:00Z'); tick(); assert.equal(requests.length, 1);
+  requests[0].resolve({ ok: true, status: 200, json: async () => ({ status: 'live', tasks: [] }) }); await settle();
+  assert.equal(render().taskToday.focus.date, '2026-10-28'); assert.equal(render().taskToday.focus.picked, 0);
+  listeners.get('focus')(); assert.equal(requests.length, 2); assert.equal(requests[1].url, '/api/hub/tasks'); assert.ok(requests[1].options.signal);
+  requests[1].resolve({ ok: true, status: 200, json: async () => ({ status: 'live', tasks: [] }) }); await settle();
+  h.unmount(); assert.equal(listeners.size, 0); assert.equal(tick, null);
 });
 
 function overviewHarness() {

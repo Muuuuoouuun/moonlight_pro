@@ -56,12 +56,19 @@ test('production page supplies full ledger truth to the empty-signal panel', () 
   // Execute the actual page function with inert child/read boundaries; no effects, network or writes.
   const runtime = { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }), useState: value => [value, () => {}], useCallback: value => value, useMemo: fn => fn(), useEffect() {} };
   const code = compile('DailyBrief');
-  const ledger = { syncState: 'partial', briefSyncState: 'partial', signals: [], metrics: [], summary: {}, refreshTasks() {} };
-  const deps = { React: runtime, useDailyBriefLedger: () => ledger, useGuruRecommendations: () => ({}), useToast: () => ({}), rankSignals: signals => signals };
+  const ledger = { syncState: 'partial', briefSyncState: 'partial', sources: [{ key: 'calendar', state: 'error' }], signals: [], metrics: [], summary: {}, taskToday: { state: 'partial' }, refreshTasks() {} };
+  const projectedTasks = { state: 'live', items: [], focus: { picked: 0, done: 0 } };
+  const deps = { React: runtime, useDailyBriefLedger: () => ledger, useTodayTaskActions: taskToday => {
+    assert.equal(taskToday, ledger.taskToday); return { taskToday: projectedTasks, pendingIds: [] };
+  }, useGuruRecommendations: () => ({}), useToast: () => ({}), rankSignals: signals => signals };
   for (const match of code.matchAll(/React\.createElement\(([A-Z]\w*)/g)) deps[match[1]] ??= match[1];
   const Page = new Function(...Object.keys(deps), `${code}; return DailyBrief;`)(...Object.values(deps));
   const find = node => Array.isArray(node) ? node.flatMap(find) : node && typeof node === 'object' ? [...(node.type === 'CommandClear' ? [node] : []), ...find(node.props?.children)] : [];
   const panels = find(Page({ onNavigate() {} }));
   assert.equal(panels.length, 1);
-  assert.equal(panels[0].props.state, ledger);
+  const supplied = panels[0].props.state;
+  assert.equal(supplied.taskToday, projectedTasks, 'the page uses the acknowledged task projection');
+  assert.equal(supplied.signals, ledger.signals); assert.equal(supplied.sources, ledger.sources);
+  assert.equal(supplied.briefSyncState, 'partial'); assert.equal(supplied.syncState, 'partial', 'task truth cannot promote the full brief');
+  assert.match(render(supplied), /모두 읽지 못했습니다/);
 });

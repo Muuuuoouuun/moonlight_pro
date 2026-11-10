@@ -145,17 +145,16 @@ export function WorkDrawer({ product, areas, seed, onClose, onSaved }) {
 function MonthDrawer({ product, month, onClose, onSaved }) {
   const [target, setTarget] = React.useState(month);
   const current = monthNumbers(product, target);
-  const [draft, setDraft] = React.useState(null);
-  React.useEffect(() => {
-    const numbers = monthNumbers(product, target);
-    setDraft({
-      activeUsers: numbers.activeUsers ?? "",
-      revenue: numbers.revenue ?? "",
-      cost: numbers.cost ?? "",
-    });
-  }, [product, target]);
+  // Comparing months must not discard numbers already typed in either month.
+  const [drafts, setDrafts] = React.useState({});
+  const draftKey = `${product.id}:${target}`;
+  const draft = drafts[draftKey] || {
+    activeUsers: current.activeUsers ?? "",
+    revenue: current.revenue ?? "",
+    cost: current.cost ?? "",
+  };
+  const setDraft = (next) => setDrafts((previous) => ({ ...previous, [draftKey]: next }));
   const [state, setState] = React.useState({ saving: false, message: "" });
-  if (!draft) return null;
   const save = async () => {
     if (state.saving) return;
     const parsed = parseMonthInput(draft);

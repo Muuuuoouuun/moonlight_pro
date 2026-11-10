@@ -12,7 +12,7 @@ import { GOAL_CONCEPT_BY_ROLE, KPI_HEALTH_LABEL, bulletScale, daysSinceObservati
 import { useGoals, useGoalCommand } from '../use-goals';
 import { GOAL_SOURCE_OPTIONS, GoalCommandFeedback, GoalMetricCard, GoalMetricForm, GoalObjectiveForm, GoalObservationForm, GoalReadFeedback, goalScopeLabel } from '../goal-components';
 import { GoalWeeklyActuals } from '../goal-weekly-actuals';
-import { GoalContinueDrawer, GoalScorecard } from '../goal-scorecard';
+import { GoalScorecard } from '../goal-scorecard';
 import { GaugeBar, GlanceAttention, KpiStrip, TonePill, WeeklyMemo, kpiRowsFor } from '../goal-glance';
 import { goalDashboardSnapshot } from '@/lib/goal-dashboard';
 import '../goal-dashboard.css';
@@ -518,6 +518,45 @@ function KpiAddDrawer({ objectives, onClose, onSaved }) {
   </Drawer>;
 }
 
+export function goalRecordHref(href, records) {
+  const [path, query = ''] = href.split('?');
+  const params = new URLSearchParams(query);
+  if (records) { params.set('records', '1'); params.delete('setup'); }
+  else { params.set('setup', '1'); params.delete('records'); }
+  return `${path}?${params}`;
+}
+
+export function goalRecordsRequested(params) {
+  // A view choice alone never adopts the old ledger as a new plan. Explicit
+  // record identities still open their original detail and input surfaces.
+  return params.get('records') === '1' || Boolean(params.get('goal') || params.get('record'));
+}
+
+function GoalSetupSurface({ view, model, onCreate, onRecords }) {
+  const readable = ['live', 'partial'].includes(model.status);
+  const descriptions = {
+    okr: '이루려는 변화부터 정한 뒤, 핵심 결과와 유지 지표를 연결하세요.',
+    kpi: '계속 지킬 기준과 측정 방법을 직접 정하세요. 이전 지표의 숫자를 가져오지 않습니다.',
+    check: '목표와 지표를 설정하면 실제값과 근거를 이곳에서 기록할 수 있습니다.',
+    weekly: '목표와 측정 기준을 정한 뒤 같은 정의로 주간 실적을 확인하세요.',
+  };
+  return <section className="goal-setup" aria-label="새 목표 설정 안내">
+    <div className="goal-setup-intro"><span className="goal-eyebrow">새로 설정하기</span><h3>목표를 다시 정할 자리입니다</h3>
+      <p>{descriptions[view]}</p><p className="goal-muted">목표·수치·기간은 비워 두었습니다. 기존 목표와 실적은 별도 기록에서 확인하고 편집할 수 있습니다.</p>
+      <Button variant="outline" onClick={onRecords}>기존 목표·실적 보기</Button>
+    </div>
+    {!readable && <GoalReadFeedback model={model} />}
+    <div className="goal-setup-grid">
+      {[
+        ['O', '목표', '어떤 변화를 이룰지와 시작일·종료일을 직접 입력하세요.'],
+        ['KR', '핵심 결과', '목표를 저장한 뒤 측정할 결과와 기준을 추가하세요.'],
+        ['KPI', '유지 지표', '계속 지킬 선과 측정 방법을 직접 정하세요.'],
+      ].map(([kind, title, description]) => <article key={kind} className="goal-setup-card"><span className="mono">{kind}</span><h3>{title}</h3><p>{description}</p><span className="goal-setup-placeholder">아직 새로 설정하지 않았습니다</span></article>)}
+    </div>
+    <p className="goal-muted">상단의 목표 만들기로 시작하세요. 기존 기록은 자동으로 새 목표가 되거나 복사되지 않습니다.</p>
+  </section>;
+}
+
 export function Goals() {
   const router = useRouter(), params = useSearchParams();
   // Work 탭(OKR·KPI)에서 열렸으면 목표 링크가 그 탭 안에 머문다. 현황의 목표·성과는 기본 경로.
@@ -527,12 +566,12 @@ export function Goals() {
   const query = scope ? new URLSearchParams({ scope }).toString() : '';
   const model = useGoals(query);
   const [search, setSearch] = React.useState('');
-  const [status, setStatus] = React.useState('active');
+  const [status, setStatus] = React.useState('all');
   const [checkFilter, setCheckFilter] = React.useState('all');
   const [notice, setNotice] = React.useState('');
   const [metricModalObjective, setMetricModalObjective] = React.useState(null);
   const [kpiAdding, setKpiAdding] = React.useState(false);
-  const [continueFrom, setContinueFrom] = React.useState(null);
+  const showRecords = goalRecordsRequested(params);
   const view = goalView(params);
   const today = seoulToday();
   const checking = view === 'check';
@@ -548,21 +587,22 @@ export function Goals() {
   const selectedId = params.get('goal');
   const statusObjectives = model.objectives.filter(item => status === 'all' || item.status === status);
   const filtered = statusObjectives.filter(item => `${item.title} ${item.description || ''}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-  const base = goalHref(null, scope, { check: checking, weekly, kpi, base: routeBase });
-  const hrefFor = objective => goalHref(objective.id, scope, { check: checking, weekly, kpi, base: routeBase });
+  const pageHref = (id, nextScope = scope, options = {}) => goalRecordHref(goalHref(id, nextScope, { check: checking, weekly, kpi, base: routeBase, ...options }), showRecords);
+  const base = pageHref(null);
+  const hrefFor = objective => pageHref(objective.id);
   const openRecord = (event, objective, metric) => { opener.current = event.currentTarget; setNotice(''); router.push(`${hrefFor(objective)}&record=${metric.id}`, {scroll:false}); };
   const create = React.useCallback(event => {
     opener.current = event?.currentTarget || createButton.current;
-    router.push(goalHref(null, scope, { check: checking, weekly, kpi, create: true, base: routeBase }), { scroll: false });
-  }, [router, scope, checking, weekly, kpi, routeBase]);
+    router.push(goalRecordHref(goalHref(null, scope, { check: checking, weekly, kpi, create: true, base: routeBase }), showRecords), { scroll: false });
+  }, [router, scope, checking, weekly, kpi, routeBase, showRecords]);
 
   React.useEffect(() => {
     const key = event => {
-      if (event.key.toLowerCase() !== 'n' || event.metaKey || event.ctrlKey || event.altKey || creating || selectedId || metricModalObjective || kpiAdding || continueFrom || document.querySelector('[role="dialog"]') || event.target?.closest?.('input,textarea,select,[contenteditable="true"]')) return;
+      if (event.key.toLowerCase() !== 'n' || event.metaKey || event.ctrlKey || event.altKey || creating || selectedId || metricModalObjective || kpiAdding || document.querySelector('[role="dialog"]') || event.target?.closest?.('input,textarea,select,[contenteditable="true"]')) return;
       if (model.status === 'live' || model.status === 'partial') { event.preventDefault(); create(); }
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
-  }, [create, creating, selectedId, metricModalObjective, kpiAdding, continueFrom, model.status]);
+  }, [create, creating, selectedId, metricModalObjective, kpiAdding, model.status]);
 
   const close = () => { focusAfterClose.current = { id: selectedId, metricId: recordId }; router.replace(base, { scroll: false }); };
 
@@ -590,14 +630,17 @@ export function Goals() {
           {!weekly && <TruthBadge state={model.status} />}
           {model.refreshing && <span className="mono goal-muted">갱신 중…</span>}
         </div>
-        <p className="goal-header-sub"><b>{shortDate(today)}</b><span className="mono">이번 주 {weekRange(today)}</span></p>
-        {view !== 'okr' && <p className="goal-header-desc"><strong>OKR</strong>은 이 기간에 이루려는 변화와 그것을 재는 핵심 결과(KR)입니다. <strong>KPI</strong>는 지킬 건강 지표이며, 현재는 목표 기간 단위로 기록하고 집계합니다.</p>}
+        {showRecords ? <p className="goal-header-sub"><b>{shortDate(today)}</b><span className="mono">이번 주 {weekRange(today)}</span></p> : <p className="goal-header-desc">목표·기간·기준값을 직접 정해주세요.</p>}
+        {showRecords && view !== 'okr' && <p className="goal-header-desc"><strong>OKR</strong>은 이 기간에 이루려는 변화와 그것을 재는 핵심 결과(KR)입니다. <strong>KPI</strong>는 지킬 건강 지표이며, 현재는 목표 기간 단위로 기록하고 집계합니다.</p>}
       </div>
       <div className="goal-actions">
         <Button disabled={model.refreshing} onClick={model.refresh} icon="refresh">새로고침</Button>
         <Button ref={createButton} variant="primary" icon="plus" disabled={!['live', 'partial'].includes(model.status)} onClick={create}>목표 만들기 <Kbd>N</Kbd></Button>
       </div>
     </header>
+
+    <SegmentedControl label="새 설정과 기존 기록" value={showRecords ? 'records' : 'setup'} options={[{ key: 'setup', label: '새 목표 설정' }, { key: 'records', label: '기존 기록' }]}
+      onChange={value => router.replace(goalRecordHref(goalHref(null, scope, { check: checking, weekly, kpi, base: routeBase }), value === 'records'), { scroll: false })} />
 
     <div className="goal-toolbar">
       <div className="goal-toolbar-controls">
@@ -610,7 +653,7 @@ export function Goals() {
             { key: 'check', label: '체크인' },
             { key: 'weekly', label: '주간 실측' },
           ]}
-          onChange={value => router.replace(goalHref(null, scope, { check: value === 'check', weekly: value === 'weekly', kpi: value === 'kpi', base: routeBase }), { scroll: false })}
+          onChange={value => router.replace(pageHref(null, scope, { check: value === 'check', weekly: value === 'weekly', kpi: value === 'kpi' }), { scroll: false })}
         />
         <SegmentedControl
           label="소속 선택"
@@ -620,15 +663,16 @@ export function Goals() {
             { key: 'personal', label: '개인' },
             { key: 'company', label: 'ClassIn' },
           ]}
-          onChange={val => router.replace(goalHref(null, val === 'all' ? '' : val, { check: checking, weekly, kpi, base: routeBase }), { scroll: false })}
+          onChange={val => router.replace(pageHref(null, val === 'all' ? '' : val), { scroll: false })}
         />
       </div>
       <span className="goal-toolbar-caption">
-        {weekly ? '지난 주들의 실제 기록을 같은 정의로 비교하세요.' : kpi ? '점수 없이 선 안·밖과 추이로 봅니다. 선 밖인 것부터 보입니다.' : checking ? '숫자와 근거를 훑고 바로 실제값을 기록하세요. KR과 KPI를 함께 봅니다.' : <><i className="goal-legend-marker" aria-hidden="true" />세로선 = 기대(기간 경과) · 막대 끝 = 바닥(약속) · 점수 = 0.7 × 진행률</>}
+        {!showRecords ? '입력 구조만 준비했습니다. 새 목표의 값은 직접 정합니다.' : weekly ? '지난 주들의 실제 기록을 같은 정의로 비교하세요.' : kpi ? '점수 없이 선 안·밖과 추이로 봅니다. 선 밖인 것부터 보입니다.' : checking ? '숫자와 근거를 훑고 바로 실제값을 기록하세요. KR과 KPI를 함께 봅니다.' : <><i className="goal-legend-marker" aria-hidden="true" />세로선 = 기대(기간 경과) · 막대 끝 = 바닥(약속) · 점수 = 0.7 × 진행률</>}
       </span>
     </div>
 
-    {!weekly && (
+    {showRecords && <p className="goal-record-notice" role="note">기존에 저장한 목표·실적·이력입니다. 기록을 그대로 열람·편집하며, 새 목표로 자동 채택하거나 복사하지 않습니다.</p>}
+    {showRecords && !weekly && (
       <div className="goal-filters">
         <TextField
           label={checking || kpi ? '목표·지표 검색' : '목표 검색'}
@@ -663,10 +707,10 @@ export function Goals() {
     )}
 
     {notice && <p role="status" className="goal-muted">{notice}</p>}
-    {checking && <p className="goal-muted">자동 값은 각 목표의 개인·회사 전체 기간 기록입니다. 실제값 0과 미측정을 구분하며, 연결만으로 실적이 늘지 않습니다.</p>}
+    {showRecords && checking && <p className="goal-muted">자동 값은 각 목표의 개인·회사 전체 기간 기록입니다. 실제값 0과 미측정을 구분하며, 연결만으로 실적이 늘지 않습니다.</p>}
     {!weekly && model.status === 'partial' && <p className="goal-muted" role="status">일부 기록을 확인하지 못했습니다. 읽힌 값만 표시하며 부족한 근거로 달성을 확정하지 않습니다.</p>}
 
-    {weekly ? (
+    {!showRecords ? <GoalSetupSurface view={view} model={model} onCreate={create} onRecords={() => router.replace(goalRecordHref(base, true), { scroll: false })} /> : weekly ? (
       <GoalWeeklyActuals scope={scope} onCreate={['live', 'partial'].includes(model.status) ? create : undefined} />
     ) : !['live', 'partial'].includes(model.status) || !model.objectives.length ? (
       <GoalReadFeedback model={model} onCreate={create} />
@@ -677,12 +721,12 @@ export function Goals() {
     ) : !filtered.length ? (
       <EmptyState title="조건에 맞는 목표가 없습니다" action={<Button onClick={() => { setSearch(''); setStatus('all'); }}>검색·필터 지우기</Button>} />
     ) : (
-      <GlanceView model={model} objectives={filtered} hrefFor={hrefFor} checkHref={goalHref(null, scope, { check: true, base: routeBase })} dashboard={onWorkTab} weeklyHref={goalHref(null, scope, { weekly: true, base: routeBase })} kpiHref={goalHref(null, scope, { kpi: true, base: routeBase })} onOpen={event => { opener.current = event.currentTarget; }} onRecord={openRecord} onAddMetric={obj => setMetricModalObjective(obj)} onContinue={(objective, extra) => setContinueFrom({ objective, change: extra?.change || '' })} onMemoSaved={model.refresh} />
+      <GlanceView model={model} objectives={filtered} hrefFor={hrefFor} checkHref={pageHref(null, scope, { check: true })} dashboard={onWorkTab} weeklyHref={pageHref(null, scope, { weekly: true })} kpiHref={pageHref(null, scope, { kpi: true })} onOpen={event => { opener.current = event.currentTarget; }} onRecord={openRecord} onAddMetric={obj => setMetricModalObjective(obj)} onContinue={() => create()} onMemoSaved={model.refresh} />
     )}
 
     {creating && (
       <Drawer title="목표 만들기" subtitle="원하는 변화와 실제 계획 기간부터 정하세요." presentation="compact" width="min(560px, 96vw)" onClose={() => { if (!creatingBusy) close(); }}>
-        <GoalObjectiveForm key={`new:${scope || 'personal'}`} scope={scope || 'personal'} onBusyChange={setCreatingBusy} onCancel={close} onSaved={result => { const entity = result.entity; model.refresh(); router.replace(entity?.id ? hrefFor(entity) : base, { scroll: false }); }} />
+        <GoalObjectiveForm freshSetup key={`setup:new:${scope || 'personal'}`} scope={scope || 'personal'} onBusyChange={setCreatingBusy} onCancel={close} onSaved={result => { const entity = result.entity; model.refresh(); router.replace(entity?.id ? goalRecordHref(hrefFor(entity), true) : base, { scroll: false }); }} />
       </Drawer>
     )}
 
@@ -695,10 +739,6 @@ export function Goals() {
           onCancel={() => setMetricModalObjective(null)}
         />
       </Drawer>
-    )}
-
-    {continueFrom && (
-      <GoalContinueDrawer objective={continueFrom.objective} metrics={model.metrics} change={continueFrom.change} onClose={() => setContinueFrom(null)} onCreated={entity => { setContinueFrom(null); model.refresh(); router.replace(hrefFor(entity), { scroll: false }); }} />
     )}
 
     {kpiAdding && (

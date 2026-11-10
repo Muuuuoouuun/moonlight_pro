@@ -120,7 +120,7 @@ export async function submitQuickCapture(session, { fetchImpl = globalThis.fetch
       data,
       error: !response.ok && !data.error && !data.status ? `저장 실패 (${response.status})` : null,
     });
-    return { started: true, durable };
+    return { started: true, durable, data, capture: capture.payload };
   } catch (error) {
     session.settle({ ok: false, error: isTimeout(error) ? QUICK_CAPTURE_LOST_RESPONSE : error instanceof Error ? error.message : null });
     return { started: true, durable: false };

@@ -73,11 +73,11 @@ export function GoalEvidence({ evidence = [] }) {
   })}</ul>;
 }
 
-export function GoalObjectiveForm({ objective, scope = 'personal', onSaved, onCancel, onBusyChange }) {
-  const key = objective ? `objective:${objective.id}` : `new:${scope}`;
+export function GoalObjectiveForm({ objective, scope = 'personal', freshSetup = false, onSaved, onCancel, onBusyChange }) {
+  const key = objective ? `objective:${objective.id}` : `${freshSetup ? 'setup:' : ''}new:${scope}`;
   const [draft, change, clear] = useGoalDraft(key, () => {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
-    return { title: objective?.title || '', description: objective?.description || '', scope: objective?.scope || scope, periodStart: objective?.periodStart || today, periodEnd: objective?.periodEnd || today, timezone: objective?.timezone || 'Asia/Seoul', status: objective?.status || 'active' };
+    return { title: objective?.title || '', description: objective?.description || '', scope: objective?.scope || scope, periodStart: objective?.periodStart || (freshSetup ? '' : today), periodEnd: objective?.periodEnd || (freshSetup ? '' : today), timezone: objective?.timezone || 'Asia/Seoul', status: objective?.status || 'active' };
   });
   const [revision, setRevision] = React.useState(objective?.revision);
   const [validation, setValidation] = React.useState('');

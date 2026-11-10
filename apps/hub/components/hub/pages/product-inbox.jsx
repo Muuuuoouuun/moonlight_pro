@@ -125,12 +125,15 @@ export function ProductInbox({ inquiries, products, areas, selectedId, onSelect,
   const [filter, setFilter] = React.useState("open");
   const [productFilter, setProductFilter] = React.useState("all");
   const [showDetail, setShowDetail] = React.useState(Boolean(selectedId));
+  React.useEffect(() => { setShowDetail(Boolean(selectedId)); }, [selectedId]);
   const productName = (id) => products.find((p) => p.id === id)?.name || null;
   const list = inquiries
     .filter(FILTERS.find((f) => f.key === filter).test)
     .filter((q) => productFilter === "all" || (productFilter === "none" ? !q.productId : q.productId === productFilter))
     .sort((a, b) => Number(Boolean(a.productId)) - Number(Boolean(b.productId)) || String(b.receivedAt || "").localeCompare(String(a.receivedAt || "")));
-  const selected = inquiries.find((q) => q.id === selectedId) || list[0] || null;
+  const selected = selectedId ? inquiries.find((q) => q.id === selectedId) || null : list[0] || null;
+  const missingSelection = Boolean(selectedId && !selected);
+  const backToList = () => { setShowDetail(false); onSelect(null); };
   const count = (f) => inquiries.filter(f.test).length;
 
   return (
@@ -142,7 +145,10 @@ export function ProductInbox({ inquiries, products, areas, selectedId, onSelect,
         <SelectField aria-label="제품으로 거르기" value={productFilter} onChange={(event) => setProductFilter(event.target.value)}
           options={[{ value: "all", label: "모든 제품" }, { value: "none", label: "제품 미정" }, ...products.map((p) => ({ value: p.id, label: p.name }))]} />
       </div>
-      {!inquiries.length ? (
+      {missingSelection ? (
+        <EmptyState icon="inbox" title="이 문의를 찾지 못했습니다" description="현재 불러온 목록에서 링크의 문의를 확인할 수 없습니다. 주소를 확인하거나 문의 목록으로 돌아가 주세요."
+          action={<Button variant="outline" size="sm" onClick={backToList}>문의 목록으로</Button>} />
+      ) : !inquiries.length ? (
         <EmptyState icon="inbox" title="아직 문의가 없어요" description="메일·랜딩페이지·직접 등록 문의가 여기 모여요. 전화·대면 문의는 문의 화면에서 적을 수 있어요."
           action={<Button variant="outline" size="sm" onClick={() => window.location.assign("/dashboard/revenue/inquiries?new=inquiry")}>문의 적기</Button>} />
       ) : (
@@ -167,7 +173,7 @@ export function ProductInbox({ inquiries, products, areas, selectedId, onSelect,
           </div>
           {selected ? (
             <InquiryDetail key={selected.id} inquiry={selected} products={products} areas={areas}
-              onBack={() => setShowDetail(false)} onChanged={onChanged} />
+              onBack={backToList} onChanged={onChanged} />
           ) : <div className={styles.detail}><p className={styles.dim}>문의를 고르세요.</p></div>}
         </div>
       )}

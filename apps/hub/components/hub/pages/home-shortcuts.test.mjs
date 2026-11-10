@@ -16,7 +16,7 @@ function visit(node) {
 visit(ast);
 assert.ok(footer);
 const js = ts.transpileModule(`const element = ${footer.getText(ast)};`, { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText;
-const tree = new Function('React', 'Kbd', `${js}; return element;`)(React, Kbd);
+const tree = new Function('React', 'Kbd', 'active', `${js}; return element;`)(React, Kbd, { links: [{ action: 'decision' }] });
 const children = React.Children.toArray(tree.props.children);
 const keyChildren = node => React.Children.toArray(node?.props?.children).filter(child => child?.type === Kbd).map(child => child.props.children);
 
@@ -40,4 +40,9 @@ test('all shortcut guidance remains visible semantic text without new interactiv
   assert.equal((html.match(/<kbd\b/g) || []).length, 6);
   assert.doesNotMatch(html, /overflow:hidden|display:none|<button\b|tabindex=/);
   // This checks real JSX/SSR layout inputs, not measured browser scrollWidth.
+});
+
+ test('Home hides the decision shortcut when the current record has no decision action', () => {
+  const unavailable = new Function('React', 'Kbd', 'active', `${js}; return element;`)(React, Kbd, { links: [] });
+  assert.doesNotMatch(renderToStaticMarkup(unavailable), />D<|결정 기록/);
 });

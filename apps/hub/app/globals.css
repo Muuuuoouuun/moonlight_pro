@@ -2838,3 +2838,15 @@ button {
   .hub-app .hub-project-portfolio-support .hub-project-portfolio-schedule-list { padding-left: 0; }
   .hub-app .hub-project-portfolio-support__updates { padding-left: 0; }
 }
+
+/* Mobile project creation owns the work area until Save/Cancel returns to the list. */
+@media (max-width: 600px) {
+  .hub-app .hub-projects-workspace-main[data-creating="true"] > .hub-project-page-header,
+  .hub-app .hub-projects-workspace-main[data-creating="true"] > .hub-pms-filterbar { display: none !important; }
+  .hub-app .project-create-inline { padding: 20px 14px 16px; }
+  .hub-app .project-create-inline__header { margin-bottom: 20px; }
+  .hub-app .project-create-inline__header h1 { font-size: 26px; }
+  .hub-app .project-create-inline .project-create-actions { margin-top: 20px; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); }
+  .hub-app .project-create-inline .project-create-actions > button { flex: 1; min-width: 0; }
+  .hub-app .hub-project-primary-control kbd { display: none; }
+}

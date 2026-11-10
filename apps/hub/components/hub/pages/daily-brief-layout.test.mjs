@@ -8,6 +8,7 @@ import { brandInWorkspace } from '../workspace-map.js';
 import { collapsedTodayAgendaRows, todayAgendaRows } from './workflow-reading.js';
 import { REACTION_LABEL } from '../../../lib/sales-os/followup-scoring.js';
 import { buildDailyFocus } from '../../../lib/daily-focus.js';
+import { buildTaskToday } from '../../../lib/task-today.js';
 
 // Run the production JSX, with read hooks and unrelated widgets replaced by local
 // boundaries. No API, browser effect, model, customer record or save is executed.
@@ -39,12 +40,13 @@ const focusOf = (state = 'live', items = []) => ({
 });
 const ledgerOf = (dailyFocus) => ({
   dailyFocus, signals: [], metrics: [], summary: {}, syncState: 'live',
-  taskToday: { state: 'live', counts: { missed: 2, today: 3 } }, refreshTasks() {},
+  taskToday: { state: 'live', counts: { missed: 2, today: 3, total: 5 }, laterCount: 0 }, refreshTasks() {},
 });
 function components(runtime, getLedger, html = false) {
   const deps = {
     React: runtime, collapsedTodayAgendaRows, todayAgendaRows, brandInWorkspace, FOCUS_REACTION_LABEL: REACTION_LABEL,
     REVIEW_EVENING_HOUR: 18, useDailyBriefLedger: getLedger,
+    useTodayTaskActions: taskToday => ({ taskToday, pendingIds: [] }),
     useGuruRecommendations: () => ({ reload() {} }), useToast: () => ({}),
     rankSignals: (signals) => signals,
   };
@@ -60,7 +62,7 @@ function components(runtime, getLedger, html = false) {
     deps.Button = ({ children, onClick }) => runtime.createElement('button', { type: 'button', onClick }, children);
     deps.CalendarOutcome = ({ title, whenLabel }) => runtime.createElement('span', null, whenLabel, ' ', title);
   }
-  return new Function(...Object.keys(deps), `${compiled}; return { DailyBrief, FocusSlots };`)(...Object.values(deps));
+  return new Function(...Object.keys(deps), `${compiled}; return { DailyBrief, FocusSlots, BriefNavigation };`)(...Object.values(deps));
 }
 function findAll(node, predicate) {
   if (Array.isArray(node)) return node.flatMap((child) => findAll(child, predicate));
@@ -120,7 +122,7 @@ test('production DailyBrief renders one navigable shortcut set for missing/live/
     const jumps = findAll(navs[0], (n) => n.type === 'button');
     assert.equal(jumps.length, routes.length);
     for (const jump of jumps) assert.equal(jump.props['aria-label'], undefined, 'native button names follow their visible label and detail');
-    assert.equal(text(jumps[0]), '내 작업5건 확인');
+    assert.equal(text(jumps[0]), '내 작업열린 할 일 5건');
     app.navigations.length = 0;
     jumps.forEach((button) => button.props.onClick());
     assert.deepEqual(app.navigations, routes);
@@ -201,8 +203,21 @@ test('real React server render retains the accessible nav for every read state',
     assert.equal((html.match(/aria-label="Daily Brief 빠른 이동"/g) || []).length, 1);
     assert.equal((html.match(/class="daily-brief__jump"/g) || []).length, routes.length);
     assert.doesNotMatch(html, /class="daily-brief__jump"[^>]*aria-label=/);
-    assert.match(html, /<strong>내 작업<\/strong><small>5건 확인<\/small>/);
+    assert.match(html, /<strong>내 작업<\/strong><small>열린 할 일 5건<\/small>/);
   }
+});
+
+test('quick navigation counts every open task before and after focus selection, completion and deletion', () => {
+  const now = new Date('2026-10-27T03:00:00Z'), date = '2026-10-27';
+  const tasks = Array.from({ length: 6 }, (_, i) => ({ id: `open-${i}`, title: `할 일 ${i}`, status: 'todo', focusDates: [] }));
+  const { BriefNavigation } = components(React, () => ledgerOf(null), true);
+  const detail = rows => renderToStaticMarkup(React.createElement(BriefNavigation, { taskToday: { ...buildTaskToday(rows, { now }), state: 'live' } }));
+  assert.match(detail(tasks), /열린 할 일 6건/);
+  const selected = tasks.map((task, i) => i === 0 ? { ...task, focusDates: [date] } : task);
+  assert.match(detail(selected), /열린 할 일 6건/, 'putting a task in a slot never completes or removes it');
+  const completed = selected.map((task, i) => i === 0 ? { ...task, status: 'done', completedAt: now.toISOString() } : task);
+  assert.match(detail(completed), /열린 할 일 5건/);
+  assert.match(detail(completed.filter(task => task.id !== 'open-1')), /열린 할 일 4건/);
 });
 
 test('carry-over projection reaches Today with original dated start, not false live-empty copy', () => {

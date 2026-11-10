@@ -362,6 +362,7 @@ export function Projects({ workspace }) {
   const [inlineTaskTitle, setInlineTaskTitle] = React.useState('');
   const [inlineSubmitting, setInlineSubmitting] = React.useState(false);
   const searchInputRef = React.useRef(null);
+  const [projectSearchRequest, setProjectSearchRequest] = React.useState(0);
   const normalizedQuery = projectQuery.trim().toLowerCase();
   const resetTaskFilters = () => {
     setProjectQuery('');
@@ -1775,7 +1776,10 @@ export function Projects({ workspace }) {
     selection: kbSelection,
     // n은 위 뷰 인지 리스너가 소유(18차 회귀 이력) — 여기서는 바인딩하지 않는다.
     onEditSelected: openKbSelected,
-    onSearchFocus: () => searchInputRef.current?.focus(),
+    onSearchFocus: () => {
+      if (view === 'tree') setProjectSearchRequest(current => current + 1);
+      else searchInputRef.current?.focus();
+    },
   });
   React.useEffect(() => {
     if (!kbSelection.selectedId) return;
@@ -2007,7 +2011,7 @@ export function Projects({ workspace }) {
       </Drawer>
       )}
 
-      <div className="hub-projects-workspace-main" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="hub-projects-workspace-main" data-creating={projectDraft?.isNew && view === 'tree' ? 'true' : undefined} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className={`hub-page-header hub-project-page-header${openDetail ? ' hub-project-page-header--detail' : ''}`} style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div className="hub-project-header-context">
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
@@ -2068,7 +2072,7 @@ export function Projects({ workspace }) {
             <Button className="hub-project-task-create" variant="primary" size="sm" icon="plus" disabled={!canWriteTasks || pendingTaskIds.size > 0} onClick={() => createTodo(null, view === 'backlog' ? 'inbox' : 'todo')}>작업 추가 <Kbd>N</Kbd></Button>
           )}
           <Button className="hub-project-primary-control" variant={taskView || view === 'tree' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
-            Project {!taskView && <Kbd>N</Kbd>}
+            새 프로젝트 {!taskView && <Kbd>N</Kbd>}
           </Button>
         </div>
 
@@ -2179,6 +2183,7 @@ export function Projects({ workspace }) {
               query={projectQuery}
               onQueryChange={setProjectQuery}
               searchInputRef={searchInputRef}
+              searchRequest={projectSearchRequest}
               onOpenProject={openProjectDetail}
               onSelectProject={selectOverviewProject}
               onOpenCustomer={projectId => openProjectDetail(projectId, { customer: true })}

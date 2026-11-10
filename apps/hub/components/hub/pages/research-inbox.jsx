@@ -67,6 +67,7 @@ export function ResearchInbox() {
   const openCreate = React.useCallback(() => { setFormError(''); setDrawer(true); }, []);
   usePageCreateHotkey(openCreate);
   const pending = React.useRef(new Map());
+  const writing = React.useRef(false);
   const brandPrefillApplied = React.useRef(false);
   const lifecycle = React.useRef({ active: false, epoch: 0, controller: null, runsController: null }).current;
 
@@ -101,6 +102,9 @@ export function ResearchInbox() {
     } catch { if (current()) setRunsState({ status: 'error', runs: [], settings: null }); }
     finally { if (current()) lifecycle.runsController = null; }
   }, [lifecycle]);
+  const latestRead = React.useRef(null);
+  // A completed write refreshes the currently open source, even if its query changed while saving.
+  latestRead.current = { reload, briefParam, brandParam };
   React.useEffect(() => {
     setSelectedId(briefParam); setMobileDetail(briefParam !== null);
     if (briefParam !== null) { setStatusFilter('all'); setBrandFilter(brandParam || 'all'); }
@@ -116,15 +120,16 @@ export function ResearchInbox() {
     return () => clearInterval(interval);
   }, [runDrawer, runsState.runs, reloadRuns, lifecycle]);
   React.useEffect(() => {
+    // Query changes cancel reads, not the component's pending writes or their busy-state cleanup.
     lifecycle.active = true;
-    void reload();
-    void reloadRuns();
     return () => {
       lifecycle.active = false; lifecycle.epoch++;
       lifecycle.controller?.abort(); lifecycle.controller = null;
       lifecycle.runsController?.abort(); lifecycle.runsController = null;
     };
-  }, [reload, reloadRuns, lifecycle]);
+  }, [lifecycle]);
+  React.useEffect(() => { void reload(); }, [reload]);
+  React.useEffect(() => { void reloadRuns(); }, [reloadRuns]);
   React.useEffect(() => {
     const brand = (catalog.brands || []).find(entry => entry.key === searchParams.get('brandKey'));
     if (brand && !brandPrefillApplied.current) {
@@ -162,9 +167,11 @@ export function ResearchInbox() {
     return result || { status: 'error' };
   }
   async function decide(action) {
-    if (!selected || busy) return;
+    if (!selected || writing.current) return;
     const epoch = lifecycle.epoch;
+    const readContext = latestRead.current;
     const current = () => lifecycle.active && lifecycle.epoch === epoch;
+    writing.current = true;
     setBusy(true);
     try {
       const result = await post({ action, briefId: selected.id, expectedRevision: selected.revision,
@@ -172,18 +179,20 @@ export function ResearchInbox() {
       if (!current()) return;
       if (['saved','duplicate'].includes(result.status)) {
         if (action.startsWith('promote-')) {
-          setStatusFilter('promoted'); setSelectedId(selected.id);
+          if (latestRead.current.briefParam === readContext.briefParam && latestRead.current.brandParam === readContext.brandParam) {
+            setStatusFilter('promoted'); setSelectedId(selected.id);
+          }
           toast.success('콘텐츠 원장에 저장했습니다.');
         }
         else toast.success(action === 'discard' ? '버렸습니다. 버림 필터에서 되돌릴 수 있습니다.' : '검토 상태를 저장했습니다.');
-        await reload();
-      } else { toast.error(commandMessage(result)); if (result.status === 'conflict') await reload(); }
+        await latestRead.current.reload();
+      } else { toast.error(commandMessage(result)); if (result.status === 'conflict') await latestRead.current.reload(); }
     } catch { if (current()) toast.error('저장 확인에 실패했습니다. 같은 버튼으로 다시 시도해 주세요.'); }
-    finally { if (current()) setBusy(false); }
+    finally { writing.current = false; if (current()) setBusy(false); }
   }
   async function create(event) {
     event.preventDefault();
-    if (busy) return;
+    if (writing.current) return;
     const epoch = lifecycle.epoch;
     const current = () => lifecycle.active && lifecycle.epoch === epoch;
     setFormError('');
@@ -191,16 +200,20 @@ export function ResearchInbox() {
       facts: form.facts.split('\n').map(line => line.trim()).filter(Boolean), interpretation: form.interpretation,
       counterevidence: form.counterevidence, unknown: form.unknown, draft: form.draft,
       sources: [{ url: form.sourceUrl, title: form.sourceTitle, accessLevel: form.accessLevel, locator: form.locator }] };
-    setBusy(true);
+    writing.current = true; setBusy(true);
     try {
       const result = await post({ action: 'create', brief });
       if (!current()) return;
-      if (['saved','duplicate'].includes(result.status)) {
+      if (['saved','duplicate'].includes(result.status) && result.briefId) {
         setDrawer(false); setForm(emptyForm()); setSelectedId(result.briefId); setStatusFilter('all'); setBrandFilter(brief.brandId);
-        await reload(); if (current()) toast.success('검토용 리서치를 저장했습니다.');
+        // The explicit source in the URL owns selection; replace an older source with the saved one.
+        const next = new URLSearchParams({ brief: result.briefId });
+        if (brief.brandId) next.set('brand', brief.brandId);
+        router.replace(`/dashboard/content/research?${next}`, { scroll: false });
+        toast.success('검토용 리서치를 저장했습니다.');
       } else setFormError(commandMessage(result));
     } catch { if (current()) setFormError('저장 응답을 받지 못했습니다. 입력을 유지했으니 다시 시도해 주세요.'); }
-    finally { if (current()) setBusy(false); }
+    finally { writing.current = false; if (current()) setBusy(false); }
   }
   async function prepare(event) {
     event.preventDefault(); if (runBusy || !lifecycle.active) return;
@@ -210,7 +223,7 @@ export function ResearchInbox() {
     try { const result = await runWriter.current(runForm);
       if (!current()) return;
       if (['ok', 'partial', 'running'].includes(result?.status) && result.run?.id) {
-        await Promise.all([reloadRuns(), reload()]);
+        await Promise.all([reloadRuns(), latestRead.current.reload()]);
         if (!current()) return;
         if (result.status === 'running') toast.info('같은 준비 요청이 처리 중입니다. 실행 기록에서 확인해 주세요.');
         else if (result.status === 'partial') toast.info('일부 자료를 준비했습니다. 실행 기록과 검토 대기 원고를 확인해 주세요.');

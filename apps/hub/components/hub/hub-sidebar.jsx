@@ -225,7 +225,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     // 다른 탭(영업·매출의 거래 = ClassIn에선 classin/pipeline)은 같은 역할의 탭으로 간다.
     const currentPathname = pathnameOf(active);
     const sibling = sidebarChildren(owner, value)
-      .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') === 'goals') === (view === 'goals')))
+      .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') || '') === (view || '')))
       || tabForRouteRole(owner, active, value);
     const target = owner === 'overview' && view === 'goals'
       ? goalHref(null, value, { check: goalView(new URLSearchParams(search)) === 'check', weekly: goalView(new URLSearchParams(search)) === 'weekly', kpi: goalView(new URLSearchParams(search)) === 'kpi' }).slice(1)

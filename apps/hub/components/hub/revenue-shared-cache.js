@@ -78,7 +78,7 @@ export function createRevenueLedgerCache({ fetcher = (...args) => fetch(...args)
     });
   }
 
-  function refresh(reset = false) {
+  function refresh(reset = false, preserveSnapshot = false) {
     if (pending) return pending.promise;
     const work = { promise: null, cancel: null };
     // Register before publishing or calling the transport: either can reenter.
@@ -114,7 +114,7 @@ export function createRevenueLedgerCache({ fetcher = (...args) => fetch(...args)
       return getSnapshot();
     });
     pending = work;
-    if (reset || !isServable()) publish(INITIAL_SNAPSHOT);
+    if (reset || (!isServable() && !preserveSnapshot)) publish(INITIAL_SNAPSHOT);
     return work.promise;
   }
 
@@ -124,11 +124,11 @@ export function createRevenueLedgerCache({ fetcher = (...args) => fetch(...args)
     getServerSnapshot: () => INITIAL_SNAPSHOT,
     subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
     refresh: () => refresh(),
-    invalidate: () => {
+    invalidate: (options = {}) => {
       const obsolete = pending;
       pending = null;
       obsolete?.cancel?.();
-      return refresh(true);
+      return refresh(options.preserve !== true, options.preserve === true);
     },
   };
 }

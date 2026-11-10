@@ -47,9 +47,84 @@ async function mountedInbox(query, reader) {
   }
   render();
   return { render, state: () => slots[0].value, setRoute(query) { params = new URLSearchParams(query); return render(); },
+    route: () => params,
+    element(predicate) { const element = find(latest, predicate); assert.ok(element); return element; },
+    button(text) { const button = find(latest, element => element.props?.children === text); assert.ok(button, `missing button: ${text}`); return button; },
     async retry() { const button = find(latest, element => element.props?.children === '다시 불러오기'); assert.ok(button); await button.props.onClick(); },
     unmount() { for (const slot of slots) slot?.cleanup?.(); } };
 }
+
+for (const outcome of ['saved', 'duplicate', 'error']) test(`a pending ${outcome} review releases its lock after query navigation and refreshes the current source`, async () => {
+  let resolveWrite; const reads = [], writes = [];
+  const first = { id: 'first', title: '첫 리서치', state: 'new', revision: 1, stateVersion: 1, sources: [] };
+  const second = { ...first, id: 'second', title: '계속 검토할 리서치' };
+  const mounted = await mountedInbox('', async (url, options) => {
+    if (options?.method === 'POST') {
+      writes.push(JSON.parse(options.body));
+      return new Promise(resolve => { resolveWrite = result => resolve(response(result)); });
+    }
+    reads.push(url);
+    return response({ status: 'live', briefs: new URL(url, 'https://local.test').searchParams.get('brief') === 'second' ? [second] : [first, second] });
+  });
+  await settle(); mounted.render();
+  const action = mounted.button('Studio 초안으로 보내기').props.onClick;
+  const pendingWrite = action();
+  await action(); // The captured callback can be invoked again before React renders.
+  assert.equal(writes.length, 1);
+  mounted.render();
+  mounted.setRoute('brief=second'); await settle(); mounted.render();
+  resolveWrite({ status: outcome }); await pendingWrite; await settle();
+  const tree = mounted.render();
+  assert.equal(mounted.button('나중에').props.disabled, false);
+  assert.match(JSON.stringify(tree), /계속 검토할 리서치/);
+  assert.equal(new URL(reads.at(-1), 'https://local.test').searchParams.get('brief'), 'second');
+  assert.equal(writes[0].briefId, 'first');
+  mounted.unmount();
+});
+
+for (const status of ['saved', 'duplicate']) test(`creating a ${status} research source replaces an older explicit source and opens the new record`, async () => {
+  const first = { id: 'old-source', title: '기존 리서치', state: 'new', brandId: 'same-brand', sources: [] };
+  const created = { ...first, id: 'new-source', title: '새로 저장한 리서치' };
+  const reads = [], writes = [];
+  const mounted = await mountedInbox('brief=old-source', async (url, options) => {
+    if (options?.method === 'POST') { writes.push(JSON.parse(options.body)); return response({ status, briefId: created.id }); }
+    reads.push(url);
+    return response({ status: 'live', briefs: [new URL(url, 'https://local.test').searchParams.get('brief') === created.id ? created : first] });
+  });
+  await settle(); mounted.render();
+  mounted.element(element => element.props?.icon === 'plus').props.onClick(); mounted.render();
+  for (const [label, value] of [['브랜드', first.brandId], ['제목', created.title], ['이번에 실제로 바뀐 점', '새 사실'], ['왜 이 브랜드인가', '관련 있음'], ['확인한 사실', '확인한 원문 사실'], ['검토용 원고', '원고'], ['확인한 원문 URL', 'https://source.test/article'], ['자료 제목', '원문']]) {
+    // Drawer fields have onChange; the page-level brand filter is excluded.
+    mounted.element(element => element.props?.label === label && element.props?.onChange && (label !== '브랜드' || element.props.required)).props.onChange({ target: { value } }); mounted.render();
+  }
+  await mounted.element(element => element.type === 'form' && element.props?.onSubmit && element.props.className === 'research-form').props.onSubmit({ preventDefault() {} });
+  assert.equal(mounted.route().get('brief'), created.id); assert.equal(mounted.route().get('brand'), first.brandId);
+  mounted.render(); await settle();
+  const tree = mounted.render();
+  assert.equal(writes.length, 1); assert.equal(writes[0].brief.title, created.title);
+  assert.equal(new URL(reads.at(-1), 'https://local.test').searchParams.get('brief'), created.id);
+  assert.match(JSON.stringify(tree), /새로 저장한 리서치/); assert.doesNotMatch(JSON.stringify(tree), /기존 리서치/);
+  assert.equal(mounted.button('나중에').props.disabled, false);
+  mounted.unmount();
+});
+
+test('an uncertain review retry keeps its original request ID after the write lock is released', async () => {
+  const writes = [];
+  const mounted = await mountedInbox('', async (_url, options) => {
+    if (options?.method === 'POST') {
+      writes.push(JSON.parse(options.body));
+      throw Error('synthetic lost response');
+    }
+    return response({ status: 'live', briefs: [{ id: 'one', title: '재시도할 리서치', state: 'new', revision: 1, stateVersion: 1, sources: [] }] });
+  });
+  await settle(); mounted.render();
+  await mounted.button('나중에').props.onClick(); mounted.render();
+  assert.equal(mounted.button('나중에').props.disabled, false);
+  await mounted.button('나중에').props.onClick(); mounted.render();
+  assert.equal(writes.length, 2);
+  assert.equal(writes[0].requestId, writes[1].requestId);
+  mounted.unmount();
+});
 
 test('the real research page reads an old deep link exactly, exposes missing links and retries errors', async () => {
   const id = '22222222-2222-4222-8222-222222222222'; let calls = 0; const reads = [];

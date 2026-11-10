@@ -390,14 +390,19 @@ export function Evolution({ onNavigate }) {
 
 function CopyRow({ value, mono }) {
   const [copied, setCopied] = React.useState(false);
-  const copy = () => {
-    navigator.clipboard?.writeText(value).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+  const [copyError, setCopyError] = React.useState('');
+  const copy = async () => {
+    setCopied(false); setCopyError('');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard-unavailable');
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch { setCopyError('복사하지 못했습니다. 아래 내용을 직접 선택해 복사해 주세요.'); }
   };
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
+      display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
       background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
       padding: '5px 6px 5px 10px',
     }}>
@@ -415,6 +420,9 @@ function CopyRow({ value, mono }) {
         <Iconed name={copied ? 'check' : 'copy'} size={11} />
         {copied ? 'Copied' : 'Copy'}
       </button>
+      {copyError && <div role="alert" style={{ flexBasis: '100%', fontSize: 11.5, color: 'var(--danger)', overflowWrap: 'anywhere' }}>
+        {copyError}<code className="mono" style={{ display: 'block', color: 'var(--fg)', userSelect: 'all' }}>{value}</code>
+      </div>}
     </div>
   );
 }
@@ -422,6 +430,7 @@ function CopyRow({ value, mono }) {
 function KeyRow({ item, last, kind }) {
   const [revealed, setRevealed] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [copyError, setCopyError] = React.useState('');
 
   const displayValue = (() => {
     if (kind === 'key') {
@@ -435,10 +444,14 @@ function KeyRow({ item, last, kind }) {
   })();
   const copyValue = kind === 'key' ? item.ref : displayValue;
 
-  const copy = () => {
-    navigator.clipboard?.writeText(copyValue).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+  const copy = async () => {
+    setCopied(false); setCopyError('');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard-unavailable');
+      await navigator.clipboard.writeText(copyValue);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch { setCopyError('복사하지 못했습니다. 아래 내용을 직접 선택해 복사해 주세요.'); }
   };
 
   return (
@@ -511,6 +524,9 @@ function KeyRow({ item, last, kind }) {
         background: 'var(--surface-2)', border: '1px dashed var(--line-soft)', borderRadius: 'var(--r-sm)',
         padding: '6px 10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>{displayValue}</div>
+      {copyError && <div role="alert" style={{ marginTop: 6, fontSize: 11.5, color: 'var(--danger)', overflowWrap: 'anywhere' }}>
+        {copyError}<code className="mono" style={{ display: 'block', color: 'var(--fg)', userSelect: 'all' }}>{copyValue}</code>
+      </div>}
     </div>
   );
 }

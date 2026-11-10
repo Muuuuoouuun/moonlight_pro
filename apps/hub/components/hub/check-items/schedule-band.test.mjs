@@ -179,5 +179,6 @@ test('홈: T가 시간 잡기를 열고, 시간표는 다음 근무일까지 한
   assert.match(home, /<Kbd>T<\/Kbd> 시간 잡기/);
   assert.match(home, /nextWorkdayKey\(day\)/);
   assert.match(home, /<ScheduledList /);
-  assert.match(home, /scheduled=\{waitingCount\}/);
+  assert.match(home, /const waitingCount = scheduledBlocks\.filter/);
+  assert.match(home, /<ScheduledList blocks=\{scheduledBlocks\}/);
 });

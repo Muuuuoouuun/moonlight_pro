@@ -70,6 +70,7 @@ export function ContentPerformance() {
   const view = VIEWS.some(item => item.key === params.get('view')) ? params.get('view') : 'summary';
   const rawYear = params.get('year') || String(currentYear), year = /^\d{4}$/.test(rawYear) && Number(rawYear) >= 1970 && Number(rawYear) <= 2100 ? Number(rawYear) : currentYear;
   const brand = params.get('brand') || '', channel = params.get('channel') || '', month = /^(0[1-9]|1[0-2])$/.test(params.get('month') || '') ? params.get('month') : '';
+  const variant = params.get('variant') || '';
   const [data, setData] = React.useState(empty), [reload, setReload] = React.useState(0), [editing, setEditing] = React.useState(null);
   const [count, setCount] = React.useState(40), [notice, setNotice] = React.useState('');
   const queryYear = view === 'monthly' ? year : currentYear;
@@ -92,6 +93,18 @@ export function ContentPerformance() {
     return () => window.removeEventListener('moonlight:content-saved', refresh);
   }, [refresh]);
   React.useEffect(() => setCount(40), [view, year, month, brand, channel]);
+  React.useEffect(() => {
+    if (!variant) { setEditing(null); return; }
+    setEditing(current => current?.id === variant ? current : null);
+    if (data.status !== 'live') return;
+    const entry = data.publications?.find(row => row.id === variant);
+    if (!entry) { setEditing(null); return; }
+    setEditing(current => current?.id === entry.id ? current : entry);
+    const date = seoulDate(entry.publishedAt);
+    if (view !== 'monthly' || String(year) !== date.slice(0, 4) || month !== date.slice(5, 7) || brand !== (entry.brandId || '') || channel !== entry.channel) {
+      navigate({ view: 'monthly', year: date.slice(0, 4), month: date.slice(5, 7), brand: entry.brandId || '', channel: entry.channel });
+    }
+  }, [variant, data, view, year, month, brand, channel]);
   function navigate(patch) {
     const next = new URLSearchParams(params.toString());
     for (const [key, value] of Object.entries(patch)) value ? next.set(key, value) : next.delete(key);
@@ -99,6 +112,7 @@ export function ContentPerformance() {
   }
   const now = new Date(data.generatedAt || Date.now()), periods = performancePeriods(now);
   const all = data.publications || [];
+  const missingVariant = variant && data.status === 'live' && !all.some(entry => entry.id === variant);
   const selected = performanceRows(all, { view, year, month, brand, channel }, now);
   const totals = summarizePublications(selected);
   const monthRows = Array.from({ length: 12 }, (_, index) => {
@@ -123,6 +137,7 @@ export function ContentPerformance() {
       {(brand || channel || month) && <Button onClick={() => navigate({ brand: '', channel: '', month: '' })}>필터 해제</Button>}
     </div>
     {notice && <p role="status">{notice}</p>}
+    {missingVariant && <p role="alert">선택한 발행 원고를 이 연도에서 찾을 수 없습니다. 원래 발행 링크를 확인하거나 연도를 바꿔 주세요. <Button size="xs" onClick={() => navigate({ variant: '' })}>선택 해제</Button></p>}
     {data.status === 'loading' ? <Card><Skeleton lines={6} height={24} label="콘텐츠 성과 집계 중" /></Card>
       : data.status === 'error' ? <EmptyState icon="signal" title="집계를 확인하지 못했습니다" description={data.message} action={<Button onClick={refresh}>다시 불러오기</Button>} />
       : data.status === 'preview' ? <EmptyState icon="content" title="콘텐츠 저장소 연결이 필요합니다" description="연결되면 저장된 발행 기록과 직접 입력한 성과를 집계합니다." action={<Link href="/dashboard/content/queue">소재·제작으로</Link>} />
@@ -144,10 +159,10 @@ export function ContentPerformance() {
               <div><Link className="hub-row performance-title" href={entry.href}>{entry.title}</Link><p className="performance-muted">{seoulDate(entry.publishedAt)} · {entry.brandName || '브랜드 미지정'} · {channelLabel(entry.channel)}</p>
                 <p className="performance-values">{METRICS.map(({ key, label }) => <span key={key}>{label} <b className="num">{number(entry.metrics[key])}</b></span>)}</p>
                 {entry.metrics.capturedAt && <p className="performance-muted">{entry.metrics.source === 'manual' ? '직접 기록' : '수집 기록'} · {time(entry.metrics.capturedAt)}</p>}</div>
-              <Button variant="outline" onClick={() => setEditing(entry)}>{entry.metrics.capturedAt ? '수치 수정' : '수치 기록'}</Button>
+              <Button variant="outline" onClick={() => navigate({ variant: entry.id })}>{entry.metrics.capturedAt ? '수치 수정' : '수치 기록'}</Button>
             </li>)}</ul>{selected.length > count && <div className="performance-more"><Button onClick={() => setCount(value => value + 40)}>원고 더 보기</Button></div>}</Card>}
         </section>
       </>}
-    {editing && <MetricEditor key={editing.id} entry={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setNotice('수치를 기록했습니다.'); window.dispatchEvent(new Event('moonlight:content-saved')); }} />}
+    {editing && <MetricEditor key={editing.id} entry={editing} onClose={() => { setEditing(null); navigate({ variant: '' }); }} onSaved={() => { setEditing(null); navigate({ variant: '' }); setNotice('수치를 기록했습니다.'); window.dispatchEvent(new Event('moonlight:content-saved')); }} />}
   </div>;
 }

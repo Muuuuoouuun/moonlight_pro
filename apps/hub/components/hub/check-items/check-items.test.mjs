@@ -157,7 +157,7 @@ test('snooze presets are tomorrow, the day after and next Monday in Seoul time',
 
 test('Home drives the deck from the keyboard without firing inside fields or dialogs', () => {
   const home = read('../pages/home.jsx');
-  assert.match(home, /useCheckItemDeck\(signals/);
+  assert.match(home, /useCheckItemDeck\(homeItems/);
   assert.match(home, /\/\^\(INPUT\|TEXTAREA\|SELECT\)\$\/\.test\(t\.tagName\)/);
   assert.match(home, /\[role="dialog"\]/);
   assert.match(home, /\/\^\[1-4\]\$\/\.test\(e\.key\)/);

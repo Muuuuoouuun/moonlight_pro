@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test, { after } from 'node:test';
 import ts from 'typescript';
 import { createQuickCaptureSession, shouldSubmitQuickTask, submitQuickCapture } from '../../lib/quick-task-capture.js';
+import { PROJECT_VIEW_OPTIONS } from './pages/project-view-constants.js';
 
 const originalFetch = globalThis.fetch;
 const unexpectedNetwork = [];
@@ -51,6 +52,23 @@ function find(node, predicate) {
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 const quickCode = compile(process.env.QUICK_CAPTURE_EVENT_SOURCE || new URL('./quick-capture.jsx', import.meta.url), ['HINTS', 'QuickCaptureForm', 'GlobalQuickCapture']);
+
+test('a confirmed inbox capture opens the registered project memo workspace after closing its drawer', () => {
+  const runtime = hooks(), visits = [], session = createQuickCaptureSession({ createId: () => 'local-receipt' });
+  session.setHint('inbox'); session.setRaw('받은함에서 이어 볼 입력'); session.begin();
+  session.settle({ ok: true, data: { status: 'saved', destinationType: 'work_order' } });
+  const scope = { React: runtime.React, createQuickCaptureSession, shouldSubmitQuickTask, submitQuickCapture, createClientId: () => 'unused',
+    Button: 'Button', Card: 'Card', Kbd: 'Kbd', TruthBadge: 'TruthBadge', Iconed: 'Iconed', requestAnimationFrame: () => 0, cancelAnimationFrame() {} };
+  const Form = new Function(...Object.keys(scope), `${quickCode}; return QuickCaptureForm;`)(...Object.values(scope));
+  try {
+    const tree = runtime.render(() => Form({ session, onDone: () => visits.push('closed'), onNavigate: path => visits.push(path) }));
+    find(tree, node => node.type === 'Button' && node.props.children.includes('보관함 보기')).props.onClick();
+    assert.deepEqual(visits, ['closed', 'dashboard/work/projects?view=memos']);
+    const url = new URL(visits[1], 'https://local.invalid/');
+    assert.ok(PROJECT_VIEW_OPTIONS.some(option => option.key === url.searchParams.get('view')), 'the destination view is registered');
+  } finally { runtime.cleanup(); }
+});
+
 for (const [label, data, eventCount, callbackCount] of [
   ['saved task', { status: 'saved', destinationType: 'task' }, 1, 1],
   ['duplicate task', { status: 'duplicate', destinationType: 'task' }, 1, 1],

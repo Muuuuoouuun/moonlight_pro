@@ -97,15 +97,48 @@ test("다음 미팅 잡기 reuses the shared calendar capability check and stays
 // TopBar New·⌘K 생성 딥링크의 착지 계약(22차) — 각 표면이 ?new=<kind>를 1회 소비하고
 // 쿼리를 소거한다. 소비가 없으면 셸의 New는 다시 팔레트 위장 버튼으로 퇴행한다.
 test("revenue surfaces consume their ?new= create deep links exactly once", () => {
-  for (const kind of ["lead", "deal", "case"]) {
-    assert.match(
-      revenueSource,
-      new RegExp(`searchParams\\.get\\('new'\\) !== '${kind}'`),
-      `?new=${kind} 소비 이펙트가 있어야 한다`,
-    );
+  const parsed = ts.createSourceFile("revenue.jsx", revenueSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+  for (const [componentName, kind] of [["Leads", "lead"], ["Deals", "deal"], ["Cases", "case"], ["Accounts", "account"]]) {
+    const component = parsed.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === componentName);
+    assert.ok(component);
+    const paramsName = kind === "account" ? "accountSearchParams" : "searchParams";
+    let consumer;
+    function visit(node) {
+      if (ts.isCallExpression(node) && node.expression.getText(parsed) === "React.useEffect"
+        && node.arguments[0]?.getText(parsed).includes(`${paramsName}.get('new') !== '${kind}'`)) consumer = node.arguments[0];
+      ts.forEachChild(node, visit);
+    }
+    visit(component); assert.ok(consumer, `?new=${kind} has an actual consumer effect`);
+    for (const scope of [null, "personal", "classin"]) {
+      let creates = 0, ledgerUnavailable = false;
+      const replacements = [], ref = { current: false }, pathname = `/dashboard/revenue/${kind}s`;
+      const base = new URLSearchParams(scope ? `scope=${scope}&view=stage` : "");
+      const consume = params => new Function("searchParams", "accountSearchParams", "pathname", "accountPathname",
+        "router", "accountRouter", "ledgerUnavailable", `created${kind[0].toUpperCase() + kind.slice(1)}FromQueryRef`,
+        `create${kind[0].toUpperCase() + kind.slice(1)}`, `return (${consumer.getText(parsed)});`)(
+          params, params, pathname, pathname,
+          { replace: url => replacements.push(url) }, { replace: url => replacements.push(url) },
+          ledgerUnavailable, ref, () => { creates++; },
+        )();
+      consume(base); assert.equal(creates, 0, "a plain visit does not create a row");
+      const incoming = new URLSearchParams(base); incoming.set("new", kind);
+      if (kind === "deal") {
+        ledgerUnavailable = true; consume(incoming);
+        assert.equal(creates, 0, "an unavailable ledger does not consume the creation request");
+        ledgerUnavailable = false;
+      }
+      consume(incoming); consume(incoming);
+      assert.equal(creates, 1, `${kind}: the same unconsumed query creates exactly once`);
+      assert.equal(replacements.length, 1);
+      const destination = new URL(replacements[0], "https://synthetic.invalid/");
+      assert.equal(destination.pathname, pathname);
+      assert.equal(destination.searchParams.has("new"), false, "refresh cannot replay creation");
+      assert.equal(destination.searchParams.get("scope"), scope);
+      assert.equal(destination.searchParams.get("view"), scope ? "stage" : null, "unrelated query context survives");
+      consume(destination.searchParams); assert.equal(creates, 1, "the cleaned URL has no creation side effect");
+      consume(incoming); consume(incoming);
+      assert.equal(creates, 2, "a later explicit New request works again on the mounted page");
+      assert.equal(replacements.length, 2);
+    }
   }
-  assert.match(revenueSource, /accountSearchParams\.get\('new'\) !== 'account'/);
-  // 소비 후 쿼리 소거(새로고침 재실행 금지) — 각 이펙트가 replace로 정리한다.
-  const consumeBlocks = revenueSource.match(/searchParams\.get\('new'\) !== '(?:lead|deal|case)'[\s\S]{0,420}?router\.replace\(pathname\)/g) || [];
-  assert.equal(consumeBlocks.length, 3, "lead/deal/case 소비 이펙트가 전부 replace로 쿼리를 소거해야 한다");
 });

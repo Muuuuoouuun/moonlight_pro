@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { NAV_TREE, navPathForScope } from './hub-data.js';
+import ts from 'typescript';
+import { NAV_TREE, LEGACY_TREE, navPathForScope } from './hub-data.js';
 import { SIDEBAR_PRIMARY, SIDEBAR_UTILITIES, topNavigationForRoute } from './hub-nav.js';
 import { FINANCE_VIEWS, financeFilters } from './pages/finance-view.js';
 
@@ -22,8 +23,23 @@ test('customer business Accounts keep their original destination and backward-co
   assert.equal(customer.label,'고객사·거래처 계정');
   assert.equal(customer.path,'dashboard/revenue/accounts');assert.ok(customer.keywords.includes('Accounts'));
   const palette=readFileSync(new URL('./hub-command-palette.jsx',import.meta.url),'utf8');
-  assert.match(palette,/label: '고객사·거래처 계정 추가', path: 'dashboard\/revenue\/accounts\?new=account'/);
-  assert.match(palette,/keywords: \['New Account', '계정', '고객사', '거래처'\]/);
+  const ast=ts.createSourceFile('hub-command-palette.jsx',palette,ts.ScriptTarget.Latest,true,ts.ScriptKind.JSX);
+  let catalog;
+  function visit(node) {
+    if(ts.isVariableDeclaration(node) && node.name.getText(ast)==='items') catalog=node.initializer.arguments[0];
+    ts.forEachChild(node,visit);
+  }
+  visit(ast);assert.ok(catalog,'exercise the actual command-palette catalog');
+  for(const scope of ['all','classin','personal']) {
+    const build=new Function('NAV_TREE','LEGACY_TREE','navPathForScope','scope',`return (${catalog.getText(ast)});`)(NAV_TREE,LEGACY_TREE,navPathForScope,scope);
+    const action=build().find(item=>item.kind==='Action' && item.label==='고객사·거래처 계정 추가');
+    assert.ok(action);assert.equal(action.icon,'accounts');
+    assert.equal(action.path,`dashboard/revenue/accounts?new=account${scope==='all'?'':`&scope=${scope}`}`);
+    assert.deepEqual(action.keywords,['New Account','계정','고객사','거래처']);
+    const parsed=new URL(action.path,'https://synthetic.invalid/');
+    assert.equal(parsed.pathname,'/dashboard/revenue/accounts');assert.equal(parsed.searchParams.get('new'),'account');
+    assert.equal(parsed.searchParams.get('scope'),scope==='all'?null:scope);
+  }
 });
 
 test('semantic separation does not add a sidebar anchor or revenue tab or change finance view keys',()=>{

@@ -5,48 +5,19 @@ import { Button, Skeleton, TruthBadge } from '../hub-primitives';
 import { buildHomeMorningBrief } from './home-morning-brief.js';
 import './home-morning-brief.css';
 
-export function HomeMorningBrief({ brief, schedule, onNavigate, now = new Date() }) {
-  const { state, rows } = buildHomeMorningBrief({ brief, schedule, now });
-  const sourceNote = {
-    loading: '기록 확인 중',
-    live: '확인된 기록 기준',
-    preview: '연결된 기록 범위를 확인하세요',
-    error: '기록을 확인하지 못했습니다',
-    partial: '일부 기록 미확인 · 확인된 항목만 표시',
-  }[state];
-
+export function HomeMorningBrief({ brief, onNavigate }) {
+  const { state, progress } = buildHomeMorningBrief({ brief });
   return (
-    <section className="home-morning" aria-labelledby="home-morning-title">
-      <div className="home-morning__heading">
-        <h3 id="home-morning-title">아침 브리핑</h3>
-        {state !== 'live' && state !== 'loading' ? (
-          <TruthBadge state={state} reason={state === 'partial' ? '일부 기록만 확인했습니다' : state === 'preview' ? undefined : '기록을 확인하지 못했습니다'} />
-        ) : null}
+    <section className="home-handoff" aria-label="실행과 흐름 이어가기">
+      <div className="home-handoff__summary">
+        <span className="fx-eyebrow">오늘의 할 일</span>
+        {state === 'loading' ? <Skeleton lines={1} label="할 일 확인 중" /> : <p>{progress}</p>}
+        {!['live', 'loading'].includes(state) && <TruthBadge state={state} reason={state === 'partial' ? '일부 기록만 확인했습니다' : undefined} />}
       </div>
-      <div className="fx-card home-morning__card">
-        <div className="home-morning__intro">
-          <span className="fx-eyebrow">오늘의 시작</span>
-          <h4>오늘은 이것부터</h4>
-        </div>
-        {state === 'loading' ? (
-          <div className="home-morning__loading"><Skeleton lines={3} /></div>
-        ) : (
-          <dl className="home-morning__rows">
-            {rows.map(row => (
-              <div className="home-morning__row" key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.text}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        <div className="home-morning__footer">
-          <span className="home-morning__source">{sourceNote}</span>
-          <div className="home-morning__actions">
-            <Button variant="primary" size="sm" onClick={() => onNavigate?.('dashboard/daily-brief')}>오늘 열기</Button>
-            <Button variant="outline" size="sm" onClick={() => onNavigate?.('dashboard/daily-brief')}>30초 AI 브리핑 열기</Button>
-          </div>
-        </div>
+      <div className="home-handoff__actions">
+        <Button variant="secondary" size="sm" onClick={() => onNavigate?.('dashboard/daily-brief')}>오늘 열기</Button>
+        <Button variant="secondary" size="sm" onClick={() => onNavigate?.('dashboard/work/projects')}>프로젝트 열기</Button>
+        <Button variant="ghost" size="sm" onClick={() => onNavigate?.('dashboard/overview?view=summary')}>현황에서 흐름 보기</Button>
       </div>
     </section>
   );

@@ -1,69 +1,88 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import ts from 'typescript';
+import { HomeMorningBrief } from './home-morning-brief.jsx';
+import { SIGNAL_TARGETS, withEntityRef } from '../../../lib/signal-targets.js';
 
 const source = readFileSync(new URL('./home.jsx', import.meta.url), 'utf8');
-const componentUrl = new URL('./home-morning-brief.jsx', import.meta.url);
-const component = existsSync(componentUrl) ? await import(componentUrl.href) : {};
-const { HomeMorningBrief } = component;
+const live = { status: 'live', taskToday: { state: 'live', focus: { picked: 2, done: 1 }, queueCount: 4 } };
 
-test('Home places its one morning brief below the tip and before shortcuts', () => {
-  assert.match(source, /<GuidanceInlineTip\b[\s\S]*?<TodaySchedule\b[\s\S]*?<HomeMorningBrief\b[\s\S]*?<footer\b/);
+test('Home starts with execution routes, then source records and collapsed supporting context', () => {
+  assert.match(source, /<HomeMorningBrief\b[\s\S]*?<FocusCard\b[\s\S]*?<TodaySchedule\b[\s\S]*?<footer\b/);
   assert.equal((source.match(/<HomeMorningBrief\b/g) || []).length, 1);
+  assert.match(source, /홈 · \{formatEyebrowDate/);
+  assert.match(source, /할 일은 오늘에서, 프로젝트는 해당 화면에서 이어가세요/);
+  const schedule = source.slice(source.indexOf('function TodaySchedule('), source.indexOf('export function Home('));
+  assert.match(schedule, /<details className="home-support-disclosure">/);
+  assert.doesNotMatch(schedule, /<details[^>]*\bopen[= >]/);
+  assert.match(source, /<details className="home-support-disclosure">[\s\S]*?참고 관점과 보조 브리핑[\s\S]*?<GuidanceInlineTip/);
+  assert.match(source, /dashboard\/daily-brief\?panel=briefing/, 'existing AI entry remains explicit and optional');
 });
 
-test('shared daily brief read passes its real focus and task data to Home', async () => {
-  const { fetchDailyBriefSignals } = await import('../daily-brief-signals.js');
-  const dailyFocus = { urgentKa: { state: 'live', item: null } };
-  const taskToday = { state: 'live', focus: { picked: 2, done: 1 } };
-  const live = await fetchDailyBriefSignals({
-    fetchImpl: async () => ({
-      ok: true, status: 200,
-      json: async () => ({ status: 'live', signals: [], dailyFocus, taskToday }),
-    }),
-  });
-  assert.deepEqual(live, { status: 'live', signals: [], dailyFocus, taskToday, checkItems: null });
-
-  const failed = await fetchDailyBriefSignals({
-    fetchImpl: async () => ({
-      ok: true, status: 200,
-      json: async () => ({ status: 'error', signals: [{ title: 'stale' }], dailyFocus, taskToday }),
-    }),
-  });
-  assert.deepEqual(failed, { status: 'error', signals: [], dailyFocus: null, taskToday: null, checkItems: null });
+test('compact Home handoff repeats one factual task line, keeps goal assumptions and detailed lists out', () => {
+  const html = renderToStaticMarkup(React.createElement(HomeMorningBrief, { brief: live, onNavigate() {} }));
+  assert.match(html, /실행과 흐름 이어가기/);
+  assert.match(html, /집중 2개 중 1개 완료 · 대기 4개/);
+  assert.match(html, /오늘 열기/);
+  assert.match(html, /현황에서 흐름 보기/);
+  assert.doesNotMatch(html, /아침 브리핑|다음 일정|먼저 확인|오늘의 시작|이번 달 목표|<dl\b/);
 });
 
-test('morning brief card renders three factual lines and navigation without an embedded tip', () => {
-  assert.equal(typeof HomeMorningBrief, 'function');
-  const html = renderToStaticMarkup(React.createElement(HomeMorningBrief, {
-    brief: {
-      status: 'live', signals: [],
-      dailyFocus: { urgentKa: { state: 'live', item: null }, focusCustomers: { state: 'live', items: [] } },
-      taskToday: { state: 'live', focus: { picked: 2, done: 1 }, counts: { missed: 0 } },
-    },
-    schedule: { status: 'live', events: [] },
-    now: new Date('2026-09-29T00:15:00.000Z'),
-    onNavigate: () => {},
-  }));
-  assert.match(html, /아침 브리핑/);
-  assert.match(html, /먼저 확인[\s\S]*다음 일정[\s\S]*오늘의 진척[\s\S]*오늘 열기/);
-  assert.match(html, /30초 AI 브리핑 열기/);
-  assert.equal((html.match(/guidance-inline-tip-wrap/g) || []).length, 0);
-  assert.doesNotMatch(html, /고객 A|고객 미팅/);
+test('Home handoff buttons navigate only after activation and preserve their destination lens', () => {
+  const visits = [];
+  const tree = HomeMorningBrief({ brief: live, onNavigate: href => visits.push(href) });
+  const buttons = React.Children.toArray(tree.props.children)[1].props.children;
+  assert.deepEqual(visits, []);
+  buttons[0].props.onClick(); buttons[1].props.onClick(); buttons[2].props.onClick();
+  assert.deepEqual(visits, ['dashboard/daily-brief', 'dashboard/work/projects', 'dashboard/overview?view=summary']);
 });
 
-test('loading and complete read failure do not claim that only some records are missing', () => {
-  const loading = renderToStaticMarkup(React.createElement(HomeMorningBrief, {
-    brief: { status: 'loading' }, schedule: { status: 'loading' }, onNavigate: () => {},
-  }));
-  assert.match(loading, /기록 확인 중/);
-  assert.doesNotMatch(loading, /일부 기록 미확인/);
+test('handoff loading, failure, preview and partial are distinct from verified empty', () => {
+  for (const status of ['loading', 'error', 'preview', 'partial']) {
+    const html = renderToStaticMarkup(React.createElement(HomeMorningBrief, { brief: { status }, onNavigate() {} }));
+    assert.doesNotMatch(html, /대기 0개|0개 완료|아직 오늘 집중할 일을 고르지/);
+    if (status === 'loading') assert.match(html, /할 일 확인 중/);
+    if (status === 'error') assert.match(html, /읽지 못했습니다/);
+    if (status === 'preview') assert.match(html, /연결/);
+    if (status === 'partial') assert.match(html, /일부 할 일만 확인/);
+  }
+});
 
-  const error = renderToStaticMarkup(React.createElement(HomeMorningBrief, {
-    brief: { status: 'error' }, schedule: { status: 'error' }, onNavigate: () => {},
-  }));
-  assert.match(error, /기록을 확인하지 못했습니다/);
-  assert.doesNotMatch(error, /일부 기록 미확인/);
+test('Home departure preserves the viewed card and existing scope for Back without replaying an action', () => {
+  const ast = ts.createSourceFile('home.jsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+  let callback;
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'navigateFromHome') callback = node.initializer.arguments[0];
+    ts.forEachChild(node, visit);
+  }
+  visit(ast); assert.ok(callback);
+  const visits = [], replaced = [], historyState = { existing: true };
+  const window = { location: { pathname: '/dashboard/home', search: '?scope=personal&check=old&do=3', hash: '#here' },
+    history: { state: historyState, replaceState: (...args) => replaced.push(args) } };
+  const make = new Function('activeKey', 'window', 'onNavigate', `return ${callback.getText(ast)};`);
+  const navigate = make('content:current', window, target => visits.push(target));
+  navigate('dashboard/daily-brief');
+  assert.deepEqual(visits, ['dashboard/daily-brief']);
+  assert.equal(replaced[0][0], historyState);
+  const restored = new URL(replaced[0][2], 'http://local.test');
+  assert.equal(restored.searchParams.get('scope'), 'personal');
+  assert.equal(restored.searchParams.get('check'), 'content:current');
+  assert.equal(restored.searchParams.has('do'), false);
+  assert.equal(restored.hash, '#here');
+  window.history.replaceState = () => { throw new Error('history unavailable'); };
+  navigate('dashboard/overview?view=summary');
+  assert.equal(visits.at(-1), 'dashboard/overview?view=summary');
+});
+
+test('Home project outcome opens the actual subject and keeps other source links intact', () => {
+  const from = source.indexOf('function homeOutcomeTarget('), to = source.indexOf('// 허브 read', from);
+  assert.ok(from >= 0 && to > from);
+  const target = new Function('SIGNAL_TARGETS', 'withEntityRef', `${source.slice(from, to)}; return homeOutcomeTarget;`)(SIGNAL_TARGETS, withEntityRef);
+  const id = '62000000-0000-4000-8000-000000000001';
+  assert.equal(target({ subject: { type: 'project', id } }, { action: 'projects' }), `dashboard/work/projects?project=${id}`);
+  assert.equal(target({ source: { from: 'content', ref: 'one item' } }, { action: 'write' }), 'dashboard/content/studio?item=one%20item');
+  assert.equal(target({}, { action: 'unknown' }), null);
 });

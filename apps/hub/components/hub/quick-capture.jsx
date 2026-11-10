@@ -42,6 +42,10 @@ export function QuickCaptureForm({
   inputClassName,
   session: providedSession,
   focusRef,
+  taskOnly = false,
+  controls = null,
+  submitLabel,
+  disabled = false,
 }) {
   const [ownSession] = React.useState(() => createQuickCaptureSession({ initialHint, createId: createClientId }));
   const session = providedSession || ownSession;
@@ -53,20 +57,21 @@ export function QuickCaptureForm({
   React.useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus, inputRef]);
   // Refocus after React has re-enabled the field, not while it is still disabled.
   React.useEffect(() => {
-    if (state.status !== 'saved') return;
+    if (state.status !== 'saved' || disabled) return;
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(frame);
-  }, [state.status, inputRef]);
+  }, [state.status, disabled, inputRef]);
 
   async function submit(event) {
     event.preventDefault();
     // POST /api/hub/inbox 왕복·멱등 키·20초 제한·응답 유실 문구는 데스크톱 위젯과 공유한다.
-    const { durable } = await submitQuickCapture(session);
+    if (disabled) return;
+    const result = await submitQuickCapture(session);
     // 연속 입력이 기본값이다 — 저장 후 닫지 않고 포커스를 유지한다.
-    if (durable) onSaved?.();
+    if (result.durable) onSaved?.(result);
   }
 
-  const saving = state.status === "saving";
+  const saving = state.status === "saving" || disabled;
   const message = state.status === 'error' ? state.error : state.status === 'preview' ? '저장하지 않았습니다. 입력은 남겨 두었습니다.' : saving ? '저장 중…' : state.status === 'saved' ? state.duplicate ? '이미 저장된 입력입니다.' : state.destinationType === 'work_order' ? HINTS.inbox.saved : HINTS.task.saved : HINTS[hint].idle;
   const compact = layout === "compact";
   const stateColor = state.status === "error"
@@ -94,16 +99,17 @@ export function QuickCaptureForm({
               className="mono"
               style={{ flex: 1, fontSize: 10.5, color: "var(--fg-dim)", letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}
             >
-              <span>Quick Capture</span>
+              <span>{taskOnly ? '할 일 추가' : 'Quick Capture'}</span>
               <span style={{ fontSize: 10.5, color: "var(--fg-faint)", textTransform: "none", letterSpacing: 0, display: "inline-flex", alignItems: "center", gap: 4 }}>
                 (Enter로 저장 <Kbd style={{ fontSize: 10.5, minWidth: 14, height: 16, padding: "0 4px", lineHeight: "14px" }}>↵</Kbd>)
               </span>
             </label>
-            <div role="group" aria-label="저장 위치" style={{ display: "flex", gap: 4 }}>
+            {!taskOnly && <div role="group" aria-label="저장 위치" style={{ display: "flex", gap: 4 }}>
               <Button type="button" variant={hint === "task" ? "secondary" : "ghost"} size="xs" aria-pressed={hint === "task"} disabled={saving} onClick={() => changeHint("task")}>할 일</Button>
               <Button type="button" variant={hint === "inbox" ? "secondary" : "ghost"} size="xs" aria-pressed={hint === "inbox"} disabled={saving} onClick={() => changeHint("inbox")}>정리 전</Button>
-            </div>
+            </div>}
           </div>
+          {controls}
           <div className="hub-quick-capture__field" data-invalid={state.status === "error" ? "true" : undefined}>
             <input
               id={inputId}
@@ -143,7 +149,7 @@ export function QuickCaptureForm({
           disabled={saving || !raw.trim()}
           style={{ height: 42, flexShrink: 0, ...(compact ? { width: "100%" } : { alignSelf: "flex-end" }) }}
         >
-          {saving ? "저장 중" : HINTS[hint].submit}
+          {saving ? "저장 중" : submitLabel || HINTS[hint].submit}
         </Button>
       </form>
       <div style={{ marginTop: 6, minHeight: 18, display: "flex", alignItems: "center", gap: 8 }}>
@@ -155,7 +161,7 @@ export function QuickCaptureForm({
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => { onDone?.(); onNavigate?.("dashboard/work/my"); }}>할 일 보기</Button>
         )}
         {state.status === "saved" && state.destinationType === "work_order" && (
-          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => { onDone?.(); onNavigate?.("dashboard/work/inbox"); }}>보관함 보기</Button>
+          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => { onDone?.(); onNavigate?.("dashboard/work/projects?view=memos"); }}>보관함 보기</Button>
         )}
       </div>
     </>

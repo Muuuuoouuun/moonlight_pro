@@ -57,6 +57,7 @@ test('제목은 시간대마다 하는 일을 말하고, 모르는 수는 숫자
   assert.equal(buildTodayDeck({ taskToday: live({ picked: 2, done: 1 }), agenda, now: local(16) }).headline, '빈 시간 · 다음은 16:30');
   assert.equal(buildTodayDeck({ taskToday: live({ picked: 2, done: 1 }), now: evening }).headline, '오늘 3개 중 1개 끝냈어요');
   assert.equal(buildTodayDeck({ taskToday: live({ picked: 0, done: 0 }), agenda, now: local(17, 45) }).headline, '세 자리가 비어 있어요');
+  assert.equal(buildTodayDeck({ taskToday: live({ picked: 1, done: 0 }, [{ id: 'selected', focusToday: true }]), now: day }).headline, '오늘 끝낼 일 1개', 'selected unfinished work is not the number of empty slots');
   assert.equal(buildTodayDeck({ taskToday: live({ picked: 2, done: 2 }), agenda, now: local(17, 45) }).headline, '오늘 3개를 다 끝냈어요');
   assert.equal(buildTodayDeck({ taskToday: { state: 'partial', items: [], focus: { picked: 2, done: 0 } }, now: evening }).headline, '하루를 닫을 시간', 'partial의 0은 확인한 0이 아니다');
 });
@@ -64,8 +65,9 @@ test('제목은 시간대마다 하는 일을 말하고, 모르는 수는 숫자
 test('오늘 화면은 세 자리를 할 일 목록보다 먼저 그리고, 같은 할 일을 목록에 두 번 그리지 않는다', () => {
   const source = readFileSync(new URL('./daily-brief.jsx', import.meta.url), 'utf8').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
   const at = marker => { const i = source.indexOf(marker); assert.ok(i > 0, marker); return i; };
-  assert.ok(at('<QuickCaptureForm') < at('<TodaySlots') && at('<TodaySlots') < at('<TaskToday'));
-  assert.match(source, /const listItems = \[\.\.\.items\.filter\(\(task\) => !task\.focusToday\), \.\.\.later\]/);
+  assert.ok(at('<TodayTaskCapture') < at('<TodaySlots') && at('<TodaySlots') < at('<TaskToday'));
+  assert.match(source, /taskToday\.queueItems\.filter\(task => !hiddenIds\.has\(task\.id\)\)/);
+  assert.match(source, /items\.filter\(\(task\) => !task\.focusToday\)/, '이전 모델의 fallback도 집중을 중복 표시하지 않는다');
   assert.doesNotMatch(source, /15분 집중/, '15분 집중은 세 자리가 맡는다');
 });
 

@@ -33,7 +33,7 @@ function mountMonthDrawer(recordMonth) {
     },
   };
   const saved = [];
-  const product = { id: '22222222-2222-4222-8222-222222222222', name: '합성 제품', metrics: [] };
+  let product = { id: '22222222-2222-4222-8222-222222222222', name: '합성 제품', metrics: [] };
   const dependencies = {
     React, ...catalog, recordMonth, styles: {},
     monthLabel: month => `${Number(month.slice(5, 7))}월`,
@@ -61,11 +61,30 @@ function mountMonthDrawer(recordMonth) {
   return {
     saved, field, findAll, render,
     edit(label, value) { field(label).props.onChange({ target: { value } }); render(); },
+    month(value) { findAll(node => node.type === 'SegmentedControl')[0].props.onChange(value); render(); },
+    reread(metrics) { product = { ...product, metrics }; render(); },
     async save() { const pending = saveButton().props.onClick(); render(); await pending; render(); },
     startSave() { const pending = saveButton().props.onClick(); render(); return pending; },
     alert: () => text(findAll(node => node.props.role === 'alert')[0]),
   };
 }
+
+test('monthly drafts survive month comparison, a refreshed product and a failed-save retry', async () => {
+  const writes = [];
+  const drawer = mountMonthDrawer(async body => { writes.push(body); return writes.length === 1 ? { ok: false, message: '합성 연결 실패' } : { ok: true }; });
+  drawer.edit('매출', '123,456'); drawer.edit('비용', '0');
+  drawer.month('2026-09'); drawer.edit('매출', '456,789'); drawer.edit('주간 사용자', '12');
+  drawer.month('2026-10');
+  assert.equal(drawer.field('매출').props.value, '123,456'); assert.equal(drawer.field('비용').props.value, '0');
+  drawer.reread([{ month: '2026-10', revenue: 999, cost: 999 }]);
+  assert.equal(drawer.field('매출').props.value, '123,456');
+  await drawer.save(); assert.equal(drawer.saved.length, 0);
+  drawer.month('2026-09');
+  assert.equal(drawer.field('매출').props.value, '456,789'); assert.equal(drawer.field('주간 사용자').props.value, '12');
+  drawer.month('2026-10'); await drawer.save();
+  assert.deepEqual(writes[0], writes[1]); assert.equal(writes[1].revenue, 123456); assert.equal(writes[1].cost, 0);
+  assert.equal(writes[1].month, '2026-10'); assert.equal(drawer.saved.length, 1);
+});
 
 test('actual monthly drawer rejects malformed input with zero writes and preserves it for correction', async () => {
   for (const value of ['-500', '+500', '1.5', 'abc', '1,2', '9007199254740992']) {

@@ -242,6 +242,34 @@ const readDraft = (target, scope) => (target?.id ? recordDraftStore.read(draftKe
 const writeDraft = (target, form, scope) => (target?.id ? recordDraftStore.write(draftKey(target, scope), pickDraft(form)) : null);
 const clearDraft = (target, scope) => { if (target?.id) recordDraftStore.clear(draftKey(target, scope)); };
 
+// 요약 요청의 실패 사본은 다음 초안과 다른 자리에 둔다. 응답 유실은 저장 실패와
+// 다르므로 다시 열어도 확인 전에는 같은 입력을 바로 재전송하지 않는다.
+const summaryRecoveryKey = (target, scope = "") => `${draftKey(target, scope)}:summary-recoveries`;
+const summaryRecoveryListeners = new Map();
+const readSummaryRecoveries = (target, scope) => {
+  const rows = target?.id ? recordDraftStore.read(summaryRecoveryKey(target, scope))?.value : null;
+  return Array.isArray(rows) ? rows.filter(row => row?.form && row.optimisticId) : [];
+};
+const publishSummaryRecoveries = (target, scope, rows) => {
+  if (target?.id) recordDraftStore.write(summaryRecoveryKey(target, scope), rows);
+  summaryRecoveryListeners.get(summaryRecoveryKey(target, scope))?.forEach(listener => listener(rows));
+};
+const holdSummaryRecovery = (target, snapshot, message, unknown, scope) => {
+  const rows = [...readSummaryRecoveries(target, scope).filter(row => row.optimisticId !== snapshot.optimisticId),
+    { optimisticId: snapshot.optimisticId, form: pickDraft(snapshot.form), capture: snapshot.capture || {}, message, unknown }];
+  publishSummaryRecoveries(target, scope, rows);
+  return rows;
+};
+const summaryRecoveryText = ({ form, capture = {} }) => [
+  `어떻게: ${channelLabel(form.kind)}${form.replied ? " · 회신 받음" : ""}`,
+  `연락 시각: ${capture.occurredAt ? `${new Date(capture.occurredAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })} (한국 시간)` : "직접 지정 없음 · 서버 저장 시각 기준"}`,
+  `반응: ${REACTIONS.find(row => row.key === form.reaction)?.label || "미입력"}`,
+  `요약: ${form.summary || ""}`, form.body ? `자세히:\n${form.body}` : "",
+  `다음 약속: ${form.nextAction || ""}`,
+  `언제: ${form.followup === "dormant" ? "기약 없음" : form.followup === "none" ? "후속 없음" : form.at || "미정"}`,
+].filter(Boolean).join("\n");
+const SUMMARY_UNKNOWN_COPY = "저장 여부를 확인하지 못했어요. 이미 기록됐을 수 있으니 이 고객의 최근 기록을 먼저 확인해 주세요.";
+
 // 일부 저장 뒤 아직 못 보낸 긴 글(원문 · 자세히). 요청이 가는 동안은 메모리에만 들고, 실패가 확인되면
 // (durable) 초안과 같은 탭 저장소에도 둔다 — 그 상태에서 새로고침해도 긴 글이 남는다. 요청이 가는
 // 중에는 탭에 두지 않는다: 저장됐는데 새로고침 뒤 "일부 저장"이라고 말하면 같은 글을 두 번 보내게 된다.
@@ -644,6 +672,16 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   // 저장을 눌러 보기 전에는 필수 표시를 붉히지 않는다 — 빈 폼을 열자마자 꾸짖는 건 잔소리다.
   const [attempted, setAttempted] = React.useState(false);
   const [pendingUndo, setPendingUndo] = React.useState(null);
+  const [summaryRecoveries, setSummaryRecoveries] = React.useState(() => readSummaryRecoveries(target, draftScope));
+  const [unknownChecked, setUnknownChecked] = React.useState(null);
+  const unknownSummary = summaryRecoveries.find(row => row.unknown && sameDraft(form, row.form));
+  React.useEffect(() => {
+    const key = summaryRecoveryKey(target, draftScope);
+    if (!summaryRecoveryListeners.has(key)) summaryRecoveryListeners.set(key, new Set());
+    const listeners = summaryRecoveryListeners.get(key);
+    listeners.add(setSummaryRecoveries);
+    return () => { listeners.delete(setSummaryRecoveries); if (!listeners.size) summaryRecoveryListeners.delete(key); };
+  }, [target?.kind, target?.id, draftScope]);
   // 요약 RPC 성공 뒤 원문 note만 실패하면, 같은 연락을 두 번 만들지 않고 note만 재시도한다.
   // summary는 이미 저장된 요약이다 — 넓은 기록창이 잠긴 칸에 그대로 보인다.
   const [pendingRawNote, setPendingRawNote] = React.useState(() => recoveredRawNote && {
@@ -826,13 +864,18 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data.status !== "saved") {
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok || data?.status !== "saved") {
         // 늦은 실패 — 입력 복원 + 원인 명명 (낙관 행 제거는 onUndone이 담당).
         // preview(백엔드 미구성)도 여기다: 저장되지 않았으므로 "기록됨"을 말하지 않는다.
-        fail(snapshot, `${data.status === "preview" ? "Preview · 연결 필요 — 저장되지 않았습니다" : data.error || data.reason || "저장에 실패했습니다."} — 입력을 복원했습니다.`);
+        const rejected = resp.status >= 400 && resp.status < 500;
+        const unknown = !rejected && (resp.status >= 500 || !data || !["preview", "invalid-input", "failed"].includes(data.status));
+        fail(snapshot, unknown ? SUMMARY_UNKNOWN_COPY : `${data?.status === "preview" ? "Preview · 연결 필요 — 저장되지 않았습니다" : data?.error || data?.reason || "저장에 실패했습니다."} — 입력을 복원했습니다.`, unknown);
         return false;
       }
+      const remaining = readSummaryRecoveries(target, draftScope).filter(row => !sameDraft(row.form, snapshot.form));
+      publishSummaryRecoveries(target, draftScope, remaining);
+      setSummaryRecoveries(remaining);
       onSummaryPersisted?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId }, target);
       annotate(data.activityId || null, snapshot);
       // 붙여넣은 원문은 요약이 저장된 뒤에 별도 note로 남긴다. 아직 원자 저장이 아니라
@@ -886,7 +929,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       onPersisted?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId, ...(savedNote ? { note: savedNote } : {}) }, target);
       return true;
     } catch (err) {
-      fail(snapshot, `${err instanceof Error ? err.message : String(err)} — 입력을 복원했습니다.`);
+      fail(snapshot, SUMMARY_UNKNOWN_COPY, true);
       return false;
     }
   };
@@ -952,22 +995,35 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     }
   };
 
-  const fail = (snapshot, message) => {
+  const fail = (snapshot, message, unknown = false) => {
     onUndone?.(snapshot.optimisticId, target);
     // 실패한 글은 그 고객의 초안으로도 남긴다 — 창이 이미 닫혔거나 다음 사람으로 넘어간 뒤에 온 실패라도
     // 같은 자리의 기록창을 다시 열면 쓰던 글이 있다(저장할 때 지운 초안을 되돌려 놓는다).
-    writeDraft(target, snapshot.form, draftScope);
-    restore(snapshot);
+    setSummaryRecoveries(holdSummaryRecovery(target, snapshot, message, unknown, draftScope));
+    const parked = readDraft(target, draftScope)?.value;
+    const current = mountedRef.current ? formRef.current : parked;
+    const hasNewDraft = current && !sameDraft(current, baseForm(presetForm)) && !sameDraft(current, snapshot.form);
+    if (!hasNewDraft) {
+      writeDraft(target, snapshot.form, draftScope);
+      restore(snapshot);
+    }
     setState("error");
     setErrorMsg(message);
     // '저장하고 다음'으로 보낸 기록의 실패는 창 머리의 '이전' 줄이 말한다 — 창은 이미 다른 사람의 것이라
     // 그 사람이 보던 탭('이 고객')을 쓰기로 돌리지 않는다.
     if (!snapshot.queued) onAttention?.();
-    onFailed?.({ optimisticId: snapshot.optimisticId, message, form: snapshot.form, target });
+    onFailed?.({ optimisticId: snapshot.optimisticId, message, form: snapshot.form, target, preservedDraft: Boolean(hasNewDraft) });
   };
 
   // advance: '저장하고 다음'으로 눌렀는가(주 버튼 · ⌘↵). '저장만'은 넘어가지 않고 지금처럼 창을 닫는다.
   const save = ({ ignoreWarning = false, advance = false } = {}) => {
+    const uncertain = readSummaryRecoveries(target, draftScope).find(row => row.unknown && sameDraft(form, row.form));
+    if (uncertain && unknownChecked !== uncertain.optimisticId) {
+      setSummaryRecoveries(readSummaryRecoveries(target, draftScope));
+      setState("error"); setErrorMsg(SUMMARY_UNKNOWN_COPY);
+      onAttention?.();
+      return;
+    }
     if (!check.ok) {
       setAttempted(true);
       const focusMissing = () => {
@@ -1181,7 +1237,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     warnCopy,
     errorMsg,
     // 넓은 기록창은 실패를 레일 + 제목 한 곳으로 그린다 — 기록은 생겼고 긴 글만 빠졌으면 "일부 저장"이다.
-    errorTitle: wide ? (pendingRawNote ? "일부 저장" : "저장 못 함") : "",
+    errorTitle: wide ? (pendingRawNote ? "일부 저장" : unknownSummary ? "저장 여부 미확인" : "저장 못 함") : "",
     // 쉬는 글자 — 초안이 놓인 곳, 그리고 '저장하고 다음'이 데려갈 사람(있을 때만).
     draftHint: [autoFocus ? draftHintCopy(draftPlace, { dirty: !untouched }) : "", queued ? recordNextHint(next) : ""].filter(Boolean).join(" · "),
   });
@@ -1193,6 +1249,15 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       <span style={{ flex: 1 }}>{draftRestoredCopy(draftPlace)}</span>
       <Button variant="ghost" size="xs" onClick={() => { clearDraft(target, draftScope); reset(); }}>지우기</Button>
     </div>
+  );
+  const summaryRecoveryPanel = summaryRecoveries.length > 0 && (
+    <details>
+      <summary style={{ fontSize: 12, color: "var(--fg-muted)" }}>이전 기록 입력 보관 · {summaryRecoveries.length}건</summary>
+      {summaryRecoveries.map(row => <div key={row.optimisticId}>
+        <p style={{ fontSize: 12 }}>{row.message}</p>
+        <TextAreaField label={row.unknown ? "저장 여부 미확인 입력" : "저장하지 못한 입력"} value={summaryRecoveryText(row)} readOnly rows={5} />
+      </div>)}
+    </details>
   );
   const captureNote = captureLine && (
     <span style={{ fontSize: 11.5, color: "var(--fg-dim)" }}>
@@ -1227,6 +1292,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   const saveStatus = (
     <>
       <RecordSaveLine line={saveLine} onUndo={pendingUndo?.undo} />
+      {unknownSummary && <CheckboxRow checked={unknownChecked === unknownSummary.optimisticId} onChange={(checked) => setUnknownChecked(checked ? unknownSummary.optimisticId : null)} text="최근 기록에 없는 것을 확인했어요 · 같은 입력 다시 저장" />}
       {pendingRawNote && <Button variant="ghost" size="xs" onClick={skipRawNote} disabled={rawNoteBusy}>{noteCopy.skip}</Button>}
       {!sheet && saveSecondary}
     </>
@@ -1491,6 +1557,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
           {/* 전환 칸(연락 기록 | 메모)은 시트에서 흐르는 칸 맨 위에 선다 — 글을 쓰기 시작하면 위로 비킨다. */}
           {sheet && modeBar}
           {restoredLine}
+          {summaryRecoveryPanel}
           {captureNote}
           {summaryField}
           {folded && (
@@ -1531,6 +1598,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   return (
     <div onKeyDown={onKeyDown} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {restoredLine}
+      {summaryRecoveryPanel}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <SegmentedControl

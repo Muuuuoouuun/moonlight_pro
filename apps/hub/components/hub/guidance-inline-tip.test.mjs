@@ -111,7 +111,7 @@ test('each workflow keeps one tip in its selected hierarchy, outside the Home br
   assert.equal((homeBrief.match(/<GuidanceInlineTip\b/g) || []).length, 0);
   assert.match(today, /<TaskToday[\s\S]*?<GuidanceInlineTip\s+variant="today"[\s\S]*?<FocusSlots/);
   // 홈 7g(2026-10-19): 결정 카드 → 멘토 한 줄 → 오늘의 시간표 → 아침 요약.
-  assert.match(home, /<FocusCard\b[\s\S]*?<GuidanceInlineTip\s+variant="home"[\s\S]*?<TodaySchedule\b[\s\S]*?<HomeMorningBrief\b/);
+  assert.match(home, /<HomeMorningBrief\b[\s\S]*?<FocusCard\b[\s\S]*?<TodaySchedule\b[\s\S]*?<details className="home-support-disclosure">[\s\S]*?<GuidanceInlineTip\s+variant="home"/);
   const chartStart = overview.indexOf('작업·기획 활동 추이');
   const tip = overview.indexOf('<GuidanceInlineTip variant="overview"');
   const domainPanels = overview.indexOf('hub-grid--split', chartStart);

@@ -106,11 +106,23 @@
 .filterBar { display: flex; align-items: center; gap: 6px; }
 .filterBar > :global(.hub-seg) { flex: 0 1 auto; min-width: 0; }
 .filterBar > :global(.hub-seg) :global(.hub-seg__btn) { padding: 3px 10px !important; }
-.extraFilter, .filterOptions { display: none !important; }
+.extraFilter { display: inline-flex !important; flex-shrink: 0; margin-left: auto; }
+.filterOptions { display: grid !important; grid-template-columns: 1fr 1fr; gap: 4px; padding-top: 4px; }
+.filterOptions button { width: 100%; }
 .filterResult { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 10.5px; color: var(--fg-muted); }
 .filterResult :global(.num) { font-size: 12px; }
 .notice { display: flex; align-items: center; gap: 6px; }
 .notice > span { flex: 1; }
+
+/* 작은 화면에서도 선택 전에 상태·처리 수·기한을 같은 두 줄에서 읽는다. */
+@media (max-width: 900px) {
+  .index .compactMeta { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-left: 26px; color: var(--fg-muted); font-size: 12px; }
+  .compactMeta > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .compactMeta > span:last-child { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+  .compactMeta > span[data-risk="true"] { color: var(--danger); }
+  .index .legacyMeta, .index .row :global(.hub-project-portfolio-index-row__progress) { display: none; }
+  .index .extraFilter, .filterOptions button { min-width: 44px; min-height: 44px; }
+}
 
 @media (min-width: 901px) {
   .index { position: relative; }

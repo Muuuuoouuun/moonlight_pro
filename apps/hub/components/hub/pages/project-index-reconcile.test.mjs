@@ -25,14 +25,15 @@ const project = (id, done = 0, total = 2) => ({ id, name: id, statusKey: 'active
 
 // Run actual hooks, effects and event handlers. Browser services are local mocks;
 // no copied ordering/completion implementation, live data or transport is used.
-function mounted(kind, initial, { storage = new Map(), reduced = false } = {}) {
+function mounted(kind, initial, { storage = new Map(), reduced = false, mobile = false } = {}) {
   const cells = [], pending = [], writes = [], timers = new Map(), listeners = new Map();
+  const frames = [], focusCounts = { search: 0, picker: 0 };
   let cursor = 0, dirty = false, output, props = initial, timerId = 0, domRows = [];
   const media = { matches: reduced, addEventListener(_name, callback) { listeners.set('motion', callback); }, removeEventListener() { listeners.delete('motion'); } };
-  const browser = { matchMedia: () => media, addEventListener() {}, removeEventListener() {}, innerWidth: 1280, innerHeight: 720 };
+  const browser = { matchMedia: query => query.includes('max-width') ? { matches: mobile } : media, addEventListener() {}, removeEventListener() {}, innerWidth: 1280, innerHeight: 720 };
   const document = { activeElement: null, addEventListener() {}, removeEventListener() {} };
   const localStorage = { getItem: key => storage.get(key) ?? null, setItem(key, value) { writes.push({ key, value: JSON.parse(value) }); storage.set(key, value); } };
-  const list = { scrollTop: 0, querySelectorAll: () => domRows, getBoundingClientRect: () => ({ top: 0, left: 0, right: 300, bottom: 400 }) };
+  const list = { scrollTop: 0, querySelectorAll: () => domRows, querySelector: () => domRows[0]?.button, getBoundingClientRect: () => ({ top: 0, left: 0, right: 300, bottom: 400 }) };
   function effect(callback, deps) {
     const index = cursor++;
     if (!cells[index] || !same(cells[index].deps, deps)) pending.push({ index, callback, deps });
@@ -51,7 +52,7 @@ function mounted(kind, initial, { storage = new Map(), reduced = false } = {}) {
     projectGenreLabel: () => '', projectGenreTint: () => undefined, projectStatusLabel: value => value,
     readTaskChecklist, selectUrgentProjectItems, selectProjectNextStep, buildCurrentMonthProjectPreview,
     setTimeout(callback) { const id = ++timerId; timers.set(id, callback); return id; }, clearTimeout(id) { timers.delete(id); },
-    requestAnimationFrame: () => 1, cancelAnimationFrame() {},
+    requestAnimationFrame(callback) { frames.push(callback); return frames.length; }, cancelAnimationFrame(id) { frames[id - 1] = null; },
   };
   const controls = new Function(...Object.keys(scope), `${controlsCode}\nreturn {useProjectIndexControls, ProjectIndexMenu};`)(...Object.values(scope));
   const workspace = new Function(...Object.keys({ ...scope, ...controls }), `${workspaceCode}\nreturn {ProjectPortfolioWorkspace, ProjectIndexRow};`)(...Object.values({ ...scope, ...controls }));
@@ -74,6 +75,10 @@ function mounted(kind, initial, { storage = new Map(), reduced = false } = {}) {
         output = kind === 'row' ? workspace.ProjectIndexRow(props) : workspace.ProjectPortfolioWorkspace(props);
         const listNode = nodes(output, node => node.props?.className?.includes('hub-project-portfolio-index__list'))[0];
         if (listNode) listNode.props.ref.current = list;
+        const search = nodes(output, node => node.type === 'Input' && node.props.ariaLabel === '프로젝트 검색')[0];
+        if (search?.props.ref) search.props.ref.current = { focus() { focusCounts.search++; } };
+        const picker = nodes(output, node => node.type === 'Button' && text(node) === '프로젝트 바꾸기')[0];
+        if (picker?.props.ref) picker.props.ref.current = { focus() { focusCounts.picker++; } };
         domRows = nodes(output, node => node.type?.name === 'ProjectIndexRow').map((node, index) => rowElement(node.props.project.id, index));
       }
       for (const item of pending.splice(0)) { cells[item.index]?.cleanup?.(); cells[item.index] = { deps: item.deps, cleanup: item.callback() }; }
@@ -82,13 +87,77 @@ function mounted(kind, initial, { storage = new Map(), reduced = false } = {}) {
     throw new Error('hook did not settle');
   }
   render();
-  return { render, storage, writes, media, document, listeners, get output() { return output; }, row: id => domRows.find(row => row.dataset.projectIndexId === id), unmount() { for (const cell of cells) cell?.cleanup?.(); }, changeMotion(value) { media.matches = value; listeners.get('motion')?.({ matches: value }); render(); } };
+  return { render, storage, writes, media, document, listeners, focusCounts, flushFrames() { frames.splice(0).forEach(callback => callback?.()); }, get output() { return output; }, row: id => domRows.find(row => row.dataset.projectIndexId === id), unmount() { for (const cell of cells) cell?.cleanup?.(); }, changeMotion(value) { media.matches = value; listeners.get('motion')?.({ matches: value }); render(); } };
 }
 function pointer(row, y) { return { button: 0, isPrimary: true, pointerId: 1, pointerType: 'mouse', clientX: 20, clientY: y, currentTarget: row.button, target: row.button, preventDefault() {}, stopPropagation() {} }; }
 function baseProps(projects, extra = {}) { return { projects, indexProjects: projects, portfolioProjects: projects, todosByProject: new Map(), brandByKey: new Map(), indexStorageKey: 'personal', sourceState: 'live', selectedProjectId: projects[0]?.id, query: '', ...extra }; }
 const projectRows = tree => nodes(tree, node => node.type?.name === 'ProjectIndexRow');
 const heading = tree => nodes(tree, node => node.key === 'done-group-heading')[0];
 const status = tree => nodes(tree, node => node.props?.role === 'status')[0];
+
+test('mobile search request reveals and focuses the index, and Enter selects a result without losing task drafts', () => {
+  const projects = [project('a'), project('b')], selected = [];
+  const searchInputRef = { current: null };
+  const props = baseProps(projects, { searchInputRef, onSelectProject: id => selected.push(id) });
+  const view = mounted('workspace', props, { mobile: true });
+  const work = () => nodes(view.output, node => node.type === 'ProjectWorkList')[0];
+  const draft = { a: { title: 'Unsent next task' } };
+  work().props.draftStore.setDrafts(draft); view.render();
+  view.render({ ...props, searchRequest: 1 }); view.flushFrames();
+  assert.equal(view.output.props['data-mobile-picker'], 'true');
+  assert.ok(view.focusCounts.search > 0);
+  const search = () => nodes(view.output, node => node.type === 'Input' && node.props.ariaLabel === '프로젝트 검색')[0];
+  search().props.onKeyDown({ key: 'Enter', isComposing: true });
+  assert.deepEqual(selected, [], 'IME composition must not select a project');
+  let prevented = false;
+  search().props.onKeyDown({ key: 'ArrowDown', preventDefault() { prevented = true; } });
+  assert.equal(prevented, true); assert.equal(view.document.activeElement, view.row('a').button);
+  search().props.onKeyDown({ key: 'Enter', preventDefault() {} }); view.render(); view.flushFrames();
+  assert.deepEqual(selected, ['a']); assert.equal(view.output.props['data-mobile-picker'], 'false');
+  assert.equal(view.focusCounts.picker, 1); assert.equal(work().props.draftStore.drafts, draft);
+  view.unmount();
+});
+
+test('starting an inline project from the mobile picker always reveals its create surface', () => {
+  const props = baseProps([project('a')], { searchInputRef: { current: null } });
+  const view = mounted('workspace', props, { mobile: true });
+  nodes(view.output, node => node.type === 'Button' && text(node) === '프로젝트 바꾸기')[0].props.onClick();
+  view.render(); assert.equal(view.output.props['data-mobile-picker'], 'true');
+  const createSurface = { type: 'create-form', props: { children: 'Unsent project title' } };
+  view.render({ ...props, createSurface });
+  assert.equal(view.output.props['data-create-open'], 'true');
+  assert.equal(view.output.props['data-mobile-picker'], 'false', 'the stage must not be hidden together with the index');
+  assert.equal(nodes(view.output, node => node.type === 'create-form')[0], createSurface);
+  view.render(props);
+  assert.equal(view.output.props['data-mobile-picker'], 'false', 'canceling creation returns to the selected project');
+  view.unmount();
+});
+
+test('mobile picker Escape respects a consumed search Escape and returns focus on close', () => {
+  const view = mounted('workspace', baseProps([project('a')], { searchInputRef: { current: null } }), { mobile: true });
+  nodes(view.output, node => node.type === 'Button' && text(node) === '프로젝트 바꾸기')[0].props.onClick(); view.render();
+  view.output.props.onKeyDown({ key: 'Escape', defaultPrevented: true }); view.render();
+  assert.equal(view.output.props['data-mobile-picker'], 'true');
+  view.output.props.onKeyDown({ key: 'Escape', defaultPrevented: false, preventDefault() {}, stopPropagation() {} }); view.render(); view.flushFrames();
+  assert.equal(view.output.props['data-mobile-picker'], 'false'); assert.equal(view.focusCounts.picker, 1);
+  view.unmount();
+});
+
+test('the same additional filters remain operable outside desktop width', () => {
+  const selected = [];
+  const props = baseProps([project('a')], { onFilterChange: value => selected.push(value) });
+  const view = mounted('workspace', props, { mobile: true });
+  nodes(view.output, node => node.type === 'IconButton' && node.props.tooltip === '추가 프로젝트 필터')[0].props.onClick(); view.render();
+  const metrics = nodes(view.output, node => node.type?.name === 'PortfolioMetric');
+  assert.deepEqual(metrics.map(node => node.props.metric.key), ['active', 'blockedOrOverdue', 'dueSoon', 'unmeasured']);
+  metrics.find(node => node.props.metric.key === 'dueSoon').type(metrics.find(node => node.props.metric.key === 'dueSoon').props).props.onClick();
+  assert.deepEqual(selected, ['dueSoon']);
+  const css = readFileSync(new URL('./project-index-controls.module.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /\.extraFilter, \.filterOptions \{ display: none/);
+  assert.match(css, /\.index \.extraFilter, \.filterOptions button \{ min-width: 44px; min-height: 44px; \}/);
+  assert.match(css, /@media \(max-width: 900px\) \{\s*\.index \.compactMeta \{ display: grid/);
+  view.unmount();
+});
 
 test('actual reorder/sort preserve collapse and hidden project slots across reload', () => {
   const projects = [project('a'), project('b'), project('done', 2)];

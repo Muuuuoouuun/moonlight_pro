@@ -1018,7 +1018,7 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   // (?lead= 딥링크)가 담당한다. 계약 고객(account)은 아직 ?account= 딥링크가 없어
   // followups ActivityPanel과 같은 규칙으로 링크를 숨긴다.
   const editHref = row.kind !== "account" && row.id
-    ? `dashboard/revenue/leads?lead=${encodeURIComponent(row.id)}`
+    ? `dashboard/revenue/leads?lead=${encodeURIComponent(row.id)}${scopeKey ? `&scope=${scopeKey}` : ""}`
     : null;
 
   if (memoState) {
@@ -1134,11 +1134,11 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
         setActivities(prev => addSavedNoteRow(applyReceiptEvent(prev, { type: "saved", activityId, optimisticId, at }), note, at));
         onRecordPersisted?.(row);
       }}
-      onFailed={({ message, form }) => onRecordFailed?.(row, {
+      onFailed={({ message, form, preservedDraft }) => onRecordFailed?.(row, {
         message,
         form,
         // 폼이 아직 떠 있으면 폼이 직접 입력을 복원하고 원인을 말한다 — 부모는 알림만.
-        formMounted: mountedRef.current && Boolean(recordRef.current),
+        formMounted: Boolean(preservedDraft) || (mountedRef.current && Boolean(recordRef.current)),
       })}
       onDone={() => { if (mountedRef.current) setRecord(null); }}
       // 휴대폰 시트는 주 버튼을 드로어 머리의 자리에 그린다(자리가 서기 전에는 null — 제자리에 그리지 않는다).
@@ -1458,6 +1458,7 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
   // explicit so clearing the original phone/promise is not silently ignored.
   const createPayload = { createId, name: name.trim(), stage,
     phone: phone.trim(), next_action: nextAction.trim(), next_action_at: nextActionAt || "",
+    ...(workspace === "brand" ? { type: "personal" } : workspace === "classin" ? { type: "company" } : {}),
     ...(workspace ? { workspace } : {}), focusOverride: isImportant ? "raise" : "default" };
   React.useEffect(() => { rememberRevenueDraft('lead', createPayload); }, [name, phone, stage, nextAction, nextActionAt, isImportant, workspace, createId]);
 
@@ -1854,13 +1855,18 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
 
   // ?q=<검색어> — 오늘 연락 등 다른 탭이 "이 사람 찾기"로 보낸다. 전체에서 찾고 1회 소거.
   // ?new=customer — 탑바 생성·다른 탭의 "새 고객" 딥링크. 1회 열고 소거.
-  const entryParamsDone = React.useRef(false);
+  const entryParamsDone = React.useRef(null);
   React.useEffect(() => {
-    if (entryParamsDone.current) return;
-    entryParamsDone.current = true;
     const q = searchParams?.get("q");
     const wantsNew = searchParams?.get("new");
     const phone = searchParams?.get("phone");
+    const entryKey = q || wantsNew === "customer" || wantsNew === "lead"
+      ? JSON.stringify([q, wantsNew, phone]) : null;
+    // 쿼리만 바뀌면 같은 페이지가 남는다. 빈 URL은 다음 요청을 받을 준비를 하고,
+    // 아직 소거되지 않은 같은 요청만 중복 소비하지 않는다.
+    if (!entryKey) { entryParamsDone.current = null; return; }
+    if (entryParamsDone.current === entryKey) return;
+    entryParamsDone.current = entryKey;
     const consumed = [];
     if (q) { setSearch(q); setSegment("all"); consumed.push("q"); }
     if (wantsNew === "customer" || wantsNew === "lead") {
@@ -1872,14 +1878,14 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
   }, [searchParams, stripParams]);
 
   // 딥링크: ?customer=<kind>:<id> — 기록 로드 후 1회만 열고 쿼리 소거 (DESIGN §8.1)
-  const deepLinkDone = React.useRef(false);
+  const deepLinkDone = React.useRef(null);
   React.useEffect(() => {
     // 기록이 아직 로드 전(loading)일 때만 대기 — 빈/preview DB에서도 파라미터를 소비하고
     // 설명한다(기존: 빈 기록이면 ?customer= 링크가 영원히 무시·무설명, 4차 재감사 S).
-    if (deepLinkDone.current || syncState === 'loading') return;
     const target = searchParams?.get("customer");
-    if (!target) { deepLinkDone.current = true; return; }
-    deepLinkDone.current = true;
+    if (!target) { deepLinkDone.current = null; return; }
+    if (deepLinkDone.current === target || syncState === 'loading' || syncState === 'error') return;
+    deepLinkDone.current = target;
     if (allRows.some(r => r.key === target)) setOpenKey(target);
     else setCreateError('링크의 고객을 찾을 수 없습니다 — 기록이 비어 있거나 항목이 삭제됐습니다.');
     stripParams(["customer"]);
@@ -2242,7 +2248,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
         <NewCustomerDrawer
           initialName={newCustomer.name || ""}
           initialPhone={newCustomer.phone || ""}
-          workspace={scopeKey === "classin" ? "classin" : null}
+          workspace={scopeKey === "classin" ? "classin" : scopeKey === "personal" ? "brand" : null}
           onClose={() => setNewCustomer(null)}
           onCreated={(id, name) => {
             toast.success(`고객 등록됨 · ${name}`);

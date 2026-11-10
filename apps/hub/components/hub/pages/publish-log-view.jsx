@@ -83,7 +83,7 @@ export function PublishLogDetail({ row, onOpenDraft, onOpenPerformance, onFollow
       </ol>
       <div className="pl-detail-actions">
         {row.contentId && <Button size="xs" variant="outline" onClick={() => onOpenDraft(row)}>원고 열기</Button>}
-        {row.state === 'published' && <Button size="xs" variant="outline" onClick={onOpenPerformance}>{row.metrics ? '성과에서 수정' : '성과 기록'}</Button>}
+        {row.state === 'published' && <Button size="xs" variant="outline" onClick={() => onOpenPerformance(row)}>{row.metrics ? '성과에서 수정' : '성과 기록'}</Button>}
         {row.state === 'published' && row.contentId && onFollowUp && <Button size="xs" variant="outline" disabled={followUpBusy} onClick={() => onFollowUp(row)}>{followUpBusy ? '만드는 중…' : '후속편 쓰기'}</Button>}
       </div>
     </aside>

@@ -26,6 +26,7 @@ const ledgerOf = (syncState = 'live', extra = {}) => ({
 function render(ledger, cachedStreak = null) {
   const deps = {
     React, ...taskModel, useDailyBriefLedger: () => ledger,
+    useTodayTaskActions: taskToday => ({ taskToday, pendingIds: [] }),
     useGuruRecommendations: () => ({}), useToast: () => ({}), rankSignals: items => items,
     useUndoableAction: () => ({}), formatBriefDate: () => '합성 날짜', greetingFor: () => '안녕하세요',
     window: {}, localStorage: { getItem: () => JSON.stringify(cachedStreak) },
@@ -44,7 +45,9 @@ function render(ledger, cachedStreak = null) {
   const { DailyBrief } = new Function(...Object.keys(deps), `${compiled}; return { DailyBrief };`)(...Object.values(deps));
   const html = renderToStaticMarkup(React.createElement(DailyBrief, { onNavigate() {} }));
   const hero = html.match(/<div class="daily-brief__intro-stats"[^>]*>([\s\S]*?)<\/div>/)?.[1] || '';
-  const tasks = html.slice(html.indexOf('aria-label="오늘 할 일"'));
+  const taskStart = html.indexOf('aria-label="대기 할 일"');
+  assert.ok(taskStart >= 0, '대기 할 일 영역이 실제로 렌더돼야 한다');
+  const tasks = html.slice(taskStart);
   return { html, hero, tasks, counts: [...hero.matchAll(/<strong[^>]*>(.*?)<\/strong>/g)].map(match => match[1]) };
 }
 
