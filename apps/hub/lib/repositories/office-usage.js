@@ -5,7 +5,11 @@ import { fetchSupabaseRowsDetailed, withWorkspaceFilter } from '@/lib/server-rea
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OFFICE_USAGE_ROW_LIMIT = 1000;
 
-export function summarizeOfficeRuns(rows) {
+const DROP_REASONS = ['context', 'wrong', 'useless'];
+
+export function summarizeOfficeRuns(allRows) {
+  // 연결 점검용 probe 행은 요청 수·판정·토큰 어디에도 넣지 않는다.
+  const rows = allRows.filter(row => row.recommendation?.probe !== true);
   const requests = rows.filter(row => row.mode !== 'apply');
   const failures = requests.filter(row => row.result === 'error');
   const failureCategories = {};
@@ -15,12 +19,28 @@ export function summarizeOfficeRuns(rows) {
   }
   // 성공한 요청만 평균한다 — 48초 제한에 걸린 실패가 평균을 왜곡하지 않게 한다.
   const elapsed = requests.filter(row => row.result === 'ok').map(row => row.recommendation?.elapsedMs).filter(ms => Number.isFinite(ms) && ms >= 0);
+  const verdicts = { kept: 0, edited: 0, dropped: 0, total: 0, topDropReason: null };
+  const dropReasons = {};
+  for (const row of requests) {
+    const verdict = row.recommendation?.verdict;
+    if (!verdict || !['kept', 'edited', 'dropped'].includes(verdict.value)) continue;
+    verdicts[verdict.value] += 1;
+    verdicts.total += 1;
+    if (verdict.value === 'dropped' && DROP_REASONS.includes(verdict.reason)) dropReasons[verdict.reason] = (dropReasons[verdict.reason] || 0) + 1;
+  }
+  // 동률이면 DROP_REASONS 순서가 이긴다.
+  verdicts.topDropReason = DROP_REASONS.reduce((top, reason) => (dropReasons[reason] || 0) > (dropReasons[top] || 0) ? reason : top, DROP_REASONS[0]);
+  if (!dropReasons[verdicts.topDropReason]) verdicts.topDropReason = null;
+  // usage는 Engine generation.usage({promptTokens, outputTokens, totalTokens}) 그대로이고, 세지 못한 행은 null이다.
+  const counted = requests.map(row => row.recommendation?.usage?.totalTokens).filter(n => Number.isSafeInteger(n) && n >= 0);
   return {
     requests: requests.length,
     applied: rows.filter(row => row.mode === 'apply' && row.result === 'ok').length,
     failed: failures.length,
     failureCategories,
     averageElapsedMs: elapsed.length ? Math.round(elapsed.reduce((sum, ms) => sum + ms, 0) / elapsed.length) : null,
+    verdicts,
+    tokens: counted.length ? counted.reduce((sum, n) => sum + n, 0) : null,
   };
 }
 

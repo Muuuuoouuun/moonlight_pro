@@ -145,3 +145,16 @@ test('Engine returns the first classified failure with an operator message, neve
  assert.match(data.error,/제한 시간/);
  assert.doesNotMatch(JSON.stringify(data),/secret provider detail/);
 });
+test('brand record enters the prompt as read-only data without touching role cards or tone',()=>{
+ const plain=buildOfficePrompt(request,context);
+ const brandContext={...context,brand:{status:'live',name:'Study.Seagull',lines:2,truncated:false,text:'브랜드: Study.Seagull\n현재 집중점: 릴스 3편'}};
+ const withBrand=buildOfficePrompt(request,brandContext);
+ assert.match(withBrand.prompt,/현재 집중점: 릴스 3편/);
+ assert.match(withBrand.systemInstruction,/브랜드 기록\(읽기 전용\)/);
+ assert.doesNotMatch(plain.systemInstruction,/브랜드 기록\(읽기 전용\)/);
+ // 같은 담당이면 붙이는 한 줄 말고 시스템 지침은 그대로다(역할 카드·말투 동결).
+ assert.equal(withBrand.systemInstruction.replace(/\n\nsourceContext\.brand\.text[^\n]*/,''),plain.systemInstruction);
+ // 못 읽은 상태(text 없음)는 프롬프트 문구를 바꾸지 않고 상태만 sourceContext로 전달한다.
+ const failed=buildOfficePrompt(request,{...context,brand:{status:'error',name:null,lines:0,truncated:false,reason:'read-failed'}});
+ assert.equal(failed.systemInstruction,plain.systemInstruction);assert.match(failed.prompt,/read-failed/);
+});

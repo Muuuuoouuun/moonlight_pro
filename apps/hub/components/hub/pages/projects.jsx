@@ -2905,10 +2905,13 @@ export function Projects({ workspace }) {
       {projectDraft && !projectDraft.isNew && (
         <EditDrawer
           title="프로젝트 편집"
-          subtitle="목표·분류·연결을 설정하세요. 일정은 계획·검증에서 관리합니다."
+          presentation="compact"
+          layout="sheet"
+          width="min(560px, 94vw)"
+          optionalLabel="고객·장르·GitHub"
           record={projectDraft}
           fields={[
-            { key: 'title', label: '프로젝트명', placeholder: '프로젝트 이름' },
+            { key: 'title', label: '프로젝트명', variant: 'title', placeholder: '프로젝트 이름' },
             {
               key: 'areaId', label: '업무 분류', type: 'select',
               options: [
@@ -2917,29 +2920,14 @@ export function Projects({ workspace }) {
               ],
             },
             {
-              key: 'brandId',
-              label: '브랜드·컨테이너',
-              type: 'select',
+              key: 'brandId', label: '브랜드', type: 'select',
               options: [
                 { value: '', label: '연결 없음' },
                 ...brands.filter(item => item.key !== 'all').map(item => ({ value: item.id, label: item.name })),
               ],
             },
-            { key: 'summary', label: '목표 결과', type: 'textarea', placeholder: '완료됐을 때 어떤 상태가 되어야 하나요?' },
             {
-              key: 'entityKey', label: '관련 리드·고객', type: 'select',
-              options: [
-                { value: '', label: '연결 없음' },
-                ...(projectDraft.entityKey && !ledger.projectEntities.some(entity => entity.key === projectDraft.entityKey)
-                  ? [{ value: projectDraft.entityKey, label: '현재 연결 유지' }] : []),
-                ...ledger.projectEntities.map(entity => ({ value: entity.key, label: entity.label })),
-              ],
-            },
-            {
-              key: 'status',
-              label: '상태',
-              type: 'select',
-              row: 'project-state',
+              key: 'status', label: '상태', type: 'segmented',
               options: [
                 { value: 'draft', label: '계획' },
                 { value: 'active', label: '진행 중' },
@@ -2949,10 +2937,7 @@ export function Projects({ workspace }) {
               ],
             },
             {
-              key: 'priority',
-              label: '우선순위',
-              type: 'select',
-              row: 'project-state',
+              key: 'priority', label: '우선순위', type: 'segmented',
               options: [
                 { value: 'low', label: '낮음' },
                 { value: 'medium', label: '보통' },
@@ -2961,13 +2946,23 @@ export function Projects({ workspace }) {
               ],
             },
             ...(projectDraft.status === 'blocked' ? [{ key: 'blocker', label: '막힌 이유', placeholder: '진행을 막는 구체적인 이유' }] : []),
-            {
-              key: 'genre', label: '장르', type: 'select',
-              options: [{ value: '', label: '장르 없음' }, ...PROJECT_GENRES.map(item => ({ value: item.key, label: item.label }))],
-            },
-            { key: 'githubRepo', label: 'GitHub 저장소', placeholder: 'owner/repo · 열린 PR이 할 일로 들어옵니다' },
             { key: 'nextAction', label: '다음 행동', placeholder: '다음에 할 한 가지' },
             ...(!projectEditSource?.delivery ? [{ key: 'dueAt', label: '기한', inputType: 'date' }] : []),
+            { key: 'summary', label: '목표 결과', type: 'textarea', rows: 4, placeholder: '완료됐을 때 어떤 상태가 되어야 하나요?' },
+            {
+              key: 'entityKey', label: '리드·고객', type: 'select', optional: true,
+              options: [
+                { value: '', label: '연결 없음' },
+                ...(projectDraft.entityKey && !ledger.projectEntities.some(entity => entity.key === projectDraft.entityKey)
+                  ? [{ value: projectDraft.entityKey, label: '현재 연결 유지' }] : []),
+                ...ledger.projectEntities.map(entity => ({ value: entity.key, label: entity.label })),
+              ],
+            },
+            {
+              key: 'genre', label: '장르', type: 'select', optional: true,
+              options: [{ value: '', label: '장르 없음' }, ...PROJECT_GENRES.map(item => ({ value: item.key, label: item.label }))],
+            },
+            { key: 'githubRepo', label: 'GitHub', placeholder: 'owner/repo · 열린 PR이 할 일로', optional: true },
           ]}
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectEdit}

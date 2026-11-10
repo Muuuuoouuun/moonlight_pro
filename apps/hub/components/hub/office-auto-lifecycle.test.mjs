@@ -15,7 +15,9 @@ test('the retained discussion receives whether its surface is visible', () => {
   for (const surface of ['discussion', 'commander']) {
     let slot = 0;
     const hooks = { ...React, useState: () => [[surface, true, false][slot++], () => {}], useEffect: () => {} };
-    const council = new Function('React', 'SegmentedControl', 'OfficeCommander', 'OfficeCouncilDiscussion', 'styles', 'useSearchParams', 'OfficeMeetingSessionProvider', 'OfficeMeetingRoom', `${code};return OfficeCouncil;`)(hooks, 'segmented', 'commander', Discussion, { shell: 'shell' }, () => new URLSearchParams(), 'provider', 'meeting-room');
+    // 2026-10-29 A안: 운영 게이트가 닫히면 회의실 한 장만 그린다. 보존된 두 면은 게이트가 열릴 때만 세그먼트로 돌아오므로 여기서 연다.
+    const gates = { officeCommander: true, officeWorkBreakdown: true };
+    const council = new Function('React', 'SegmentedControl', 'OfficeCommander', 'OfficeCouncilDiscussion', 'styles', 'useSearchParams', 'OfficeMeetingSessionProvider', 'OfficeMeetingRoom', 'FEATURE_GATES', `${code};return OfficeCouncil;`)(hooks, 'segmented', 'commander', Discussion, { shell: 'shell' }, () => new URLSearchParams(), 'provider', 'meeting-room', gates);
     const tree = council({ scope: 'classin' });
     function find(node) {
       if (node?.type === Discussion) return node;

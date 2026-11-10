@@ -83,11 +83,12 @@ export const OFFICE_SCOPES = Object.freeze(['all', 'classin', 'personal']);
 export const OFFICE_LENSES = Object.freeze([]);
 export class OfficeInputError extends Error {}
 const plain = x => x !== null && typeof x === 'object' && !Array.isArray(x) && Object.getPrototypeOf(x) === Object.prototype;
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function check(ok, message) { if (!ok) throw new OfficeInputError(message); }
 function keys(x, allowed) { check(plain(x) && Object.keys(x).every(k => allowed.includes(k)), '지원하지 않는 입력 필드입니다.'); }
 function text(x, max) { check(typeof x === 'string' && x.trim().length > 0 && x.length <= max, '본문 길이를 확인해 주세요.'); return x.trim(); }
 export function parseOfficeRequest(value) {
-  keys(value, ['ownerId','mode','scope','message','participants','lens','history','includeProjects','deliberation']);
+  keys(value, ['ownerId','mode','scope','message','participants','lens','history','includeProjects','brandId','deliberation']);
   const {ownerId = 'eevee', mode = 'chat', scope = 'all', lens = null} = value;
   check(OFFICE_IDS.includes(ownerId), '등록되지 않은 오피스 담당입니다.');
   check(OFFICE_MODES.includes(mode), '지원하지 않는 오피스 모드입니다.');
@@ -105,8 +106,11 @@ export function parseOfficeRequest(value) {
   });
   check(JSON.stringify(normalizedHistory).length <= 20000, '대화 문맥이 너무 깁니다. 새 대화를 시작해 주세요.');
   check(value.includeProjects === undefined || typeof value.includeProjects === 'boolean', '프로젝트 참조 설정이 올바르지 않습니다.');
+  check(value.brandId === undefined || value.brandId === null || (typeof value.brandId === 'string' && UUID.test(value.brandId)), '브랜드 선택이 올바르지 않습니다.');
   check(value.deliberation === undefined || mode === 'council', '토론 조절은 관점 비교에서 사용해 주세요.');
-  return {ownerId, mode, scope, lens:null, message:text(value.message,6000), participants:[...participants], history:normalizedHistory, includeProjects:value.includeProjects === true,...(value.deliberation === undefined ? {} : {deliberation:parseOfficeDeliberation(value.deliberation, participants)})};
+  // 범위 '전체'에는 브랜드 레인이 없다 — 값이 와도 읽지 않는다. 키는 값이 있을 때만 싣는다(저장된 요청·해시가 달라지지 않게).
+  const brandId = scope === 'all' || !value.brandId ? null : value.brandId.toLowerCase();
+  return {ownerId, mode, scope, lens:null, message:text(value.message,6000), participants:[...participants], history:normalizedHistory, includeProjects:value.includeProjects === true,...(brandId ? {brandId} : {}),...(value.deliberation === undefined ? {} : {deliberation:parseOfficeDeliberation(value.deliberation, participants)})};
 }
 export function parseOfficeAnswer(value, mode) {
   keys(value, ['answer','nextAction','recommendation','evidence','dissent']);
@@ -121,7 +125,7 @@ export function parseOfficeAnswer(value, mode) {
   return result;
 }
 export function parseOfficeContext(value, scope) {
-  keys(value, ['source','scope','projects','note']);
+  keys(value, ['source','scope','projects','note','brand']);
   check(value.scope === scope && ['provided','live','partial','preview','error'].includes(value.source), '업무 문맥 범위가 일치하지 않습니다.');
   check(Array.isArray(value.projects) && value.projects.length <= 8, '프로젝트 문맥이 너무 큽니다.');
   const projects = value.projects.map(row => {
@@ -131,7 +135,23 @@ export function parseOfficeContext(value, scope) {
     return {id:row.id,name:text(row.name,300),status:text(row.status,80),scope:row.scope};
   });
   check(!['provided','preview','error'].includes(value.source) || projects.length === 0, '연결 상태와 프로젝트 자료가 일치하지 않습니다.');
-  return {source:value.source,scope,projects,note:text(value.note,1000)};
+  return {source:value.source,scope,projects,note:text(value.note,1000),...(value.brand === undefined ? {} : {brand:parseOfficeBrandContext(value.brand)})};
+}
+// 브랜드 기록(읽기 전용) 부착 결과. 키 순서가 Hub가 만든 순서와 같아야 Engine 되돌림 비교(JSON)가 통과한다.
+export const OFFICE_BRAND_CONTEXT_MAX = 2000;
+function parseOfficeBrandContext(value) {
+  keys(value, ['status','name','lines','truncated','reason','logUnread','text']);
+  check(['live','partial','error','rejected'].includes(value.status), '브랜드 기록 상태가 올바르지 않습니다.');
+  check(value.name === null || (typeof value.name === 'string' && value.name.length > 0 && value.name.length <= 300), '브랜드 이름이 올바르지 않습니다.');
+  check(Number.isSafeInteger(value.lines) && value.lines >= 0 && value.lines <= 60 && typeof value.truncated === 'boolean', '브랜드 기록 줄 수가 올바르지 않습니다.');
+  check(value.reason === undefined || ['scope','not-found','read-failed','not-configured'].includes(value.reason), '브랜드 기록 사유가 올바르지 않습니다.');
+  check(value.logUnread === undefined || value.logUnread === true, '브랜드 기록 표시가 올바르지 않습니다.');
+  check(value.text === undefined || (typeof value.text === 'string' && value.text.length > 0 && value.text.length <= OFFICE_BRAND_CONTEXT_MAX), '브랜드 기록이 너무 깁니다.');
+  const attached = value.status === 'live' || value.status === 'partial';
+  check(attached ? value.name !== null && value.reason === undefined : value.name === null && value.lines === 0 && value.text === undefined && value.reason !== undefined && !value.truncated && value.logUnread === undefined, '브랜드 기록 상태와 내용이 일치하지 않습니다.');
+  check(value.status !== 'live' || (!value.truncated && value.logUnread === undefined), '일부만 읽은 기록을 전체로 표시할 수 없습니다.');
+  check(value.status !== 'partial' || value.truncated || value.logUnread === true, '일부 기록의 사유가 없습니다.');
+  return {status:value.status,name:value.name,lines:value.lines,truncated:value.truncated,...(value.reason === undefined ? {} : {reason:value.reason}),...(value.logUnread === undefined ? {} : {logUnread:true}),...(value.text === undefined ? {} : {text:value.text})};
 }
 
 // Failure classification shared by Engine, Hub and the Office usage summary (2026-09-23 운영자 확정).

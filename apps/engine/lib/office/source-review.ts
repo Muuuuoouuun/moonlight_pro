@@ -48,8 +48,10 @@ function sourceStrings(value: unknown): string[] {
 // project names are source text. Workflow facts keep the generic walk.
 function contextStrings(context: unknown): string[] {
   if (context && typeof context === 'object' && !Array.isArray(context) && typeof (context as { source?: unknown }).source === 'string' && Array.isArray((context as { projects?: unknown }).projects)) {
-    const { note, projects } = context as { note?: unknown; projects: { name?: unknown }[] };
-    return [note, ...projects.map(project => project?.name)].filter((value): value is string => typeof value === 'string');
+    const { note, projects, brand } = context as { note?: unknown; projects: { name?: unknown }[]; brand?: { text?: unknown } };
+    // 브랜드 기록(읽기 전용)은 운영자가 적어 둔 자료라 인용 후보다. 줄 단위로 나눠 다른 자료와 같은 규칙으로 인용한다.
+    const brandLines = typeof brand?.text === 'string' ? brand.text.split('\n') : [];
+    return [note, ...projects.map(project => project?.name), ...brandLines].filter((value): value is string => typeof value === 'string');
   }
   return sourceStrings(context);
 }

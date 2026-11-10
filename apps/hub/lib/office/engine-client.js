@@ -34,9 +34,12 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
    const answer=parseOfficeAnswer({answer:data.answer,nextAction:data.nextAction,...(request.mode==='council'?{recommendation:data.recommendation,evidence:data.evidence,dissent:data.dissent}:{})},request.mode);
    parseOfficeContext(data.context,request.scope);
    if(JSON.stringify(data.context)!==JSON.stringify(context)) throw new Error('context-mismatch');
+   // 브랜드 기록 원문은 모델 요청에만 쓴다. 결과·저장에는 무엇을 읽었는지(상태·이름·줄 수)만 남긴다.
+   const {text:_brandText,...brandSummary}=context.brand||{};
+   const resultContext=context.brand?{...context,brand:brandSummary}:context;
    const discussion=request.mode==='council'?{discussion:parseOfficeDiscussion(data.discussion,request)}:{};
    if(request.mode!=='council'&&data.discussion!==undefined)throw new Error('unexpected-discussion');
-   return {status:'generated',...answer,...discussion,ownerId:request.ownerId,mode:request.mode,scope:request.scope,participants:request.participants,lens:null,simulation:data.simulation,version:data.version,model:typeof data.model==='string'?data.model:null,context,...(['traced','none','untraced'].includes(data.sourceCheck)?{sourceCheck:data.sourceCheck}:{}),...(generationRecord(data.generation)?{generation:generationRecord(data.generation)}:{})};
+   return {status:'generated',...answer,...discussion,ownerId:request.ownerId,mode:request.mode,scope:request.scope,participants:request.participants,lens:null,simulation:data.simulation,version:data.version,model:typeof data.model==='string'?data.model:null,context:resultContext,...(['traced','none','untraced'].includes(data.sourceCheck)?{sourceCheck:data.sourceCheck}:{}),...(generationRecord(data.generation)?{generation:generationRecord(data.generation)}:{})};
   }catch(err){
    // A durable caller must not pay for another generation when the first
    // response was lost or timed out. Legacy freeform callers keep their status.

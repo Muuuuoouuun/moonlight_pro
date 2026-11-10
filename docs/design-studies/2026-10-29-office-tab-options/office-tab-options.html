@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오피스 탭 시안 A · B (2026-10-29)</title>
+<style>
+@font-face{font-family:'SUIT Variable';src:url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2');font-weight:100 900;font-display:swap}
+@font-face{font-family:'JetBrains Mono';src:url('../../../apps/hub/public/fonts/JetBrainsMono-Variable.woff2') format('woff2');font-weight:100 800;font-display:swap}
+:root{
+  --bg:oklch(0.94 0.004 250);--box:oklch(0.978 0.003 250);--well:oklch(0.915 0.005 250);--ink:oklch(0.22 0.008 250);--ink-fg:oklch(0.97 0.003 250);
+  --fg:oklch(0.20 0.008 250);--fg-muted:oklch(0.42 0.008 250);--fg-dim:oklch(0.47 0.008 250);
+  --line:oklch(0.80 0.006 250);--line-soft:oklch(0.86 0.005 250);--moon:oklch(0.60 0.05 250);--danger:oklch(0.55 0.16 25);
+  --sh-panel:-6px -6px 14px oklch(1 0 0/.8),6px 6px 16px oklch(0.6 0.01 250/.22);--sh-inset:inset 2px 2px 5px oklch(0.6 0.01 250/.22),inset -2px -2px 5px oklch(1 0 0/.8);
+  --r:10px;--r-lg:14px;--r-xl:20px;--pill:999px;
+}
+html[data-theme="dark"]{
+  --bg:oklch(0.165 0.005 250);--box:oklch(0.24 0.007 250);--well:oklch(0.20 0.006 250);--ink:oklch(0.86 0.006 250);--ink-fg:oklch(0.18 0.006 250);
+  --fg:oklch(0.92 0.005 250);--fg-muted:oklch(0.74 0.009 250);--fg-dim:oklch(0.67 0.010 250);
+  --line:oklch(0.34 0.008 250);--line-soft:oklch(0.30 0.008 250);--moon:oklch(0.78 0.008 250);--danger:oklch(0.68 0.16 25);
+  --sh-panel:-4px -4px 10px oklch(0.30 0.006 250/.5),6px 6px 16px oklch(0.08 0.005 250/.7);--sh-inset:inset 2px 2px 6px oklch(0.08 0.005 250/.7),inset -2px -2px 5px oklch(0.30 0.006 250/.5);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 'SUIT Variable',system-ui,sans-serif;word-break:keep-all}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;gap:12px;align-items:center;padding:12px 24px;background:var(--bg);border-bottom:1px solid var(--line-soft)}
+.toolbar strong{font-weight:500}
+.toolbar button{font:inherit;padding:6px 14px;border-radius:var(--pill);border:1px solid var(--line);background:var(--box);color:var(--fg);cursor:pointer}
+.toolbar button[aria-pressed="true"]{background:var(--ink);color:var(--ink-fg);border-color:transparent}
+.board{padding:24px;display:grid;gap:40px}
+.art{width:1440px;max-width:100%;margin:0 auto}
+.art > h1{font-size:16px;font-weight:500;margin:0 0 10px;color:var(--fg-muted)}
+.frame{display:grid;grid-template-columns:232px 1fr;min-height:860px;background:var(--bg);border:1px solid var(--line-soft);border-radius:var(--r-xl);overflow:hidden;position:relative}
+.frame::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 50% at 100% 0%,oklch(0.75 0.04 250/.18),transparent 70%);pointer-events:none}
+.side{margin:12px;padding:14px 10px;border-radius:22px;background:var(--box);box-shadow:var(--sh-panel);display:flex;flex-direction:column;gap:4px;position:relative}
+.side .logo{display:flex;align-items:center;gap:8px;padding:6px 8px 14px;font-weight:600}
+.side .logo i{width:26px;height:26px;border-radius:8px;background:var(--ink);display:inline-block}
+.side .search{margin:0 4px 10px;padding:8px 10px;border-radius:var(--pill);box-shadow:var(--sh-inset);background:var(--well);font-size:12.5px;color:var(--fg-dim)}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--pill);font-size:13px;color:var(--fg-muted)}
+.nav i{width:14px;height:14px;border:1.5px solid currentColor;border-radius:4px;display:inline-block;opacity:.8}
+.nav.on{background:var(--ink);color:var(--ink-fg);margin-top:auto}
+.main{padding:0 24px 24px;position:relative;min-width:0}
+.top{display:flex;align-items:center;justify-content:space-between;padding:12px 0 6px;font-size:12.5px;color:var(--fg-muted)}
+.top .crumb b{display:block;color:var(--fg);font-size:14px;font-weight:500}
+.tabs{display:flex;gap:18px;font-size:13px;color:var(--fg-dim);padding:6px 0 10px;border-bottom:1px solid var(--line-soft);margin-bottom:18px}
+.tabs .on{color:var(--fg);box-shadow:inset 0 -1px 0 var(--fg)}
+.head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-dim)}
+.head h2{margin:4px 0 2px;font-size:20px;font-weight:500}
+.head p{margin:0;color:var(--fg-muted);font-size:13px}
+.seg{display:inline-flex;padding:3px;border-radius:var(--pill);background:var(--well);box-shadow:var(--sh-inset);gap:2px}
+.seg span{padding:5px 14px;border-radius:var(--pill);font-size:12.5px;color:var(--fg-muted)}
+.seg .on{background:var(--ink);color:var(--ink-fg)}
+.room{display:grid;grid-template-columns:232px minmax(0,1fr) 220px;border-radius:var(--r-lg);background:var(--box);box-shadow:var(--sh-panel);overflow:hidden;min-height:560px}
+.rail{padding:16px 12px;display:grid;gap:20px;align-content:start;background:color-mix(in oklch,var(--box) 85%,var(--well))}
+.rail.l{border-right:1px solid var(--line-soft)}.rail.r{border-left:1px solid var(--line-soft)}
+.st{display:flex;justify-content:space-between;align-items:center;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-dim);font-weight:500}
+.st a{font-size:11.5px;letter-spacing:0;text-transform:none;color:var(--fg-muted)}
+.item{padding:7px 10px;border-radius:8px;font-size:12.5px;color:var(--fg)}
+.item small{display:block;font-size:11.5px;color:var(--fg-dim)}
+.item.on{background:var(--box);box-shadow:inset 1px 0 0 var(--moon)}
+.ghost{display:inline-block;padding:6px 10px;border-radius:var(--pill);font-size:12px;color:var(--fg-muted);border:1px solid transparent}
+.center{padding:16px 20px;display:grid;gap:14px;align-content:start;min-width:0}
+.jobs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px;border-radius:var(--pill);background:var(--well);box-shadow:var(--sh-inset)}
+.jobs .lbl{font-size:11px;letter-spacing:.1em;color:var(--fg-dim);padding:0 8px 0 10px}
+.chip{padding:6px 13px;border-radius:var(--pill);font-size:12.5px;color:var(--fg-muted);background:transparent;border:1px solid transparent}
+.chip.on{background:var(--ink);color:var(--ink-fg)}
+.chip.link{border:1px dashed var(--line);color:var(--fg-dim)}
+.jobs .more{margin-left:auto;font-size:12px;color:var(--fg-dim);padding-right:10px}
+.agenda{border-radius:var(--r);background:var(--well);box-shadow:var(--sh-inset);padding:12px 14px;min-height:150px;display:grid;grid-template-rows:auto 1fr auto;gap:8px}
+.agenda .cap{font-size:11.5px;color:var(--fg-dim);display:flex;justify-content:space-between}
+.agenda pre{margin:0;font:inherit;white-space:pre-wrap;color:var(--fg-muted);font-size:13.5px;line-height:1.75}
+.agenda pre b{color:var(--fg);font-weight:500}
+.agenda .foot{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--fg-dim)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--pill);font-size:12.5px;background:var(--box);box-shadow:var(--sh-panel);color:var(--fg)}
+.btn.ink{background:var(--ink);color:var(--ink-fg);box-shadow:none}
+.btn.sm{padding:5px 11px;font-size:12px}
+.card{border-radius:var(--r);border:1px solid var(--line-soft);background:var(--box);padding:14px 16px;display:grid;gap:10px}
+.card .who{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-muted)}
+.mark{width:22px;height:22px;border-radius:7px;background:var(--well);box-shadow:var(--sh-inset);display:inline-grid;place-items:center;font-size:11px;font-weight:600;color:var(--fg)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:var(--pill);font-size:11px;border:1px dashed var(--line);color:var(--fg-muted)}
+.badge.solid{border-style:solid}
+.card h4{margin:0;font-size:14.5px;font-weight:500;line-height:1.5}
+.card p{margin:0;font-size:13.5px;line-height:1.85;color:var(--fg-muted)}
+.card .acts{display:flex;gap:8px;flex-wrap:wrap}
+.verdict{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--line-soft);font-size:12.5px;color:var(--fg-muted);flex-wrap:wrap}
+.verdict .seg span{padding:3px 11px;font-size:12px}
+.seat{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:8px;border:1px solid var(--line-soft);background:var(--box)}
+.seat.owner{border-color:var(--line)}
+.seat b{display:block;font-size:13px;font-weight:600}.seat small{font-size:11.5px;color:var(--fg-dim);line-height:1.4}
+.kv{display:grid;gap:5px;font-size:12.5px}.kv div{display:flex;justify-content:space-between;gap:8px}.kv div span:last-child{color:var(--fg)}
+.select{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:8px;background:var(--well);box-shadow:var(--sh-inset);font-size:12.5px;color:var(--fg-muted)}
+.usage{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--fg-dim);padding:12px 4px 0}
+.usage b{color:var(--fg);font-weight:500}
+.note{font-size:12px;color:var(--fg-dim);margin:6px 0 0}
+.red{color:var(--danger)}
+.empty{display:grid;place-items:center;text-align:center;gap:4px;padding:36px 12px;color:var(--fg-muted);font-size:13px}
+.empty b{font-weight:500;color:var(--fg)}
+.diff{position:absolute;right:28px;top:-2px;font-size:11px;color:var(--fg-dim)}
+.legend{font-size:12px;color:var(--fg-dim);margin:10px 0 0;display:flex;gap:16px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--moon);vertical-align:-1px;margin-right:4px}
+@media (max-width:1000px){.room{grid-template-columns:1fr}.rail{display:none}.frame{grid-template-columns:1fr}.side{display:none}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <strong>오피스 탭 시안</strong>
+  <span style="color:var(--fg-dim);font-size:12.5px">2026-10-29 · 1440×900 · 기획 §4 "회의실 한 장"</span>
+  <span style="margin-left:auto"></span>
+  <button id="th" aria-pressed="false" onclick="toggleTheme()">다크</button>
+  <button onclick="document.getElementById('a').scrollIntoView({behavior:'smooth'})">A 한 화면</button>
+  <button onclick="document.getElementById('b').scrollIntoView({behavior:'smooth'})">B 현행 3면 정리</button>
+</div>
+
+<div class="board">
+
+<!-- ========== A ========== -->
+<section class="art" id="a">
+  <h1>A · 회의실 한 장 — 일감 먼저 · 브랜드 기록 · 그대로/고쳐/버림 (권장, Q-OF1 = 합친다)</h1>
+  <div class="frame">
+    <aside class="side">
+      <div class="logo"><i></i>Moonlight <span style="font-weight:400;color:var(--fg-dim);font-size:11px">HUB · PRO</span></div>
+      <div class="search">검색 · 바로 이동 <span class="mono" style="float:right">⌘K</span></div>
+      <div class="seg" style="margin:0 4px 10px"><span class="on">전체</span><span>ClassIn</span><span>개인</span></div>
+      <div class="nav"><i></i>홈</div><div class="nav"><i></i>오늘</div><div class="nav"><i></i>현황</div><div class="nav"><i></i>내 작업</div>
+      <div class="nav"><i></i>영업·매출</div><div class="nav"><i></i>기회 탐색</div><div class="nav"><i></i>프로젝트</div><div class="nav"><i></i>제품</div>
+      <div class="nav"><i></i>브랜드</div><div class="nav"><i></i>콘텐츠</div>
+      <div class="nav on"><i></i>AI·자동화</div><div class="nav"><i></i>설정</div>
+    </aside>
+    <div class="main">
+      <div class="top"><div class="crumb">AI·자동화<b>오피스</b></div><div>목 · 10/29 · <span class="mono">19:27</span></div></div>
+      <div class="tabs"><span class="on">오피스</span><span>코칭·대화</span><span>자동화 개요</span><span>Runs</span><span>Webhooks</span><span>보류 (5)</span></div>
+
+      <div class="head">
+        <div><div class="eyebrow">AI·자동화 / 오피스</div><h2>이브이 오피스</h2><p>일감을 고르거나 안건을 바로 적으세요. 답변은 업무를 바꾸지 않습니다.</p></div>
+        <div class="seg"><span>개인</span><span class="on">회사</span></div>
+      </div>
+
+      <div class="room">
+        <div class="rail l">
+          <div><div class="st">지금 회의 <a>저장된 회의</a></div>
+            <div class="item on">판 1 · 판매판단<small>19:27 · 에브이·리피아</small></div>
+            <div class="item" style="color:var(--fg-dim)">+ 새 안건</div></div>
+          <div><div class="st">오래 멈춘 할 일</div>
+            <div class="item">2안: 타이포그래피 애플스타일<small>28일째 그대로 · 마감 미정</small></div>
+            <div class="item">22세기 D01 · 완료 체크와 최신 목차 대조<small>11일째 그대로 · 마감 미정</small></div>
+            <div class="item">OMR 메이커 · 원격·로컬 변경 관계 확인<small>11일째 그대로 · 마감 미정</small></div>
+            <div class="item">band2sheet · 착수 전 실곡 검증 근거<small>11일째 그대로 · 마감 미정</small></div>
+            <span class="ghost">할 일 검색</span></div>
+        </div>
+
+        <div class="center">
+          <div class="jobs"><span class="lbl">일감</span>
+            <span class="chip">정리</span><span class="chip">막힌일</span><span class="chip on">판매판단</span><span class="chip">개인 답장</span>
+            <span class="chip link">회사 답장 ↗</span><span class="chip link">원고 ↗</span>
+            <span class="more">더 보기 ▸</span></div>
+
+          <div class="agenda">
+            <div class="cap"><span>안건 · 판매판단 뼈대(템플릿 A)가 들어왔습니다 · 지우고 적어도 됩니다</span><span>브랜드 기록 <b style="color:var(--fg)">Study.Seagull</b> · 5줄 붙음</span></div>
+            <pre><b>상대</b> 학원 원장 1인 · 소규모
+<b>상품</b> 밴드 악보 소프트웨어 파일럿
+<b>현재 가격</b> 월 3만원 · 제안 검토 중
+<b>질문</b> 3개월 무료 뒤 월 3만원이 맞나, 연 결제 할인을 먼저 꺼낼까</pre>
+            <div class="foot"><span><span class="mono">⌘↵</span> 보내기 · 답변은 업무를 변경하지 않습니다</span><span class="btn ink sm">보내기</span></div>
+          </div>
+
+          <div class="card">
+            <div class="who"><span class="mark">에</span>에브이 · 전략총괄 · 주관 <span class="badge">◇ 권장</span><span class="badge solid">업무 변경 없음</span><span style="margin-left:auto;color:var(--fg-dim)">관점 리피아 · 재무</span></div>
+            <h4>무료 3개월보다 "첫 달 무료 + 연 결제 2개월 할인"이 비교 가능한 제안이다</h4>
+            <p>이 판에서 읽은 것: 안건 4줄과 Study.Seagull 기록(집중점 "학원 원장 직접 영업", 최근 로그 5줄). 무료 기간이 길수록 전환 시점의 가격 저항이 커진다는 가정은 <span class="badge">근거 확인 안 됨</span>이라 운영자 판단이 필요하다. 리피아: 월 3만원 × 파일럿 n곳의 손익은 입력에 없어 계산하지 않았다.</p>
+            <div class="acts"><span class="btn sm">확인 후 할 일로 연결</span><span class="btn sm">다른 관점으로 검토</span><span class="btn sm">역할별 발언 3</span><span class="ghost">더보기</span></div>
+            <div class="verdict">이 답, 어떻게 썼나요?
+              <div class="seg"><span class="on">그대로</span><span>고쳐</span><span>버림 ▾</span></div>
+              <span class="mono" style="color:var(--fg-dim)">그대로 · 19:31</span>
+              <span style="margin-left:auto;color:var(--fg-dim)">한 판에 한 번 · 다시 누르면 바뀜</span></div>
+          </div>
+        </div>
+
+        <div class="rail r">
+          <div><div class="st">참석자 <a>바꾸기</a></div>
+            <div class="seat owner"><span class="mark">에</span><span><b>에브이 · 주관</b><small>전략총괄 · 선택할 이유와 포기할 것</small></span></div>
+            <div class="seat"><span class="mark">리</span><span><b>리피아 · 관점</b><small>재무·자원총괄</small></span></div>
+            <span class="ghost">+ 관점 더하기</span></div>
+          <div><div class="st">브랜드 기록</div>
+            <div class="select"><span>Study.Seagull</span><span>▾</span></div>
+            <p class="note">개인 범위의 브랜드만 · 설명·운영 상태·집중점·최근 로그 5줄을 읽기 전용으로 붙입니다</p></div>
+          <div><div class="st">진행 방식</div>
+            <div class="kv"><div><span>응답 방식</span><span>회의</span></div><div><span>발언 단계</span><span>주관 → 관점</span></div><div><span>프로젝트 참고</span><span>끔</span></div><div><span>오늘은 최소한만</span><span>끔</span></div></div>
+            <span class="ghost">회의·기록</span></div>
+        </div>
+      </div>
+
+      <div class="usage">최근 <b class="mono">7</b>일 · 요청 <b class="mono">9</b> · 할 일 연결 <b class="mono">3</b> · <b>그대로+고쳐 <span class="mono">6/8</span></b> · 버림 사유 상위 <b>맥락부족</b> · 평균 <b class="mono">23</b>초 · 실패 <b class="mono">0</b> · 이달 추정 <b class="mono">₩1,240</b></div>
+      <div class="legend"><span><i></i>바뀐 자리: 일감 줄 · 브랜드 기록 ▾ · 결과 카드 아래 한 줄 · 사용 줄 두 칸</span><span>나머지 레일·좌석·드로어는 V4 그대로</span><span>숫자·브랜드·답변은 모두 예시</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== B ========== -->
+<section class="art" id="b">
+  <h1>B · 현행 3면 유지, 순서만 회의실 먼저 — Q-OF1 대안 (P2·P3는 저장 회의 면 안에만)</h1>
+  <div class="frame">
+    <aside class="side">
+      <div class="logo"><i></i>Moonlight <span style="font-weight:400;color:var(--fg-dim);font-size:11px">HUB · PRO</span></div>
+      <div class="search">검색 · 바로 이동 <span class="mono" style="float:right">⌘K</span></div>
+      <div class="seg" style="margin:0 4px 10px"><span class="on">전체</span><span>ClassIn</span><span>개인</span></div>
+      <div class="nav"><i></i>홈</div><div class="nav"><i></i>오늘</div><div class="nav"><i></i>현황</div><div class="nav"><i></i>내 작업</div>
+      <div class="nav"><i></i>영업·매출</div><div class="nav"><i></i>기회 탐색</div><div class="nav"><i></i>프로젝트</div><div class="nav"><i></i>제품</div>
+      <div class="nav"><i></i>브랜드</div><div class="nav"><i></i>콘텐츠</div>
+      <div class="nav on"><i></i>AI·자동화</div><div class="nav"><i></i>설정</div>
+    </aside>
+    <div class="main">
+      <div class="top"><div class="crumb">AI·자동화<b>오피스</b></div><div>목 · 10/29 · <span class="mono">19:27</span></div></div>
+      <div class="tabs"><span class="on">오피스</span><span>코칭·대화</span><span>자동화 개요</span><span>Runs</span><span>Webhooks</span><span>보류 (5)</span></div>
+
+      <div style="margin-bottom:14px"><div class="seg"><span class="on">저장 회의</span><span>관점 대화·회의</span><span>이브이 업무 분담</span></div>
+        <span class="note" style="display:inline-block;margin-left:12px">세 면 그대로 · 첫 면만 저장 회의로 바뀜 · 업무 분담은 끝으로</span></div>
+
+      <div class="head">
+        <div><div class="eyebrow">AI·자동화 / 오피스</div><h2>이브이 오피스</h2><p>안건 하나를 올리고, 필요한 관점을 불러 함께 검토하세요.</p></div>
+        <div class="seg"><span>개인</span><span>회사</span></div>
+      </div>
+
+      <div class="room">
+        <div class="rail l">
+          <div><div class="st">지금 회의 <a>저장된 회의</a></div><div class="item" style="color:var(--fg-dim)">아직 없음 · 아래에서 할 일을 고르거나 직접 적어 주세요</div></div>
+          <div><div class="st">오래 멈춘 할 일</div>
+            <div class="item">2안: 타이포그래피 애플스타일<small>28일째 그대로 · 마감 미정</small></div>
+            <div class="item">3안: 설명형 + 그래픽 쇼츠<small>28일째 그대로 · 마감 미정</small></div>
+            <div class="item">22세기 D01 · 완료 체크와 최신 목차 대조<small>11일째 그대로 · 마감 미정</small></div>
+            <span class="ghost">할 일 검색</span></div>
+        </div>
+        <div class="center">
+          <div class="jobs"><span class="lbl">일감</span>
+            <span class="chip">정리</span><span class="chip">막힌일</span><span class="chip">판매판단</span><span class="chip">개인 답장</span>
+            <span class="chip link">회사 답장 ↗</span><span class="chip link">원고 ↗</span><span class="more">더 보기 ▸</span></div>
+          <div class="empty"><b>회의할 안건을 올려 주세요</b>개인 또는 회사 범위를 고른 뒤 안건을 보내 주세요.<span class="btn sm" style="margin-top:8px">안건 가져오기</span></div>
+          <div class="agenda" style="min-height:96px">
+            <div class="cap"><span>안건 또는 질문</span><span>브랜드 기록 없음</span></div>
+            <pre style="color:var(--fg-dim)">회의를 저장할 개인 또는 회사 범위를 골라 주세요.</pre>
+            <div class="foot"><span><span class="mono">⌘↵</span> 보내기</span><span class="btn sm" style="opacity:.5">보내기</span></div>
+          </div>
+        </div>
+        <div class="rail r">
+          <div><div class="st">참석자</div>
+            <div class="seat owner"><span class="mark">이</span><span><b>이브이 · 주관</b><small>복잡한 요청을 다음 한 걸음으로</small></span></div>
+            <span class="ghost">+ 관점 더하기</span></div>
+          <div><div class="st">브랜드 기록</div><div class="select"><span>없음</span><span>▾</span></div></div>
+          <div><div class="st">진행 방식</div>
+            <div class="kv"><div><span>응답 방식</span><span>대화</span></div><div><span>발언 단계</span><span>—</span></div><div><span>프로젝트 참고</span><span>끔</span></div><div><span>오늘은 최소한만</span><span>끔</span></div></div>
+            <span class="ghost">회의·기록</span></div>
+        </div>
+      </div>
+      <div class="usage">최근 <b class="mono">7</b>일 · 요청 <b class="mono">2</b> · 할 일 연결 <b class="mono">0</b> · <b>그대로+고쳐 <span class="mono">—</span></b> · 평균 <b class="mono">23</b>초 · 실패 <b class="mono">0</b></div>
+      <div class="legend"><span>B는 세그먼트가 남아 첫 행동이 여전히 "면 고르기"다 — 기획 §1의 표면 예산 문제는 그대로</span></div>
+    </div>
+  </div>
+</section>
+
+</div>
+<script>
+function toggleTheme(){const h=document.documentElement;const d=h.getAttribute('data-theme')==='dark';h.setAttribute('data-theme',d?'light':'dark');const b=document.getElementById('th');b.setAttribute('aria-pressed',String(!d));b.textContent=d?'다크':'라이트';}
+if(matchMedia('(prefers-color-scheme: dark)').matches)toggleTheme();
+</script>
+</body>
+</html>

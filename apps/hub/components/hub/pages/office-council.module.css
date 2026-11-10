@@ -43,6 +43,16 @@
 .orderList { margin:0; padding-left:18px; display:grid; gap:4px; font-size:12.5px; color:var(--fg-muted); line-height:1.5; }
 
 .main { display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--surface); }
+/* 일감 줄(2026-10-29 A안 P2): 첫 행동은 고정표의 칩 하나. 고른 칸만 잉크(SegmentedControl 문법), 링크 칩은 점선 + ↗ */
+.jobs { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 20px; border-bottom:1px solid var(--line-soft); flex-shrink:0; min-width:0; }
+.jobsLabel { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--fg-dim); font-weight:500; }
+/* 링크 칩은 점선 — 회의실 밖 자리로 보낸다. radius·색은 프리미티브 그대로(§7 Radius) */
+.jobLink { border-style:dashed !important; }
+.jobsMore { margin-left:auto; color:var(--fg-dim); }
+/* 판정 줄(A안 P3): 결과 카드 아래 한 줄. 빨강은 `기록 못 함` 한 곳 */
+.verdict { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0; padding-top:10px; border-top:1px solid var(--line-soft); font-size:12.5px; color:var(--fg-muted); }
+.verdictHint { margin-left:auto; font-size:11.5px; color:var(--fg-dim); }
+.verdictError { color:var(--danger); display:inline-flex; align-items:center; gap:4px; }
 .agendaBar { padding:12px 20px; border-bottom:1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; flex-shrink:0; }
 .agendaBar > p { margin:0; color:var(--fg-muted); font-size:13px; line-height:1.5; }
 .agendaMain { display:flex; align-items:center; gap:8px; min-width:0; flex:1 1 240px; }
@@ -184,6 +194,8 @@
   .header p { display:none; }
   /* 탑바 + 제목 + 보기 탭 + 아래 여백. 탭이 없던 A보다 탭 한 줄(44px + 12px)만큼 줄어든다 */
   .room { min-height:min(480px,calc(100dvh - 252px)); height:calc(100dvh - 252px); }
+  .jobs { padding:8px 12px; gap:6px; }
+  .jobsLabel { display:none; }
   .agendaBar { padding:8px 12px; min-height:48px; flex-wrap:wrap; row-gap:4px; }
   /* 업무 조각·자동 진행 멈추기가 붙으면 안건 문구 아래로 내려간다 */
   .agendaBar > p { flex:1 1 180px; }

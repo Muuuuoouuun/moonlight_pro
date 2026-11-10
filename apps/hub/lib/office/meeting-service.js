@@ -27,8 +27,9 @@ function validatePatch(input) {
   || (input.reviewers !== undefined && (!Array.isArray(input.reviewers) || input.reviewers.length>2 || new Set(input.reviewers).size!==input.reviewers.length || input.reviewers.some(id=>!OFFICE_IDS.includes(id))))) throw new Error();
  return input;
 }
+// brandId(2026-10-29 A안 P4)는 0069 RPC의 p_input 키 목록 밖이라 claim 전에 뗀다 — 저장되는 p_request에는 들어가므로 재시도도 같은 브랜드 기록을 읽는다.
 function validateTurn(input) {
- if (!keys(input,['requestId','expectedRevision','message','mode','includeProjects','deliberation']) || !isAgentUuid(input.requestId) || !revision(input.expectedRevision)
+ if (!keys(input,['requestId','expectedRevision','message','mode','includeProjects','deliberation','brandId']) || (input.brandId!=null && !isAgentUuid(input.brandId)) || !isAgentUuid(input.requestId) || !revision(input.expectedRevision)
   || !text(input.message,6000) || (input.mode !== undefined && !OFFICE_MODES.includes(input.mode)) || (input.includeProjects !== undefined && typeof input.includeProjects !== 'boolean')) throw new Error();
  return { ...input, requestId: input.requestId.toLowerCase(), message: input.message.trim() };
 }
@@ -83,6 +84,7 @@ export function buildMeetingRequest(detail, input) {
  const mode=input.mode ?? meeting.mode;
  return parseOfficeRequest({ ownerId:meeting.ownerId,scope:meeting.scope,mode,message:input.message,
   participants:mode==='council'?[meeting.ownerId,...meeting.reviewers]:[],history,includeProjects:input.includeProjects===true,
+  ...(input.brandId?{brandId:input.brandId}:{}),
   ...(input.deliberation !== undefined?{deliberation:input.deliberation}:{}) });
 }
 function turnResponse(data, id) {
@@ -135,12 +137,13 @@ export function createOfficeMeetingService(deps) {
   async turn(id, input, identity) {
    if (missingWorkspace(identity)) return workspacePreview();
    let body;try{body=validateTurn(input);if(!isAgentUuid(id)||!validIdentity(identity))throw new Error();}catch{return failure('invalid-meeting-turn','invalid-input');}
+   const {brandId:_brandId,...claimInput}=body;
    const detail=await get(id,identity);if(detail.status!=='ready')return detail;
    const existing=detail.turns?.find(turn=>turn.id===body.requestId);
    let request;try{request=existing?.request ?? buildMeetingRequest(detail,body);}catch{return failure('invalid-meeting-turn','invalid-input');}
    if(!existing && deps.engineConfigured?.()===false)return failure('office-engine-not-configured','preview');
    let claimed;
-   try{claimed=await rpc('office_meeting_turn_claim_v1',{p_meeting_id:id.toLowerCase(),p_input:body,p_request:request},identity);}catch(error){return {...storageFailure(error,true),requestId:body.requestId};}
+   try{claimed=await rpc('office_meeting_turn_claim_v1',{p_meeting_id:id.toLowerCase(),p_input:claimInput,p_request:request},identity);}catch(error){return {...storageFailure(error,true),requestId:body.requestId};}
    if(claimed.claimed!==true || !claimed.attemptToken)return turnResponse(publicDetail(claimed),body.requestId);
    let result;const startedAt=Date.now();
    try{const context=await deps.readContext(request,{workspaceId:identity.workspaceId});result=await deps.generate(request,context);

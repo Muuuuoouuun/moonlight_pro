@@ -14,6 +14,10 @@
       "types": "./office.d.ts",
       "default": "./office.js"
     },
+    "./office-jobs": {
+      "types": "./office-jobs.d.ts",
+      "default": "./office-jobs.js"
+    },
     "./office-routing": {
       "types": "./office-routing.d.ts",
       "default": "./office-routing.js"

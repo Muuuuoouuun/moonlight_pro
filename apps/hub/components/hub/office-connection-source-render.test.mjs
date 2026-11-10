@@ -57,7 +57,7 @@ test('brand picker uses familiar existing names, company unbranded choice, and s
   const personal = render(OfficeConnectionBrandPicker, { scope: 'personal', value: brandId, brandState });
   assert.match(personal, /<select/); assert.match(personal, /기존 브랜드 이름/); assert.match(personal, /브랜드 선택 필요/);
   assert.doesNotMatch(personal, /<input|UUID/);
-  assert.match(personal, /브랜드 사실 자료를 모델에 제공/);
+  assert.match(personal, /기록\(설명·운영 상태·집중점·최근 로그 5줄\)을 읽기 전용으로 붙여/);
   const company = render(OfficeConnectionBrandPicker, { scope: 'classin', value: null, brandState: { status: 'live', brands: [] } });
   assert.match(company, /회사 공통 · 브랜드 없음/); assert.match(company, /확인한 브랜드가 없습니다/);
   const all = render(OfficeConnectionBrandPicker, { scope: 'all', brandState });

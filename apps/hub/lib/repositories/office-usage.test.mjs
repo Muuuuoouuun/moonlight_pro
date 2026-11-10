@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { summarizeOfficeRuns, readOfficeUsage } from './office-usage.js';
 
+const noVerdicts = { kept: 0, edited: 0, dropped: 0, total: 0, topDropReason: null };
+
 test('summarizes office runs into requests, links, failures and average latency of successful requests', () => {
   const rows = [
     { agent: 'office.eevee', mode: 'chat', result: 'ok', recommendation: { elapsedMs: 10000 } },
@@ -11,8 +13,8 @@ test('summarizes office runs into requests, links, failures and average latency 
     { agent: 'office.apply', mode: 'apply', result: 'ok', recommendation: { contextChanged: true } },
     { agent: 'office.eevee', mode: 'chat', result: 'ok', recommendation: null },
   ];
-  assert.deepEqual(summarizeOfficeRuns(rows), { requests: 5, applied: 1, failed: 2, failureCategories: { deadline: 1, unknown: 1 }, averageElapsedMs: 15000 });
-  assert.deepEqual(summarizeOfficeRuns([]), { requests: 0, applied: 0, failed: 0, failureCategories: {}, averageElapsedMs: null });
+  assert.deepEqual(summarizeOfficeRuns(rows), { requests: 5, applied: 1, failed: 2, failureCategories: { deadline: 1, unknown: 1 }, averageElapsedMs: 15000, verdicts: noVerdicts, tokens: null });
+  assert.deepEqual(summarizeOfficeRuns([]), { requests: 0, applied: 0, failed: 0, failureCategories: {}, averageElapsedMs: null, verdicts: noVerdicts, tokens: null });
 });
 
 test('reads only office runs in the window and keeps the Hub read envelope', async () => {
@@ -55,4 +57,22 @@ test('usage read does not treat a rows array with a read error as live', async (
 test('usage read keeps an explicitly unconfigured connection in preview', async () => {
   const value = await readOfficeUsage({ fetchRows: async () => ({ configured: false, rows: [] }) });
   assert.equal(value.status, 'preview');
+});
+
+test('verdicts and tokens are tallied while probe rows are excluded everywhere', () => {
+  const usage = totalTokens => ({ promptTokens: 1, outputTokens: 1, totalTokens });
+  const rows = [
+    { mode: 'chat', result: 'ok', recommendation: { usage: usage(100), verdict: { value: 'kept', reason: null } } },
+    { mode: 'chat', result: 'ok', recommendation: { usage: usage(50), verdict: { value: 'edited', reason: null } } },
+    { mode: 'draft', result: 'ok', recommendation: { usage: null, verdict: { value: 'dropped', reason: 'wrong' } } },
+    { mode: 'draft', result: 'ok', recommendation: { verdict: { value: 'dropped', reason: 'wrong' } } },
+    { mode: 'draft', result: 'ok', recommendation: { verdict: { value: 'dropped', reason: 'context' } } },
+    { mode: 'chat', result: 'ok', recommendation: { verdict: { value: 'bogus' } } },
+    { mode: 'chat', result: 'ok', recommendation: { probe: true, usage: usage(9999), verdict: { value: 'kept', reason: null } } },
+  ];
+  const summary = summarizeOfficeRuns(rows);
+  assert.equal(summary.requests, 6);
+  assert.deepEqual(summary.verdicts, { kept: 1, edited: 1, dropped: 3, total: 5, topDropReason: 'wrong' });
+  assert.equal(summary.tokens, 150);
+  assert.equal(summarizeOfficeRuns([{ mode: 'chat', result: 'ok', recommendation: { probe: true } }]).requests, 0);
 });

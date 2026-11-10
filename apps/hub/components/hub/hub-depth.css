@@ -304,7 +304,8 @@
 .hub-app[data-visual-system="depth-c"] .hub-input,
 .hub-app[data-visual-system="depth-c"] .hub-field,
 .hub-app[data-visual-system="depth-c"] .hub-quick-capture__field,
-.hub-app[data-visual-system="depth-c"] .customers-search {
+.hub-app[data-visual-system="depth-c"] .customers-search,
+.hub-app[data-visual-system="depth-c"] .hub-drawer-input {
   background: var(--well);
   border-color: transparent;
   box-shadow: var(--shadow-inset-edge);
@@ -320,6 +321,15 @@
   background: var(--well);
   border-color: transparent;
   box-shadow: 0 0 0 1px var(--moon-300), var(--shadow-inset-edge);
+}
+/* EditDrawer 입력(한 줄·select·글쓰기 칸)도 같은 눌린 홈. 경계는 음영이 맡고 선은 아주 옅게 —
+ * 3:1 선이 노골적이라는 운영자 피드백(2026-10-23). 포커스만 Moonstone 1px로 또렷하다. */
+.hub-app[data-visual-system="depth-c"] .hub-drawer-input { border-color: color-mix(in srgb, var(--line-control) 18%, transparent); box-shadow: var(--shadow-inset); }
+.hub-app[data-visual-system="depth-c"] .hub-drawer-input:hover:not(:disabled) { border-color: color-mix(in srgb, var(--line-control) 38%, transparent); }
+.hub-app[data-visual-system="depth-c"] .hub-drawer-input:focus {
+  border-color: var(--moon-300);
+  background: var(--well);
+  box-shadow: 0 0 0 1px var(--moon-300), var(--shadow-inset);
 }
 /* 오류는 색 선을 지킨다(폼 메시지와 함께, §5.3) */
 .hub-app[data-visual-system="depth-c"] .hub-input[aria-invalid="true"] { border-color: var(--danger); }
