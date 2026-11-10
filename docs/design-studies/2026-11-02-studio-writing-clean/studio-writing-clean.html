@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>깔끔한 원고 시안</title>
+<style>
+@font-face { font-family: 'SUIT Variable'; src: url('../../../apps/hub/public/fonts/SUIT-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../../../apps/hub/public/fonts/JetBrainsMono-Variable.woff2') format('woff2'); font-weight: 100 800; font-display: swap; }
+
+/* ── 깊이 토큰 — 13a·13b·13c(depth C)와 같은 값 + 2026-10-22 테두리 대신 음영 ── */
+:root, [data-theme="light"] {
+  --page: oklch(0.93 0.006 255);
+  --glow: radial-gradient(110% 70% at 88% -12%, oklch(0.91 0.03 250) 0%, oklch(0.94 0.008 255) 48%, oklch(0.935 0.007 255) 100%);
+  --face: oklch(0.95 0.006 255);
+  --panel-face: oklch(0.978 0.004 255);
+  --window: oklch(0.985 0.003 255);
+  --hi: oklch(1 0 0 / .96);
+  --lo: oklch(0.45 0.03 250 / .30);
+  --lo-sm: oklch(0.5 0.02 250 / .24);
+  --rim: inset 0 1px 0 oklch(1 0 0 / .9);
+  --fg: oklch(0.20 0.008 250);
+  --fg-muted: oklch(0.42 0.008 250);
+  --fg-dim: oklch(0.47 0.008 250);
+  --fg-faint: oklch(0.52 0.007 250);
+  --line: oklch(0.80 0.008 250 / .7);
+  --line-strong: oklch(0.62 0.008 250);
+  --line-control: oklch(0.66 0.007 250);
+  --ink: oklch(0.20 0.008 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.31 0.012 250), oklch(0.20 0.008 250));
+  --ink-fg: oklch(0.985 0.003 250);
+  --ink-shadow: -2px -2px 6px oklch(1 0 0 / .8), 4px 6px 12px -3px oklch(0.25 0.05 250 / .5), inset 0 1px 0 oklch(1 0 0 / .18);
+  --moon-300: oklch(0.50 0.06 252);
+  --accent: #5274a8;
+  --danger: oklch(0.55 0.19 25);
+  --scrim: oklch(0.30 0.012 250 / .26);
+}
+[data-theme="dark"] {
+  --page: oklch(0.16 0.008 252);
+  --glow: radial-gradient(110% 70% at 88% -12%, oklch(0.26 0.035 255) 0%, oklch(0.19 0.012 252) 46%, oklch(0.17 0.008 250) 100%);
+  --face: oklch(0.21 0.010 252);
+  --panel-face: oklch(0.24 0.011 252);
+  --window: oklch(0.255 0.011 252);
+  --hi: oklch(1 0 0 / .045);
+  --lo: oklch(0 0 0 / .62);
+  --lo-sm: oklch(0 0 0 / .5);
+  --rim: inset 0 1px 0 oklch(1 0 0 / .08);
+  --fg: oklch(0.94 0.004 250);
+  --fg-muted: oklch(0.76 0.008 250);
+  --fg-dim: oklch(0.68 0.009 250);
+  --fg-faint: oklch(0.62 0.009 250);
+  --line: oklch(0.36 0.01 250 / .7);
+  --line-strong: oklch(0.55 0.01 250);
+  --line-control: oklch(0.50 0.008 250);
+  --ink: oklch(0.92 0.005 250);
+  --ink-grad: linear-gradient(180deg, oklch(0.97 0.004 250), oklch(0.86 0.006 250));
+  --ink-fg: oklch(0.18 0.008 250);
+  --ink-shadow: 0 0 0 1px oklch(1 0 0 / .1), 0 6px 18px -6px oklch(0.85 0.03 250 / .35), inset 0 1px 0 oklch(1 0 0 / .6);
+  --moon-300: oklch(0.78 0.03 252);
+  --danger: oklch(0.70 0.16 25);
+  --scrim: oklch(0.05 0.01 250 / .55);
+}
+:root {
+  --raised: -7px -7px 18px var(--hi), 10px 13px 30px -8px var(--lo), var(--rim);
+  --raised-sm: -3px -3px 8px var(--hi), 4px 4px 10px -1px var(--lo-sm), var(--rim);
+  --inset: inset 2px 2px 6px var(--lo-sm), inset -2px -2px 6px var(--hi);
+  --inset-deep: inset 3px 3px 9px var(--lo-sm), inset -3px -3px 9px var(--hi);
+  --inset-edge: inset 1px 1px 0 var(--line-control);
+  --shadow-window: 0 40px 90px -30px oklch(0 0 0 / .5), 0 14px 32px -14px oklch(0 0 0 / .32), var(--rim);
+  --dur-hover: 120ms; --dur-enter: 200ms; --dur-panel: 180ms; --dur-overlay: 160ms;
+  --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+/* 판은 바탕보다 한 단계 밝은 면 */
+.side, .paper, .panel, .note, .pane, .chcard, .wk, .win, .state, .phone-sheet { --face: var(--panel-face); }
+.win { --face: var(--window); }
+/* 다크: 솟은 요소만 한 단계 밝은 면 + 위쪽 빛 가장자리 (11a·11b·13과 같은 처리) */
+[data-theme="dark"] .search, [data-theme="dark"] .me, [data-theme="dark"] .ibtn, [data-theme="dark"] .brandpick,
+[data-theme="dark"] .btile[aria-checked="true"], [data-theme="dark"] .chip:not(.chip--in),
+[data-theme="dark"] .btn:not(.btn--ink):not(.btn--ghost), [data-theme="dark"] .rcard[aria-checked="true"], [data-theme="dark"] .tchip[aria-checked="true"] {
+  background: linear-gradient(180deg, oklch(0.315 0.013 252), oklch(0.28 0.012 252));
+  box-shadow: 0 12px 26px -10px oklch(0 0 0 / .85), 0 3px 6px oklch(0 0 0 / .4), inset 0 1px 0 oklch(1 0 0 / .15), inset 0 0 0 1px oklch(1 0 0 / .04);
+}
+[data-theme="dark"] .btile[aria-checked="true"], [data-theme="dark"] .rcard[aria-checked="true"], [data-theme="dark"] .tchip[aria-checked="true"] { box-shadow: inset 0 0 0 1px var(--accent), 0 12px 26px -10px oklch(0 0 0 / .85), inset 0 1px 0 oklch(1 0 0 / .15); }
+[data-theme="dark"] .btn:not(.btn--ink):not(.btn--ghost):active, [data-theme="dark"] .ibtn:active { background: transparent; box-shadow: var(--inset); }
+
+* { box-sizing: border-box; }
+html { background: var(--page); }
+body { margin: 0; font-family: 'SUIT Variable', ui-sans-serif, system-ui, sans-serif; color: var(--fg); background: var(--page); -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11','ss01','ss03'; word-break: keep-all; }
+button, input, textarea { font: inherit; color: inherit; }
+.mono { font-family: 'JetBrains Mono', 'SUIT Variable', ui-monospace, monospace; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.stat { font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* ── 시안 바깥 틀 ─────────────────────────────────────────────── */
+.deck { padding: 40px 48px 96px; display: flex; flex-direction: column; gap: 28px; }
+.deck-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.deck-head h1 { margin: 0; font-size: 26px; font-weight: 300; letter-spacing: -0.02em; }
+.deck-head p { margin: 6px 0 0; font-size: 13px; color: var(--fg-dim); max-width: 900px; line-height: 1.65; }
+.asks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 1440px; }
+.ask { padding: 14px 18px; border-radius: 18px; background: var(--panel-face); box-shadow: var(--raised-sm); font-size: 12.5px; line-height: 1.6; color: var(--fg-muted); }
+.ask b { display: block; color: var(--fg); font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.ask .mono { font-size: 11.5px; }
+.board-label { display: flex; align-items: baseline; gap: 12px; margin-top: 28px; flex-wrap: wrap; max-width: 1440px; }
+.board-label b { font-size: 22px; font-weight: 300; }
+.board-label span { font-size: 12.5px; color: var(--fg-dim); }
+.sample { font-size: 11px; padding: 3px 9px; border-radius: 999px; box-shadow: var(--inset); color: var(--fg-dim); }
+
+/* ── 아트보드 · 셸 (11a·11b · 13과 같음) ───────────────────────── */
+.board { width: 1440px; height: 900px; border-radius: 28px; overflow: hidden; background: var(--glow); display: flex; gap: 14px; padding: 14px; position: relative; box-shadow: 0 1px 2px oklch(0 0 0 / .08), 0 36px 96px -36px oklch(0 0 0 / .45); flex-shrink: 0; }
+.side { width: 232px; flex-shrink: 0; border-radius: 22px; background: var(--face); box-shadow: var(--raised); display: flex; flex-direction: column; padding: 14px 10px 12px; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 4px; }
+.brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--ink-grad); display: grid; place-items: center; color: var(--ink-fg); box-shadow: 0 6px 16px -6px oklch(0.3 0.05 250 / .55); }
+.brand b { font-size: 13.5px; font-weight: 600; display: block; letter-spacing: -0.01em; }
+.brand small { font-size: 10.5px; color: var(--fg-faint); }
+.search { height: 38px; border: 0; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; font-size: 12.5px; color: var(--fg-dim); cursor: pointer; }
+.kbd { font-size: 10.5px; padding: 3px 7px; border-radius: 999px; box-shadow: var(--inset); color: var(--fg-muted); }
+.nav { position: relative; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.nav button, .util button { position: relative; z-index: 1; height: 36px; border: 0; background: transparent; border-radius: 999px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 13px; color: var(--fg-muted); cursor: pointer; text-align: left; transition: color var(--dur-hover) var(--ease-hub); }
+.nav button:hover, .util button:hover { color: var(--fg); }
+.nav button[aria-current="page"] { color: var(--ink-fg); font-weight: 500; }
+.nav-pill { position: absolute; left: 0; right: 0; top: 0; height: 36px; border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); will-change: transform, height; }
+.nav .count { margin-left: auto; min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; font-size: 10.5px; box-shadow: var(--inset); color: var(--fg-muted); padding: 0 5px; }
+.nav button[aria-current="page"] .count { background: var(--ink-fg); color: var(--ink); box-shadow: none; }
+.util { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; }
+.me { margin-top: 4px; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); }
+.me-av { width: 30px; height: 30px; border-radius: 999px; background: var(--ink-grad); color: var(--ink-fg); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.me b { display: block; font-size: 12px; font-weight: 500; }
+.me small { font-size: 10.5px; color: var(--fg-faint); }
+
+/* 탭 묶음 = 눌린 pill 트랙 + 잉크 현재 칸 (2026-10-22) */
+.seg { position: relative; display: inline-flex; padding: 3px; border-radius: 999px; box-shadow: var(--inset); }
+.seg-thumb { position: absolute; top: 3px; left: 0; height: calc(100% - 6px); border-radius: 999px; background: var(--ink-grad); box-shadow: var(--ink-shadow); will-change: transform, width; }
+.seg button { position: relative; z-index: 1; height: 28px; padding: 0 14px; border: 0; background: transparent; border-radius: 999px; font-size: 12px; color: var(--fg-dim); cursor: pointer; transition: color var(--dur-hover); white-space: nowrap; }
+.seg button[aria-pressed="true"] { color: var(--ink-fg); font-weight: 500; }
+.seg--lg button { height: 34px; padding: 0 18px; font-size: 13px; }
+.side .seg { display: flex; } .side .seg button { flex: 1; }
+
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.topbar { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 6px 0 10px; flex-shrink: 0; }
+.crumb small { display: block; font-size: 10.5px; letter-spacing: .12em; color: var(--fg-faint); text-transform: uppercase; }
+.crumb b { font-size: 14px; font-weight: 500; }
+.grow { flex: 1; }
+.clock { height: 34px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; box-shadow: var(--inset); font-size: 12px; color: var(--fg-muted); }
+.ibtn { width: 34px; height: 34px; border: 0; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); display: grid; place-items: center; color: var(--fg-muted); cursor: pointer; flex-shrink: 0; }
+.ibtn--ghost { background: transparent; box-shadow: none; }
+.ibtn--ghost:hover { background: color-mix(in oklch, var(--fg) 6%, transparent); color: var(--fg); }
+.scroll { flex: 1; overflow: auto; padding: 18px 26px 40px 22px; display: flex; flex-direction: column; gap: 20px; scrollbar-width: thin; }
+
+.btn { height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: transform var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub); }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.98); box-shadow: var(--inset); }
+.btn--ink { background: var(--ink-grad); color: var(--ink-fg); box-shadow: 0 1px 2px oklch(0 0 0 / .18), 0 7px 16px -7px oklch(0.2 0.03 250 / .55), inset 0 1px 0 oklch(1 0 0 / .18), inset 0 -1px 0 oklch(0 0 0 / .3); font-weight: 500; }
+.btn--ink:active { box-shadow: inset 0 2px 5px oklch(0 0 0 / .45); }
+.btn[disabled] { cursor: not-allowed; transform: none; background: transparent; box-shadow: var(--inset); color: var(--fg-dim); font-weight: 400; }
+.btn--sm { height: 32px; padding: 0 13px; font-size: 12px; }
+.btn--xs { height: 28px; padding: 0 11px; font-size: 11.5px; }
+.btn--ghost { background: transparent; box-shadow: none; color: var(--fg-muted); }
+.btn--ghost:hover { color: var(--fg); background: color-mix(in oklch, var(--fg) 5%, transparent); }
+.link { border: 0; background: transparent; padding: 0; font-size: inherit; color: var(--fg-muted); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; cursor: pointer; }
+.link:hover { color: var(--fg); }
+
+.panel { border-radius: 24px; background: var(--face); box-shadow: var(--raised); padding: 20px 22px; }
+.eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg-dim); font-weight: 500; }
+.chip { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 999px; font-size: 12px; color: var(--fg-muted); box-shadow: var(--raised-sm); background: var(--face); white-space: nowrap; }
+.chip--in { box-shadow: var(--inset); background: transparent; }
+.chip b { color: var(--fg); font-weight: 600; }
+.row { display: flex; align-items: center; gap: 10px; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.muted { color: var(--fg-muted); } .dim { color: var(--fg-dim); } .faint { color: var(--fg-faint); }
+.meta { font-size: 11.5px; color: var(--fg-dim); }
+.danger { color: var(--danger); }
+.diamond { width: 9px; height: 9px; border: 1px dashed var(--fg-dim); transform: rotate(45deg); flex-shrink: 0; display: inline-block; }
+
+/* 채널 표시 — 색 없이 모양: 연결됨 ● · 연결 전 ○(점선) · 만료 ! (빨강, 올리기를 막는 실패) */
+.chs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.ch { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; color: var(--fg-muted); box-shadow: var(--inset); white-space: nowrap; }
+.ch::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--fg); }
+.ch.is-off { box-shadow: none; border: 1px dotted var(--line-strong); color: var(--fg-dim); }
+.ch.is-off::before { background: transparent; border: 1px dotted var(--fg-dim); }
+.ch.is-un { box-shadow: none; border: 1px dashed var(--line-strong); color: var(--fg-dim); }
+.ch.is-un::before { background: transparent; border: 1px solid var(--fg-dim); }
+.ch.is-bad { color: var(--danger); }
+.ch.is-bad::before { content: '!'; width: auto; height: auto; background: none; font-weight: 700; font-size: 10.5px; }
+.btile img, .brandpick img, .bp-item img, .bh img, .av, .ph-brand img { display: block; border-radius: 28%; }
+
+
+/* 스펙 띠 (아트보드 아래) */
+.specs { width: 1440px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.spec { padding: 14px 18px; border-radius: 18px; background: var(--panel-face); box-shadow: var(--raised-sm); font-size: 12px; line-height: 1.6; color: var(--fg-muted); }
+.spec b { display: block; font-size: 12.5px; color: var(--fg); font-weight: 600; margin-bottom: 6px; }
+.spec dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; }
+.spec dt { color: var(--fg-dim); white-space: nowrap; }
+.spec dd { margin: 0; }
+
+/* ── 접힌 사이드바(56px 레일) — 17a 집중형에서만 ─────────────────── */
+.side--rail { width: 64px; align-items: center; padding: 14px 8px 12px; }
+.side--rail .brand { padding: 0; }
+.rail-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; align-items: center; }
+.rail-nav button { width: 40px; height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--fg-muted); display: grid; place-items: center; cursor: pointer; }
+.rail-nav button[aria-current="page"] { background: var(--ink-grad); color: var(--ink-fg); box-shadow: var(--ink-shadow); }
+.side--rail .me-av { margin-top: auto; }
+
+/* ── 공통: 글 블록 ───────────────────────────────────────────── */
+.ce { outline: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ce:empty::before { content: attr(data-ph); color: var(--fg-faint); }
+.forbid { text-decoration: underline dotted var(--fg-dim); text-underline-offset: 5px; text-decoration-thickness: 1px; cursor: help; }
+.ring { width: 22px; height: 22px; flex-shrink: 0; }
+.ring circle { fill: none; stroke-width: 2.4; }
+.ring .track { stroke: var(--line); }
+.ring .fill { stroke: var(--fg-muted); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset var(--dur-hover) var(--ease-hub); }
+.ring.is-over .fill { stroke: var(--danger); }
+.specs .spec b + dl { margin-top: 2px; }
+
+/* ═══ 17a 한 장 원고지 (집중) ═══════════════════════════════════ */
+.zen { flex: 1; min-height: 0; position: relative; display: flex; justify-content: center; padding: 6px 28px 0; }
+.zen-paper { width: 100%; max-width: 880px; height: 100%; border-radius: 28px 28px 0 0; background: var(--panel-face); box-shadow: var(--raised); display: flex; flex-direction: column; position: relative; }
+.zen-meta { display: flex; align-items: center; gap: 2px; padding: 20px 22px 0 24px; font-size: 12.5px; color: var(--fg-dim); }
+.meta-btn { border: 0; background: transparent; font: inherit; color: var(--fg-muted); padding: 5px 9px; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub); }
+.meta-btn:hover { background: color-mix(in oklch, var(--fg) 5%, transparent); color: var(--fg); }
+.meta-btn img { border-radius: 28%; }
+.meta-dot { color: var(--fg-faint); padding: 0 2px; }
+.zen-body { flex: 1; overflow: auto; padding: 44px 0 140px; scrollbar-width: thin; }
+.zen-col { max-width: 620px; margin: 0 auto; }
+.zen-title { display: block; width: 100%; border: 0; background: transparent; padding: 0; font-size: 36px; font-weight: 300; letter-spacing: -0.025em; line-height: 1.2; color: var(--fg); outline: none; }
+.zen-title::placeholder { color: var(--fg-faint); }
+.zen-memo { display: inline-flex; align-items: center; gap: 8px; margin: 14px 0 40px; border: 0; background: transparent; padding: 0; font-size: 13px; color: var(--fg-dim); cursor: pointer; }
+.zen-memo:hover { color: var(--fg); }
+.zen-memo-box { margin: -26px 0 40px; padding: 14px 18px; border-radius: 16px; box-shadow: var(--inset); font-size: 14px; line-height: 1.8; color: var(--fg-muted); }
+.zen-post { position: relative; }
+.zen-post + .zen-post { margin-top: 34px; }
+.zen-post .ce { font-size: 18px; line-height: 1.9; color: var(--fg); }
+.zen-no { position: absolute; left: -46px; top: 5px; width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; font-size: 11px; color: transparent; transition: color var(--dur-hover) var(--ease-hub); }
+.zen-post:hover .zen-no { color: var(--fg-faint); box-shadow: var(--inset); }
+.zen-post:focus-within .zen-no { color: var(--ink-fg); background: var(--ink-grad); box-shadow: var(--ink-shadow); }
+.zen-count { position: absolute; right: 0; bottom: -22px; font-size: 11px; color: var(--fg-faint); visibility: hidden; }
+.zen-post:focus-within .zen-count, .zen-post.is-over .zen-count { visibility: visible; }
+.zen-post.is-over .zen-count { color: var(--danger); }
+.zen-post.is-over { box-shadow: inset 1px 0 0 var(--danger); padding-left: 14px; }
+.zen-add { margin-top: 30px; border: 0; background: transparent; padding: 0; font-size: 13px; color: var(--fg-faint); cursor: pointer; }
+.zen-add:hover { color: var(--fg); }
+.zen-dock { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 18px; border-radius: 999px; background: var(--face); box-shadow: var(--raised); white-space: nowrap; z-index: 2; }
+.zen-dock .sum { font-size: 12px; color: var(--fg-dim); margin-right: 8px; }
+.zen-dock .sum b { color: var(--fg); font-weight: 500; }
+.zen-dock .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.zen-ai { position: absolute; left: 50%; bottom: 82px; transform: translateX(-50%); width: 440px; padding: 14px; border-radius: 22px; background: var(--window); box-shadow: var(--shadow-window); display: none; flex-direction: column; gap: 10px; z-index: 3; }
+.zen-ai.is-open { display: flex; animation: popIn var(--dur-overlay) var(--ease-hub); }
+@keyframes popIn { from { opacity: 0; transform: translate(-50%, 4px); } }
+.zen-ai .well-in { display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; box-shadow: var(--inset), var(--inset-edge); font-size: 13px; color: var(--fg-faint); }
+.zen-toc { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; }
+.zen-toc button { width: 30px; height: 4px; border: 0; padding: 0; border-radius: 999px; background: var(--line-strong); cursor: pointer; transition: width var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub); }
+.zen-toc button:hover, .zen-toc button[aria-current="true"] { width: 44px; background: var(--fg); }
+.zen-hint { position: absolute; right: 22px; top: 64px; width: 220px; padding: 10px 12px; border-radius: 14px; border: 1px dashed var(--line-strong); font-size: 12px; line-height: 1.55; color: var(--fg-muted); background: var(--panel-face); display: none; }
+.zen-hint.is-on { display: block; }
+
+/* ═══ 17b 스레드 카드 (보이는 대로 쓰기) ════════════════════════ */
+.tdesk { flex: 1; min-height: 0; display: grid; grid-template-columns: 252px minmax(0, 1fr) 292px; gap: 22px; padding: 6px 22px 18px 18px; }
+.tside { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-top: 4px; scrollbar-width: none; }
+.tside .eyebrow { padding: 2px 4px; }
+.memo-note { border-radius: 18px; box-shadow: var(--inset); padding: 14px 16px; font-size: 13.5px; line-height: 1.75; color: var(--fg-muted); }
+.memo-note small { display: block; font-size: 10.5px; letter-spacing: .1em; color: var(--fg-dim); margin-bottom: 6px; }
+.sugg { border-radius: 18px; background: var(--panel-face); box-shadow: var(--raised-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.6; }
+.sugg .why { font-size: 11px; color: var(--fg-dim); display: flex; gap: 6px; align-items: center; }
+.sugg del { color: var(--fg-dim); }
+.sugg.is-gone { display: none; }
+.tcol { min-height: 0; overflow: auto; scrollbar-width: thin; padding: 2px 6px 24px; }
+.tstack { max-width: 580px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.ttitle { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--fg-dim); padding: 0 6px; }
+.ttitle input { flex: 1; border: 0; background: transparent; font: inherit; font-size: 15px; font-weight: 500; color: var(--fg); outline: none; padding: 6px 0; border-bottom: 1px solid transparent; }
+.ttitle input:focus { border-bottom-color: var(--moon-300); }
+.tsheet { border-radius: 28px; background: var(--panel-face); box-shadow: var(--raised); padding: 22px 24px 10px; }
+.tsheet-head { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--fg-dim); }
+.tsheet-head .who { border: 0; background: transparent; font: inherit; display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 999px; cursor: pointer; color: var(--fg); font-size: 13px; font-weight: 600; }
+.tsheet-head .who:hover { background: color-mix(in oklch, var(--fg) 5%, transparent); }
+.tsheet-head .who img { border-radius: 28%; }
+.tsheet-head .who .mono { font-weight: 400; font-size: 11px; color: var(--fg-dim); }
+.tc { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 0 14px; position: relative; padding-bottom: 20px; }
+.tc:not(.tc--add)::before { content: ''; position: absolute; left: 20.5px; top: 48px; bottom: 2px; width: 1px; background: var(--line-strong); }
+.tc .av { width: 42px; height: 42px; border-radius: 999px; overflow: hidden; box-shadow: var(--raised-sm); }
+.tc .av img { width: 100%; height: 100%; display: block; }
+.tc .hd { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; min-height: 22px; }
+.tc .hd small { font-weight: 400; font-size: 11px; color: var(--fg-faint); }
+.tc .hd .grow { flex: 1; }
+.tc .hd .n { font-size: 11px; font-weight: 400; color: var(--fg-faint); }
+.tc .ce { font-size: 16.5px; line-height: 1.75; color: var(--fg); padding: 4px 0 2px; }
+.tc.is-over .hd .n { color: var(--danger); }
+.tc--add { cursor: pointer; padding-bottom: 12px; align-items: center; }
+.tc--add .av { box-shadow: none; border: 1px dashed var(--line-strong); }
+.tc--add span { font-size: 13.5px; color: var(--fg-faint); }
+.tc--add:hover span { color: var(--fg); }
+.ship { border-radius: 24px; background: var(--panel-face); box-shadow: var(--raised); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.ship h4 { margin: 0; font-size: 15px; font-weight: 600; }
+.ship .to { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; box-shadow: var(--inset); font-size: 12.5px; }
+.ship .to b { display: block; font-size: 13px; }
+.ship .to img { border-radius: 28%; }
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.checks li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; padding: 7px 2px; font-size: 12.5px; align-items: baseline; }
+.checks li + li { border-top: 1px solid var(--line); }
+.checks small { font-size: 11px; color: var(--fg-dim); }
+.checks li.is-bad, .checks li.is-bad small { color: var(--danger); }
+.ship .btn--ink { width: 100%; justify-content: center; height: 44px; }
+.ship .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ship .row2 .btn { justify-content: center; }
+
+/* ═══ 17c 메모 → 원고 두 단 ═══════════════════════════════════ */
+.split { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 6px 22px 18px 18px; }
+.toolrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toolrow .bp { height: 38px; border: 0; border-radius: 999px; background: var(--face); box-shadow: var(--raised-sm); display: inline-flex; align-items: center; gap: 8px; padding: 0 14px 0 5px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.toolrow .bp img { border-radius: 28%; }
+.toolrow .tin { flex: 1; min-width: 160px; border: 0; background: transparent; font: inherit; font-size: 16px; font-weight: 500; color: var(--fg); padding: 6px 4px; outline: none; border-bottom: 1px solid transparent; }
+.toolrow .tin:focus { border-bottom-color: var(--moon-300); }
+.toolrow .tin::placeholder { color: var(--fg-faint); }
+.cols { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 0.9fr) 76px minmax(0, 1.25fr); }
+.mcol { min-height: 0; border-radius: 26px; box-shadow: var(--inset-deep); padding: 22px 26px; display: flex; flex-direction: column; gap: 12px; }
+.mcol .head, .dcol .head { display: flex; align-items: baseline; gap: 10px; }
+.mcol .head small, .dcol .head small { font-size: 11.5px; color: var(--fg-dim); }
+.mcol .ce { flex: 1; overflow: auto; font-size: 15px; line-height: 1.85; color: var(--fg-muted); scrollbar-width: thin; }
+.mcol .refs { display: flex; gap: 6px; flex-wrap: wrap; }
+.bridge { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.bridge .go { width: 52px; height: 52px; border-radius: 999px; border: 0; background: var(--ink-grad); color: var(--ink-fg); box-shadow: var(--ink-shadow); display: grid; place-items: center; cursor: pointer; transition: transform var(--dur-hover) var(--ease-hub); }
+.bridge .go:hover { transform: translateY(-1px); }
+.bridge .lbl { font-size: 11px; color: var(--fg-muted); text-align: center; line-height: 1.4; }
+.bridge .mini { height: 30px; padding: 0 10px; border-radius: 999px; border: 0; background: var(--face); box-shadow: var(--raised-sm); color: var(--fg-muted); cursor: pointer; font-size: 11px; white-space: nowrap; }
+.dcol { min-height: 0; border-radius: 26px; background: var(--panel-face); box-shadow: var(--raised); padding: 22px 30px 18px 58px; display: flex; flex-direction: column; gap: 14px; }
+.dcol .head { margin-left: -32px; }
+.dposts { flex: 1; overflow: auto; scrollbar-width: thin; padding: 0 6px 0 36px; margin-left: -36px; }
+.dp { position: relative; padding: 2px 0 22px; }
+.dp + .dp { border-top: 1px solid var(--line); padding-top: 18px; }
+.dp .no { position: absolute; left: -36px; top: 5px; width: 22px; height: 22px; border-radius: 999px; box-shadow: var(--inset); display: grid; place-items: center; font-size: 10.5px; color: var(--fg-dim); }
+.dp + .dp .no { top: 21px; }
+.dp:focus-within .no { background: var(--ink-grad); color: var(--ink-fg); box-shadow: var(--ink-shadow); }
+.dp .ce { font-size: 16.5px; line-height: 1.85; }
+.dp .cnt { position: absolute; right: 0; bottom: 2px; font-size: 11px; color: var(--fg-faint); }
+.dp.is-over .cnt { color: var(--danger); }
+.cand { border-radius: 18px; border: 1px dashed var(--line-strong); padding: 12px 14px; display: none; flex-direction: column; gap: 8px; font-size: 13.5px; line-height: 1.7; background: color-mix(in oklch, var(--fg) 2%, transparent); }
+.cand.is-on { display: flex; animation: fadeIn var(--dur-enter) var(--ease-hub); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } }
+.cand .why { font-size: 11px; color: var(--fg-dim); display: flex; gap: 6px; align-items: center; }
+.dfoot { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-dim); }
+.dfoot b { color: var(--fg); font-weight: 500; }
+
+/* 비교표 */
+.compare { width: 1440px; border-collapse: separate; border-spacing: 0; border-radius: 22px; overflow: hidden; background: var(--panel-face); box-shadow: var(--raised-sm); font-size: 12.5px; line-height: 1.55; }
+.compare th, .compare td { padding: 12px 16px; text-align: left; vertical-align: top; }
+.compare thead th { font-size: 12px; color: var(--fg-dim); font-weight: 500; border-bottom: 1px solid var(--line); }
+.compare tbody th { font-weight: 600; color: var(--fg); white-space: nowrap; width: 150px; }
+.compare tbody tr + tr > * { border-top: 1px solid var(--line); }
+.compare td { color: var(--fg-muted); }
+</style>
+</head>
+<body>
+<div class="deck">
+  <header class="deck-head">
+    <div>
+      <h1>원고 작성 — 더 깔끔하게 쓰는 형태 17a · 17b · 17c</h1>
+      <p>지금 구현된 원고 책상(16a)은 원고지 안에 브랜드 · 형식 탭 · 제목 · 펼친 원문 메모 · 연결 글 블록 · AI 요청/템플릿 · AI 버튼 3개 · 다른 작업 · 하단 바가 한 번에 보이고, 양옆 여백 칸까지 있어 쓰는 동안 눈이 갈 곳이 많습니다. 같은 기능과 같은 저장 · 올리기 계약을 두고, 쓰는 화면에 무엇을 남길지만 세 방향으로 다르게 정리했습니다.</p>
+    </div>
+    <div class="row">
+      <span class="sample">예시 값 · 목업</span>
+      <div class="seg" data-seg role="group" aria-label="테마">
+        <span class="seg-thumb"></span>
+        <button type="button" aria-pressed="true" data-theme-set="light">라이트</button>
+        <button type="button" aria-pressed="false" data-theme-set="dark">다크</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════ 17a 한 장 원고지 ═══════════════════════ -->
+  <div class="board-label" id="b17a"><b>17a 한 장 원고지 — 쓰는 동안엔 글만</b><span>사이드바는 접힌 레일, 여백 칸 없음. 위 한 줄(브랜드 · 형식 · 저장)과 아래 떠 있는 바 하나만. 글을 눌러 써 보세요 — 번호 · 글자 수는 쓰는 블록에만 나타나고, 브랜드 금지어는 글 안에 점선 밑줄로. 아래 바의 <span class="mono">✦ AI</span>를 눌러 보세요</span></div>
+  <section class="board" aria-label="시안 17a">
+    <aside class="side side--rail" data-railshell></aside>
+    <div class="main">
+      <div class="topbar" data-topbar="content"></div>
+      <div class="zen">
+        <article class="zen-paper" aria-label="원고">
+          <div class="zen-meta">
+            <button class="meta-btn" type="button" aria-label="올릴 브랜드 · Class.Moon"><img src="../../../apps/hub/public/icons/brands/classmoon.png" alt="" width="20" height="20">Class.Moon</button>
+            <span class="meta-dot">·</span>
+            <button class="meta-btn" type="button" aria-label="형식 · 스레드">스레드 ▾</button>
+            <span class="meta-dot">·</span>
+            <span class="mono" data-zen-save style="padding:0 8px">✓ 저장됨 08:42</span>
+            <span class="grow"></span>
+            <button class="meta-btn" type="button" aria-label="새 글">＋ 새 글</button>
+            <button class="ibtn ibtn--ghost" type="button" aria-label="더보기 — 기획 · 결과물 · 버전 · 말투"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+          </div>
+          <nav class="zen-toc" aria-label="연결 글 목차" data-zen-toc></nav>
+          <div class="zen-hint" data-zen-hint><b style="display:flex;gap:6px;align-items:center;color:var(--fg)"><span class="diamond"></span>권장 · 브랜드 금지어</b>‘무조건’은 Class.Moon 금지어예요. 빼거나 다른 말로 — 막지는 않아요.</div>
+          <div class="zen-body">
+            <div class="zen-col">
+              <input class="zen-title" value="복습이 안 되는 진짜 이유" placeholder="제목" aria-label="제목">
+              <button class="zen-memo" type="button" data-zen-memo aria-expanded="false">✎ 원문 메모 · 3줄 <span style="color:var(--fg-faint)">— AI 초안의 재료</span></button>
+              <div class="zen-memo-box" data-zen-memo-box hidden>수업 끝나고 학생 질문 — "복습하려고 펴면 뭐부터 볼지 모르겠다." 마지막 3분에 '내일 볼 한 줄'을 직접 적게 했더니 다음 주에 그 줄부터 펴 봄.</div>
+              <div data-zen-posts></div>
+              <button class="zen-add" type="button" data-zen-add>＋ 이어서 쓰기 <span class="mono">Enter Enter</span></button>
+            </div>
+          </div>
+          <div class="zen-ai" data-zen-ai role="dialog" aria-label="AI">
+            <div class="between"><span class="eyebrow">AI · Class.Moon 말투</span><span class="meta">요청은 한 줄로</span></div>
+            <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn btn--sm" type="button">메모로 초안</button><button class="btn btn--sm" type="button">다듬기</button><button class="btn btn--sm" type="button">첫 줄 3안</button><button class="btn btn--ghost btn--sm" type="button">다른 작업 ▾</button></div>
+            <div class="well-in">부탁할 것 — 예: 조금 더 짧게, 마지막 줄은 질문으로</div>
+          </div>
+          <div class="zen-dock">
+            <span class="sum" data-zen-sum></span>
+            <button class="btn btn--ghost btn--sm" type="button" data-zen-ai-btn aria-expanded="false">✦ AI</button>
+            <span class="sep"></span>
+            <button class="btn btn--ghost btn--sm" type="button">복사</button>
+            <button class="btn btn--ghost btn--sm" type="button">예약</button>
+            <button class="btn btn--ink btn--sm" type="button">올리기 ↑</button>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+  <div class="specs">
+    <div class="spec"><b>남긴 것</b><dl><dt>위 한 줄</dt><dd>브랜드 · 형식 · 저장 · 새 글 · ⋯ (12.5px, 누르면 바꿈)</dd><dt>원고지</dt><dd>제목 36/300 → 메모 한 줄 → 연결 글 18/1.9</dd><dt>아래 바</dt><dd>글자 요약 · ✦ AI · 복사 · 예약 · <b style="display:inline">올리기</b></dd></dl></div>
+    <div class="spec"><b>여백 · 위계</b><dl><dt>글 폭</dt><dd>620px, 위 44 · 아래 140(떠 있는 바 자리)</dd><dt>연결 글 사이</dt><dd>선 없이 34px 공백</dd><dt>번호</dt><dd>여백 46px 안, 가리키거나 쓰는 블록에만</dd><dt>글자 수</dt><dd>쓰는 블록에만 · 500자 넘으면 늘 보임(빨강)</dd></dl></div>
+    <div class="spec"><b>숨긴 곳</b><dl><dt>여백 칸 둘</dt><dd>목차는 왼쪽 끝 막대(연결 글 수만큼), 말투는 글 안 점선 밑줄 + ◇ 권장 말풍선</dd><dt>AI</dt><dd>✦ AI 한 단추 → 위로 뜨는 작은 판</dd><dt>기획 · 결과물 · 버전</dt><dd>⋯ 더보기</dd></dl></div>
+    <div class="spec"><b>이럴 때 좋음</b><dl><dt>장점</dt><dd>가장 조용하다. 원고지에서 AI 패널 · 펼친 메모 칸 · 양옆 여백 칸이 빠지고, 글 위아래로 한 줄씩만 남는다</dd><dt>대가</dt><dd>채널 연결 상태 · 말투 요약이 늘 보이진 않는다(올리기 창에서 확인)</dd></dl></div>
+  </div>
+
+  <!-- ═══════════════════════ 17b 스레드 카드 ═══════════════════════ -->
+  <div class="board-label" id="b17b"><b>17b 스레드 카드 — 올라갈 모습 그대로 쓰기</b><span>가운데가 곧 Threads 미리보기. 프로필 · 연결선 · 글자 링이 있는 카드에 바로 쓴다. 왼쪽은 재료(메모 · AI 제안), 오른쪽은 올리기. 글을 고쳐 링이 차는 걸 보고, 왼쪽 제안의 <span class="mono">적용</span>을 눌러 보세요</span></div>
+  <section class="board" aria-label="시안 17b">
+    <aside class="side" data-shell="콘텐츠"></aside>
+    <div class="main">
+      <div class="topbar" data-topbar="content"></div>
+      <div class="tdesk">
+        <aside class="tside" aria-label="재료">
+          <span class="eyebrow">재료</span>
+          <div class="memo-note"><small>원문 메모 · 올라가지 않아요</small>수업 끝나고 학생 질문 — "복습하려고 펴면 뭐부터 볼지 모르겠다." 마지막 3분에 '내일 볼 한 줄'을 직접 적게 했더니 다음 주에 그 줄부터 펴 봄.</div>
+          <span class="eyebrow" style="margin-top:6px">AI 제안 · Class.Moon 말투</span>
+          <div class="sugg" data-sugg>
+            <span class="why"><span class="diamond"></span>다듬기 · 1번 글</span>
+            <div>복습이 안 되는 건 <del>의지 문제가</del> 의지가 약해서가 아니에요. <del>시작점이 없어서예요.</del> 어디서 시작할지 몰라서예요.</div>
+            <div class="row" style="gap:6px"><button class="btn btn--sm" type="button" data-apply>적용</button><button class="btn btn--ghost btn--sm" type="button" data-drop>버리기</button></div>
+          </div>
+          <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn btn--ghost btn--xs" type="button">메모로 초안</button><button class="btn btn--ghost btn--xs" type="button">다듬기</button><button class="btn btn--ghost btn--xs" type="button">첫 줄 3안</button></div>
+        </aside>
+        <div class="tcol">
+          <div class="tstack">
+            <label class="ttitle">목록 이름<input value="복습이 안 되는 진짜 이유" aria-label="제목 · 목록에서 찾을 이름"><span class="mono" data-t-save>✓ 08:42</span></label>
+            <article class="tsheet" aria-label="스레드 원고">
+              <div class="tsheet-head">
+                <button class="who" type="button" aria-label="올릴 브랜드 · Class.Moon"><img src="../../../apps/hub/public/icons/brands/classmoon.png" alt="" width="26" height="26">Class.Moon <span class="mono">@moon.classin</span> ▾</button>
+                <span class="grow"></span>
+                <div class="seg" data-seg role="group" aria-label="형식"><span class="seg-thumb"></span><button type="button" aria-pressed="true">스레드</button><button type="button" aria-pressed="false">카드뉴스</button><button type="button" aria-pressed="false">쇼츠</button></div>
+              </div>
+              <div data-t-posts></div>
+              <div class="tc tc--add" data-t-add role="button" tabindex="0"><span class="av"></span><span>이어서 쓰기 · Enter 두 번</span></div>
+            </article>
+          </div>
+        </div>
+        <aside class="tside" aria-label="올리기">
+          <span class="eyebrow">올리기</span>
+          <div class="ship">
+            <div class="to"><img src="../../../apps/hub/public/icons/brands/classmoon.png" alt="" width="32" height="32"><div><b>Threads @moon.classin</b><span class="meta">● 연결됨 · 권한 20일 남음</span></div></div>
+            <ul class="checks" data-t-checks></ul>
+            <div class="seg" data-seg role="group" aria-label="언제" style="width:100%"><span class="seg-thumb"></span><button type="button" aria-pressed="true" style="flex:1">지금</button><button type="button" aria-pressed="false" style="flex:1">예약</button><button type="button" aria-pressed="false" style="flex:1">직접</button></div>
+            <button class="btn btn--ink" type="button">Threads에 지금 올리기 ↑</button>
+            <div class="row2"><button class="btn btn--sm" type="button">복사</button><button class="btn btn--sm" type="button">더보기 ⋯</button></div>
+          </div>
+          <p class="meta" style="margin:0;padding:0 4px;line-height:1.6">카드뉴스 · 쇼츠는 가운데가 장 · 장면 카드로 바뀌고, 올리기는 직접 올리기만.</p>
+        </aside>
+      </div>
+    </div>
+  </section>
+  <div class="specs">
+    <div class="spec"><b>남긴 것</b><dl><dt>가운데</dt><dd>Threads 카드 그대로 — 프로필 · 핸들 · 1/3 · 연결선 · 글자 링</dd><dt>왼쪽</dt><dd>원문 메모(눌린 홈) · AI 제안(후보마다 적용 / 버리기)</dd><dt>오른쪽</dt><dd>올리기 판 — 받는 계정 · 확인 · 언제 · 주 버튼</dd></dl></div>
+    <div class="spec"><b>여백 · 위계</b><dl><dt>카드 폭</dt><dd>580px(Threads 앱 폭에 가깝게), 본문 16.5/1.75</dd><dt>연결선</dt><dd>프로필 아래 1px <span class="mono">--line-strong</span></dd><dt>글자 수</dt><dd>숫자 대신 22px 링 + 남은 수, 500 넘으면 빨강</dd></dl></div>
+    <div class="spec"><b>바뀌는 것</b><dl><dt>미리보기</dt><dd>따로 없음 — 쓰는 화면이 곧 미리보기</dd><dt>올리기 창</dt><dd>지금 올리기는 오른쪽 판에서 바로, 예약 · 직접만 창</dd><dt>제목</dt><dd>글 밖 "목록 이름" 한 줄로(올라가지 않으니까)</dd></dl></div>
+    <div class="spec"><b>이럴 때 좋음</b><dl><dt>장점</dt><dd>올라갈 모양을 보며 쓴다. 연결 글 경계가 카드라 헷갈리지 않는다</dd><dt>대가</dt><dd>세 칸 구조는 그대로 — 화면이 좁으면 재료 · 올리기가 아래로 내려간다</dd></dl></div>
+  </div>
+
+  <!-- ═══════════════════════ 17c 메모 → 원고 ═══════════════════════ -->
+  <div class="board-label" id="b17c"><b>17c 메모 → 원고 두 단 — 재료와 글을 나란히</b><span>왼쪽은 날것의 메모(눌린 홈), 오른쪽은 다듬는 원고(솟은 판). 가운데 <span class="mono">→</span>가 AI 초안 한 단계. 눌러서 후보가 원고 위에 점선으로 뜨는 걸 보세요. 도구는 위 한 줄에만</span></div>
+  <section class="board" aria-label="시안 17c">
+    <aside class="side" data-shell="콘텐츠"></aside>
+    <div class="main">
+      <div class="topbar" data-topbar="content"></div>
+      <div class="split">
+        <div class="toolrow">
+          <button class="bp" type="button" aria-label="올릴 브랜드 · Class.Moon"><img src="../../../apps/hub/public/icons/brands/classmoon.png" alt="" width="28" height="28">Class.Moon ▾</button>
+          <div class="seg" data-seg role="group" aria-label="형식"><span class="seg-thumb"></span><button type="button" aria-pressed="true">스레드</button><button type="button" aria-pressed="false">카드뉴스</button><button type="button" aria-pressed="false">쇼츠</button></div>
+          <input class="tin" value="복습이 안 되는 진짜 이유" placeholder="제목 (목록에서 찾을 이름)" aria-label="제목">
+          <span class="mono meta" data-c-save>✓ 저장됨 08:42</span>
+          <button class="ibtn ibtn--ghost" type="button" aria-label="더보기"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+          <button class="btn btn--sm" type="button">예약</button>
+          <button class="btn btn--ink btn--sm" type="button">올리기 ↑</button>
+        </div>
+        <div class="cols">
+          <section class="mcol" aria-label="원문 메모">
+            <div class="head"><span class="eyebrow">원문 메모</span><small>재료 · 복사 · 올리기에 안 들어가요</small></div>
+            <div class="ce" contenteditable="true" data-ph="떠오른 것, 들은 말, 장면을 그대로" aria-label="원문 메모">수업 끝나고 학생 질문 — "복습하려고 펴면 뭐부터 볼지 모르겠다."
+
+마지막 3분에 '내일 볼 한 줄'을 직접 적게 했더니 다음 주에 그 줄부터 펴 봄.
+
+숙제 검사보다 한 줄 검사.</div>
+            <div class="refs"><span class="chip chip--in">↗ 참고 링크 1</span><span class="chip chip--in">기획 3/6</span></div>
+          </section>
+          <div class="bridge">
+            <button class="go" type="button" data-c-go aria-label="메모로 AI 초안"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+            <span class="lbl">AI 초안</span>
+            <button class="mini" type="button">다듬기</button>
+            <button class="mini" type="button">첫 줄 3안</button>
+          </div>
+          <section class="dcol" aria-label="원고">
+            <div class="head"><span class="eyebrow">원고</span><small data-c-sum></small><span class="grow"></span><small class="mono">Class.Moon 말투</small></div>
+            <div class="cand" data-c-cand>
+              <span class="why"><span class="diamond"></span>AI 후보 · 메모로 초안 · 연결 글 3개</span>
+              <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px"><li>복습이 안 되는 건 의지가 약해서가 아니에요. 어디서 시작할지 몰라서예요.</li><li>수업 끝나고 한 학생이 물었어요. "복습하려고 펴면 뭐부터 봐야 할지 모르겠어요." 그날 마지막 3분을 바꿨어요.</li><li>다음 주, 그 한 줄부터 펴 보는 학생이 늘었어요. 오늘 수업 끝 3분, 한 줄만 남겨 보세요.</li></ol>
+              <div class="row" style="gap:6px"><button class="btn btn--sm" type="button" data-c-apply>이걸로 바꾸기</button><button class="btn btn--ghost btn--sm" type="button" data-c-drop>버리기</button><span class="meta" style="margin-left:auto">바꾸면 버전 남김</span></div>
+            </div>
+            <div class="dposts" data-c-posts></div>
+            <div class="dfoot"><span>복사 · 직접 올리기는 <b>올리기</b> 창에서</span><span class="grow"></span><button class="btn btn--ghost btn--xs" type="button">복사</button></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="specs">
+    <div class="spec"><b>남긴 것</b><dl><dt>위 한 줄</dt><dd>브랜드 · 형식 · 제목 · 저장 · ⋯ · 예약 · <b style="display:inline">올리기</b></dd><dt>왼쪽</dt><dd>원문 메모 — 접지 않고 늘 펼친 재료 칸</dd><dt>가운데</dt><dd>→ AI 초안 · 다듬기 · 첫 줄 — AI는 이 세 단추뿐</dd><dt>오른쪽</dt><dd>원고(연결 글) · AI 후보는 원고 위에 점선</dd></dl></div>
+    <div class="spec"><b>여백 · 위계</b><dl><dt>비율</dt><dd>메모 0.9 : 원고 1.25, 사이 76px</dd><dt>메모</dt><dd>15/1.85 <span class="mono">--fg-muted</span> — 날것은 한 단계 흐리게</dd><dt>원고</dt><dd>16.5/1.85 <span class="mono">--fg</span>, 번호는 판 안 왼쪽 여백</dd></dl></div>
+    <div class="spec"><b>바뀌는 것</b><dl><dt>메모</dt><dd>접힘 → 늘 보이는 칸(본문이 차도 접히지 않음)</dd><dt>AI 패널</dt><dd>요청 · 템플릿 · 다른 작업은 ⋯ 더보기, 화면엔 세 단추</dd><dt>하단 바</dt><dd>없앰 — 행동은 위 한 줄</dd></dl></div>
+    <div class="spec"><b>이럴 때 좋음</b><dl><dt>장점</dt><dd>운영자 흐름(떠오름 → 우선 저장 → 다듬기)과 같은 모양. 메모를 보며 쓴다</dd><dt>대가</dt><dd>원고 폭이 가장 좁다(약 520px). 휴대폰에선 메모 | 원고 탭</dd></dl></div>
+  </div>
+
+  <table class="compare" aria-label="세 안 비교">
+    <thead><tr><th></th><th>17a 한 장 원고지</th><th>17b 스레드 카드</th><th>17c 메모 → 원고</th></tr></thead>
+    <tbody>
+      <tr><th>한 줄</th><td>쓰는 동안엔 글만, 나머지는 부를 때만</td><td>올라갈 모습 그대로 쓰고, 옆에서 바로 올린다</td><td>재료와 글을 나란히, AI는 그 사이 한 단계</td></tr>
+      <tr><th>쓰는 동안 보이는 것</th><td>브랜드 · 형식 · 저장 / 글 / 떠 있는 바 하나</td><td>메모 · AI 제안 / 카드 / 올리기 판</td><td>도구 한 줄 / 메모 · → · 원고</td></tr>
+      <tr><th>원고 폭</th><td>620px</td><td>580px(카드)</td><td>약 520px</td></tr>
+      <tr><th>메모</th><td>한 줄 → 누르면 펼침</td><td>왼쪽 칸에 늘</td><td>왼쪽 절반에 늘</td></tr>
+      <tr><th>AI</th><td>✦ 한 단추 → 뜨는 판</td><td>제안 카드(적용 / 버리기)</td><td>→ 초안 · 다듬기 · 첫 줄, 후보는 점선</td></tr>
+      <tr><th>말투 · 금지어</th><td>글 안 점선 밑줄 + ◇ 말풍선</td><td>AI 제안 머리 · 올리기 확인 줄</td><td>원고 머리 한 줄 · 올리기 창</td></tr>
+      <tr><th>올리기</th><td>아래 바 → 올리기 창(16b)</td><td>오른쪽 판에서 바로(예약 · 직접만 창)</td><td>위 한 줄 → 올리기 창(16b)</td></tr>
+      <tr><th>16a에서 바꾸는 양</th><td>작다 — 배치 · 숨김만, 저장 · 올리기 그대로</td><td>중간 — 편집기를 카드로, 올리기 창 일부를 판으로</td><td>중간 — 메모 칸 · 가운데 단추, 하단 바 없앰</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+// ── 예시 값 (목업 전용 — 코드에 넣지 않는다) ───────────────────────────
+const POSTS = [
+  '복습이 안 되는 건 의지 문제가 아니에요. 시작점이 없어서예요.',
+  '수업 끝나고 한 학생이 물었어요. "복습하려고 펴면 뭐부터 봐야 할지 모르겠어요."\n그날 수업 마지막 3분을 바꿨어요. 오늘 배운 것 중 \'내일 다시 볼 한 줄\'을 직접 적게 했어요.',
+  '다음 주, 그 한 줄부터 펴 보는 학생이 늘었어요. 무조건 한 줄만 남겨 보세요.',
+];
+const LIMIT = 500;
+const ICON = '../../../apps/hub/public/icons/brands/classmoon.png';
+const len = (s) => [...s].length;
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const markForbid = (s) => esc(s).replace(/무조건/g, '<span class="forbid" data-forbid tabindex="0">무조건</span>');
+const textOf = (el) => el.innerText.replace(/\n$/, '');
+
+// ── 17a ──────────────────────────────────────────────────────────
+const zen = { posts: [...POSTS] };
+function renderZen() {
+  const host = document.querySelector('[data-zen-posts]');
+  host.innerHTML = zen.posts.map((p, i) => `<div class="zen-post" data-i="${i}"><span class="zen-no mono" aria-hidden="true">${i + 1}</span><div class="ce" contenteditable="true" data-i="${i}" aria-label="연결 글 ${i + 1} / ${zen.posts.length}" data-ph="이어서…">${markForbid(p)}</div><span class="zen-count mono" data-c="${i}"></span></div>`).join('');
+  zenCounts();
+}
+function zenCounts() {
+  let total = 0;
+  zen.posts.forEach((p, i) => {
+    const n = len(p); total += n;
+    const box = document.querySelector(`.zen-post[data-i="${i}"]`);
+    box.classList.toggle('is-over', n > LIMIT);
+    box.querySelector('[data-c]').textContent = n > LIMIT ? `${n} / ${LIMIT} · 나눠야 올라가요` : `${n} / ${LIMIT}`;
+  });
+  document.querySelector('[data-zen-sum]').innerHTML = `연결 글 <b class="mono">${zen.posts.length}</b> · <b class="mono">${total}</b>자`;
+  document.querySelector('[data-zen-toc]').innerHTML = zen.posts.map((p, i) => `<button type="button" aria-label="${i + 1}번 글로" data-go="${i}"></button>`).join('');
+}
+const zenRoot = document.querySelector('[aria-label="시안 17a"]');
+let zenSaveT;
+zenRoot.addEventListener('input', (e) => {
+  const ce = e.target.closest('.ce[data-i]'); if (!ce) return;
+  zen.posts[+ce.dataset.i] = textOf(ce); zenCounts();
+  const s = zenRoot.querySelector('[data-zen-save]'); s.textContent = '입력 중';
+  clearTimeout(zenSaveT); zenSaveT = setTimeout(() => { s.textContent = '✓ 저장됨'; }, 1200);
+});
+zenRoot.addEventListener('focusin', (e) => {
+  const ce = e.target.closest('.ce[data-i]'); if (!ce) return;
+  zenRoot.querySelectorAll('[data-go]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.go === ce.dataset.i)));
+});
+zenRoot.addEventListener('click', (e) => {
+  if (e.target.closest('[data-zen-ai-btn]')) { const ai = zenRoot.querySelector('[data-zen-ai]'); const open = !ai.classList.contains('is-open'); ai.classList.toggle('is-open', open); e.target.closest('button').setAttribute('aria-expanded', String(open)); return; }
+  if (e.target.closest('[data-zen-memo]')) { const box = zenRoot.querySelector('[data-zen-memo-box]'); box.hidden = !box.hidden; e.target.closest('button').setAttribute('aria-expanded', String(!box.hidden)); return; }
+  if (e.target.closest('[data-forbid]')) { zenRoot.querySelector('[data-zen-hint]').classList.toggle('is-on'); return; }
+  const go = e.target.closest('[data-go]'); if (go) { const ce = zenRoot.querySelector(`.ce[data-i="${go.dataset.go}"]`); ce.focus(); return; }
+  if (e.target.closest('[data-zen-add]')) { zen.posts.push(''); renderZen(); zenRoot.querySelector(`.ce[data-i="${zen.posts.length - 1}"]`).focus(); }
+});
+
+// ── 17b ──────────────────────────────────────────────────────────
+const th = { posts: [...POSTS] };
+const RING = 2 * Math.PI * 9;
+const ring = (n) => { const over = n > LIMIT; const r = Math.min(1, n / LIMIT); return `<svg class="ring${over ? ' is-over' : ''}" viewBox="0 0 22 22" aria-hidden="true"><circle class="track" cx="11" cy="11" r="9"/><circle class="fill" cx="11" cy="11" r="9" stroke-dasharray="${RING}" stroke-dashoffset="${RING * (1 - r)}"/></svg>`; };
+function renderThread() {
+  const n = th.posts.length;
+  document.querySelector('[data-t-posts]').innerHTML = th.posts.map((p, i) => `<div class="tc" data-i="${i}"><span class="av"><img src="${ICON}" alt="" width="42" height="42"></span><div><div class="hd">moon.classin <small>${i ? '연결 글' : '지금'}</small><span class="grow"></span><span class="n mono" data-n="${i}"></span><span data-ring="${i}"></span></div><div class="ce" contenteditable="true" data-i="${i}" aria-label="연결 글 ${i + 1} / ${n}" data-ph="이어서…">${esc(p)}</div></div></div>`).join('');
+  threadCounts();
+}
+function threadCounts() {
+  let over = 0, max = 0;
+  th.posts.forEach((p, i) => {
+    const n = len(p); max = Math.max(max, n); if (n > LIMIT) over++;
+    document.querySelector(`.tc[data-i="${i}"]`).classList.toggle('is-over', n > LIMIT);
+    document.querySelector(`[data-n="${i}"]`).textContent = n > LIMIT ? `${n - LIMIT}자 넘음` : `${i + 1}/${th.posts.length} · ${LIMIT - n}자 남음`;
+    document.querySelector(`[data-ring="${i}"]`).innerHTML = ring(n);
+  });
+  document.querySelector('[data-t-checks]').innerHTML = [
+    ['✓', '브랜드 · Class.Moon', 'ClassIn 회사', ''],
+    over ? ['✕', `연결 글 ${over}개가 500자를 넘어요`, '', 'is-bad'] : ['✓', `연결 글 ${th.posts.length}개 · 모두 500자 이내`, `최장 ${max}자`, ''],
+    ['◇', '권장 · 금지어 ‘무조건’ 빼기', '1건', ''],
+    ['✓', '원고 저장됨', '', ''],
+  ].map(([g, t, s, c]) => `<li class="${c}"><span aria-hidden="true">${g === '◇' ? '<span class="diamond"></span>' : g}</span><span>${t}</span><small class="mono">${s}</small></li>`).join('');
+}
+const thRoot = document.querySelector('[aria-label="시안 17b"]');
+thRoot.addEventListener('input', (e) => { const ce = e.target.closest('.ce[data-i]'); if (!ce) return; th.posts[+ce.dataset.i] = textOf(ce); threadCounts(); });
+thRoot.addEventListener('click', (e) => {
+  if (e.target.closest('[data-apply]')) { th.posts[0] = '복습이 안 되는 건 의지가 약해서가 아니에요. 어디서 시작할지 몰라서예요.'; renderThread(); thRoot.querySelector('[data-sugg]').classList.add('is-gone'); return; }
+  if (e.target.closest('[data-drop]')) { thRoot.querySelector('[data-sugg]').classList.add('is-gone'); return; }
+  if (e.target.closest('[data-t-add]')) { th.posts.push(''); renderThread(); thRoot.querySelector(`.ce[data-i="${th.posts.length - 1}"]`).focus(); }
+});
+
+// ── 17c ──────────────────────────────────────────────────────────
+const sp = { posts: ['복습이 안 되는 건 의지 문제가 아니에요.', '수업 끝나고 한 학생이 물었어요. "복습하려고 펴면 뭐부터 봐야 할지 모르겠어요."'] };
+function renderSplit() {
+  document.querySelector('[data-c-posts]').innerHTML = sp.posts.map((p, i) => `<div class="dp" data-i="${i}"><span class="no mono" aria-hidden="true">${i + 1}</span><div class="ce" contenteditable="true" data-i="${i}" aria-label="연결 글 ${i + 1} / ${sp.posts.length}" data-ph="이어서…">${esc(p)}</div><span class="cnt mono" data-cc="${i}"></span></div>`).join('');
+  splitCounts();
+}
+function splitCounts() {
+  let total = 0;
+  sp.posts.forEach((p, i) => { const n = len(p); total += n; document.querySelector(`.dp[data-i="${i}"]`).classList.toggle('is-over', n > LIMIT); document.querySelector(`[data-cc="${i}"]`).textContent = `${n} / ${LIMIT}`; });
+  document.querySelector('[data-c-sum]').innerHTML = `스레드 · 연결 글 <span class="mono">${sp.posts.length}</span> · <span class="mono">${total}</span>자`;
+}
+const spRoot = document.querySelector('[aria-label="시안 17c"]');
+spRoot.addEventListener('input', (e) => { const ce = e.target.closest('.dcol .ce[data-i]'); if (!ce) return; sp.posts[+ce.dataset.i] = textOf(ce); splitCounts(); });
+spRoot.addEventListener('click', (e) => {
+  if (e.target.closest('[data-c-go]')) { spRoot.querySelector('[data-c-cand]').classList.add('is-on'); return; }
+  if (e.target.closest('[data-c-apply]')) { sp.posts = [...POSTS.slice(0, 2), '다음 주, 그 한 줄부터 펴 보는 학생이 늘었어요. 오늘 수업 끝 3분, 한 줄만 남겨 보세요.']; sp.posts[0] = '복습이 안 되는 건 의지가 약해서가 아니에요. 어디서 시작할지 몰라서예요.'; renderSplit(); spRoot.querySelector('[data-c-cand]').classList.remove('is-on'); return; }
+  if (e.target.closest('[data-c-drop]')) { spRoot.querySelector('[data-c-cand]').classList.remove('is-on'); }
+});
+
+// 공통: 연결 글 안에서 Enter 두 번 = 다음 연결 글 (세 안 모두)
+function bindEnter(root, state, render) {
+  root.addEventListener('keydown', (e) => {
+    const ce = e.target.closest('.ce[data-i]');
+    if (!ce || e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    const text = textOf(ce);
+    if (ce.dataset.lastEnter && Date.now() - ce.dataset.lastEnter < 600) {
+      e.preventDefault();
+      const i = +ce.dataset.i;
+      state.posts[i] = text.replace(/\n+$/, '');
+      state.posts.splice(i + 1, 0, '');
+      render();
+      root.querySelector(`.ce[data-i="${i + 1}"]`)?.focus();
+      return;
+    }
+    ce.dataset.lastEnter = Date.now();
+  });
+}
+bindEnter(zenRoot, zen, renderZen);
+bindEnter(thRoot, th, renderThread);
+bindEnter(spRoot, sp, renderSplit);
+
+// ── 접힌 레일 (17a) ─────────────────────────────────────────────────
+// ── 셸: 사이드바 · 탑바 (13a·b·c와 같은 구조) ───────────────────────────
+const NAV = ['홈', '오늘', '현황', '내 작업', '영업·매출', '기회 탐색', '프로젝트', '제품', '브랜드', '콘텐츠'];
+const ICONS = {
+  '홈': 'M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1Z', '오늘': 'M6 3h9l3 3v15H6Z M9 11h6 M9 15h4',
+  '현황': 'M4 20V10 M10 20V4 M16 20v-7 M3 20h18', '내 작업': 'M9 6h11 M9 12h11 M9 18h11 M4 6l1 1 2-2 M4 12l1 1 2-2 M4 18l1 1 2-2',
+  '영업·매출': 'M4 19h16 M6 15l4-5 3 3 5-7', '기회 탐색': 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M15 9l-2 4-4 2 2-4Z',
+  '프로젝트': 'M4 7h6l2 2h8v10H4Z', '제품': 'M4 8l8-4 8 4v8l-8 4-8-4Z M4 8l8 4 8-4 M12 12v8', '브랜드': 'M12 3 4 7v6c0 4 4 7 8 8 4-1 8-4 8-8V7Z',
+  '콘텐츠': 'M5 4h10l4 4v12H5Z M8 12h8 M8 16h6', 'AI·자동화': 'M12 3v3 M12 18v3 M3 12h3 M18 12h3 M7 7l2 2 M15 15l2 2 M7 17l2-2 M15 9l2-2',
+  '설정': 'M4 7h10 M18 7h2 M4 17h4 M12 17h8 M16 5v4 M10 15v4',
+};
+document.querySelectorAll('[data-shell]').forEach(el => {
+  const cur = el.dataset.shell;
+  el.innerHTML = `<div class="brand"><span class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg></span><div><b>Moonlight</b><small>Hub · Pro</small></div></div>
+    <button class="search" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex:1;text-align:left">검색 · 바로 이동</span><span class="kbd mono">⌘K</span></button>
+    <div class="seg" data-seg role="group" aria-label="범위"><span class="seg-thumb"></span><button type="button" aria-pressed="true">전체</button><button type="button" aria-pressed="false">ClassIn</button><button type="button" aria-pressed="false">개인</button></div>
+    <nav class="nav" aria-label="주요"><span class="nav-pill"></span>${NAV.map(n => `<button type="button"${n === cur ? ' aria-current="page"' : ''}>${n}${n === '영업·매출' ? '<span class="count mono">3</span>' : ''}${n === '콘텐츠' ? '<span class="count mono" aria-label="올릴 차례 1">1</span>' : ''}</button>`).join('')}</nav>
+    <div class="util"><button type="button">AI·자동화</button><button type="button">설정</button></div>
+    <div class="me"><span class="me-av">N</span><div><b>운영자</b><small>Founder · Pro</small></div></div>`;
+});
+const TOPTABS = { content: ['콘텐츠', ['소재·제작', '원고 작성', '발행', '성과', '리서치함'], 1], brand: ['브랜드', ['브랜드 목록', '컨텐츠 로그'], 0] };
+document.querySelectorAll('[data-topbar]').forEach(el => {
+  const [crumb, tabs, on] = TOPTABS[el.dataset.topbar];
+  el.innerHTML = `<div class="crumb"><small>Moonlight</small><b>${crumb}</b></div>
+    <div class="seg" data-seg role="group" aria-label="${crumb} 탭" style="margin-left:10px"><span class="seg-thumb"></span>${tabs.map((t, i) => `<button type="button" aria-pressed="${i === on}">${t}</button>`).join('')}</div>
+    <span class="grow"></span>
+    <span class="clock mono">수 · 10/21 · 08:42</span>
+    <button class="ibtn" type="button" aria-label="알림"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></button>
+    <button class="btn btn--sm" type="button">빠른 입력 <span class="kbd mono">C</span></button>`;
+});
+document.querySelectorAll('.nav button, .util button').forEach(b => {
+  const label = b.firstChild.textContent.trim();
+  if (ICONS[label]) b.insertAdjacentHTML('afterbegin', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[label].split(' M').map((d, i) => '<path d="' + (i ? 'M' : '') + d + '"/>').join('') + '</svg>');
+});
+
+// ── 미끄러짐 (11a·11b·13과 같음) ──────────────────────────────────
+const SLIDE_EASE = 'cubic-bezier(0.16, 1, 0.3, 1.04)';
+const slideDur = d => Math.round(Math.min(520, 280 + d * 0.75));
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+function slide(el, axis, pos, size, host, animate = true) {
+  const sizeProp = axis === 'y' ? 'height' : 'width';
+  const tr = v => (axis === 'y' ? 'translateY(' : 'translateX(') + v + 'px)';
+  const from = parseFloat(el.dataset.pos), fromSize = parseFloat(el.dataset.size);
+  el.dataset.pos = pos; el.dataset.size = size;
+  el.style.transform = tr(pos); el.style[sizeProp] = size + 'px';
+  el.getAnimations().forEach(a => a.cancel());
+  if (!animate || isNaN(from) || from === pos || reduceMotion.matches) return;
+  el.animate([{ transform: tr(from), [sizeProp]: fromSize + 'px' }, { transform: tr(pos), [sizeProp]: size + 'px' }], { duration: slideDur(Math.abs(pos - from)), easing: SLIDE_EASE });
+}
+function placeThumb(seg, animate = true) {
+  const on = seg.querySelector('button[aria-pressed="true"]'), th = seg.querySelector('.seg-thumb');
+  if (on && th) slide(th, 'x', on.offsetLeft, on.offsetWidth, seg, animate);
+}
+function bindSeg(seg) {
+  if (seg.dataset.bound) return; seg.dataset.bound = '1';
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    if (b.dataset.themeSet) document.documentElement.dataset.theme = b.dataset.themeSet;
+    placeThumb(seg);
+  });
+}
+function placeNav(nav, animate = true) {
+  const cur = nav.querySelector('[aria-current="page"]');
+  slide(nav.querySelector('.nav-pill'), 'y', cur.offsetTop, cur.offsetHeight, nav, animate);
+}
+document.querySelectorAll('.nav').forEach(nav => nav.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  nav.querySelectorAll('button').forEach(x => x.removeAttribute('aria-current'));
+  b.setAttribute('aria-current', 'page'); placeNav(nav);
+}));
+
+document.querySelectorAll('[data-railshell]').forEach((el) => {
+  el.innerHTML = `<div class="brand"><span class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg></span></div>
+    <nav class="rail-nav" aria-label="주요">${NAV.map((n) => `<button type="button" aria-label="${n}"${n === '콘텐츠' ? ' aria-current="page"' : ''}>${'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[n].split(' M').map((d, i) => '<path d="' + (i ? 'M' : '') + d + '"/>').join('') + '</svg>'}</button>`).join('')}</nav>
+    <span class="me-av">N</span>`;
+});
+renderZen(); renderThread(); renderSplit();
+document.querySelectorAll('[data-seg]').forEach(bindSeg);
+function layout() { document.querySelectorAll('[data-seg]').forEach((s) => placeThumb(s, false)); document.querySelectorAll('.nav').forEach((n) => placeNav(n, false)); }
+document.fonts.ready.then(layout);
+window.addEventListener('resize', layout);
+</script>
+</body>
+</html>

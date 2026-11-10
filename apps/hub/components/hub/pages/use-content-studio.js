@@ -386,6 +386,20 @@ export function useContentStudio(workspace) {
       return { ok: false, message: current() ? error.message : '' };
     } finally { if (current()) update({ busy: false }); }
   };
-  return { ...state, scope, campaignRequested: campaignParam !== null, edit, save, recordPublication, switchVariant, newDraft, refreshHistory, compareLatest, recover, mutate, retryLoad,
+  // 서버가 직접 발행을 기록한 뒤(Threads 올리기 — 0073 RPC가 결과물·콘텐츠 상태를 바꾼다) 정확한 버전을 다시 받는다.
+  // 받지 않으면 다음 저장이 낡은 수정 시각으로 가서 충돌한다. 입력 중이던 글은 그대로 둔다.
+  const refreshPublished = async (contentId, variantId) => {
+    const documentEpoch = epoch.current;
+    try {
+      const detail = await getDetail(contentId);
+      if (epoch.current !== documentEpoch || stateRef.current.draft.variantId !== variantId) return false;
+      const latest = draftFromDetail(detail, variantId);
+      const dirty = stateRef.current.dirty;
+      adopt(dirty ? { ...stateRef.current.draft, itemUpdatedAt: latest.itemUpdatedAt, variantUpdatedAt: latest.variantUpdatedAt, status: latest.status } : latest, detail, dirty);
+      window.dispatchEvent(new Event('moonlight:content-saved'));
+      return true;
+    } catch { return false; }
+  };
+  return { ...state, scope, campaignRequested: campaignParam !== null, edit, save, recordPublication, refreshPublished, switchVariant, newDraft, refreshHistory, compareLatest, recover, mutate, retryLoad,
     retryMutation: () => stateRef.current.pendingMutation && mutate(stateRef.current.pendingMutation.command), getDraft: () => stateRef.current.draft, getDocumentIdentity: () => epoch.current };
 }
