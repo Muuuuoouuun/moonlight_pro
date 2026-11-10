@@ -188,7 +188,8 @@
 }
 @media(max-width:600px) {
   .page { padding:16px; }
-  .shell { padding:16px; }
+  /* 하단 80px = 16px + 빠른 메모 버튼 자리(48px + 아래 16px, quick-memo.module.css) — .hub-page 화면과 같은 처리(검토 §7). */
+  .shell { padding:16px 16px 80px; }
   .header { align-items:flex-start; gap:12px; margin-bottom:12px; }
   .header h2 { margin:4px 0; }
   .header p { display:none; }

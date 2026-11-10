@@ -92,6 +92,6 @@ export function DraftEditor({ draft, edit, disabled, onSelect }) {
           className="studio-body-input" rows={8} autoResize value={draft.body} disabled={disabled || !supported}
           onChange={(event) => edit({ body: event.target.value })}
           onSelect={(event) => onSelect({ start: event.target.selectionStart, end: event.target.selectionEnd, body: draft.body })} />}
-    {!structured && <div className="studio-row studio-muted studio-small studio-body-meta"><span className="mono">{chars.toLocaleString()}자</span></div>}
+    {!structured && <div className="studio-row studio-muted studio-small studio-body-meta"><span><span className="mono">{chars.toLocaleString()}</span>자</span></div>}
   </div>;
 }

@@ -100,7 +100,7 @@ export function ProjectBoardView({
                   >프로젝트 · 연결 메모 보기</a>
                 )}
                 <TaskChecklistGauge task={c} />
-                {c.due && <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)', marginTop: 6 }}>기한 · {c.due}</div>}
+                {c.due && <div style={{ fontSize: 10.5, color: 'var(--fg-muted)', marginTop: 6 }}>기한 · <span className="mono">{c.due}</span></div>}
                 <select
                   className="hub-project-board-status"
                   aria-label={`${c.title} 상태 변경`}

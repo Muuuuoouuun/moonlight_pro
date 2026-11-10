@@ -42,12 +42,12 @@
   box-shadow: inset 1px 0 0 var(--danger);
 }
 
+/* 제품 화면의 라벨은 거의 한글(`진행 중인 프로젝트`·`지금 볼 것`·`제품 · 2026 · 10월`)이다 — Mono는 한글 글리프가
+   없어 SUIT로 대체되며 어절이 벌어지고, 대문자·0.16em 자간은 한글 음절만 띄운다. 숫자는 옆의 .mono가 맡는다. */
 .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--fg-dim);
   font-weight: 500;
 }
 

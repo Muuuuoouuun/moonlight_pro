@@ -424,7 +424,7 @@ export function ProductPage({ product, month, months, areas, backLabel = "제품
                   <span className={styles.rowMeta}>
                     <span>{workType(project.workType)?.label || "종류 미정"}</span>
                     {project.requests > 0 && <span>요청 {project.requests}</span>}
-                    {project.dueAt && <span className="mono">목표 {shortDay(project.dueAt)}</span>}
+                    {project.dueAt && <span>목표 <span className="mono">{shortDay(project.dueAt)}</span></span>}
                   </span>
                 </span>
                 <TaskCells done={project.tasksDone} total={project.tasks} />

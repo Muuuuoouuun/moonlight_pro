@@ -60,6 +60,10 @@
   font-size:12px;
   color:var(--fg-muted);
 }
+.goal-legend-help { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.goal-legend-help > summary { cursor:pointer; color:var(--fg-dim); list-style:none; text-decoration:underline; text-decoration-color:var(--line-strong); text-underline-offset:3px; }
+.goal-legend-help > summary::-webkit-details-marker { display:none; }
+.goal-legend-help[open] > summary { color:var(--fg-muted); }
 .goal-filters {
   display:flex;
   align-items:flex-end;
@@ -505,7 +509,8 @@
 }
 
 @media (max-width:600px) {
-  .goals-page { padding:16px 12px; }
+  /* 하단 80px = 16px + 빠른 메모 버튼 자리(48px + 아래 16px, quick-memo.module.css) — .hub-page 화면과 같은 처리(검토 §7). */
+  .goals-page { padding:16px 12px 80px; }
   .goal-fields-two { grid-template-columns:minmax(0,1fr); }
   .goal-header { gap:16px; }
   .goal-toolbar { flex-direction:column; align-items:flex-start; }

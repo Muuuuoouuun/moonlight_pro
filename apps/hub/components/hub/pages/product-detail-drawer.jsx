@@ -168,7 +168,7 @@ function ChecklistSection({ product, onEdit, onTab, onSaved }) {
                         <li key={feature.id} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 32, fontSize: 13 }}>
                           <Checkbox checked={Boolean(feature.verifiedAt)} disabled={saving !== null} label={`${feature.text} 점검`} onChange={(checked) => toggle(feature, checked)} />
                           <span style={{ flex: 1, minWidth: 0, color: feature.verifiedAt ? "var(--fg-muted)" : "var(--fg)" }}>{feature.text}</span>
-                          {feature.verifiedAt && <span className="mono" style={{ fontSize: 11, color: "var(--fg-dim)" }}>점검 {feature.verifiedAt.slice(5)}</span>}
+                          {feature.verifiedAt && <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>점검 <span className="mono">{feature.verifiedAt.slice(5)}</span></span>}
                         </li>
                       ))}
                     </ul>
@@ -325,7 +325,7 @@ function RepositoryRow({ product, repository, onChanged, onCodex }) {
         {Number.isFinite(summary.reviewRequests) && <span>리뷰 요청 <span className="num">{summary.reviewRequests}</span></span>}
         {Number.isFinite(summary.openPullRequests) && <span>열린 PR <span className="num">{summary.openPullRequests}</span></span>}
         {summary.latestRelease?.tag && <span>릴리스 <span className="mono">{summary.latestRelease.tag}</span></span>}
-        <span>동기화 <span className="mono">{formatWhen(repository.lastSyncedAt) || "전"}</span></span>
+        <span>동기화 <span className={formatWhen(repository.lastSyncedAt) ? "mono" : undefined}>{formatWhen(repository.lastSyncedAt) || "전"}</span></span>
       </div>
       {repository.status === "error" && repository.lastError && <span style={{ fontSize: 12, color: "var(--danger)" }}>동기화 실패 · {repository.lastError}</span>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>

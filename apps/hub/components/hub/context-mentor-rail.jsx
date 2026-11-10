@@ -101,7 +101,7 @@ export function ContextMentorRail({ domain = 'sales', contextKey, onGuidanceAsk,
       aria-expanded={open}
     >
       <span aria-hidden="true"><Iconed name="sparkle" size={19} /></span>
-      <span className="context-mentor-rail__mark mono">멘토</span>
+      <span className="context-mentor-rail__mark">멘토</span>
       <span className="context-mentor-rail__label">관점 열기</span>
       <span className="context-mentor-rail__arrow" aria-hidden="true"><Iconed name="chevronL" size={16} /></span>
     </button>

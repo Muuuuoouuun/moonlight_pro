@@ -425,7 +425,8 @@ export function Projects({ workspace }) {
         ? '프로젝트 기록 확인 중'
         : syncState === 'error'
           ? '프로젝트 기록 읽기 실패'
-          : 'preview · 실제 기록 미연결';
+          // 옆의 TruthBadge가 이미 `Preview · 연결 필요`라고 말한다 — 소문자 상태 키(`preview`)를 한 번 더 붙이지 않는다.
+          : '실제 기록 미연결';
   })();
 
   // selectedProjectId를 deps에 넣으면 상세 열기/닫기(URL param 변경)마다 loadLedger가
@@ -2330,7 +2331,7 @@ export function Projects({ workspace }) {
                       description={syncState === 'preview'
                         ? "Supabase가 연결되지 않았습니다. 예시 데이터를 섞지 않으며, 연결 후 실제 프로젝트만 표시합니다."
                         : "Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."}
-                      action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
+                      action={<Button variant="secondary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
                     />
                   </Card>
                 )}
@@ -2381,10 +2382,10 @@ export function Projects({ workspace }) {
                         <BrandMark brand={section.brand} size={18} />
                         <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.brand.name}</span>
                         {rollupActive > 0 && (
-                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>진행 중 {rollupActive}</span>
+                          <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>진행 중 <span className="mono">{rollupActive}</span></span>
                         )}
                         {rollupRisk > 0 && (
-                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--danger)' }}>막힘·지연 {rollupRisk}</span>
+                          <span style={{ fontSize: 10.5, color: 'var(--danger)' }}>막힘·지연 <span className="mono">{rollupRisk}</span></span>
                         )}
                         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{items.length}</span>
                       </button>
@@ -2460,7 +2461,7 @@ export function Projects({ workspace }) {
                                   </div>
                                   <div className="hub-project-due-risk">
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                      <span className="mono">{p.due || '기한 없음'}</span>
+                                      <span className={p.due ? 'mono' : undefined}>{p.due || '기한 없음'}</span>
                                       {pDDay && (
                                         <span className={`hub-project-dday-badge hub-project-dday-badge--${pDDay.tone}`}>
                                           {pDDay.text}
@@ -2522,7 +2523,7 @@ export function Projects({ workspace }) {
                                         <TaskChecklistGauge task={t} emptyLabel="체크리스트 추가" />
                                       </button>
                                       <span className="hub-project-subtask__assignee">{t.assignee}</span>
-                                      <span className="mono hub-project-subtask__due">{t.due || '기한 없음'}</span>
+                                      <span className={`hub-project-subtask__due${t.due ? ' mono' : ''}`}>{t.due || '기한 없음'}</span>
                                     </div>
                                   ))}
                                   {inlineAddingProjectId === p.id ? (

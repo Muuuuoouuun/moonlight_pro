@@ -60,6 +60,8 @@ const SCOPE_OPTIONS = [
   { key: 'personal', label: 'Personal', dot: 'personal' },
   { key: 'company', label: 'Company', dot: 'company' },
 ];
+// 빈 상태 문구는 화면의 필터 칩과 같은 이름을 쓴다 — 내부 키(`all`)를 그대로 내보내면 `필터: all`이 된다.
+const scopeFilterLabel = (key) => SCOPE_OPTIONS.find((option) => option.key === key)?.label || key;
 
 function isClassInGuruRecord(record) {
   if (!record || record.type !== 'company') return false;
@@ -779,7 +781,8 @@ export function Leads({ workspace }) {
         </div>
         <div style={{ flex: 1 }} />
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
-        <Input ref={searchRef} className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
+        {/* .hub-toolbar는 감싸는 칸에 — Input 자신에 붙이면 휴대폰 규칙(.hub-toolbar > * 줄바꿈)이 아이콘과 입력을 두 줄로 나눠 30px 칸 밖으로 밀어냈다(390px 실측 2026-11-01). */}
+        <div className="hub-toolbar" style={{ display: 'flex' }}><Input ref={searchRef} placeholder="이름·소스·단계 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} /></div>
         <div style={{ width: 8 }} />
         <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
         <input ref={cardFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCardFile} />
@@ -874,7 +877,7 @@ export function Leads({ workspace }) {
           <EmptyState
             icon="search"
             title={LEADS.length === 0 ? '리드가 없습니다' : '일치하는 리드가 없습니다'}
-            description={term ? `"${search}" 검색 결과 0건 · 필터: ${filter}` : `필터: ${filter} · ${LEADS.length}건 중 0건`}
+            description={term ? `"${search}" 검색 결과 0건 · 필터: ${scopeFilterLabel(filter)}` : `필터: ${scopeFilterLabel(filter)} · ${LEADS.length}건 중 0건`}
             action={(
               <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
                 {labelFiltersActive && <Button variant="ghost" size="sm" onClick={clearLabelFilters}>필터 해제</Button>}
@@ -3294,7 +3297,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                     <span style={{ display: 'block', fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{deal.name}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
                       <Badge tone="neutral" size="xs" variant="outline">{stage?.label || deal.stage}</Badge>
-                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>마감 {deal.close || '미정'}</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>마감 {deal.close ? <span className="mono">{deal.close}</span> : '미정'}</span>
                     </span>
                   </span>
                   <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(deal.value)}</span>
@@ -3446,7 +3449,7 @@ export function Accounts({ workspace, onNavigate }) {
   const scopeFilteredEmpty = filter !== 'all' && ACCOUNTS.length > 0;
   const emptyTitle = scopeFilteredEmpty ? '해당 범위에 계정이 없습니다' : '계정이 없습니다';
   const emptyDescription = (liveCopy) => (
-    scopeFilteredEmpty ? `필터: ${filter} · ${ACCOUNTS.length}건 중 0건`
+    scopeFilteredEmpty ? `필터: ${scopeFilterLabel(filter)} · ${ACCOUNTS.length}건 중 0건`
       : syncState === 'live' ? liveCopy
       : '필터를 조정하거나 첫 계정을 등록하세요.'
   );
@@ -3828,7 +3831,8 @@ export function Accounts({ workspace, onNavigate }) {
         {/* Type filter */}
         <SegmentedControl className="hub-toolbar" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
 
-        <Input ref={accountSearchRef} className="hub-toolbar" placeholder="계정·담당자·전화·딜 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
+        {/* .hub-toolbar는 감싸는 칸에 — Input 자신에 붙이면 휴대폰 규칙(.hub-toolbar > * 줄바꿈)이 아이콘과 입력을 두 줄로 나눠 30px 칸 밖으로 밀어냈다(390px 실측 2026-11-01). */}
+        <div className="hub-toolbar" style={{ display: 'flex' }}><Input ref={accountSearchRef} placeholder="계정·담당자·전화·딜 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} /></div>
         <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account <Kbd>N</Kbd></Button>
       </div>
 
@@ -3912,7 +3916,7 @@ export function Accounts({ workspace, onNavigate }) {
                 description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : emptyDescription('Supabase customer_accounts 기록에 표시할 계정이 없습니다.')}
                 action={search.trim()
                   ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
-                  : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
+                  : <Button variant="secondary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
               />
             </Card>
           )}
@@ -3980,7 +3984,7 @@ export function Accounts({ workspace, onNavigate }) {
               description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : emptyDescription('Supabase customer_accounts 기록이 비어 있습니다.')}
               action={search.trim()
                 ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
-                : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
+                : <Button variant="secondary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
             />
           )}
         </Card>

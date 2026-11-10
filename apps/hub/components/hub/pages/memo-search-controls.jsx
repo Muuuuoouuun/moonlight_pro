@@ -30,7 +30,8 @@ export function MemoSearchControls({ filters, context, onApply }) {
         <SelectField label="메모 기록 범위" value={draft.noteScope} options={[{ value: '', label: '모든 범위' }, { value: 'personal', label: '개인' }, { value: 'company', label: '회사 업무' }, { value: 'unclassified', label: '범위 미분류' }]} onChange={(event) => {
           const next = { ...draft, noteScope: event.target.value }; setDraft(next); onApply(next);
         }} />
-        <Button variant="primary" type="submit" icon="search">찾기</Button>
+        {/* 화면의 primary는 머리의 `메모 남기기` — 검색 제출은 보조(§5.2 primary 하나). */}
+        <Button variant="secondary" type="submit" icon="search">찾기</Button>
         {draft.q && <Button aria-label="입력한 검색어 지우기" onClick={() => update({ q: '' })}>지우기</Button>}
         <Button variant="outline" aria-expanded={open} aria-controls="memo-search-details" onClick={() => setOpen((value) => !value)}>조건 {open ? '접기' : '열기'}</Button>
       </div>

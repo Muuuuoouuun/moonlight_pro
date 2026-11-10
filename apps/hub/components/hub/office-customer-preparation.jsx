@@ -16,7 +16,7 @@ export function OfficeCustomerContext({ context }) {
         <p>다음 연락 날짜: {customer.nextContactAt || '미확인'}</p>
       </div>}
       {activities.map(item => <blockquote key={item.id} className={styles.sourceQuote}>
-        <p className={styles.meta}>{item.kind} · <span className="mono">{item.occurredAt || '날짜 미확인'}</span></p>
+        <p className={styles.meta}>{item.kind} · <span className={item.occurredAt ? 'mono' : undefined}>{item.occurredAt || '날짜 미확인'}</span></p>
         <p className={styles.body}>{item.body || '본문이 기록되지 않았습니다.'}</p>
       </blockquote>)}
       {!activities.length && <p className={styles.note}>직접 연결된 활동 기록이 없습니다. 요청에 연락 목적과 확인된 원문을 덧붙여 주세요.</p>}

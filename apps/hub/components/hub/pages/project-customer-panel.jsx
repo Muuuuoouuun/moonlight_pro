@@ -117,7 +117,7 @@ export function ProjectCustomerPanel({ project, onBack, onSaved, onMemo, onOpenM
         <header><h3 className="project-focus-heading">{customer.label}</h3>{customer.company && customer.company !== customer.label && <p className="project-focus-muted">{customer.company}</p>}</header>
         {data.status === 'partial' && <div role="status"><TruthBadge state="partial" /><p className="project-focus-muted">일부 정보를 확인하지 못했어요.</p><Button variant="ghost" size="sm" onClick={data.reload}>다시 확인</Button></div>}
         <section className="project-focus-section"><h4>다음 약속</h4><p>{customer.nextAction || '아직 정한 다음 행동이 없어요.'}</p>
-          {customer.nextAction && <span className="mono project-focus-muted">{customer.dormant ? '기약 없음' : contextDate(customer.nextActionAt)}</span>}</section>
+          {customer.nextAction && <span className={`project-focus-muted${customer.dormant ? '' : ' mono'}`}>{customer.dormant ? '기약 없음' : contextDate(customer.nextActionAt)}</span>}</section>
         <section className="project-focus-section"><h4>{data.recent?.scope === 'company' ? '기관 공통 기록' : '최근 대화'}</h4>
           {data.recent ? <><p className="project-focus-excerpt">{data.recent.body}</p><span className="mono project-focus-muted">{contextDate(data.recent.occurredAt)} · {contactLabels[data.recent.kind] || '연락'}</span></>
             : <p className="project-focus-muted">{data.failedSources?.some(name => name.endsWith('activities')) ? '최근 대화를 확인하지 못했어요.' : '직접 연결된 대화 기록이 없어요.'}</p>}</section>
