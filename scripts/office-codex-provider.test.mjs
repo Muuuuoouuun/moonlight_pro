@@ -75,8 +75,10 @@ async function setup(t, mode = 'success') {
       process.on('SIGTERM', () => process.exit(0));
       setInterval(() => {}, 1000);
     } else if (mode === 'abort-cleanup') {
-      emit({ type: 'item.started', item: { type: 'reasoning' } });
+      // Install the handler before announcing readiness: the test aborts on the
+      // announcement, and under load an earlier TERM would kill the default way.
       process.on('SIGTERM', () => setTimeout(() => process.exit(0), 80));
+      emit({ type: 'item.started', item: { type: 'reasoning' } });
       setInterval(() => {}, 1000);
     } else if (mode === 'ignore-term') {
       process.on('SIGTERM', () => {});
