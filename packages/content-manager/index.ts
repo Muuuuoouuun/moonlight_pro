@@ -1,1 +1,1 @@
-export * from "./card-news";
+export * from "./card-news/index.ts";
