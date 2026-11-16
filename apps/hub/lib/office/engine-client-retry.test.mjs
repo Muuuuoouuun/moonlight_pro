@@ -7,7 +7,7 @@ const request = parseOfficeRequest({ ownerId: 'eevee', scope: 'personal', messag
 const context = { source: 'provided', scope: 'personal', projects: [], note: '직접 입력만 참고' };
 const generated = { status: 'generated', version: OFFICE_VERSION, ownerId: request.ownerId, mode: request.mode,
   scope: request.scope, participants: [], lens: null, simulation: false, answer: '검토 내용', nextAction: '직접 확인', context };
-const options = { engineUrl: 'https://engine.invalid', secret: 'isolated-test', retries: 1 };
+const options = { engineUrl: 'https://engine.invalid', secret: 'isolated-test', retries: 1, retryDelayMs: 0 };
 
 test('known client rejections do not repeat a generation POST', async () => {
   for (const status of [400, 401, 403, 404, 409]) {

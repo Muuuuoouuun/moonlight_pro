@@ -206,7 +206,7 @@ export async function callApi(config, manifest, model, body) {
         if ((response.status === 429 || response.status >= 500) && attempt < manifest.maxAttempts) {
           const delay = data?.error?.details?.find(item => typeof item.retryDelay === 'string')?.retryDelay;
           const requestedMs = Number.parseFloat(response.headers.get('retry-after') || delay || '') * 1000;
-          await new Promise(done => setTimeout(done, Math.min(60000, Math.max(attempt * 2000, Number.isFinite(requestedMs) ? requestedMs : 0))));
+          await new Promise(done => setTimeout(done, Math.min(60000, Math.max(attempt * (manifest.retryBaseMs ?? 2000), Number.isFinite(requestedMs) ? requestedMs : 0))));
           continue;
         }
         const error = new Error(`provider HTTP ${response.status}`);

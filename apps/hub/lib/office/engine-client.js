@@ -7,7 +7,7 @@ function generationRecord(value) {
  if(usage!==null&&!(usage&&['promptTokens','outputTokens','totalTokens'].every(key=>count(usage[key]))))return null;
  return {elapsedMs:value.elapsedMs,modelCalls:value.modelCalls,usage:usage===null?null:{promptTokens:usage.promptTokens,outputTokens:usage.outputTokens,totalTokens:usage.totalTokens}};
 }
-export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=process.env.COM_MOON_ENGINE_URL,secret=process.env.COM_MOON_SHARED_WEBHOOK_SECRET,retries=0,unknownOnTransportFailure=false}={}) {
+export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=process.env.COM_MOON_ENGINE_URL,secret=process.env.COM_MOON_SHARED_WEBHOOK_SECRET,retries=0,unknownOnTransportFailure=false,retryDelayMs=600}={}) {
  if(!engineUrl?.trim()||!secret?.trim()) return {status:'preview',error:'오피스 Engine 연결이 필요합니다. 입력은 보존됩니다.'};
  const attempts=Math.max(0,Math.min(retries,2));
  for(let attempt=0;attempt<=attempts;attempt++) {
@@ -23,7 +23,7 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
    if(unknownOnTransportFailure && !response.ok && response.status>=500) return {status:'unknown',error:'오피스 응답 수신을 확인하지 못했습니다. 저장된 회의 상태를 다시 확인해 주세요.'};
    if(!response.ok || data?.status!=='generated') {
     if(attempt<attempts && (response.status===502 || response.status===503)) {
-     await new Promise(r=>setTimeout(r,600));
+     await new Promise(r=>setTimeout(r,retryDelayMs));
      continue;
     }
     throw new Error('engine-failed');
@@ -48,7 +48,7 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
    // not transient. Retrying this POST would create a new model generation.
    // Explicit 502/503 retries above and legacy transport retries remain bounded.
    if(attempt<attempts && !responseRead) {
-    await new Promise(r=>setTimeout(r,600));
+    await new Promise(r=>setTimeout(r,retryDelayMs));
     continue;
    }
    return {status:'error',error:'오피스 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};

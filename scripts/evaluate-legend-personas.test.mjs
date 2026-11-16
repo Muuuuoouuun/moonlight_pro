@@ -69,7 +69,7 @@ test('a non-JSON 503 is logged and retried before successful generation', async 
   });
   await new Promise(done => server.listen(0, '127.0.0.1', done));
   try {
-    const record = await evaluator.callApi({ key: 'test-only-key', base: `http://127.0.0.1:${server.address().port}` }, { maxAttempts: 2, timeoutMs: 2000 }, 'test-model', {});
+    const record = await evaluator.callApi({ key: 'test-only-key', base: `http://127.0.0.1:${server.address().port}` }, { maxAttempts: 2, timeoutMs: 2000, retryBaseMs: 0 }, 'test-model', {});
     assert.equal(record.text, 'recovered');
     assert.deepEqual(record.attempts.map(item => item.status), [503, 200]);
     assert.equal(calls, 2);
