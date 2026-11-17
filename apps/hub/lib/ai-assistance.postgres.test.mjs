@@ -24,6 +24,7 @@ test('AI candidate transactions preserve receipt, source version, workspace and 
     try { await access(join(path, 'initdb'), constants.X_OK); bin = path; break; } catch {}
   }
   if (!bin) return t.skip('PostgreSQL binaries unavailable');
+  if (process.getuid?.() === 0) return t.skip('initdb refuses to run as root');
   // Private socket directory, no TCP listener, random port number: parallel clusters never share state.
   const root = await mkdtemp(join(tmpdir(), 'moon-ai-')); const port = String(20000 + Math.floor(Math.random() * 20000)); let running = false;
   const env = { ...process.env, LC_ALL: 'C' };

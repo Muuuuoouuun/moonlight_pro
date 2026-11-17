@@ -33,6 +33,7 @@ test('atomic inquiry PostgreSQL transactions', async t => {
   assert.ok(source, 'unified inquiry migration exists');
   const bin = await postgresBin();
   if (!bin) { t.skip('Local PostgreSQL binaries unavailable; set INQUIRY_TEST_PG_BIN to run transaction tests'); return; }
+  if (process.getuid?.() === 0) return t.skip('initdb refuses to run as root');
   const root = await mkdtemp(join(tmpdir(), 'moon-inquiries-'));
   const data = join(root, 'data');
   let running = false;

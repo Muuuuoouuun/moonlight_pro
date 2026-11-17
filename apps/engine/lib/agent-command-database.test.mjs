@@ -28,6 +28,7 @@ test('agent command PostgreSQL transaction contract', async t => {
   assert.ok(source, 'Agent command migration exists');
   const bin = await postgresBin();
   if (!bin) { t.skip('Local PostgreSQL binaries unavailable; set AGENT_COMMAND_TEST_PG_BIN'); return; }
+  if (process.getuid?.() === 0) return t.skip('initdb refuses to run as root');
   const root = await mkdtemp(join(tmpdir(), 'moon-agent-commands-'));
   const data = join(root, 'data'); let running = false;
   const run = (name, args, input) => {

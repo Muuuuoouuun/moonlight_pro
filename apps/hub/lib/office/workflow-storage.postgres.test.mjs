@@ -23,6 +23,7 @@ test('Office PostgreSQL receipts, retention and task application share real comm
     try { await access(join(candidate, 'initdb'), constants.X_OK); bin = candidate; break; } catch {}
   }
   if (!bin) return t.skip('Local PostgreSQL binaries unavailable');
+  if (process.getuid?.() === 0) return t.skip('initdb refuses to run as root');
   const root = await mkdtemp(join(tmpdir(), 'moon-office-')), data = join(root, 'data'); let running = false;
   // Socket-only server in a private directory; a random port also keeps the
   // shared-memory key apart from other PostgreSQL tests running concurrently.
