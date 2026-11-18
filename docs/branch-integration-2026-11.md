@@ -32,6 +32,7 @@ runuser -u nobody -- env HOME=/tmp/pgnobody TMPDIR=/tmp/pgnobody \
 | 11-15 `cposf9` | `ogd5zz`(`a39da95`)로 ff — 24개 포함 | `packages/content-manager`를 ESM으로, 확장자 없던 다시 내보내기 두 곳에 `.ts`(경고 7 → 0) | root 실패 6(환경), build 통과 |
 | 11-16 `s0khj6` | `cposf9`(`75fbe43`)로 ff | `callOfficeEngine` `retryDelayMs`·Legend 평가 `retryBaseMs` 주입 — 재시도 시험이 실제로 ~3.8s 자던 것 제거(운영 기본값 그대로) | root 실패 6(환경), build 통과 |
 | 11-17 `8wme6f` | `s0khj6`(`12b774b`)로 ff. 11-16 이후 새 원격 브랜치·커밋 없음 | PostgreSQL 시험 6파일(`agent-command-database`·`inquiry-database`·`content-performance-restore`·`ai-assistance`·`office/workflow-storage`·`database-readiness`)에 root skip 가드 — 이미 `threads-publish-jobs`가 쓰는 줄과 같다. 11월 일일 기록 6개를 이 파일로 합침 | 아래 |
+| 11-18 `0ghs0v` | `8wme6f`(`0f83d57`)로 ff. 11-17 이후 새 원격 커밋 없음(fetch로 새로 보인 `codex/*` 5개는 모두 이미 포함), `inspiring-heisenberg-naw856`은 계속 대기 | 코드 수정 없음 — 가장 느린 시험(`icon-registry` 2.3s, TS 검사기)도 정당한 비용이라 손대지 않음. `npm audit fix`는 hono 외에 `@capacitor/cli`의 glob 13→14 등 무관한 메이저까지 바꿔 되돌림 | 아래 |
 
 ### 2026-11-17 검증
 
@@ -47,3 +48,16 @@ runuser -u nobody -- env HOME=/tmp/pgnobody TMPDIR=/tmp/pgnobody \
 ### 보안 안내 — Next.js 16.4.2 (운영자 결정 필요)
 
 11-17부터 `next build` 첫 실행이 `SecurityFatalError: Your version of Next.js is affected by a known security vulnerability`로 멈추고 업그레이드를 권한다(같은 명령을 다시 돌리면 빌드는 끝까지 성공한다). `npm audit` 기준 해당 권고는 **GHSA-mfr8-8qww-v76h**(moderate, `>=16.3.0 <=16.4.4`, `'use cache'` 함수를 `unstable_cache()`로 부를 때 root params 정보 노출)이고 수정 버전은 **16.4.6**(semver 패치)이다. 저장소에는 `'use cache'`·`unstable_cache` 사용이 없어 직접 영향은 확인되지 않았다. Hub·Engine의 `next`를 16.4.6으로 올리는 것은 의존성·락 파일 변경이라 이번 예약 실행에서는 하지 않았다. Vercel 빌드가 같은 안내로 멈추는지는 확인하지 않았다.
+
+### 2026-11-18 검증
+
+| 항목 | 결과 |
+|---|---|
+| 루트 `npm test` (root) | 6714 tests · 통과 6679 · **실패 0** · skip 35 (2분) — 11-17과 같음 |
+| `npm run lint` · `check:contracts` | 통과 (lint 1975 파일 0건) |
+| `npm audit --omit=dev` | moderate 3건: `next` 16.4.2(위 GHSA-mfr8-8qww-v76h + 새 **GHSA-vc7v-qv4w-wrv8** — 중첩 `'use cache'` 캐시 누출, 같은 16.4.6에서 수정), 그리고 **새로** `hono` 4.13.13 5건(≤4.13.15, 최신 4.13.19) |
+
+### 보안 안내 — hono (운영자 결정 필요, 11-18 추가)
+
+`hono`는 직접 의존성이 아니라 `@modelcontextprotocol/sdk@1.32.2`(Hub·`packages/mcp-server`)가 끌고 오는 전이 의존성이다. 권고 5건은 `mount()`·RegExpRouter 와일드카드 미들웨어·`css` 헬퍼·`csrf()`·`validator('form')` 문제인데, 저장소는 hono를 직접 import하지 않고 `packages/mcp-server/src/http.js`도 `node:http` + SDK의 `StreamableHTTPServerTransport`만 쓰므로 해당 기능 사용은 확인되지 않았다. `npm audit fix`가 관련 없는 패키지 메이저까지 함께 올려 이번에는 넣지 않았다. 고치려면 루트 `package.json`의 `overrides`에 `"hono": "^4.13.19"`를 두거나 SDK를 올리는 쪽이 범위가 좁다.
+
