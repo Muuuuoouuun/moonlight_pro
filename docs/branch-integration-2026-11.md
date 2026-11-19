@@ -33,6 +33,7 @@ runuser -u nobody -- env HOME=/tmp/pgnobody TMPDIR=/tmp/pgnobody \
 | 11-16 `s0khj6` | `cposf9`(`75fbe43`)로 ff | `callOfficeEngine` `retryDelayMs`·Legend 평가 `retryBaseMs` 주입 — 재시도 시험이 실제로 ~3.8s 자던 것 제거(운영 기본값 그대로) | root 실패 6(환경), build 통과 |
 | 11-17 `8wme6f` | `s0khj6`(`12b774b`)로 ff. 11-16 이후 새 원격 브랜치·커밋 없음 | PostgreSQL 시험 6파일(`agent-command-database`·`inquiry-database`·`content-performance-restore`·`ai-assistance`·`office/workflow-storage`·`database-readiness`)에 root skip 가드 — 이미 `threads-publish-jobs`가 쓰는 줄과 같다. 11월 일일 기록 6개를 이 파일로 합침 | 아래 |
 | 11-18 `0ghs0v` | `8wme6f`(`0f83d57`)로 ff. 11-17 이후 새 원격 커밋 없음(fetch로 새로 보인 `codex/*` 5개는 모두 이미 포함), `inspiring-heisenberg-naw856`은 계속 대기 | 코드 수정 없음 — 가장 느린 시험(`icon-registry` 2.3s, TS 검사기)도 정당한 비용이라 손대지 않음. `npm audit fix`는 hono 외에 `@capacitor/cli`의 glob 13→14 등 무관한 메이저까지 바꿔 되돌림 | 아래 |
+| 11-19 `ipng6u` | `0ghs0v`(`921e1bc`)로 ff. 11-18 이후 새 원격 커밋 없음, `inspiring-heisenberg-naw856`은 계속 대기 | 코드 수정 없음 | 아래 |
 
 ### 2026-11-17 검증
 
@@ -61,3 +62,10 @@ runuser -u nobody -- env HOME=/tmp/pgnobody TMPDIR=/tmp/pgnobody \
 
 `hono`는 직접 의존성이 아니라 `@modelcontextprotocol/sdk@1.32.2`(Hub·`packages/mcp-server`)가 끌고 오는 전이 의존성이다. 권고 5건은 `mount()`·RegExpRouter 와일드카드 미들웨어·`css` 헬퍼·`csrf()`·`validator('form')` 문제인데, 저장소는 hono를 직접 import하지 않고 `packages/mcp-server/src/http.js`도 `node:http` + SDK의 `StreamableHTTPServerTransport`만 쓰므로 해당 기능 사용은 확인되지 않았다. `npm audit fix`가 관련 없는 패키지 메이저까지 함께 올려 이번에는 넣지 않았다. 고치려면 루트 `package.json`의 `overrides`에 `"hono": "^4.13.19"`를 두거나 SDK를 올리는 쪽이 범위가 좁다.
 
+### 2026-11-19 검증
+
+| 항목 | 결과 |
+|---|---|
+| 루트 `npm test` (root) | 6714 tests · 통과 6679 · **실패 0** · skip 35 — 11-18과 같음 |
+| `npm run lint` · `check:contracts` | 통과 (lint 1975 파일 0건) |
+| `npm audit --omit=dev` | moderate 3패키지, 11-18과 같은 상태. 위에 이름이 빠졌던 셋째 패키지는 `@hono/node-server` 1.19.17(≤2.1.2, GHSA-rmxm-3fg6-px4f·GHSA-jpvv-r467-5p4w) — 역시 `@modelcontextprotocol/sdk`가 끌고 오는 전이 의존성이고 직접 import 없음. 최신 `next` 16.4.6·`hono` 4.13.19·`@hono/node-server` 2.1.9. 세 건 모두 의존성 변경이라 운영자 결정 대기 |
