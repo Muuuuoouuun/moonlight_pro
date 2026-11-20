@@ -34,6 +34,7 @@ runuser -u nobody -- env HOME=/tmp/pgnobody TMPDIR=/tmp/pgnobody \
 | 11-17 `8wme6f` | `s0khj6`(`12b774b`)로 ff. 11-16 이후 새 원격 브랜치·커밋 없음 | PostgreSQL 시험 6파일(`agent-command-database`·`inquiry-database`·`content-performance-restore`·`ai-assistance`·`office/workflow-storage`·`database-readiness`)에 root skip 가드 — 이미 `threads-publish-jobs`가 쓰는 줄과 같다. 11월 일일 기록 6개를 이 파일로 합침 | 아래 |
 | 11-18 `0ghs0v` | `8wme6f`(`0f83d57`)로 ff. 11-17 이후 새 원격 커밋 없음(fetch로 새로 보인 `codex/*` 5개는 모두 이미 포함), `inspiring-heisenberg-naw856`은 계속 대기 | 코드 수정 없음 — 가장 느린 시험(`icon-registry` 2.3s, TS 검사기)도 정당한 비용이라 손대지 않음. `npm audit fix`는 hono 외에 `@capacitor/cli`의 glob 13→14 등 무관한 메이저까지 바꿔 되돌림 | 아래 |
 | 11-19 `ipng6u` | `0ghs0v`(`921e1bc`)로 ff. 11-18 이후 새 원격 커밋 없음, `inspiring-heisenberg-naw856`은 계속 대기 | 코드 수정 없음 | 아래 |
+| 11-20 `ngg8ua` | `ipng6u`(`2d9641f`)로 ff. 11-19 이후 새 원격 커밋 없음, `inspiring-heisenberg-naw856`은 계속 대기 | 코드 수정 없음 — 시험 출력의 경고 15건은 모두 Node `MockTimers` ExperimentalWarning(무해) | root `npm test` 6714 · 통과 6679 · 실패 0 · skip 35, lint(1975 파일 0건)·contracts 통과, `npm audit --omit=dev` moderate 3패키지 그대로(아래 두 안내) |
 
 ### 2026-11-17 검증
 
